@@ -78,8 +78,10 @@ const SECTIONS: Section[] = [
       <>
         When you run a scan we store the domain you entered. If you ask for a walkthrough or a demo, or ask us to email
         the result to you while the scan is still running, we store the email address you gave, and nothing else about
-        you. We do not
-        ask for a name, a company, a phone number or a card. The contact form collects what you type into it. We also
+        you. For a scan we do not
+        ask for a name, a company, a phone number or a card. If you buy a plan, you pay through Stripe: Stripe takes your
+        card and billing details, and we keep your email address and the Stripe references for your order, never the card
+        number. The contact form collects what you type into it. We also
         store a salted one-way hash of your IP address, to stop one visitor running the scan hundreds of times - the
         address itself is never written down, and the hash cannot be turned back into it.
       </>

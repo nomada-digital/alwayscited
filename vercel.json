@@ -1,4 +1,7 @@
 {
+  "regions": [
+    "lhr1"
+  ],
   "crons": [
     {
       "path": "/api/cron/purge-responses",
