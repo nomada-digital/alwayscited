@@ -10,10 +10,11 @@ import {
   keywordVolumeRequest,
   keywordVolumes,
   requestFor,
+  SERP_DEPTH,
   taskCost,
 } from "./dataforseo-request.ts";
 import { type Market } from "./domain";
-import { type Engine, type EngineRead, PARSERS, parseOrganic, rankOfRead } from "./engines";
+import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead } from "./engines";
 
 /**
  * The HTTP half. Everything that can be decided without a credential or a
@@ -193,11 +194,15 @@ export async function readKeywordPosition(
   domain: string,
   market: Market,
   budgetMs?: number,
-): Promise<{ rank: number | null | undefined; url: string | null; cost: number }> {
+): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[] }> {
   const { path, body, timeoutMs } = keywordRankRequest(keyword, market);
   const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
   const organic = parseOrganic(task.result?.[0]);
   const rank = rankOfRead(organic, domain, task.partial === true);
   const url = typeof rank === "number" ? (organic.find((o) => o.rank === rank)?.url ?? null) : null;
-  return { rank, url, cost: taskCost(task) };
+  // MS-1 (12 Oct 2026): the page of results this read already paid for - rank, domain and
+  // URL of each organic result to SERP_DEPTH - so who else ranks for the cluster keyword is
+  // kept day by day rather than thrown away. No new request and no new cost.
+  const top = organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
+  return { rank, url, cost: taskCost(task), top };
 }

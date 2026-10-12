@@ -1,0 +1,15 @@
+-- MS-1 (12 Oct 2026): keep the page of Google results the daily keyword read
+-- already pays for. Additive only, under the 19 Sep 2026 authorisation: one
+-- nullable column, no default, no existing row changed, and harmless landing
+-- before or after the deploy (runner.ts stores positions without it while the
+-- column is absent).
+--
+-- top: the organic results to SERP_DEPTH (20) for that keyword on that day, as
+-- [{ "rank": 1, "domain": "example.com", "url": "https://..." }, ...], in rank
+-- order. Null on rows written before this column, and on a failed read (no row
+-- is written for one). It is who else ranks for a cluster's keyword, day by
+-- day: the data behind M8 (Google competitors beside the brands AI names) and,
+-- later, a placement's host article position. No new request: the same
+-- /v3/serp/google/organic/live/advanced task returns it today and it was
+-- thrown away.
+alter table tracking_serp add column if not exists top jsonb;

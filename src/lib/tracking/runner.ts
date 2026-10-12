@@ -401,7 +401,7 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
             reason = out.reason;
             break;
           }
-          return { k, failed: false as const, rank: out.rank, url: read.url, cost };
+          return { k, failed: false as const, rank: out.rank, url: read.url, cost, top: read.top };
         } catch (err) {
           const billed = billedCost(err);
           spend.dfs += billed;
@@ -506,8 +506,8 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       if (error) throw new Error(`could not store the brands read again: ${error.message}`);
     });
 
-    const serpRows = serp
-      .filter((s) => !s.failed)
+    const serpRead = serp.filter((s) => !s.failed);
+    const serpRows = serpRead
       .map((s) => ({
         run_id: runId,
         client_domain_id: client.id,
@@ -518,8 +518,19 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
         cost: Number(s.cost.toFixed(4)),
       }));
     if (serpRows.length) {
-      const { error } = await db.from("tracking_serp").upsert(serpRows, { onConflict: "run_id,keyword_id" });
-      if (error) throw new Error(`could not store the keyword positions: ${error.message}`);
+      // MS-1 (12 Oct 2026): each keyword's organic top 20 rides in `top`, 20261012000000's
+      // column. A deploy landing before that migration stores the positions without it rather
+      // than losing them, as the brands_ok write does.
+      const withTop = serpRows.map((r, i) => ({ ...r, top: serpRead[i]!.top }));
+      for (const rows of [withTop, serpRows]) {
+        const { error } = await db.from("tracking_serp").upsert(rows, { onConflict: "run_id,keyword_id" });
+        if (!error) break;
+        if (rows === withTop && missingColumn(error, "top")) {
+          console.warn(`[track] ${runId} tracking_serp has no top yet; positions stored without it`);
+          continue;
+        }
+        throw new Error(`could not store the keyword positions: ${error.message}`);
+      }
     }
 
     // BRIEF-2 T12 (R96): the Sunday link check of this client's live

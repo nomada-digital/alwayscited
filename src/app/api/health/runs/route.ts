@@ -36,11 +36,17 @@ export async function GET() {
   if (!supabaseConfigured()) {
     return NextResponse.json({ day, ok: false, error: "the database is not configured" }, { status: 503, headers });
   }
-  try {
-    const out = healthAnswer(await readRunHealth(supabaseAdmin(), day, now), now);
-    return NextResponse.json(out.body, { status: out.status, headers });
-  } catch (err) {
-    console.warn(`[track] run health could not be read: ${err instanceof Error ? err.message : String(err)}`);
-    return NextResponse.json({ day, ok: false, error: "the runs could not be read" }, { status: 503, headers });
+  // One retry, 12 Oct 2026: a single failed read on a cold function answered
+  // 503 "the runs could not be read" once and 200 on the next three polls, and
+  // a monitor pages on that one 503. Two failures in a row is the check down.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const out = healthAnswer(await readRunHealth(supabaseAdmin(), day, now), now);
+      return NextResponse.json(out.body, { status: out.status, headers });
+    } catch (err) {
+      console.warn(`[track] run health could not be read (attempt ${attempt + 1}): ${err instanceof Error ? err.message : String(err)}`);
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 500));
+    }
   }
+  return NextResponse.json({ day, ok: false, error: "the runs could not be read" }, { status: 503, headers });
 }
