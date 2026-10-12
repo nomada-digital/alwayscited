@@ -353,3 +353,39 @@ export function trialStillRunning(sub: Record<string, unknown>, nowMs: number = 
   if (str(sub.status) !== "trialing") return false;
   return typeof sub.trial_end !== "number" || sub.trial_end * 1000 > nowMs;
 }
+
+/**
+ * A trial set to end before its first charge (12 Oct 2026, email review H1).
+ * The dashboard's Cancel trial was the only thing that wrote
+ * trial_cancelled_at, but a trial is also cancelled by email to us (the help
+ * page offers it; we cancel in Stripe) and in Stripe's customer portal, which
+ * is set to cancel at period end. Those left the column empty, so
+ * trial_ending and trial_midpoint told a client who had cancelled "From then
+ * it is $129 a month, charged to the card". Stripe says it either way:
+ * cancel_at_period_end, or cancel_at - the portal's and the Stripe
+ * dashboard's scheduled cancel - no later than the trial's end, with an
+ * hour's grace for Stripe's clock. A cancel_at after the trial's end is a
+ * charge first, so not this.
+ */
+export function trialCancelPending(sub: Record<string, unknown>): boolean {
+  if (str(sub.status) !== "trialing") return false;
+  if (sub.cancel_at_period_end === true) return true;
+  if (typeof sub.cancel_at !== "number") return false;
+  return typeof sub.trial_end !== "number" || sub.cancel_at <= sub.trial_end + 3600;
+}
+
+/**
+ * What client_domains.trial_cancelled_at becomes after a
+ * customer.subscription.updated (12 Oct 2026, email review H1): the event's
+ * time when a running trial is set to end uncharged (written only over an
+ * empty column, so the dashboard's own stamp stands), null when this event
+ * took that back (a renewal turned on again in the portal: the client will be
+ * charged and is told so), or undefined to leave it - a subscription out of
+ * its trial, or an update that touched neither cancel field.
+ */
+export function trialCancelledAfter(sub: Record<string, unknown>, previous: Record<string, unknown>, atS: number): string | null | undefined {
+  if (str(sub.status) !== "trialing") return undefined;
+  if (trialCancelPending(sub)) return new Date(atS * 1000).toISOString();
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(previous, k);
+  return has("cancel_at_period_end") || has("cancel_at") ? null : undefined;
+}

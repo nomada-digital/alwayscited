@@ -14,7 +14,7 @@
 export const SETUP_CONFIRMED_EVENT = "setup_confirmed";
 
 import { appPath } from "../app-host.ts";
-import { NO_PROMPT_NO_CHECK, checkAt, checkTime, zoneDay } from "./check-time.ts";
+import { NO_PROMPT_NO_CHECK, checkAt, checkTime, nextCheckAt, zoneDay } from "./check-time.ts";
 import { addDays, formatDay } from "./figures.ts";
 
 export const setupPath = (slug: string) => appPath(`/${slug}/setup`);
@@ -121,12 +121,22 @@ export function setupState(c: { started_on: string | null }, rows: readonly { cr
  * past - the runner checks a live prompt whether or not setup was confirmed
  * (decide.ts shouldTrack), so there is no first check left to promise - or
  * when it is unset. It knows nothing of prompts, so copy goes through setupChecks.
+ *
+ * 12 Oct 2026 (email review H3): one path. With `now`, the first check is
+ * still to come until its own moment (checkAt), not until London's day turns:
+ * a client started today and confirming before that day's check - a US
+ * evening, or a London small hour - was told checks had begun. Without
+ * `now`, noon UTC on `today` stands in, which says exactly what the
+ * London-day rule said: "tomorrow", or "on 12 Oct", in the client's zone.
  */
 export function firstCheckWhen(startedOn: string | null, today: string, market: string, now: number | null = null): string | null {
-  if (!startedOn || startedOn <= today) return null;
-  if (now !== null) return checkOn(startedOn, market, now);
-  return `${startedOn === addDays(today, 1) ? "tomorrow" : `on ${formatDay(startedOn)}`} at ${checkTime(startedOn, market)}`;
+  const at = now ?? noonOf(today);
+  if (!startedOn || checkAt(startedOn) <= at) return null;
+  return checkOn(startedOn, market, at);
 }
+
+/** Noon UTC on a tracking day: the same calendar day in London and New York, for a caller with no moment of its own. */
+const noonOf = (day: string) => Date.parse(`${day}T12:00:00Z`);
 
 /**
  * The daily check on `day`, said from `now` in the client's zone (ON-1
@@ -164,6 +174,11 @@ export function firstAsked(p: { today: string; startedOn: string | null; market:
 export function setupChecks(c: { startedOn: string | null; today: string; market: string; livePrompts: number; now?: number }): { first: string | null; line: string } {
   if (c.livePrompts < 1) return { first: null, line: NO_PROMPT_NO_CHECK };
   // `now` (ON-1 review): the first check's day said in the client's zone (checkOn).
-  const first = firstCheckWhen(c.startedOn, c.today, c.market, c.now ?? null);
-  return { first, line: first ? `The first check runs ${first}.` : `Checks run every day at ${checkTime(addDays(c.today, 1), c.market)}.` };
+  const at = c.now ?? noonOf(c.today);
+  const first = firstCheckWhen(c.startedOn, c.today, c.market, at);
+  if (first) return { first, line: `The first check runs ${first}.` };
+  // L2 (12 Oct 2026, email review): "Checks run every day at 06:00 UK time" stopped being true when the clocks went
+  // back, and the setup_confirmed mail keeps saying it. One time is named: the next run's, worked out by check-time.ts.
+  const next = new Date(nextCheckAt(at)).toISOString().slice(0, 10);
+  return { first: null, line: `Checks run every day. The next one runs ${checkOn(next, c.market, at)}.` };
 }

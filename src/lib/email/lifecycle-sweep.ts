@@ -5,7 +5,7 @@ import { upsellMode } from "../tracking/ask.ts";
 import { trackingDay } from "../tracking/decide.ts";
 import type { AnswerRow } from "../tracking/figures.ts";
 import { CLUSTER_BASE } from "../tracking/limits.ts";
-import { SETUP_CONFIRMED_EVENT } from "../tracking/setup-landing.ts";
+import { SETUP_CONFIRMED_EVENT, firstAsked } from "../tracking/setup-landing.ts";
 import type { TierKey } from "../tier-text.ts";
 import { billingUrl, dashboardUrl, type Rendered, setupReminder, setupUrl, trialEnding, trialMidpoint, trialTerms } from "./lifecycle.ts";
 import { lifecycleOn } from "./lifecycle-flag.ts";
@@ -54,8 +54,9 @@ type Client = {
   cluster_limit: number | null;
   trial_ends_at: string | null;
   trial_cancelled_at: string | null;
+  started_on: string | null;
 };
-const CLIENT_COLUMNS = "id, account_id, domain, brand_name, market, slug, status, tier, cluster_limit, trial_ends_at, trial_cancelled_at";
+const CLIENT_COLUMNS = "id, account_id, domain, brand_name, market, slug, status, tier, cluster_limit, trial_ends_at, trial_cancelled_at, started_on";
 
 const SWEPT_EVENTS = [...Object.values(TRIAL_MAIL_EVENT), ...SETUP_MAIL_EVENTS, SETUP_CONFIRMED_EVENT];
 
@@ -135,7 +136,9 @@ async function trialMail(db: SupabaseClient, io: SweepIo, c: Client, name: Trial
       )
     : [];
   const live = await liveCounts(db, c.id);
-  const recap = trialRecap({ rows, firstDay, today, you: c.brand_name ?? c.domain, clustersInUse: live.clusters, clusterLimit: c.cluster_limit ?? CLUSTER_BASE, livePrompts: live.prompts });
+  // L3 (12 Oct 2026, email review): with nothing set up, when prompts saved now are first asked, in the client's zone.
+  const firstAsk = firstAsked({ today, startedOn: c.started_on ?? null, market: c.market, now });
+  const recap = trialRecap({ rows, firstDay, today, you: c.brand_name ?? c.domain, clustersInUse: live.clusters, clusterLimit: c.cluster_limit ?? CLUSTER_BASE, livePrompts: live.prompts, firstAsk });
   const trial = trialTerms({ endsAt: c.trial_ends_at!, market: c.market, price: io.price, billing: billingUrl(c.slug, io.origin) });
   const d = { domain: c.domain, link: dashboardUrl(c.slug, io.origin), recap, trial };
   return name === "trial_midpoint" ? trialMidpoint(d) : trialEnding(d);

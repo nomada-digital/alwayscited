@@ -92,7 +92,10 @@ export async function mailSetupConfirmed(clientId: string, member: string): Prom
     if (qErr) throw new Error(qErr.message);
     const tier = ((c.tier as string) in TIER_PLAIN ? c.tier : "tracked") as TierKey;
     // 9 Oct 2026 (audit copy-2): the check time in the client's zone, and no "first" check once checks have begun.
-    const mail = setupConfirmed({ tier, clusters: (clusters ?? []).map((k) => k.name as string), link: appUrl("/", siteUrl()), market: (c.market as string | null) ?? "US", today: trackingDay(), startedOn: (c.started_on as string | null) ?? null, livePrompts: livePrompts ?? 0 });
+    // 12 Oct 2026 (email review H3): and the confirm's own moment, so "tomorrow" is the client's tomorrow - the setup
+    // page's words for the same moment - not London's.
+    const now = Date.now();
+    const mail = setupConfirmed({ tier, clusters: (clusters ?? []).map((k) => k.name as string), link: appUrl("/", siteUrl()), market: (c.market as string | null) ?? "US", today: trackingDay(new Date(now)), startedOn: (c.started_on as string | null) ?? null, livePrompts: livePrompts ?? 0, now });
     if (!(await sendLifecycle({ memberEmail: member, mail }))) console.warn("[app] setup_confirmed not sent");
   } catch (err) {
     console.warn(`[app] setup_confirmed skipped: ${err instanceof Error ? err.message : String(err)}`);

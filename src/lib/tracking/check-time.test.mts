@@ -93,8 +93,35 @@ test("setup promises a check only when the runner would make one: a live prompt,
   assert.deepEqual(setupChecks({ today: "2026-10-26", market: "UK", startedOn: "2026-10-27", livePrompts: 5 }), { first: "tomorrow at 05:00 UK time", line: "The first check runs tomorrow at 05:00 UK time." });
   // Checks began: a live prompt and a start that has come is what shouldTrack runs.
   assert.equal(shouldTrack({ id: "c", status: "active", started_on: "2026-10-01", activeQuestions: 1 }, base.today), true);
-  assert.deepEqual(setupChecks({ ...base, startedOn: "2026-10-01", livePrompts: 1 }), { first: null, line: "Checks run every day at 1:00am ET." });
-  assert.deepEqual(setupChecks({ today: "2026-11-02", market: "US", startedOn: "2026-10-01", livePrompts: 1 }), { first: null, line: "Checks run every day at 12:00am ET." });
+  // "Checks run every day at 1:00am ET." until 12 Oct 2026 (email review L2): a standing time stops being true when the
+  // clocks change, and the setup_confirmed mail keeps it. The line now names the next run only, in its own zone's time.
+  assert.deepEqual(setupChecks({ ...base, startedOn: "2026-10-01", livePrompts: 1 }), { first: null, line: "Checks run every day. The next one runs tomorrow at 1:00am ET." });
+  assert.deepEqual(setupChecks({ today: "2026-11-02", market: "US", startedOn: "2026-10-01", livePrompts: 1 }), { first: null, line: "Checks run every day. The next one runs tomorrow at 12:00am ET." });
+  assert.deepEqual(setupChecks({ today: "2026-10-24", market: "UK", startedOn: "2026-10-01", livePrompts: 1 }), { first: null, line: "Checks run every day. The next one runs tomorrow at 05:00 UK time." }, "the night the clocks go back");
+});
+
+/**
+ * Email review H3 (12 Oct 2026): setup_confirmed counted "tomorrow" from
+ * London's tracking day, so a US client confirming at 21:30 ET - already the
+ * next day in London - was told "tomorrow" for a check two nights away, in
+ * the subject. With the confirm's moment, the mail and the setup page say the
+ * same thing, in the client's own day.
+ */
+test("H3: a US confirm at 21:30 ET is said from the client's evening, not London's next day", () => {
+  const now = Date.parse("2026-10-10T01:30:00Z"); // 21:30 EDT on 9 Oct, 02:30 BST on 10 Oct
+  const today = "2026-10-10"; // the tracking day (London's) at that moment
+  // Bought that evening: signup starts the client the day after London's day, so the first check is 1am ET on 11 Oct.
+  assert.deepEqual(setupChecks({ today, market: "US", startedOn: "2026-10-11", livePrompts: 5, now }), { first: "on 11 Oct at 1:00am ET", line: "The first check runs on 11 Oct at 1:00am ET." });
+  // Bought that afternoon (started 10 Oct): London's day has turned but the 10 Oct check has not run - it is the US client's tomorrow.
+  assert.deepEqual(setupChecks({ today, market: "US", startedOn: "2026-10-10", livePrompts: 5, now }), { first: "tomorrow at 1:00am ET", line: "The first check runs tomorrow at 1:00am ET." });
+  // The London-day rule this replaced said "tomorrow" for the first and nothing for the second.
+  assert.equal(firstCheckWhen("2026-10-11", today, "US", now), "on 11 Oct at 1:00am ET");
+  assert.equal(firstCheckWhen("2026-10-10", today, "US", now), "tomorrow at 1:00am ET");
+  // Once that check has run, checks have begun, and the next is named from the client's day.
+  const after = Date.parse("2026-10-10T13:30:00Z");
+  assert.deepEqual(setupChecks({ today, market: "US", startedOn: "2026-10-10", livePrompts: 5, now: after }), { first: null, line: "Checks run every day. The next one runs tomorrow at 1:00am ET." });
+  // A UK client in London's small hours, started today: today's check is still to come.
+  assert.equal(firstCheckWhen("2026-10-10", today, "UK", now), "today at 06:00 UK time");
 });
 
 // ------------------------------------------------------------------ census

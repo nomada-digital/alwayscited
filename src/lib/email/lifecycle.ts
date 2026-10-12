@@ -8,7 +8,7 @@ import { escapeHtml, shell, type Palette } from "../scan/email-render.ts";
 import { TIER_PLAIN, type TierKey } from "../tier-text.ts";
 import { checkTime } from "../tracking/check-time.ts";
 import { PROMPTS_PER_CLUSTER } from "../tracking/limits.ts";
-import { setupChecks } from "../tracking/setup-landing.ts";
+import { firstAsked, setupChecks } from "../tracking/setup-landing.ts";
 
 /**
  * The lifecycle emails (R159, Danny, 1 Oct 2026, danny.md lines 159-167), as
@@ -229,19 +229,30 @@ export function setupReminder(d: { tier: TierKey; domain: string; link: string; 
  * or not setup was confirmed - is promised no "first" check, and one with no
  * live prompt is promised no check at all (review of 3eaa592). `today` is the
  * tracking day the confirm landed on; `livePrompts` the prompts not stopped.
+ *
+ * `now` (12 Oct 2026, email review H3): the moment of the confirm, so the
+ * first check is said from the client's own day, as the setup page says it
+ * (setupChecks with now, checkOn). Without it "tomorrow" was counted from
+ * London's tracking day, a day early in the subject for a US client
+ * confirming between 7pm and midnight ET. setup-mail.ts passes Date.now().
+ *
+ * No live prompt (L1, same review): the heading was "Your clusters are set
+ * up" over "Nothing is checked until a cluster has prompts". It now says
+ * what is left to do.
  */
-export function setupConfirmed(d: { tier: TierKey; clusters: string[]; link: string; market: string; today: string; startedOn: string | null; livePrompts: number }): Rendered {
-  const { first, line } = setupChecks({ startedOn: d.startedOn, today: d.today, market: d.market, livePrompts: d.livePrompts });
-  const head = first ? `Your first check runs ${first}` : "Your clusters are set up";
+export function setupConfirmed(d: { tier: TierKey; clusters: string[]; link: string; market: string; today: string; startedOn: string | null; livePrompts: number; now?: number }): Rendered {
+  const { first, line } = setupChecks({ startedOn: d.startedOn, today: d.today, market: d.market, livePrompts: d.livePrompts, ...(d.now === undefined ? {} : { now: d.now }) });
+  const empty = d.livePrompts < 1;
+  const head = first ? `Your first check runs ${first}` : empty ? "Add prompts to start your checks" : "Your clusters are set up";
   return render({
     tier: d.tier,
     subject: head,
-    preheader: `${d.clusters.length === 1 ? "1 cluster" : `${d.clusters.length} clusters`} set up.`,
+    preheader: empty ? line : `${d.clusters.length === 1 ? "1 cluster" : `${d.clusters.length} clusters`} set up.`,
     heading: head,
     body: [...(first ? [] : [line]), "You chose these clusters:"],
     list: d.clusters,
     cta: { href: d.link, label: "See your dashboard" },
-    footnote: "You can change a cluster's prompts from the dashboard at any time.",
+    footnote: empty ? "You can add a cluster's prompts from the dashboard at any time." : "You can change a cluster's prompts from the dashboard at any time.",
   });
 }
 
@@ -253,7 +264,9 @@ export function firstReading(d: { tier: TierKey; domain: string; named: number; 
     heading: "Your first reading is in",
     body: [`In the first check, ${d.domain} was named in ${d.named} of ${d.answers} AI answers, and ${d.page1} of ${d.keywords} keywords are on page 1 of Google.`],
     cta: { href: d.link, label: "See your dashboard" },
-    footnote: "The dashboard has every answer, and the pages that were cited instead.",
+    // L4 (12 Oct 2026, email review): "the pages that were cited instead" said the engines cited them in place of
+    // the client, which is not so where the client was named too.
+    footnote: "The dashboard has every answer, and the pages the answers cited.",
   });
 }
 
@@ -265,12 +278,27 @@ export function firstReading(d: { tier: TierKey; domain: string; named: number; 
  * the live clusters, counted as Settings counts them; `livePrompts` says
  * whether there is anything to check yet.
  */
-export type TrialRecap = { named: number; answers: number; since: string | null; topOther: { name: string; answers: number } | null; clustersInUse: number; clusterLimit: number; livePrompts: number };
+export type TrialRecap = {
+  named: number;
+  answers: number;
+  since: string | null;
+  topOther: { name: string; answers: number } | null;
+  clustersInUse: number;
+  clusterLimit: number;
+  livePrompts: number;
+  /**
+   * When prompts saved at the send are first asked, as setup-landing.ts
+   * firstAsked says it in the client's zone (12 Oct 2026, email review L3):
+   * "the morning after one has" was a night early for a US client saving in
+   * its evening. Null words no moment.
+   */
+  firstAsk?: string | null;
+};
 
 function recapLines(domain: string, r: TrialRecap): string[] {
   const use = `You are using ${r.clustersInUse} of your ${count(r.clusterLimit, "cluster")}.`;
   if (!r.answers || !r.since) {
-    return [r.livePrompts ? `No check has finished yet. ${use}` : "Nothing has been checked yet: no cluster has prompts. The first check runs the morning after one has."];
+    return [r.livePrompts ? `No check has finished yet. ${use}` : `Nothing has been checked yet: no cluster has prompts.${r.firstAsk ? ` Prompts you save now are first asked ${r.firstAsk}.` : ""}`];
   }
   return [
     `Since the first check on ${r.since}, ${domain} was named in ${r.named} of ${count(r.answers, "AI answer")}.` +
@@ -355,7 +383,9 @@ export function invite(d: { tier: TierKey; domain: string; link: string; inviter
  *
  * - a trial that ended without a charge says so, with no receipt line - there
  *   is no receipt - and says restarting is a paid plan, because noTrialLine
- *   refuses a second trial;
+ *   refuses a second trial. From 12 Oct 2026 (email review H2) that includes a
+ *   trial whose first charge failed and which Stripe then cancelled
+ *   (lifecycle-schedule.ts firstChargeFailed);
  * - "pick the plan again; the dashboard picks up where it stopped" was false:
  *   a new order cannot bring an ended client back (cbdffad, review of
  *   2379757). As the ended banner does, the owner is sent to Billing, where
@@ -384,7 +414,9 @@ export function planEnded(d: { tier: TierKey; domain: string; billing: string; t
     heading: `Your ${plan} plan has ended`,
     body: [`The ${plan} plan for ${d.domain} has ended, so no more checks run. Everything read so far is kept.`, "To restart, ask us from Billing in the dashboard."],
     cta: { href: d.billing, label: "Ask us to restart it" },
-    footnote: "Stripe sends the final receipt.",
+    // H2 (12 Oct 2026, email review): "Stripe sends the final receipt" until then. A plan that stops at its
+    // period's end takes no payment as it ends, so there is no receipt to send.
+    footnote: SIGN_IN_ASKS,
   });
 }
 
@@ -412,6 +444,9 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
   const recap: TrialRecap = { named: 7, answers: 60, since: "9 Oct", topOther: { name: "Xero", answers: 31 }, clustersInUse: 2, clusterLimit: 10, livePrompts: 10 };
   const waiting: TrialRecap = { named: 0, answers: 0, since: null, topOther: null, clustersInUse: 1, clusterLimit: 10, livePrompts: 5 };
   const unread: TrialRecap = { named: 0, answers: 0, since: null, topOther: null, clustersInUse: 1, clusterLimit: 10, livePrompts: 0 };
+  // L3 (12 Oct 2026): the nothing-set-up recap says when prompts saved then are first asked, from the cron's run on the
+  // day each email goes - a week in (15 Oct) and three days before the end (19 Oct) - for the UK client these draw.
+  const unreadOn = (today: string): TrialRecap => ({ ...unread, firstAsk: firstAsked({ today, startedOn: "2026-10-09", market: "UK", now: Date.parse(`${today}T05:00:00Z`) }) });
   const setupClusters = ["invoicing software", "expense tracking", "payroll for small business"];
   return {
     // ON-3 (9 Oct 2026): signup passes the market and start, so the strip says the check's time in the client's zone.
@@ -429,23 +464,26 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
     ],
     // 9 Oct 2026 (audit copy-2): the check time in each market's zone, a UK one after the clocks go back, a confirm after
     // checks began, and (review of 3eaa592) a no-scan order whose clusters have no prompt yet, so no check is promised.
+    // 12 Oct 2026 (email review H3): each confirm has its moment, as setup-mail.ts passes it, and a US confirm at
+    // 9:30pm ET - already the next day in London - is drawn, whose first check is two nights away, not "tomorrow".
     setup_confirmed: [
-      { label: "alwaysmentioned, US, confirmed the day it was bought", mail: setupConfirmed({ tier: "mentioned", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 15 }) },
-      { label: "alwaystracked, UK, confirmed the day it was bought", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-26", startedOn: "2026-10-27", livePrompts: 15 }) },
-      { label: "alwaystracked, UK, confirmed after checks began", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 15 }) },
-      { label: "alwaystracked, US, no prompts yet", mail: setupConfirmed({ tier: "tracked", clusters: ["invoicing software"], link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0 }) },
+      { label: "alwaysmentioned, US, confirmed the day it was bought", mail: setupConfirmed({ tier: "mentioned", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-09T18:00:00Z") }) },
+      { label: "alwaystracked, US, confirmed late in the evening it was bought, already the next day in London", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "US", today: "2026-10-10", startedOn: "2026-10-11", livePrompts: 15, now: Date.parse("2026-10-10T01:30:00Z") }) },
+      { label: "alwaystracked, UK, confirmed the day it was bought", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-26", startedOn: "2026-10-27", livePrompts: 15, now: Date.parse("2026-10-26T12:00:00Z") }) },
+      { label: "alwaystracked, UK, confirmed after checks began", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-12T12:00:00Z") }) },
+      { label: "alwaystracked, US, no prompts yet", mail: setupConfirmed({ tier: "tracked", clusters: ["invoicing software"], link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0, now: Date.parse("2026-10-09T18:00:00Z") }) },
     ],
     first_reading: [{ label: "alwaystracked", mail: firstReading({ tier: "tracked", domain, named: 7, answers: 20, page1: 3, keywords: 10, link: appUrl("/", ORIGIN) }) }],
     trial_midpoint: [
       { label: "a week in, US", mail: trialMidpoint({ domain, link: dash, recap, trial: us }) },
-      { label: "a week in with nothing set up, UK", mail: trialMidpoint({ domain, link: dash, recap: unread, trial: uk }) },
+      { label: "a week in with nothing set up, UK", mail: trialMidpoint({ domain, link: dash, recap: unreadOn("2026-10-15"), trial: uk }) },
       { label: "a week in with prompts but no check finished yet, US", mail: trialMidpoint({ domain, link: dash, recap: waiting, trial: us }) },
     ],
     trial_ending: [
       { label: "three days before the end, US", mail: trialEnding({ domain, link: dash, recap, trial: us }) },
       { label: "three days before the end, UK", mail: trialEnding({ domain, link: dash, recap, trial: uk }) },
       { label: "three days before the end with prompts but no check finished yet, US", mail: trialEnding({ domain, link: dash, recap: waiting, trial: us }) },
-      { label: "three days before the end with nothing set up, UK", mail: trialEnding({ domain, link: dash, recap: unread, trial: uk }) },
+      { label: "three days before the end with nothing set up, UK", mail: trialEnding({ domain, link: dash, recap: unreadOn("2026-10-19"), trial: uk }) },
     ],
     invite: [
       { label: "a viewer", mail: invite({ tier: "tracked", domain, link: appUrl("/login", ORIGIN), inviter: "sam@tallyroo.com", role: "viewer" }) },

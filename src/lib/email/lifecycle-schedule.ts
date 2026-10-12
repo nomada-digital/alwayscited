@@ -102,8 +102,8 @@ export function setupStillEmpty(p: { withPrompts: number; clusterLimit: number }
  * finished check to today, and the other brand brandBoard ranks first. Before
  * any check finished, `since` is null and the email says so.
  */
-export function trialRecap(p: { rows: AnswerRow[]; firstDay: Day | null; today: Day; you: string; clustersInUse: number; clusterLimit: number; livePrompts: number }): TrialRecap {
-  const base = { clustersInUse: p.clustersInUse, clusterLimit: p.clusterLimit, livePrompts: p.livePrompts };
+export function trialRecap(p: { rows: AnswerRow[]; firstDay: Day | null; today: Day; you: string; clustersInUse: number; clusterLimit: number; livePrompts: number; firstAsk?: string | null }): TrialRecap {
+  const base = { clustersInUse: p.clustersInUse, clusterLimit: p.clusterLimit, livePrompts: p.livePrompts, firstAsk: p.firstAsk ?? null };
   if (!p.firstDay) return { named: 0, answers: 0, since: null, topOther: null, ...base };
   const range = { from: p.firstDay, to: p.today };
   const named = namedRate(p.rows, range);
@@ -133,15 +133,43 @@ const secs = (v: unknown) => (typeof v === "number" ? v * 1000 : null);
  * trial_end on the deleted subscription, else client_domains.trial_ends_at
  * (8 Oct 2026, review of 7e133a7). The column alone was not enough: signup
  * writes it after the client is made and only logs a failed write, and with
- * it missing a trial that was never charged got the paid copy, "Stripe sends
- * the final receipt". Stripe's comes first because the column is a copy of
+ * it missing a trial that was never charged got the paid copy, which then
+ * promised a receipt (removed 12 Oct 2026, H2). Stripe's comes first because the column is a copy of
  * it - or, when signup could not read the subscription, an estimate.
  */
 export function planEndedInTrial(p: { trialEndsAt: string | null; sub: Record<string, unknown>; now: number }): boolean {
   const stripeEnd = secs(p.sub.trial_end);
-  return endedInTrial({
+  const inTrial = endedInTrial({
     trialEndsAt: stripeEnd !== null ? new Date(stripeEnd).toISOString() : p.trialEndsAt,
     endedAt: secs(p.sub.ended_at) ?? secs(p.sub.canceled_at),
     now: p.now,
   });
+  return inTrial || firstChargeFailed(p.sub);
+}
+
+/** The start of the period a subscription is in: its own current_period_start before API 2025-03-31, its first item's from then. */
+function periodStart(sub: Record<string, unknown>): number | null {
+  const own = secs(sub.current_period_start);
+  if (own !== null) return own;
+  const items = sub.items as { data?: unknown } | null | undefined;
+  const first = Array.isArray(items?.data) ? (items.data[0] as Record<string, unknown> | undefined) : undefined;
+  return first ? secs(first.current_period_start) : null;
+}
+
+/**
+ * A trial whose first charge failed, and which Stripe cancelled after its
+ * retries (12 Oct 2026, email review H2). It ends after trial_end, so
+ * endedInTrial is false, and the client - never charged - got the paid copy.
+ * Stripe says so on the subscription: cancellation_details.reason
+ * payment_failed, in the period the trial's end began. A later period means
+ * a charge went through first, so the paid copy stands; with no period on the
+ * payload nothing is assumed, because the trial copy says "You were not
+ * charged".
+ */
+export function firstChargeFailed(sub: Record<string, unknown>): boolean {
+  const trialEnd = secs(sub.trial_end);
+  const details = sub.cancellation_details as { reason?: unknown } | null | undefined;
+  if (trialEnd === null || details?.reason !== "payment_failed") return false;
+  const start = periodStart(sub);
+  return start !== null && Math.abs(start - trialEnd) <= HOUR;
 }

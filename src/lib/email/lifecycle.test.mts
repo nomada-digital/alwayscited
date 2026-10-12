@@ -108,9 +108,14 @@ test("copy-2: setup_confirmed says when checks run in the client's zone, and pro
   const cases = [
     { why: "US, started tomorrow", d: { market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 5 }, head: "Your first check runs tomorrow at 1:00am ET", line: null },
     { why: "UK, the day after the clocks go back", d: { market: "UK", today: "2026-10-26", startedOn: "2026-10-27", livePrompts: 5 }, head: "Your first check runs tomorrow at 05:00 UK time", line: null },
-    { why: "UK, checks began before the confirm", d: { market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 5 }, head: "Your clusters are set up", line: "Checks run every day at 06:00 UK time." },
-    { why: "US, no prompts, started tomorrow", d: { market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0 }, head: "Your clusters are set up", line: NO_PROMPT_NO_CHECK },
-    { why: "US, no prompts, started yesterday", d: { market: "US", today: "2026-10-09", startedOn: "2026-10-08", livePrompts: 0 }, head: "Your clusters are set up", line: NO_PROMPT_NO_CHECK },
+    // "Checks run every day at 06:00 UK time." until 12 Oct 2026 (email review L2): wrong from 25 Oct. The next run only.
+    { why: "UK, checks began before the confirm", d: { market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 5 }, head: "Your clusters are set up", line: "Checks run every day. The next one runs tomorrow at 06:00 UK time." },
+    // "Your clusters are set up" over "Nothing is checked..." until 12 Oct 2026 (email review L1): the heading now says what is left.
+    { why: "US, no prompts, started tomorrow", d: { market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0 }, head: "Add prompts to start your checks", line: NO_PROMPT_NO_CHECK },
+    { why: "US, no prompts, started yesterday", d: { market: "US", today: "2026-10-09", startedOn: "2026-10-08", livePrompts: 0 }, head: "Add prompts to start your checks", line: NO_PROMPT_NO_CHECK },
+    // Email review H3 (12 Oct 2026): the confirm's moment, 21:30 ET on 9 Oct - 10 Oct in London.
+    { why: "US, confirmed at 21:30 ET, started the day after London's", d: { market: "US", today: "2026-10-10", startedOn: "2026-10-11", livePrompts: 5, now: Date.parse("2026-10-10T01:30:00Z") }, head: "Your first check runs on 11 Oct at 1:00am ET", line: null },
+    { why: "US, confirmed at 21:30 ET, started on London's day", d: { market: "US", today: "2026-10-10", startedOn: "2026-10-10", livePrompts: 5, now: Date.parse("2026-10-10T01:30:00Z") }, head: "Your first check runs tomorrow at 1:00am ET", line: null },
   ];
   for (const c of cases) {
     const m = setupConfirmed({ ...base, ...c.d });
@@ -118,9 +123,12 @@ test("copy-2: setup_confirmed says when checks run in the client's zone, and pro
     assert.ok(m.text.startsWith(`${c.head}\n\n${c.line ? `${c.line}\n\n` : ""}You chose these clusters:\n`), `${c.why}: heading, then ${c.line ?? "no line"}\n${m.text}`);
     assert.ok(m.html.includes(`>${c.head}<`), `${c.why}: the HTML heading`);
     if (c.line) assert.ok(m.html.includes(c.line), `${c.why}: the HTML line`);
-    if (!c.d.livePrompts) assert.doesNotMatch(m.subject + m.text + m.html, /\b(?:first check|every day at)\b|\d:\d\d/, `${c.why}: no check promised`);
+    if (!c.d.livePrompts) assert.doesNotMatch(m.subject + m.text + m.html, /\b(?:first check|every day|clusters are set up)\b|\d:\d\d/, `${c.why}: no check promised`);
   }
-  assert.equal(sets.setup_confirmed.length, 4, "each branch is drawn for approval");
+  // 4 until 12 Oct 2026 (email review H3): the US confirm late in its evening, a day ahead in London, is drawn too.
+  assert.equal(sets.setup_confirmed.length, 5, "each branch is drawn for approval");
+  const evening = sets.setup_confirmed.find((p) => /next day in London/.test(p.label))!.mail;
+  assert.equal(evening.subject, "Your first check runs on 11 Oct at 1:00am ET", "the evening confirm is not told tomorrow");
   assert.ok(sets.setup_confirmed.some((p) => p.mail.text.includes(NO_PROMPT_NO_CHECK)), "the no-prompt case is one of them");
 });
 
@@ -183,6 +191,33 @@ test("every recap body of trial_midpoint and trial_ending is drawn for approval"
     for (const p of sets[name]) {
       assert.equal(Object.values(BODIES).filter((re) => re.test(p.mail.text)).length, 1, `${name} (${p.label}): exactly one recap body`);
     }
+  }
+});
+
+/**
+ * Email review H2 (12 Oct 2026): the paid plan_ended said "Stripe sends the
+ * final receipt". A plan that stops at its period's end takes no payment as it
+ * ends, and Stripe's receipt emails are not a setting we have confirmed.
+ */
+test("H2: no plan_ended promises a receipt", () => {
+  for (const p of sets.plan_ended) assert.doesNotMatch(p.mail.subject + p.mail.text + p.mail.html, /receipt/i, p.label);
+  for (const tier of ["tracked", "mentioned", "cited", "everywhere"] as const) {
+    assert.doesNotMatch(planEnded({ tier, domain: "example.com", billing: "https://example.com/b" }).text, /receipt/i, tier);
+  }
+});
+
+/** Email review L4 (12 Oct 2026): "the pages that were cited instead" said the client was passed over, which it may not have been. */
+test("L4: first_reading does not say the cited pages were cited instead of the client", () => {
+  assert.doesNotMatch(all.first_reading.text + all.first_reading.html, /instead/);
+  assert.match(all.first_reading.text, /the pages the answers cited\./);
+});
+
+/** Email review L3 (12 Oct 2026): "the morning after one has" was a night early for a US client saving in its evening. */
+test("L3: the nothing-set-up recap names when new prompts are first asked, worked out in the client's zone", () => {
+  for (const name of ["trial_midpoint", "trial_ending"] as const) {
+    const p = sets[name].find((c) => /nothing set up/.test(c.label))!;
+    assert.doesNotMatch(p.mail.text, /morning after/, `${name}: the old words`);
+    assert.match(p.mail.text, /Prompts you save now are first asked tomorrow at 06:00 UK time\./, name);
   }
 });
 
