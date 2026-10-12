@@ -5,6 +5,9 @@ import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { type Day, type Range, formatDay } from "@/lib/tracking/figures";
 import { KIND_WORDS, PLACEMENTS_FOOTNOTE, type PlacementsView, type Span, kindFilters, pageParts, shortDay, spanText } from "@/lib/tracking/placement-figures";
 import type { PlacementKind } from "@/lib/tracking/placements";
+import { PLACEMENT_PROMPTS_PER_CLIENT } from "@/lib/tracking/limits";
+import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+import { type PromptRowLite, firstCitedLine, placementPromptOf, promptLine } from "@/lib/diy/prompts/placement-lines";
 
 import DatePicker from "./DatePicker";
 import PlacementsChart from "./PlacementsChart";
@@ -20,12 +23,19 @@ import PlacementsChart from "./PlacementsChart";
  *
  * Nothing here says a placement moved a figure: every span is where the
  * cluster stood at go-live and where it stands now (causal-copy.test.mts).
+ *
+ * 13 Oct 2026, DIY P2 (spec 10 section 4.11): each live row gains two lines
+ * under its page. "First cited: Perplexity 12 Oct" always, from the answers
+ * this screen reads (placement-lines.ts); and, only once
+ * placement_prompts_enabled is on, the prompt the placement added or why it
+ * has none. With the switch off a client sees no prompt line.
  */
 
 const CARD: React.CSSProperties = { background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px" };
 const H2: React.CSSProperties = { margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em" };
 const COLS = "minmax(0, 1fr) 128px 104px 150px 150px 150px";
 const WORDS = ["no", "one", "two", "three", "four", "five"];
+const NO_ORIGINS: ReadonlyMap<string, PromptOrigin> = new Map();
 // The board's type pills. Link insertion's teal is not in the palette, so it takes the neutral hair ground.
 const KIND_PILL: Record<PlacementKind, { bg: string; fg: string }> = {
   guest_post: { bg: T.wash, fg: T.accent },
@@ -69,6 +79,10 @@ export default function Placements({
   query,
   path,
   csvHref,
+  origins = NO_ORIGINS,
+  promptLines = false,
+  firstCited = {},
+  promptRows = [],
 }: {
   brand: string;
   engines: readonly Engine[];
@@ -92,11 +106,29 @@ export default function Placements({
   path: string;
   /** GET /api/app/[client]/report?kind=placements for this cluster and range. */
   csvHref: string;
+  /** DIY P2: each prompt's origin (loadPromptOrigins), which says which prompt a placement added. */
+  origins?: ReadonlyMap<string, PromptOrigin>;
+  /** placement_prompts_enabled: the prompt line is drawn only while it is on. */
+  promptLines?: boolean;
+  /** Per live placement, each engine's first citation of its page (placements-screen.ts). */
+  firstCited?: Record<string, { engine: string; day: Day }[]>;
+  /** The client's prompts, stopped ones too (placements-screen.ts). */
+  promptRows?: PromptRowLite[];
 }) {
   const link = (k: PlacementKind | null, id: string | null, hash: string) => `${path}?${new URLSearchParams({ ...query, ...(k ? { type: k } : {}), ...(id ? { sel: id } : {}) })}${hash}`;
   const rows = view.rows.filter((r) => kind === null || r.kind === kind);
   const filters = kindFilters(view.rows).map((f) => ({ ...f, href: link(f.kind, sel, "#placements-chart") }));
   const since = view.whole.from ? shortDay(view.whole.from) : shortDay(range.from);
+  const engineLabel = (e: string) => ENGINE_SPECS[e as Engine]?.label ?? e;
+  const placementLive = promptRows.filter((q) => isPlacementPrompt(origins, q.id) && (q.stopped_on === null || q.stopped_on > today)).length;
+  /** DIY P2: a live row's first-cited line and, with the switch on, its prompt line. */
+  const linesFor = (r: (typeof view.rows)[number]) =>
+    r.live && r.liveOn
+      ? {
+          cited: firstCitedLine(firstCited[r.id] ?? [], { liveOn: r.liveOn, today, rangeFrom: range.from, label: engineLabel }),
+          prompt: promptLines ? promptLine({ kind: r.kind, live: true, prompt: placementPromptOf(r.id, origins, promptRows), today, placementPromptsLive: placementLive, allowance: PLACEMENT_PROMPTS_PER_CLIENT }) : null,
+        }
+      : null;
   const cell: React.CSSProperties = { display: "grid", gridTemplateColumns: COLS, alignItems: "center", gap: "16px", padding: "12px 24px" };
   const fig = (label: string, figure: string, big: string, sub: string, first = false) => (
     <div style={{ flex: "1 1 200px", padding: "22px 24px", display: "flex", flexDirection: "column", gap: "8px", minWidth: 0, borderLeft: first ? undefined : `1px solid ${T.line}` }}>
@@ -205,16 +237,25 @@ export default function Placements({
               const { host, path: page } = pageParts(r.url);
               const pill = KIND_PILL[r.kind];
               const on = r.id === sel;
+              const lines = linesFor(r);
               return (
                 <div key={r.id} id={`p-${r.id}`} data-placement={r.id} aria-current={on ? "true" : undefined} className="app-pl-grid" style={{ ...cell, borderTop: `1px solid ${T.hair}`, background: on ? T.wash : undefined }}>
-                  <a href={link(kind, on ? null : r.id, `#p-${r.id}`)} data-usage="placement_select" style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, color: T.ink, textDecoration: "none" }}>
-                    {/* At 320 the host column split domains anywhere (R151, 3 Oct 2026): a break only after a dot. */}
-                    <span style={{ fontSize: "14px", fontWeight: 700 }}>
-                      {host.split(".").map((part, i) => (i ? <Fragment key={i}>.<wbr />{part}</Fragment> : part))}
-                    </span>
-                    {/* DS42 (2 Oct 2026): a long path is cut at the column, so hover still reads it whole. */}
-                    <span title={page} style={{ fontSize: "12px", color: T.soft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page}</span>
-                  </a>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
+                    <a href={link(kind, on ? null : r.id, `#p-${r.id}`)} data-usage="placement_select" style={{ display: "flex", flexDirection: "column", gap: "2px", minWidth: 0, color: T.ink, textDecoration: "none" }}>
+                      {/* At 320 the host column split domains anywhere (R151, 3 Oct 2026): a break only after a dot. */}
+                      <span style={{ fontSize: "14px", fontWeight: 700 }}>
+                        {host.split(".").map((part, i) => (i ? <Fragment key={i}>.<wbr />{part}</Fragment> : part))}
+                      </span>
+                      {/* DS42 (2 Oct 2026): a long path is cut at the column, so hover still reads it whole. */}
+                      <span title={page} style={{ fontSize: "12px", color: T.soft, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{page}</span>
+                    </a>
+                    {lines ? (
+                      <span style={{ display: "flex", flexDirection: "column", gap: "2px", fontSize: "12px", lineHeight: 1.4, color: T.soft, overflowWrap: "anywhere" }}>
+                        <span data-line="first-cited">{lines.cited}</span>
+                        {lines.prompt ? <span data-line="prompt" style={{ color: T.ink }}>{lines.prompt}</span> : null}
+                      </span>
+                    ) : null}
+                  </div>
                   <span style={{ justifySelf: "start", padding: "3px 9px", borderRadius: "999px", background: pill.bg, color: pill.fg, fontSize: "12px", fontWeight: 600, whiteSpace: "nowrap" }}>{KIND_WORDS[r.kind]}</span>
                   <span style={{ fontSize: "13px", fontWeight: r.live ? 500 : 600, color: r.live ? T.ink : T.warnFg }}>{r.when}</span>
                   <span className="app-pl-cited" style={{ display: "flex", alignItems: "center", gap: "8px" }}>

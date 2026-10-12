@@ -7,6 +7,7 @@ import { clusterChart } from "./cluster-figures.ts";
 import { type Day, type Range, addDays } from "./figures.ts";
 import { rangeFrom } from "./overview-data.ts";
 import { type PlacementsView, chartSeries, citeRows, pickCluster, placedTier, placementsView } from "./placement-figures.ts";
+import { placementFirstCited } from "../diy/prompts/placement-lines.ts";
 import type { TrackingRepo } from "./repo.ts";
 
 /** The longest "since it started" the screen reads in one go. */
@@ -23,6 +24,15 @@ export type PlacementsScreen = {
   view: PlacementsView;
   /** The two panels (part 4b): weekly over 35 days, daily otherwise. */
   series: ReturnType<typeof chartSeries>;
+  /**
+   * 13 Oct 2026, DIY P2 (spec 10 section 4.11): per live placement, the first
+   * check on which each engine cited its page in the range, from its live day,
+   * in answers to the cluster's prompts - read from the answers this screen
+   * already loads, so it needs no switch.
+   */
+  firstCited: Record<string, { engine: string; day: Day }[]>;
+  /** The client's prompts, stopped ones too, for each placement's prompt line (the origins say which is whose). */
+  promptRows: { id: string; text: string; added_on: Day; stopped_on: Day | null }[];
 };
 
 /**
@@ -56,6 +66,7 @@ export async function placementsScreen(
   const chart = clusterChart({ clusters, questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null, today, engines }, cluster.id);
   if (!chart) return null;
   const questionIds = data.questions.filter((q) => q.cluster_id === cluster.id && (q.stopped_on === null || q.stopped_on > range.from)).map((q) => q.id);
+  const firstCited = placementFirstCited(rows, cluster.id, citeRows(data.answers), questionIds, engines);
   return {
     range,
     stated,
@@ -65,5 +76,7 @@ export async function placementsScreen(
     prompts: questionIds.length,
     view: placementsView({ chart, questionIds, placements: rows.filter((p) => p.cluster_id === cluster.id), cites: citeRows(data.answers), engines }),
     series: chartSeries(chart),
+    firstCited,
+    promptRows: (structure.questions ?? []).map((q) => ({ id: q.id, text: q.text, added_on: q.added_on, stopped_on: q.stopped_on })),
   };
 }

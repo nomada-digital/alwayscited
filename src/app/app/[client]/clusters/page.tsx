@@ -22,6 +22,7 @@ import { slotRefusal } from "@/lib/tracking/slot";
 import { BULK_ID, BULK_MAX, refuseRole } from "@/lib/tracking/stop";
 import { HIDE_DAYS, hiddenUntil } from "@/lib/tracking/upgrade-prompts";
 import { appPath } from "@/lib/app-host";
+import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,8 @@ export default async function ClientClusters({
   const today = repo.today();
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
-  const [data, upgrade, typed] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today), repo.orderKeyword(client.id)]);
+  // 13 Oct 2026, DIY P2: each prompt's origin, for its chip and the "From placements" sub-list (loadOverview reads no origin column).
+  const [data, upgrade, typed, origins] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today), repo.orderKeyword(client.id), loadPromptOrigins(client.id)]);
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const f = one("filter");
   const done = one("done");
@@ -119,6 +121,7 @@ export default async function ClientClusters({
           askSent={ask === "sent" || hid}
           packPrice={packPrice}
           upgrade={{ tier, mode: upgrade.mode, hidden: upgrade.hidden, startedOn: client.started_on ?? today, domain: client.domain }}
+          origins={origins}
         />
       </div>
     </div>

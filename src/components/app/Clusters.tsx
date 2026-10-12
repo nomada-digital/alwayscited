@@ -33,6 +33,9 @@ import { Chip, PositionChip, noChange } from "./Overview";
 import UpgradePrompt from "./UpgradePrompt";
 import { ClearSearch } from "./ClearLinks";
 import { appPath, siteHref } from "@/lib/app-host";
+import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+
+import OriginChip from "./prompts/OriginChip";
 
 /**
  * The Clusters page (BRIEF-3 T6 part 1, 30 Sep 2026; boards-3/Questions.dc.html):
@@ -99,8 +102,11 @@ export default function Clusters({
   packPrice = "",
   upgrade = null,
   subject = null,
+  origins = NO_ORIGINS,
 }: {
   brand: string;
+  /** 13 Oct 2026, DIY P2: each prompt's origin (loadPromptOrigins), for its chip and the "From placements" sub-list. */
+  origins?: ReadonlyMap<string, PromptOrigin>;
   /** R133: the client's brand and domain, so a prompt that names them carries the "Names the brand" chip. */
   subject?: Subject | null;
   /** client_domains.market: the check times are said in its zone (check-time.ts, 9 Oct 2026). */
@@ -161,6 +167,10 @@ export default function Clusters({
   const keep = { ...base, ...(filter === "all" ? {} : { filter }), ...(q ? { q } : {}), ...(open !== null ? { open } : {}) };
   const act = canWrite ? { action: `/api/app/${encodeURIComponent(slug)}/stop`, keep, today } : null;
   const full = used >= clusterLimit;
+  // DIY P2: the chips name Nomada only when the account's mode says nomada (origins.ts originLabel).
+  const mode: UpsellMode = upgrade?.mode ?? "off";
+  // DIY P2: the angle slots leave placement prompts out, as limits.ts counts them.
+  const slotCards = cards.map((c) => ({ ...c, prompts: c.prompts.filter((p) => !isPlacementPrompt(origins, p.id)) }));
   const ungrouped = ungroupedShown(data.questions, today);
   const live = cards.filter((c) => c.status !== "pending");
   const filters: [Filter, string][] = [
@@ -297,7 +307,7 @@ export default function Clusters({
           <span style={{ ...HEAD, textAlign: "right" }}>{since ? `Position, vs ${since}` : "Position"}</span>
         </div>
         {shown.map((c) => (
-          <ClusterRow key={c.id} c={c} brand={brand} subject={subject} open={c.id === openId} toggle={href({ open: c.id === openId ? "" : c.id })} since={since} act={act} refill={toast?.done === "stopped" && toast.kind === "prompt" ? toast.id : null} rekey={rekey?.card === c.id ? rekey : null} redraft={redraft === c.id} rekeyed={toast?.done === "rekeyed" && toast.id === c.id} typed={prefill === c.id ? typed : null} next={next} openHref={appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(c.id)}?${new URLSearchParams(base)}`)} vs={vs} firstAsk={firstAsk} />
+          <ClusterRow key={c.id} c={c} origins={origins} mode={mode} slug={slug} brand={brand} subject={subject} open={c.id === openId} toggle={href({ open: c.id === openId ? "" : c.id })} since={since} act={act} refill={toast?.done === "stopped" && toast.kind === "prompt" ? toast.id : null} rekey={rekey?.card === c.id ? rekey : null} redraft={redraft === c.id} rekeyed={toast?.done === "rekeyed" && toast.id === c.id} typed={prefill === c.id ? typed : null} next={next} openHref={appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(c.id)}?${new URLSearchParams(base)}`)} vs={vs} firstAsk={firstAsk} />
         ))}
         {shown.length === 0 ? (
           <div style={{ padding: "32px 24px", borderTop: `1px solid ${T.line}`, fontSize: "14px", color: T.soft }}>
@@ -325,17 +335,18 @@ export default function Clusters({
         ) : null}
         {prompt && cta ? <UpgradePrompt copy={prompt} cta={cta} slug={slug} items={items} keep={keep} /> : null}
       </section>
-      {ungrouped.length ? <Ungrouped rows={searchPrompts(ungrouped, q)} all={ungrouped} term={q.trim()} act={act} subject={subject} targets={moveTargets(cards, data.questions)} clusters={cards.filter((c) => c.stoppedOn === null).length} today={today} market={market} /> : null}
+      {ungrouped.length ? <Ungrouped rows={searchPrompts(ungrouped, q)} all={ungrouped} term={q.trim()} act={act} subject={subject} targets={moveTargets(cards, data.questions, origins)} clusters={cards.filter((c) => c.stoppedOn === null).length} today={today} market={market} origins={origins} mode={mode} slug={slug} /> : null}
       <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: T.soft, maxWidth: "820px" }}>
         {/* DS72 (R173 pass 10, 2 Oct 2026): with no cluster read yet there is no number beside any engine to explain. */}
         {cards.some((c) => c.now.den > 0) ? `The number beside each engine is the days it named ${brand} for that prompt, out of the days checked. ` : ""}Stopping a prompt or a cluster keeps its history in your reports. A new prompt or cluster starts at the next daily check.
       </p>
-      {toast ? <Toast t={toast} cards={cards} ungrouped={ungrouped} act={act} next={next} dismiss={`?${new URLSearchParams(keep)}`} /> : null}
+      {toast ? <Toast t={toast} cards={slotCards} ungrouped={ungrouped} act={act} next={next} dismiss={`?${new URLSearchParams(keep)}`} /> : null}
     </div>
   );
 }
 
 const HEAD: React.CSSProperties = { fontSize: "12px", fontWeight: 600, color: T.soft };
+const NO_ORIGINS: ReadonlyMap<string, PromptOrigin> = new Map();
 
 type PromptRow = OverviewData extends { questions: readonly (infer R)[] } ? R : never;
 
@@ -353,14 +364,14 @@ export function ungroupedShown(rows: readonly PromptRow[], today: string): Promp
 
 type Target = { id: string; label: string };
 
-/** The clusters a prompt can move into: live, with fewer than PROMPTS_PER_CLUSTER live prompts. */
-export function moveTargets(cards: readonly ClusterCard[], rows: readonly PromptRow[]): Target[] {
+/** The clusters a prompt can move into: live, with fewer than PROMPTS_PER_CLUSTER live prompts in their angle slots (placement prompts are not in one, DIY P2). */
+export function moveTargets(cards: readonly ClusterCard[], rows: readonly PromptRow[], origins: ReadonlyMap<string, PromptOrigin> = NO_ORIGINS): Target[] {
   return cards
-    .filter((c) => c.stoppedOn === null && rows.filter((q) => q.cluster_id === c.id && q.stopped_on === null).length < PROMPTS_PER_CLUSTER)
+    .filter((c) => c.stoppedOn === null && rows.filter((q) => q.cluster_id === c.id && q.stopped_on === null && !isPlacementPrompt(origins, q.id)).length < PROMPTS_PER_CLUSTER)
     .map((c) => ({ id: c.id, label: c.keyword ?? c.name }));
 }
 
-function Ungrouped({ rows, all, term, act, subject, targets, clusters, today, market }: { rows: PromptRow[]; all: PromptRow[]; term: string; act: Act; subject: Subject | null; targets: Target[]; clusters: number; today: string; market: string }) {
+function Ungrouped({ rows, all, term, act, subject, targets, clusters, today, market, origins, mode, slug }: { rows: PromptRow[]; all: PromptRow[]; term: string; act: Act; subject: Subject | null; targets: Target[]; clusters: number; today: string; market: string; origins: ReadonlyMap<string, PromptOrigin>; mode: UpsellMode; slug: string }) {
   // DS13: ticks and a bulk bar once two or more live rows can be changed together.
   const bulk = !!act && rows.filter((q) => q.stopped_on === null).length >= 2;
   // DS55: the page's search narrows this list too, and the heading counts the matches, as Who is named does.
@@ -398,6 +409,7 @@ function Ungrouped({ rows, all, term, act, subject, targets, clusters, today, ma
               <span style={{ flex: "1 1 260px", minWidth: 0, fontSize: "14px", color: stopping ? T.soft : T.ink, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
                 {q.text}
                 {subject && namesBrandIn(q.text, subject) ? <BrandedChip /> : null}
+                <OriginChip origin={origins.get(q.id)} slug={slug} mode={mode} />
                 {stopping ? <span style={{ fontSize: "12px", color: T.soft }}>Stops after today’s check</span> : null}
                 {/* DS76 (2 Oct 2026): a prompt added for tomorrow is listed here but not yet asked, which the Overview's count leaves out. */}
                 {!stopping && q.added_on > today ? <span style={{ fontSize: "12px", color: T.accent, fontWeight: 600 }}>{`First check ${q.added_on === addDays(today, 1) ? "tomorrow" : formatDay(q.added_on)} at ${checkTime(q.added_on, market)}`}</span> : null}
@@ -854,13 +866,73 @@ function PendingEditor({
 }
 
 /**
+ * 13 Oct 2026, DIY P2 (spec 10 section 4.10): the prompts added from live
+ * placements, under the 5 angle slots and outside them. Nomada adds and stops
+ * these from its own placement log (placement-prompt.ts), so the rows carry no
+ * Stop: a placement prompt ends when its placement is removed. Each row reads
+ * as an angle prompt's does - the engines' days, the rate, the change - and a
+ * first reading is shown, not scored.
+ */
+function FromPlacements({ prompts, origins, mode, slug, brand, pending, next, since, vs }: { prompts: ClusterCard["prompts"]; origins: ReadonlyMap<string, PromptOrigin>; mode: UpsellMode; slug: string; brand: string; pending: boolean; next: string; since: string | null; vs: string | null }) {
+  const id = `fp-${prompts[0]!.id}`;
+  return (
+    <section aria-labelledby={id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+        <span id={id} style={{ fontSize: "14px", fontWeight: 700, color: T.ink }}>
+          From placements
+        </span>
+        <span style={{ fontSize: "12px", color: T.soft }}>These don&apos;t use your 5 prompt slots.</span>
+      </div>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+        {prompts.map((p) => (
+          <li key={p.id} className="app-cl-prompt" data-placement-prompt={p.id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 52px 76px", alignItems: "center", gap: "12px", minHeight: `${ROW_H}px`, boxSizing: "border-box", padding: "8px 12px 8px 14px", borderRadius: "12px", background: T.surface, border: `1px solid ${T.hair}`, opacity: p.stoppedOn !== null ? 0.6 : 1 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "7px", minWidth: 0 }}>
+              <div className="app-cl-text-row" style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+                <OriginChip origin={origins.get(p.id)} slug={slug} mode={mode} />
+                <span title={p.text} className="app-cl-text" style={{ fontSize: "14px", fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {p.text}
+                </span>
+              </div>
+              {p.stoppedOn !== null ? (
+                <span style={{ fontSize: "12px", color: T.soft, fontWeight: 600 }}>{`Stopped from ${formatDay(p.stoppedOn)}. Its history stays in your reports.`}</span>
+              ) : p.pending || (pending && !p.fixed) ? (
+                <span style={{ fontSize: "12px", color: T.accent, fontWeight: 600 }}>{`First check tomorrow at ${next}`}</span>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                  {p.daysNamed.map((d) => (
+                    <span key={d.engine} title={`${ENGINE_SPECS[d.engine as Engine]?.label ?? d.engine}: named ${brand} on ${d.days} of ${d.of} days`} style={{ display: "inline-flex", alignItems: "center", gap: "4px", opacity: d.days ? 1 : 0.4 }}>
+                      <EngineLogo engine={d.engine as Engine} size={16} />
+                      <span style={{ fontSize: "12px", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{d.days}</span>
+                    </span>
+                  ))}
+                  <span style={{ fontSize: "12px", color: T.soft }}>{daysOfLine(p)}</span>
+                </div>
+              )}
+            </div>
+            <span style={{ fontSize: "16px", fontWeight: 700, textAlign: "right", fontVariantNumeric: "tabular-nums" }} title={p.pending ? undefined : basisLine(p.now, "answers")}>
+              {pctText(p.now.pct)}
+            </span>
+            <span style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Chip value={p.before && p.now.pct !== null && p.before.pct !== null ? p.now.pct - p.before.pct : null} unit=" pts" none={p.pending ? "Tomorrow" : since ? "New" : ""} vs={vs} />
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
  * `refill` (R103, 30 Sep 2026): the prompt just stopped. Once a prompt has a
  * reading its text is fixed, so a rewording is "Stop and add a new one": the
  * stop frees its slot at once, and that slot opens with the old text in it to
  * edit, as a new row with its own history.
  */
 function ClusterRow({
-  c,
+  c: card,
+  origins,
+  mode,
+  slug,
   brand,
   subject,
   open,
@@ -878,6 +950,10 @@ function ClusterRow({
   firstAsk,
 }: {
   c: ClusterCard;
+  /** DIY P2: each prompt's origin; placement prompts are drawn under the angle slots, not in them. */
+  origins: ReadonlyMap<string, PromptOrigin>;
+  mode: UpsellMode;
+  slug: string;
   brand: string;
   subject: Subject | null;
   open: boolean;
@@ -897,7 +973,11 @@ function ClusterRow({
   /** When drafts saved now are first asked (setup-landing.ts firstAsked). */
   firstAsk: string;
 }) {
-  const pending = c.status === "pending";
+  // 13 Oct 2026, DIY P2: the card's prompts in its angle slots, and the placement prompts beside them (spec 4.10).
+  // Every figure on the card still counts them all; the slots, the list and its editor take the angle prompts only.
+  const c: ClusterCard = { ...card, prompts: card.prompts.filter((p) => !isPlacementPrompt(origins, p.id)) };
+  const fromPlacements = card.prompts.filter((p) => isPlacementPrompt(origins, p.id));
+  const pending = card.status === "pending";
   // A stop made today shows until tomorrow's check, with Undo; the slot is already free.
   const stopped = c.stoppedOn !== null;
   // ON-1: no prompt in it at all - a signup with no scan - so nothing in it is checked yet.
@@ -916,7 +996,7 @@ function ClusterRow({
     : pending
       ? `${lead ? `${lead}. ` : ""}Added today, first check tomorrow at ${next}${basis ? `. ${basis}` : ""}`
       : `${lead ? `${lead}. ` : ""}Since ${formatDay(c.started_on)}`;
-  const named = namedCount(c);
+  const named = namedCount(card);
   const mid = BLOCK_H / 2;
   return (
     <div style={{ borderTop: `1px solid ${T.line}`, background: open ? T.bg : T.surface }}>
@@ -931,9 +1011,9 @@ function ClusterRow({
           <span style={{ fontSize: "12px", color: T.soft }}>{meta}</span>
         </span>
         <span className="app-hide-sm" style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-          <span style={{ fontSize: "12px", color: T.soft }}>{pending ? "Checked from tomorrow" : `${named} of ${c.prompts.length} name you`}</span>
+          <span style={{ fontSize: "12px", color: T.soft }}>{pending ? "Checked from tomorrow" : `${named} of ${card.prompts.length} name you`}</span>
           <span style={{ display: "flex", gap: "4px" }}>
-            {c.prompts.map((p) => {
+            {card.prompts.map((p) => {
               const fill = pending && !p.fixed ? T.wash : p.now.num > 0 ? T.accent : T.line;
               return <span key={p.id} style={{ width: "22px", height: "8px", borderRadius: "4px", background: fill }} />;
             })}
@@ -989,6 +1069,7 @@ function ClusterRow({
                   <div style={{ display: "flex", flexDirection: "column", gap: "7px", minWidth: 0 }}>
                     <div className="app-cl-text-row" style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
                       <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: "6px", background: T.chip, color: T.soft, fontSize: "11px", fontWeight: 700, letterSpacing: ".02em", textTransform: "uppercase" }}>{p.angle ?? "Prompt"}</span>
+                      <OriginChip origin={origins.get(p.id)} slug={slug} mode={mode} />
                       <span title={p.text} className="app-cl-text" style={{ fontSize: "14px", fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {p.text}
                       </span>
@@ -1078,6 +1159,7 @@ function ClusterRow({
               ) : null}
             </div>
           </div>
+          {fromPlacements.length ? <FromPlacements prompts={fromPlacements} origins={origins} mode={mode} slug={slug} brand={brand} pending={pending} next={next} since={since} vs={vs} /> : null}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "13px", color: T.soft }}>
               {c.status === "added" ? `Added ${formatDay(c.started_on)}, so there is no earlier period to compare against yet.` : pending ? `Its prompts are asked from tomorrow's check, at ${next}.` : "Dates and comparisons apply to the prompts and the keyword alike."}

@@ -25,12 +25,32 @@ import { PROMPT_TRACKED } from "./prompt-text.ts";
  * The refusals are pure so the tests can run each one. The writers below are
  * the only network half; the one runtime import (brand-name.ts) is relative
  * and dependency-free, so Node's runner can still load this.
+ *
+ * 13 Oct 2026, DIY P2 (spec 10 sections 2.5, 6.7 and 7.3; Danny's 12 Oct call,
+ * "prompts come from placements"): a prompt added from a live placement has
+ * `allowance = 'placement'`. It sits outside its cluster's 5 angle slots and
+ * the client's `cluster_limit` x 5, and is counted in its own allowance:
+ * PLACEMENT_PROMPTS_PER_CLIENT live per client, across every cluster. The
+ * angle-slot and client counts below leave those rows out; only
+ * `insertPrompts(..., { allowance: "placement" })` counts them. Before
+ * 20261013010000 is applied there is no allowance column, so every live
+ * prompt is an angle-slot prompt and none is a placement one.
  */
 
 export const CLUSTER_BASE = 10;
 export const CLUSTERS_PER_PACK = 5;
 export const PROMPTS_PER_CLUSTER = 5;
 export const KEYWORDS_PER_CLUSTER = 1;
+
+/**
+ * Placement prompts live per client, across every cluster (13 Oct 2026, DIY
+ * P2). Per client, not per cluster, because each one adds a read on every
+ * engine to a daily run already measured at 264-279 s against its 270 s
+ * budget (spec 10 section 5.5). Raised only after a placed client's run is
+ * measured under 240 s with them in it, with the reading and its date here.
+ */
+export const PLACEMENT_PROMPTS_PER_CLIENT = 10;
+export const PLACEMENT_FULL = `Placement prompt allowance full (${PLACEMENT_PROMPTS_PER_CLIENT})`;
 
 /** The pack rule: 10 + 5 per pack. Set by the webhook on `customer.subscription.updated`; no other writer. */
 export function clusterLimitFor(packs: number): number {
@@ -61,6 +81,11 @@ export function refusePrompts(p: { clientLive: number; clusterLive: number | nul
   const total = p.clusterLimit * PROMPTS_PER_CLUSTER;
   if (p.clientLive + adding > total) return `At the limit of ${total} prompts (${p.clusterLimit} clusters).`;
   return null;
+}
+
+/** A placement prompt is refused when the client already has PLACEMENT_PROMPTS_PER_CLIENT live; the angle slots are not asked. */
+export function refusePlacementPrompts(live: number, adding = 1): string | null {
+  return live + adding > PLACEMENT_PROMPTS_PER_CLIENT ? PLACEMENT_FULL : null;
 }
 
 /** A keyword is refused when its cluster already has one live, or the client has one per cluster already. */
@@ -107,15 +132,39 @@ async function liveCount(db: SupabaseClient, table: string, column: string, valu
   return count ?? 0;
 }
 
-/** The room for prompts on a client, and in a cluster when one is named. */
+/** The column is not there yet: Postgres' undefined_column, or PostgREST's schema-cache miss (a deploy before its migration). */
+export function missingColumn(e: { code?: string; message: string } | null | undefined): boolean {
+  if (!e) return false;
+  return e.code === "42703" || e.code === "PGRST204" || /column .* does not exist|Could not find the '.*' column/i.test(e.message);
+}
+
+/**
+ * Live prompts on a client or in a cluster, in one pool: the angle slots
+ * (`allowance` null) or the placement allowance. Before the allowance column
+ * exists every live prompt is a slot prompt and none is a placement one.
+ */
+export async function livePromptCount(db: SupabaseClient, column: "client_domain_id" | "cluster_id", value: string, pool: "slots" | "placement"): Promise<number | string> {
+  const live = () => db.from("tracked_questions").select("id", { count: "exact", head: true }).eq(column, value).is("stopped_on", null);
+  const { count, error } = await (pool === "placement" ? live().eq("allowance", "placement") : live().is("allowance", null));
+  if (missingColumn(error)) {
+    if (pool === "placement") return 0;
+    const { count: all, error: allErr } = await live();
+    if (allErr) return `Could not count tracked_questions: ${allErr.message}`;
+    return all ?? 0;
+  }
+  if (error) return `Could not count tracked_questions: ${error.message}`;
+  return count ?? 0;
+}
+
+/** The room for prompts on a client, and in a cluster when one is named. Placement prompts are not in it (DIY P2). */
 export async function readPromptRoom(db: SupabaseClient, clientId: string, clusterId: string | null): Promise<{ room: number; limits: { clientLive: number; clusterLive: number | null; clusterLimit: number } } | string> {
   const clusterLimit = await clusterLimitOf(db, clientId);
   if (typeof clusterLimit === "string") return clusterLimit;
-  const clientLive = await liveCount(db, "tracked_questions", "client_domain_id", clientId);
+  const clientLive = await livePromptCount(db, "client_domain_id", clientId, "slots");
   if (typeof clientLive === "string") return clientLive;
   let clusterLive: number | null = null;
   if (clusterId) {
-    const n = await liveCount(db, "tracked_questions", "cluster_id", clusterId);
+    const n = await livePromptCount(db, "cluster_id", clusterId, "slots");
     if (typeof n === "string") return n;
     clusterLive = n;
   }
@@ -161,18 +210,47 @@ export async function readSubject(db: SupabaseClient, clientId: string): Promise
   return { brand: (data.brand_name as string | null) ?? null, domain: data.domain as string, aliases: (data.brand_aliases as string[] | null) ?? [] };
 }
 
-export type PromptRow = { text: string; source: string; added_on: string; added_by: string; angle?: string | null };
+/**
+ * A prompt to insert. The origin fields (13 Oct 2026, DIY P2) are written only
+ * when given, so a writer that sets none still inserts before the
+ * prompt_origins migration is applied. `allowance` is never taken from the
+ * row: it is `insertPrompts`' `opts.allowance`, so the pool a row lands in is
+ * always the pool it was counted against.
+ */
+export type PromptRow = {
+  text: string;
+  source: string;
+  added_on: string;
+  added_by: string;
+  angle?: string | null;
+  origin_kind?: "setup" | "client" | "nomada" | "placement" | "opportunity" | "momentum";
+  origin_ref?: string | null;
+  allowance?: "placement" | null;
+};
 
-/** Insert prompts into a client (and a cluster, or ungrouped). The whole batch is refused if it does not fit. */
-export async function insertPrompts(db: SupabaseClient, clientId: string, clusterId: string | null, rows: PromptRow[]): Promise<Written> {
+/**
+ * Insert prompts into a client (and a cluster, or ungrouped). The whole batch is refused if it does not fit.
+ * With `opts.allowance = "placement"` (DIY P2) the rows go into a cluster in the placement allowance: counted
+ * against PLACEMENT_PROMPTS_PER_CLIENT, and never against the angle slots or the client's cluster_limit x 5.
+ */
+export async function insertPrompts(db: SupabaseClient, clientId: string, clusterId: string | null, rows: PromptRow[], opts: { allowance?: "placement" } = {}): Promise<Written> {
   if (!rows.length) return { ok: true, ids: [] };
-  const read = await readPromptRoom(db, clientId, clusterId);
-  if (typeof read === "string") return { ok: false, message: read };
-  const refused = refusePrompts(read.limits, rows.length);
-  if (refused) return { ok: false, message: refused };
+  const placement = opts.allowance === "placement";
+  if (placement) {
+    if (!clusterId) return { ok: false, message: "A placement prompt goes in its placement's cluster." };
+    const live = await livePromptCount(db, "client_domain_id", clientId, "placement");
+    if (typeof live === "string") return { ok: false, message: live };
+    const refused = refusePlacementPrompts(live, rows.length);
+    if (refused) return { ok: false, message: refused };
+  } else {
+    const read = await readPromptRoom(db, clientId, clusterId);
+    if (typeof read === "string") return { ok: false, message: read };
+    const refused = refusePrompts(read.limits, rows.length);
+    if (refused) return { ok: false, message: refused };
+  }
   const { data, error } = await db
     .from("tracked_questions")
-    .insert(rows.map((r) => ({ ...r, client_domain_id: clientId, cluster_id: clusterId })))
+    .insert(rows.map((r) => ({ ...withoutAllowance(r), ...(placement ? { allowance: "placement" } : {}), client_domain_id: clientId, cluster_id: clusterId })))
     .select("id");
   // ON-1 review (9 Oct 2026): the room and text reads above are not a lock. Two saves of a cluster's drafts at once -
   // a double click before the page hydrates, or setup and Clusters in two tabs - both pass them, and one cluster would
@@ -181,6 +259,12 @@ export async function insertPrompts(db: SupabaseClient, clientId: string, cluste
   if (error?.code === "23505") return { ok: false, message: PROMPT_TRACKED };
   if (error) return { ok: false, message: `Could not add the prompts: ${error.message}` };
   return { ok: true, ids: (data ?? []).map((r) => r.id as string) };
+}
+
+function withoutAllowance(r: PromptRow): Omit<PromptRow, "allowance"> {
+  const out: PromptRow = { ...r };
+  delete out.allowance;
+  return out;
 }
 
 export type KeywordRow = { keyword: string; added_on: string; added_by: string; search_volume?: number | null; intent?: string | null };
@@ -260,7 +344,7 @@ export function refuseGrouping(p: { ids: string[]; ungrouped: ReadonlySet<string
 export async function groupPrompts(db: SupabaseClient, clientId: string, clusterId: string, ids: string[], angles: ReadonlyMap<string, Angle | null> = new Map()): Promise<Written> {
   const { data: live, error } = await db.from("tracked_questions").select("id, angle").eq("client_domain_id", clientId).is("cluster_id", null).is("stopped_on", null);
   if (error) return { ok: false, message: `Could not read the ungrouped prompts: ${error.message}` };
-  const clusterLive = await liveCount(db, "tracked_questions", "cluster_id", clusterId);
+  const clusterLive = await livePromptCount(db, "cluster_id", clusterId, "slots");
   if (typeof clusterLive === "string") return { ok: false, message: clusterLive };
   const refused = refuseGrouping({ ids, ungrouped: new Set((live ?? []).map((r) => r.id as string)), clusterLive });
   if (refused) return { ok: false, message: refused };

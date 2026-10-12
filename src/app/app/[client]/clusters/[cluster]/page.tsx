@@ -18,6 +18,7 @@ import { dayPlan } from "@/lib/tracking/read-shape";
 import { writeRole } from "@/lib/tracking/member";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { appPath } from "@/lib/app-host";
+import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 
 export const dynamic = "force-dynamic";
 
@@ -64,10 +65,12 @@ export default async function ClientCluster({
   // DB-2 (9 Oct 2026): `?day=` shows that check's answers instead of the latest. Only the date comes from the
   // URL: the client is the session's member client above, the prompt one of this cluster's own (read-shape.ts dayPlan).
   const day = pickedDay(sp.day, today);
-  const [latest, notes, upgrade] = await Promise.all([
+  // 13 Oct 2026, DIY P2: each prompt's origin, and the account's mode for the chips' words (loadOverview reads no origin column).
+  const [latest, notes, upgrade, origins] = await Promise.all([
     picked && detail.card.status !== "pending" ? repo.answerDay(client.id, dayPlan(picked.id, range.to, day)) : null,
     repo.clusterNotes(client.id, detail.card.prompts.map((p) => p.id)),
     repo.upgradeContext(client.id, email, today),
+    loadPromptOrigins(client.id),
   ]);
 
   return (
@@ -96,6 +99,10 @@ export default async function ClientCluster({
           noteAction={`/api/app/${encodeURIComponent(slug)}/note`}
           engine={engineTab(sp.engine, engines)}
           clustersPath={appPath(`/${slug}/clusters`)}
+          origins={origins}
+          mode={upgrade.mode}
+          slug={slug}
+          placementsPath={appPath(`/${slug}/placements`)}
         />
       </div>
     </div>

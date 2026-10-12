@@ -1,7 +1,7 @@
 import { keywordForm } from "../scan/dataforseo-request.ts";
 
 import { type KeywordCheck, precheckKeyword, refuseDrafts, signCheck, verifyCheck } from "./add-cluster.ts";
-import { fixtureAccount, fixtureClients, fixtureMode, type Fixture, type FixtureMember } from "./fixture-mode.ts";
+import { fixtureAccount, fixtureClients, fixtureMode, placementAllowance, type Fixture, type FixtureMember } from "./fixture-mode.ts";
 import { type Edit, refuseEdits } from "./edit.ts";
 import { ANGLES, PROMPTS_PER_CLUSTER, angleFor, freeAngle, refuseCluster, refuseEdit, refuseGrouping, refuseKeyword, refusePrompts } from "./limits.ts";
 import { refuseDraftsAt } from "./prompt-text.ts";
@@ -75,7 +75,8 @@ function refuseRoom(f: Fixture, kind: StopKind, row: { stopped_on: Day | null; c
   if (kind === "cluster") return refuseCluster(clusters.filter((c) => c.stopped_on === null).length, clusterLimit);
   const clusterId = row.cluster_id ?? null;
   if (clusterId && clusters.find((c) => c.id === clusterId)?.stopped_on != null) return "Its cluster is stopped. Undo the cluster instead.";
-  const live = questions.filter((q) => q.stopped_on === null);
+  // 13 Oct 2026, DIY P2: a placement prompt is not in an angle slot, as limits.ts counts.
+  const live = questions.filter((q) => q.stopped_on === null && !placementAllowance(q));
   return refusePrompts({ clientLive: live.length, clusterLive: clusterId ? live.filter((q) => q.cluster_id === clusterId).length : null, clusterLimit });
 }
 
@@ -99,7 +100,9 @@ export function fixtureFillSlots(f: Fixture, p: { clusterId: string; slots: read
     const refused = refuseSlotText(p.slots[i]!.text, [...mine.map((q) => q.text), ...p.slots.slice(0, i).map((s) => s.text)]);
     if (refused) return { ok: false, message: refused, at: i };
   }
-  const room = refusePrompts({ clientLive: live.length, clusterLive: mine.length, clusterLimit: f.client.cluster_limit }, p.slots.length);
+  // 13 Oct 2026, DIY P2: the text is checked against every live prompt in the cluster (the database's index is), the room against the angle slots only (limits.ts).
+  const slots = (rows: typeof live) => rows.filter((q) => !placementAllowance(q)).length;
+  const room = refusePrompts({ clientLive: slots(live), clusterLive: slots(mine), clusterLimit: f.client.cluster_limit }, p.slots.length);
   if (room) return { ok: false, message: room };
   const taken = questions.map((q) => q.id);
   const rows = p.slots.map((s) => {
@@ -264,7 +267,8 @@ export function fixtureGroup(f: Fixture, p: { clusterId: string; id: string; rol
   if (!c) return { ok: false, message: "That cluster is not on this client." };
   if (c.stopped_on !== null) return { ok: false, message: "That cluster is stopped." };
   const live = questions.filter((q) => q.stopped_on === null);
-  const mine = live.filter((q) => q.cluster_id === p.clusterId);
+  // 13 Oct 2026, DIY P2: the cluster's angle slots only, as limits.ts's groupPrompts counts.
+  const mine = live.filter((q) => q.cluster_id === p.clusterId && !placementAllowance(q));
   const ungrouped = new Set(live.filter((q) => q.cluster_id === null).map((q) => q.id));
   const refused = refuseGrouping({ ids: [p.id], ungrouped, clusterLive: mine.length });
   if (refused) return { ok: false, message: refused };

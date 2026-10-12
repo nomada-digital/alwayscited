@@ -1,0 +1,10 @@
+{
+  "full": [
+    { "id": "q1-1", "source": "scan", "origin_kind": null, "origin_ref": null, "allowance": null },
+    { "id": "q1-2", "source": "scan", "origin_kind": "setup", "origin_ref": null, "allowance": null },
+    { "id": "q1-3", "source": "client", "origin_kind": "client", "origin_ref": null, "allowance": null },
+    { "id": "q1-4", "source": "nomada", "origin_kind": null, "origin_ref": null, "allowance": null },
+    { "id": "q1-5", "source": "client", "origin_kind": null, "origin_ref": null, "allowance": null },
+    { "id": "q2-1", "source": "nomada", "origin_kind": "nomada", "origin_ref": null, "allowance": null }
+  ]
+}

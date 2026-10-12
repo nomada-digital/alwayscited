@@ -148,8 +148,8 @@ const fixtureRepo: TrackingRepo = {
     return f.clusterNotes.filter((n) => questionIds.includes(n.question_id)).sort((a, b) => b.note_date.localeCompare(a.note_date));
   },
   async upgradeContext() {
-    // The fixture's account is ours, and nobody has hidden a prompt.
-    return { mode: "nomada", hidden: new Set() };
+    // The fixture's account is ours, and nobody has hidden a prompt. 13 Oct 2026, DIY P2: placed-agency's is an agency's.
+    return { mode: fixture().mode ?? "nomada", hidden: new Set() };
   },
   async placements(clientId) {
     const f = fixture();

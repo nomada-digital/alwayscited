@@ -7,6 +7,7 @@ import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, resolve
 import { type Fixture, expandFixture, fixtureState } from "./fixture-mode.ts";
 import type { OverviewData } from "./overview-data.ts";
 import { chartSeries, citeRows, placementsView } from "./placement-figures.ts";
+import { placementFirstCited } from "../diy/prompts/placement-lines.ts";
 import { urlKey } from "./placements.ts";
 import { presets } from "./date-range.ts";
 import { PAGE } from "../supabase/page.ts";
@@ -497,7 +498,8 @@ function placements(data: OverviewData, f: Fixture, range: Range, id: string) {
   if (!chart) return null;
   const questionIds = data.questions.filter((q) => q.cluster_id === id && (q.stopped_on === null || q.stopped_on > range.from)).map((q) => q.id);
   const rows = f.placements.filter((p) => p.cluster_id === id).map((p) => ({ ...p, url_key: urlKey(p.url) ?? "" }));
-  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart) };
+  // 13 Oct 2026, DIY P2: each live placement's first citation per engine, from the same cites (spec 10 section 4.11).
+  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart), firstCited: placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines) };
 }
 
 test("Placements draws the same from its cluster's prompts, without brands, as from the whole read", () => {
@@ -557,6 +559,8 @@ const USES: { what: string; path: string; use: RegExp; binds: number; lines: [pa
     lines: [
       ["answers: data.answers, serp: data.serp, range, before: null", "answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id)"],
       ["cites: citeRows(data.answers)", "cites: citeRows(data.answers), engines"],
+      // 13 Oct 2026, DIY P2: the first-cited line on each live placement (spec 10 section 4.11), from the same cluster's cites.
+      ["placementFirstCited(rows, cluster.id, citeRows(data.answers)", "placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines)"],
     ],
   },
   {

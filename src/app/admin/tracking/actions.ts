@@ -15,6 +15,7 @@ import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { RERUN_BUTTON } from "@/lib/tracking/rerun";
 import { adminEdit, adminStop, isAdminKind } from "@/lib/tracking/admin-edit";
 import { placementFields } from "@/lib/tracking/placements";
+import { addPlacementPrompt, placementPromptMessage, stopPlacementPrompt } from "@/lib/diy/prompts/placement-prompt";
 import { clearScope } from "@/lib/tracking/scope";
 
 /**
@@ -317,9 +318,25 @@ const placementInput = (form: FormData) => ({
 });
 
 /**
+ * 13 Oct 2026, DIY P2 (spec 10 section 6.7): the placement prompt hook. Called
+ * when a save leaves a placement live - logged live, moved to live, or the
+ * row's Retry (prompt=1) - and never for a row merely re-saved while live, so
+ * switching placement_prompts_enabled on backfills nothing in bulk: each
+ * earlier placement gets its prompt through its own Retry. `insertion_prompt`
+ * is the "Add a prompt from this article's title" tick a link insertion needs.
+ * The hook reads the switch first; while it is off nothing is fetched.
+ */
+async function placementPrompt(db: ReturnType<typeof supabaseAdmin>, form: FormData, p: { clientId: string; placementId: string; saved: string }): Promise<string> {
+  const o = await addPlacementPrompt(db, { clientId: p.clientId, placementId: p.placementId, insertion: text(form, "insertion_prompt") === "1", today: trackingDay() }, { fetcher: fetch });
+  if (o.kind === "failed") console.warn(`[diy] placement prompt for ${p.placementId}: ${o.message}`);
+  return placementPromptMessage(p.saved, o);
+}
+
+/**
  * R96 part 3 (BRIEF-2 T12): log a placement on one of the client's clusters.
  * alwaystracked is reporting only, so its clients have none. placements.ts
  * judges the fields and derives url_key; there is no price field anywhere.
+ * A placement logged live adds its prompt (DIY P2, placementPrompt above).
  */
 export async function logPlacement(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const refused = await refuseUnlessAdmin();
@@ -335,10 +352,12 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
   if (!cluster) return { ok: false, message: "Pick one of this client's clusters." };
   const judged = placementFields(placementInput(form), client.tier as string);
   if ("error" in judged) return { ok: false, message: judged.error };
-  const { error } = await db.from("placements").insert({ ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" });
+  const { data: made, error } = await db.from("placements").insert({ ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" }).select("id").single();
   if (error) return { ok: false, message: `Could not log the placement: ${error.message}` };
+  const saved = `Logged ${judged.row.url_key} (${judged.row.status}).`;
+  const message = judged.row.status === "live" ? await placementPrompt(db, form, { clientId, placementId: made.id as string, saved }) : saved;
   revalidatePath(`/admin/tracking/${client.slug as string}/placements`);
-  return { ok: true, message: `Logged ${judged.row.url_key} (${judged.row.status}).` };
+  return { ok: true, message };
 }
 
 /**
@@ -346,6 +365,9 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
  * the status by hand; the Sunday check never does. The URL is fixed once
  * logged (url_key is what citations match on), so a wrong one is marked
  * removed and logged again.
+ *
+ * DIY P2: a move to live, or the row's Retry (prompt=1), adds its prompt; a
+ * move to removed stops its prompt from tomorrow, never deleting it.
  */
 export async function updatePlacement(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const refused = await refuseUnlessAdmin();
@@ -355,7 +377,7 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
   const db = supabaseAdmin();
   const { data: row, error: rErr } = await db
     .from("placements")
-    .select("id, kind, url, client_domains(tier, slug)")
+    .select("id, kind, url, status, client_domains(tier, slug)")
     .eq("id", id)
     .eq("client_domain_id", clientId)
     .maybeSingle();
@@ -371,8 +393,16 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
     .eq("id", id)
     .eq("client_domain_id", clientId);
   if (error) return { ok: false, message: `Could not save the placement: ${error.message}` };
+  const saved = `Saved: ${status}.`;
+  let message = saved;
+  if (status === "live" && (row.status !== "live" || text(form, "prompt") === "1")) {
+    message = await placementPrompt(db, form, { clientId, placementId: id, saved });
+  } else if (status === "removed" && row.status !== "removed") {
+    const stopped = await stopPlacementPrompt(db, { clientId, placementId: id, today: trackingDay() });
+    message = !stopped.ok ? `${saved} Its prompt was not stopped: ${stopped.message}` : stopped.stopped.length ? `${saved} Its prompt “${stopped.stopped[0]!.text}” stops from ${dayAfter(trackingDay())}; its history stays.` : saved;
+  }
   revalidatePath(`/admin/tracking/${owner.slug}/placements`);
-  return { ok: true, message: `Saved: ${status}.` };
+  return { ok: true, message };
 }
 
 /**

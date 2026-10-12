@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { FIXTURE_SECOND_CLIENT, FIXTURE_STATES, PARTIAL_EARLIER_DAYS, YOUNG_DAYS, expandFixture, fixtureClients, fixtureLive, fixtureMode, fixtureSettings, fixtureState, fixtureUnreadable } from "./fixture-mode.ts";
+import { isDuplicatePrompt } from "../diy/prompts/dedupe.ts";
+import { promptFromTitle } from "../diy/prompts/title-rule.ts";
+import { FIXTURE_SECOND_CLIENT, FIXTURE_STATES, PARTIAL_EARLIER_DAYS, PLACED_PROMPTS, YOUNG_DAYS, type FixtureQuestion, expandFixture, fixtureClients, fixtureLive, fixtureMode, fixturePlacementPromptsOn, fixtureSettings, fixtureState, fixtureUnreadable, placementAllowance } from "./fixture-mode.ts";
 import { addDays, brandGaps, overview } from "./figures.ts";
 import { readsFailedIn } from "./decide.ts";
 import { ANGLES, PROMPTS_PER_CLUSTER, namesBrandIn } from "./limits.ts";
@@ -340,4 +342,63 @@ test("AG-1 review (9 Oct 2026): TRACKING_FIXTURE_SCOPING=0 is the deploy before 
   assert.deepEqual(fixtureClients(lead, lead.member.email).map((c) => c.slug), ["tallyroo", "ledgerline"], "lead@ sees both, as they would with no table");
   assert.equal(fixtureSettings(fx, fx.client.id).scoping, true, "unset is the table being there");
   assert.equal(fixtureState(fx, {}).scoping, undefined);
+});
+
+test("13 Oct 2026, DIY P2: placed is alwaysmentioned with three placement prompts on c1, outside its five angle slots", () => {
+  for (const st of ["placed", "placed-agency"] as const) assert.ok(FIXTURE_STATES.includes(st), st);
+  const p = fixtureState(fx, { TRACKING_FIXTURE_STATE: "placed" });
+  assert.equal(p.client.tier, "mentioned");
+  assert.equal(p.mode, undefined, "nomada mode");
+  const added = p.data.questions.filter(placementAllowance) as FixtureQuestion[];
+  assert.deepEqual(added.map((q) => q.id), ["q1-pl1", "q1-pl2", "q1-pl3"]);
+  for (const q of added) {
+    assert.equal(q.cluster_id, "c1");
+    assert.equal(q.angle, null, "no angle slot");
+    assert.equal(q.source, "nomada");
+    assert.equal(q.origin_kind, "placement");
+    assert.ok(p.placements.some((pl) => pl.id === q.origin_ref && pl.cluster_id === "c1" && pl.status === "live"), `${q.id}'s origin_ref is a live fixture placement`);
+  }
+  const angle = p.data.questions.filter((q) => q.cluster_id === "c1" && !placementAllowance(q));
+  assert.deepEqual(angle.map((q) => q.angle), [...ANGLES], "c1 keeps its five angle prompts");
+  assert.equal(p.data.questions.length, fx.data.questions.length + 3);
+  assert.equal(fixtureState(fx, {}).data.questions.some(placementAllowance), false, "the default has none");
+});
+
+test("13 Oct 2026, DIY P2: each placement prompt is the title rule's, and none duplicates a c1 prompt", () => {
+  const c1 = fx.data.questions.filter((q) => q.cluster_id === "c1").map((q) => q.text);
+  for (const pp of PLACED_PROMPTS) {
+    assert.deepEqual(promptFromTitle(pp.title, fx.client.market), { ok: true, text: pp.text }, pp.title);
+    assert.equal(isDuplicatePrompt(pp.text, c1), false, pp.text);
+  }
+});
+
+test("13 Oct 2026, DIY P2: two placement prompts were read from the morning after go-live; the retried one starts tomorrow", () => {
+  const p = fixtureState(fx, { TRACKING_FIXTURE_STATE: "placed" });
+  const q = (id: string) => p.data.questions.find((x) => x.id === id)!;
+  assert.equal(q("q1-pl1").added_on, addDays(p.placements.find((x) => x.id === "p1")!.live_on!, 1));
+  assert.equal(q("q1-pl2").added_on, addDays(p.placements.find((x) => x.id === "p4")!.live_on!, 1));
+  assert.equal(q("q1-pl3").added_on, addDays(fx.today, 1));
+  const read = (id: string) => p.data.answers.filter((a) => a.question_id === id);
+  assert.ok(read("q1-pl1").length > 0 && read("q1-pl1").every((a) => a.run_date >= q("q1-pl1").added_on));
+  assert.ok(read("q1-pl2").length > 0);
+  assert.equal(read("q1-pl3").length, 0, "nothing read before its first check");
+});
+
+test("13 Oct 2026, DIY P2: alwaysmentioned reads five engines, so the fixture's Perplexity answers are Claude's too", () => {
+  const p = fixtureState(fx, { TRACKING_FIXTURE_STATE: "placed" });
+  const engines = new Set(p.data.answers.map((a) => a.engine));
+  assert.deepEqual([...engines].sort(), ["chatgpt", "claude", "gemini", "google_aio", "perplexity"]);
+  assert.equal(p.data.answers.filter((a) => a.engine === "claude").length, p.data.answers.filter((a) => a.engine === "perplexity").length);
+  assert.ok(Object.keys(p.texts).some((k) => k.endsWith(" claude")));
+});
+
+test("13 Oct 2026, DIY P2: placed-agency is placed on an agency-mode account; the switch is on only in the placed states", () => {
+  const a = fixtureState(fx, { TRACKING_FIXTURE_STATE: "placed-agency" });
+  assert.equal(a.mode, "agency");
+  assert.equal(a.client.tier, "mentioned");
+  assert.equal(a.data.questions.filter(placementAllowance).length, 3);
+  assert.equal(fixturePlacementPromptsOn({ TRACKING_FIXTURE_STATE: "placed" }), true);
+  assert.equal(fixturePlacementPromptsOn({ TRACKING_FIXTURE_STATE: "placed-agency" }), true);
+  assert.equal(fixturePlacementPromptsOn({}), false);
+  assert.equal(fixturePlacementPromptsOn({ TRACKING_FIXTURE_STATE: "long" }), false);
 });

@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { T } from "@/config/tokens";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
 import { linkCheckState, PLACEMENT_KINDS, PLACEMENT_LIMITS, PLACEMENT_STATUSES } from "@/lib/tracking/placements";
+import { PLACEMENT_PROMPTS_PER_CLIENT, missingColumn } from "@/lib/tracking/limits";
+import { SWITCHED_OFF, placementPromptsOn } from "@/lib/diy/prompts/placement-prompt";
 
 import { ActionForm } from "../../ActionForm";
 import { logPlacement, updatePlacement } from "../../actions";
@@ -25,6 +27,12 @@ export const metadata: Metadata = {
  *
  * Clusters are made on /admin/tracking itself (BRIEF-3 C3), so the brief's
  * separate clusters page would be a second copy of that form.
+ *
+ * 13 Oct 2026, DIY P2 (spec 10 section 6.7): each live row says the prompt it
+ * added, or offers Retry, which posts the row's own save with prompt=1. A link
+ * insertion adds one only with "Add a prompt from this article's title"
+ * ticked. While placement_prompts_enabled is off the page says so, and a save
+ * fetches nothing.
  */
 
 const input = {
@@ -39,6 +47,7 @@ const input = {
 const KIND_LABEL: Record<string, string> = { guest_post: "guest post", link_insertion: "link insertion", on_site: "on-site", coverage: "coverage" };
 
 type Row = Record<string, unknown>;
+type PlacementPrompt = { id: string; text: string; added_on: string; stopped_on: string | null; origin_ref: string | null };
 
 export default async function PlacementsAdmin({ params }: { params: Promise<{ client: string }> }) {
   if (!supabaseConfigured()) return <div style={{ padding: "40px" }}>Database not configured.</div>;
@@ -59,6 +68,14 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
   ]);
   if (clErr) throw new Error(`could not read clusters: ${clErr.message}`);
   if (pErr) throw new Error(`could not read placements: ${pErr.message}`);
+  // DIY P2: the switch, and the prompts placements added (none to read before the prompt_origins migration).
+  const [promptsOn, { data: pq, error: pqErr }] = await Promise.all([
+    placementPromptsOn(db),
+    db.from("tracked_questions").select("id, text, added_on, stopped_on, origin_ref").eq("client_domain_id", id).eq("origin_kind", "placement").order("added_on", { ascending: false }),
+  ]);
+  if (pqErr && !missingColumn(pqErr)) throw new Error(`could not read the placement prompts: ${pqErr.message}`);
+  const placementPrompts = (pq ?? []) as PlacementPrompt[];
+  const livePlacementPrompts = placementPrompts.filter((q) => q.stopped_on === null).length;
 
   const kinds = PLACEMENT_KINDS.filter((k) => k !== "coverage" || client.tier === "everywhere");
   const liveClusters = (clusters ?? []).filter((c) => c.stopped_on === null);
@@ -76,8 +93,13 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
       <h1 style={{ fontSize: "24px", margin: "0 0 4px" }}>
         Placements <span style={{ color: T.soft, fontWeight: 400 }}>- {client.domain as string} - {client.tier as string}</span>
       </h1>
-      <p style={{ color: T.soft, margin: "0 0 24px" }}>
+      <p style={{ color: T.soft, margin: "0 0 12px" }}>
         Live placements are link-checked on Sundays. The check never changes a status; a row it alerted on is flagged here until you mark it removed.
+      </p>
+      <p role="status" style={{ margin: "0 0 24px", fontWeight: promptsOn ? 400 : 700, color: promptsOn ? T.soft : T.ink }}>
+        {promptsOn
+          ? `Placement prompts are on: a guest post or coverage that goes live adds one prompt from its title (${livePlacementPrompts} of ${PLACEMENT_PROMPTS_PER_CLIENT} live on this client). Earlier live placements get theirs through Retry.`
+          : SWITCHED_OFF}
       </p>
 
       {client.tier === "tracked" ? (
@@ -108,6 +130,7 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
               <StatusFields status="pitched" scheduled="" live="" />
               <input name="anchor_text" maxLength={PLACEMENT_LIMITS.anchor} placeholder="Anchor text" style={{ ...input, width: "220px" }} aria-label="Anchor text" />
               <input name="internal_note" maxLength={PLACEMENT_LIMITS.note} placeholder="Internal note" style={{ ...input, width: "260px" }} aria-label="Internal note" />
+              <InsertionTick />
             </ActionForm>
           )}
         </section>
@@ -121,7 +144,7 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
 
       {list.length === 0 ? <p style={{ color: T.soft }}>No placements logged.</p> : null}
       {list.map(({ r, check }) => (
-        <PlacementRow key={r.id as string} client={id} row={r} cluster={nameOf(r.cluster_id)} check={check} />
+        <PlacementRow key={r.id as string} client={id} row={r} cluster={nameOf(r.cluster_id)} check={check} prompt={placementPrompts.find((q) => q.origin_ref === r.id && q.stopped_on === null) ?? placementPrompts.find((q) => q.origin_ref === r.id) ?? null} />
       ))}
     </div>
   );
@@ -147,7 +170,43 @@ function StatusFields({ status, scheduled, live }: { status: string; scheduled: 
   );
 }
 
-function PlacementRow({ client, row, cluster, check }: { client: string; row: Row; cluster: string; check: { flagged: boolean; text: string } }) {
+/** "Add a prompt from this article's title": a link insertion's article is someone else's page, so its prompt is the admin's call. */
+function InsertionTick() {
+  return (
+    <label style={{ fontSize: "12.5px", color: T.soft, display: "inline-flex", alignItems: "center", gap: "6px" }}>
+      <input type="checkbox" name="insertion_prompt" value="1" maxLength={PLACEMENT_LIMITS.id} />
+      Add a prompt from this article&apos;s title (link insertions)
+    </label>
+  );
+}
+
+/** The row's prompt line: the prompt its placement added, or none yet with the Retry. */
+function PromptLine({ client, row, prompt }: { client: string; row: Row; prompt: PlacementPrompt | null }) {
+  if (row.status !== "live") return null;
+  if (prompt) {
+    return (
+      <div style={{ fontSize: "12.5px", color: T.soft, margin: "2px 0" }}>
+        {prompt.stopped_on ? `Prompt “${prompt.text}” stopped from ${prompt.stopped_on}.` : `Prompt “${prompt.text}”, first asked ${prompt.added_on}.`}
+      </div>
+    );
+  }
+  return (
+    <ActionForm action={updatePlacement} submit="Retry prompt">
+      <span style={{ fontSize: "12.5px", color: T.soft }}>No prompt from this placement.</span>
+      <input type="hidden" name="client" value={client} maxLength={PLACEMENT_LIMITS.id} />
+      <input type="hidden" name="id" value={row.id as string} maxLength={PLACEMENT_LIMITS.id} />
+      <input type="hidden" name="status" value="live" maxLength={PLACEMENT_LIMITS.id} />
+      <input type="hidden" name="scheduled_on" value={(row.scheduled_on as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.date} />
+      <input type="hidden" name="live_on" value={(row.live_on as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.date} />
+      <input type="hidden" name="anchor_text" value={(row.anchor_text as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.anchor} />
+      <input type="hidden" name="internal_note" value={(row.internal_note as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.note} />
+      <input type="hidden" name="prompt" value="1" maxLength={PLACEMENT_LIMITS.id} />
+      {row.kind === "link_insertion" ? <InsertionTick /> : null}
+    </ActionForm>
+  );
+}
+
+function PlacementRow({ client, row, cluster, check, prompt }: { client: string; row: Row; cluster: string; check: { flagged: boolean; text: string }; prompt: PlacementPrompt | null }) {
   return (
     <div style={{ borderTop: `1px solid ${T.hair}`, borderLeft: check.flagged ? `3px solid ${T.badFg}` : "3px solid transparent", padding: "8px 0 8px 10px" }}>
       <div>
@@ -165,7 +224,9 @@ function PlacementRow({ client, row, cluster, check }: { client: string; row: Ro
         <StatusFields status={row.status as string} scheduled={(row.scheduled_on as string | null) ?? ""} live={(row.live_on as string | null) ?? ""} />
         <input name="anchor_text" defaultValue={(row.anchor_text as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.anchor} placeholder="Anchor text" style={{ ...input, width: "200px" }} aria-label={`Anchor text for ${row.url_key as string}`} />
         <input name="internal_note" defaultValue={(row.internal_note as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.note} placeholder="Internal note" style={{ ...input, width: "220px" }} aria-label={`Note for ${row.url_key as string}`} />
+        {row.kind === "link_insertion" ? <InsertionTick /> : null}
       </ActionForm>
+      <PromptLine client={client} row={row} prompt={prompt} />
     </div>
   );
 }
