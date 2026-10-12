@@ -387,3 +387,431 @@ export function keywordIntents(task: Task): Map<string, Intent | null> {
   }
   return out;
 }
+
+// ───────────────────────────── DIY launch reads ─────────────────────────────
+
+/**
+ * The DIY platform's DataForSEO reads (13 Oct 2026, DIY P1; spec 10 section
+ * 5.2): the Labs and OnPage requests, their `limit` ceilings and their
+ * allow-list parsers, plus the two free paths. Built and parsed here, sent
+ * from one door each in `dataforseo.ts`, and called only from
+ * `src/lib/diy/core/doors.ts`, through the capped `diyRead` - so every paid
+ * one is reserved in the DIY ledger before it goes out (`request-shape.test.mts`
+ * holds the path, the door and the caller). The Backlinks and Content
+ * Analysis reads are P10's, in wave 3.
+ *
+ * **Parsers keep named fields only.** What a parser does not name does not
+ * survive it, so a field DataForSEO adds tomorrow never reaches a page. In
+ * particular `keyword_difficulty` (ranked_keywords carries it on every row)
+ * is never read, and nothing here reads a sponsored or spam field. The
+ * shapes are DataForSEO's documented responses, read from docs.dataforseo.com
+ * on 13 Oct 2026; the saved samples in `src/lib/diy/core/samples/` carry them
+ * with made-up values, and `diy-request.test.mts` runs every parser on them.
+ */
+
+/** The two free paths, both cost 0 (04 section 2). `freeRead` in doors.ts accepts these and refuses every other path. */
+export const DIY_FREE_PATHS = {
+  labs_status: "/v3/dataforseo_labs/status",
+  backlinks_filters: "/v3/backlinks/available_filters",
+} as const;
+export type DiyFreeKind = keyof typeof DIY_FREE_PATHS;
+export type DiyFreePath = (typeof DIY_FREE_PATHS)[DiyFreeKind];
+
+export function isDiyFreePath(path: string): path is DiyFreePath {
+  return (Object.values(DIY_FREE_PATHS) as string[]).includes(path);
+}
+
+/** The launch paid paths. `microdata` is free for a paid `instant_pages` task and rides on its reservation. */
+export const DIY_PATHS = {
+  ranked_keywords: "/v3/dataforseo_labs/google/ranked_keywords/live",
+  relevant_pages: "/v3/dataforseo_labs/google/relevant_pages/live",
+  competitors_domain: "/v3/dataforseo_labs/google/competitors_domain/live",
+  instant_pages: "/v3/on_page/instant_pages",
+  microdata: "/v3/on_page/microdata",
+  content_parsing: "/v3/on_page/content_parsing/live",
+} as const;
+export type DiyPathKey = keyof typeof DIY_PATHS;
+
+/**
+ * Row ceilings (section 5.6 item 5): 100 by default, 1000 only for
+ * `ranked_keywords`, and anything higher refused here rather than sent. A
+ * Labs read bills every row up to its limit, so the limit is the bill.
+ */
+export const DIY_LIMIT_DEFAULT = 100;
+export const DIY_LIMIT_CEILING = { ranked_keywords: 1000, relevant_pages: DIY_LIMIT_DEFAULT, competitors_domain: DIY_LIMIT_DEFAULT } as const;
+
+export function diyLimit(endpoint: keyof typeof DIY_LIMIT_CEILING, asked: number): number {
+  const ceiling = DIY_LIMIT_CEILING[endpoint];
+  if (!Number.isInteger(asked) || asked < 1 || asked > ceiling) throw new Error(`${endpoint} limit ${asked} is outside 1-${ceiling}`);
+  return asked;
+}
+
+/** One DIY request: where it goes, what it asks, and how many rows it can bill. */
+export type DiyRequest = EngineRequest & { endpoint: DiyPathKey; rows: number };
+
+const HOST_RE = /^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+
+/** A Labs target: a bare domain, no scheme, no `www.`, no path, as the docs ask. Throws on anything else. */
+export function diyTarget(domain: string): string {
+  const host = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+  if (!HOST_RE.test(host)) throw new Error(`not a domain DataForSEO can be asked about: ${JSON.stringify(domain)}`);
+  return host;
+}
+
+/** An OnPage URL: absolute http(s), 500 characters at most, no credentials. Throws on anything else. */
+export function diyPageUrl(raw: string): string {
+  const url = raw.trim();
+  if (url.length > 500) throw new Error("a page URL is 500 characters at most");
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error(`not a URL: ${JSON.stringify(raw.slice(0, 80))}`);
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw new Error("a page URL is http or https");
+  if (u.username || u.password) throw new Error("a page URL carries no credentials");
+  if (!HOST_RE.test(u.hostname)) throw new Error(`not a public host: ${u.hostname}`);
+  return u.toString();
+}
+
+const location = (market: Market) => ({ location_code: MARKETS[market].location_code, language_code: "en" });
+
+/**
+ * Every keyword the client's domain ranks for in Google's top 100, highest
+ * estimated traffic first (section 5.2; the footprint, momentum and setup
+ * suggestions). `item_types` organic: the default adds paid rows, which are
+ * not a ranking. 1000 rows is $0.132.
+ */
+export function rankedKeywordsRequest(p: { target: string; market: Market; limit?: number }): DiyRequest {
+  const limit = diyLimit("ranked_keywords", p.limit ?? DIY_LIMIT_CEILING.ranked_keywords);
+  return {
+    endpoint: "ranked_keywords",
+    path: DIY_PATHS.ranked_keywords,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [
+      {
+        target: diyTarget(p.target),
+        ...location(p.market),
+        limit,
+        item_types: ["organic"],
+        order_by: ["ranked_serp_element.serp_item.etv,desc"],
+        filters: ["ranked_serp_element.serp_item.rank_group", "<=", 100],
+      },
+    ],
+  };
+}
+
+/** The client's pages by estimated traffic (auto-filling key pages). 20 rows: $0.0144. */
+export function relevantPagesRequest(p: { target: string; market: Market }): DiyRequest {
+  const limit = diyLimit("relevant_pages", 20);
+  return {
+    endpoint: "relevant_pages",
+    path: DIY_PATHS.relevant_pages,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [{ target: diyTarget(p.target), ...location(p.market), limit, item_types: ["organic"], order_by: ["metrics.organic.etv,desc"] }],
+  };
+}
+
+/** Domains sharing the client's Google keywords, the big generalists left out (comparison-set fallback, W3). 20 rows: $0.0144. */
+export function competitorsDomainRequest(p: { target: string; market: Market }): DiyRequest {
+  const limit = diyLimit("competitors_domain", 20);
+  return {
+    endpoint: "competitors_domain",
+    path: DIY_PATHS.competitors_domain,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [{ target: diyTarget(p.target), ...location(p.market), limit, exclude_top_domains: true, item_types: ["organic"] }],
+  };
+}
+
+/** One page read with JavaScript and the structured data validator on, one task (key-page deep check). $0.0015. */
+export function instantPagesRequest(url: string): DiyRequest {
+  return {
+    endpoint: "instant_pages",
+    path: DIY_PATHS.instant_pages,
+    timeoutMs: 60_000,
+    rows: 1,
+    body: [{ url: diyPageUrl(url), enable_javascript: true, validate_micromarkup: true }],
+  };
+}
+
+/** The validator's findings for a page `instant_pages` read with `validate_micromarkup` (its task id). Free. */
+export function microdataRequest(taskId: string, url: string): DiyRequest {
+  if (!/^[0-9a-z-]{8,64}$/i.test(taskId)) throw new Error("microdata needs the instant_pages task id");
+  return { endpoint: "microdata", path: DIY_PATHS.microdata, timeoutMs: 30_000, rows: 0, body: [{ id: taskId, url: diyPageUrl(url) }] };
+}
+
+/** A page's structured content: headings, links, text. `markdown` only for the client's own page, as an example's input. $0.00015. */
+export function contentParsingRequest(url: string, markdown = false): DiyRequest {
+  return { endpoint: "content_parsing", path: DIY_PATHS.content_parsing, timeoutMs: 60_000, rows: 1, body: [{ url: diyPageUrl(url), markdown_view: markdown }] };
+}
+
+// ── parsers: named fields only ──
+
+type Obj = Record<string, unknown>;
+const obj = (v: unknown): Obj => (v && typeof v === "object" && !Array.isArray(v) ? (v as Obj) : {});
+const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const boolOrNull = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
+const text = (v: unknown, max: number): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.replace(/\s+/g, " ").trim();
+  return t ? t.slice(0, max) : null;
+};
+const firstResult = (task: Task): Obj => obj(arr(task.result)[0]);
+
+export type RankedKeyword = {
+  keyword: string;
+  /** `rank_absolute`: the position on the page of results. */
+  position: number | null;
+  /** `relative_url`: the ranking page's path. */
+  url: string | null;
+  volume: number | null;
+  intent: Intent | null;
+  /** Estimated traffic from this keyword: a vendor estimate. */
+  etv: number | null;
+  /** `rank_changes.previous_rank_absolute`: DataForSEO's own previous reading. The window it covers is [VERIFY] (section 6.10). */
+  previous: number | null;
+  isNew: boolean | null;
+};
+export type RankedKeywords = { total: number | null; etv: number | null; rows: RankedKeyword[] };
+
+export function parseRankedKeywords(task: Task): RankedKeywords {
+  const r = firstResult(task);
+  const rows: RankedKeyword[] = [];
+  for (const raw of arr(r.items)) {
+    const item = obj(raw);
+    const kd = obj(item.keyword_data);
+    const keyword = text(kd.keyword, 120);
+    if (!keyword) continue;
+    const serp = obj(obj(item.ranked_serp_element).serp_item);
+    const changes = obj(serp.rank_changes);
+    const intent = obj(kd.search_intent_info).main_intent;
+    rows.push({
+      keyword: keywordForm(keyword),
+      position: numOrNull(serp.rank_absolute),
+      url: text(serp.relative_url, 500),
+      volume: numOrNull(obj(kd.keyword_info).search_volume),
+      intent: (INTENTS as readonly string[]).includes(String(intent)) ? (intent as Intent) : null,
+      etv: numOrNull(serp.etv),
+      previous: numOrNull(changes.previous_rank_absolute),
+      isNew: boolOrNull(changes.is_new),
+    });
+  }
+  return { total: numOrNull(r.total_count), etv: numOrNull(obj(obj(r.metrics).organic).etv), rows };
+}
+
+export type RelevantPage = { url: string; etv: number | null; count: number | null; pos1: number | null; pos2_3: number | null; pos4_10: number | null; pos11_20: number | null };
+
+export function parseRelevantPages(task: Task): RelevantPage[] {
+  const out: RelevantPage[] = [];
+  for (const raw of arr(firstResult(task).items)) {
+    const item = obj(raw);
+    const url = text(item.page_address, 500);
+    if (!url) continue;
+    const o = obj(obj(item.metrics).organic);
+    out.push({ url, etv: numOrNull(o.etv), count: numOrNull(o.count), pos1: numOrNull(o.pos_1), pos2_3: numOrNull(o.pos_2_3), pos4_10: numOrNull(o.pos_4_10), pos11_20: numOrNull(o.pos_11_20) });
+  }
+  return out;
+}
+
+export type CompetitorDomain = { domain: string; intersections: number | null; avgPosition: number | null };
+
+export function parseCompetitorsDomain(task: Task): CompetitorDomain[] {
+  const out: CompetitorDomain[] = [];
+  for (const raw of arr(firstResult(task).items)) {
+    const item = obj(raw);
+    const domain = text(item.domain, 253);
+    if (!domain) continue;
+    out.push({ domain: domain.toLowerCase(), intersections: numOrNull(item.intersections), avgPosition: numOrNull(item.avg_position) });
+  }
+  return out;
+}
+
+/** The checks kept from `instant_pages`. Its noindex check's field name is [VERIFY]: the documented sample read 13 Oct 2026 carries none, so noindex comes from our own fetch's meta robots and X-Robots-Tag (section 6.4). */
+export const INSTANT_CHECKS = ["no_title", "no_h1_tag", "is_https", "has_micromarkup", "has_micromarkup_errors", "canonical"] as const;
+
+export type InstantPage = {
+  status: number | null;
+  url: string | null;
+  title: string | null;
+  description: string | null;
+  h1: string[];
+  canonical: string | null;
+  wordCount: number | null;
+  checks: Record<(typeof INSTANT_CHECKS)[number], boolean | null>;
+};
+
+/** The page, and the task id `microdata` needs. */
+export function parseInstantPage(task: Task): { taskId: string | null; page: InstantPage | null } {
+  const taskId = text((task as { id?: unknown }).id, 64);
+  const item = arr(firstResult(task).items).map(obj)[0];
+  if (!item) return { taskId, page: null };
+  const meta = obj(item.meta);
+  const checks = obj(item.checks);
+  return {
+    taskId,
+    page: {
+      status: numOrNull(item.status_code),
+      url: text(item.url, 500),
+      title: text(meta.title, 300),
+      description: text(meta.description, 500),
+      h1: arr(obj(meta.htags).h1).map((h) => text(h, 200)).filter((h): h is string => h !== null).slice(0, 10),
+      canonical: text(meta.canonical, 500),
+      wordCount: numOrNull(obj(item.content).plain_text_word_count),
+      checks: Object.fromEntries(INSTANT_CHECKS.map((k) => [k, boolOrNull(checks[k])])) as InstantPage["checks"],
+    },
+  };
+}
+
+export const MICRO_LEVELS = ["fatal", "error", "warning", "info"] as const;
+export type MicroLevel = (typeof MICRO_LEVELS)[number];
+export type MicroItem = { types: string[]; fields: { name: string; value: string | null }[]; results: { level: MicroLevel; message: string }[] };
+export type Microdata = { summary: Record<MicroLevel, number>; items: MicroItem[] };
+
+/**
+ * The validator's findings. Each item's fields nest (`inspection_info.fields[]`,
+ * each with `fields` of its own and a `test_results` object), so they are
+ * flattened to dotted names; values are cut to 200 characters, messages to
+ * 160, and an item keeps at most 40 results. P8 trims further before storing
+ * (`capSchemaPayload`: no values at all).
+ */
+export function parseMicrodata(task: Task): Microdata {
+  const r = firstResult(task);
+  const s = obj(r.test_summary);
+  const summary = Object.fromEntries(MICRO_LEVELS.map((l) => [l, numOrNull(s[l]) ?? 0])) as Record<MicroLevel, number>;
+  const items: MicroItem[] = [];
+  for (const raw of arr(r.items).slice(0, 50)) {
+    const info = obj(obj(raw).inspection_info);
+    const fields: MicroItem["fields"] = [];
+    const results: MicroItem["results"] = [];
+    const walk = (list: unknown, prefix: string, depth: number) => {
+      for (const f of arr(list).map(obj)) {
+        const name = text(f.name, 80);
+        if (!name) continue;
+        const full = prefix ? `${prefix}.${name}` : name;
+        const v = f.value;
+        fields.push({ name: full, value: Array.isArray(v) ? text(v.filter((x) => typeof x === "string").join(", "), 200) : text(v, 200) });
+        for (const t of [f.test_results].flat().map(obj)) {
+          const level = String(t.level);
+          const message = text(t.message, 160);
+          if ((MICRO_LEVELS as readonly string[]).includes(level) && message && results.length < 40) results.push({ level: level as MicroLevel, message });
+        }
+        if (depth < 4) walk(f.fields, full, depth + 1);
+      }
+    };
+    walk(info.fields, "", 0);
+    items.push({ types: arr(info.types).map((t) => text(t, 80)).filter((t): t is string => t !== null).slice(0, 10), fields: fields.slice(0, 100), results });
+  }
+  return { summary, items };
+}
+
+export type ParsedPage = {
+  status: number | null;
+  /** The topic's `main_title`, which DataForSEO describes as the page's title. [VERIFY] against the first paid read. */
+  title: string | null;
+  h1: string | null;
+  /** h2 and h3 headings, at most 40, each at most 120 characters. */
+  headings: { level: 2 | 3; text: string }[];
+  /** Date-like strings near "updated" or "published", at most 5. */
+  dates: string[];
+  /** Every link in the content: its URL and anchor. No `rel` comes back, so a link found here is never said to be followed or not. */
+  links: { url: string; anchor: string | null }[];
+  wordCount: number;
+  /** Only when asked for, for the client's own page: at most 24,000 characters, never stored. */
+  markdown?: string | null;
+};
+
+const DATE_NEAR = /\b(?:updated|published|last modified|posted)\b[^.\n]{0,40}?(\d{1,2}(?:st|nd|rd|th)?\s+[A-Z][a-z]{2,8}\.?,?\s+\d{4}|[A-Z][a-z]{2,8}\.?\s+\d{1,2}(?:st|nd|rd|th)?,?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{2,4})/gi;
+
+export function parseContentParsing(task: Task, opts: { markdown?: boolean } = {}): ParsedPage | null {
+  const item = arr(firstResult(task).items).map(obj)[0];
+  if (!item) return null;
+  const content = obj(item.page_content);
+  const topics = [...arr(content.main_topic), ...[content.main_topic].filter((t) => t && !Array.isArray(t)), ...arr(content.secondary_topic)].map(obj);
+  const blocks = [obj(content.header), obj(content.footer), ...topics];
+
+  const words: string[] = [];
+  const links = new Map<string, { url: string; anchor: string | null }>();
+  const addLink = (url: unknown, anchor: unknown) => {
+    const u = text(url, 500);
+    if (!u || links.size >= 300) return;
+    const a = text(anchor, 200);
+    links.set(`${u} ${a ?? ""}`, { url: u, anchor: a });
+  };
+  const readElements = (list: unknown) => {
+    for (const el of arr(list).map(obj)) {
+      const t = text(el.text, 5000);
+      if (t) words.push(t);
+      addLink(el.url, el.text);
+      for (const l of arr(el.urls).map(obj)) addLink(l.url, l.anchor_text);
+    }
+  };
+  for (const b of blocks) {
+    readElements(b.primary_content);
+    readElements(b.secondary_content);
+    for (const row of arr(b.table_content)) for (const cell of arr(row)) readElements([cell]);
+  }
+
+  let title: string | null = null;
+  let h1: string | null = null;
+  const headings: ParsedPage["headings"] = [];
+  for (const t of topics) {
+    title ??= text(t.main_title, 300);
+    const h = text(t.h_title, 120);
+    const level = numOrNull(t.level);
+    if (!h) continue;
+    if (level === 1) h1 ??= h;
+    else if ((level === 2 || level === 3) && headings.length < 40) headings.push({ level, text: h });
+  }
+
+  const joined = words.join("\n");
+  const dates = [...new Set([...joined.matchAll(DATE_NEAR)].map((m) => m[1]!.slice(0, 40)))].slice(0, 5);
+  const out: ParsedPage = {
+    status: numOrNull(item.status_code),
+    title,
+    h1,
+    headings,
+    dates,
+    links: [...links.values()],
+    wordCount: joined.split(/\s+/).filter(Boolean).length,
+  };
+  if (opts.markdown) out.markdown = typeof item.page_as_markdown === "string" ? item.page_as_markdown.slice(0, 24_000) : null;
+  return out;
+}
+
+export type LabsStatus = { googleDate: string | null; payload: { google: string | null; bing: string | null; amazon: string | null } };
+
+const day = (v: unknown): string | null => {
+  const m = typeof v === "string" ? /^(\d{4}-\d{2}-\d{2})/.exec(v) : null;
+  return m ? m[1]! : null;
+};
+
+/** When Labs data last refreshed: the footprint is pulled only when Google's date has moved. */
+export function parseLabsStatus(task: Task): LabsStatus {
+  const r = firstResult(task);
+  const payload = { google: day(obj(r.google).date_update), bing: day(obj(r.bing).date_update), amazon: day(obj(r.amazon).date_update) };
+  return { googleDate: payload.google, payload };
+}
+
+/** Filter names that are never kept, even as a name in a list: the spam and sponsored family, and link attributes (section 2.3). */
+export const DROPPED_FILTER = /sponsored|spam|(^|\.)attributes(\.|$)/i;
+
+/**
+ * The Backlinks filterable field names, per object group (`backlinks`,
+ * `domain_pages`, `anchors`, ...), as sorted lists of names. Types are not
+ * kept, and neither are the dropped names: W3 needs to know a filter exists,
+ * not to store the family it may not show.
+ */
+export function parseBacklinksFilters(task: Task): { groups: Record<string, string[]> } {
+  const r = firstResult(task);
+  const groups: Record<string, string[]> = {};
+  for (const [group, fields] of Object.entries(r)) {
+    if (!/^[a-z_]{2,60}$/.test(group)) continue;
+    const names = Object.keys(obj(fields)).filter((n) => n.length <= 120 && !DROPPED_FILTER.test(n));
+    if (names.length) groups[group] = names.sort();
+  }
+  return { groups };
+}

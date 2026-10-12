@@ -343,10 +343,18 @@ const LONG_ROUTES = sourceFiles(ROOT)
  * - one client's questions on its engines - and budgets itself the way the
  * pipeline does: RUN_BUDGET_MS = 270_000 against this route's 300, writing
  * its own status on the way out, the stall reaper closing one that was killed.
+ *
+ * Two since 13 Oct 2026 (DIY P1): the DIY night worker, `/api/diy/run`. The
+ * same shape again - a 270 s budget in after() against its maxDuration 300 -
+ * and it closes its own diy_jobs rows; a worker the platform kills leaves a
+ * claim that goes stale after 15 minutes and is taken again.
  */
 const LONG_WITHOUT_PASS: Record<string, string> = {
   "src/app/api/track/run/route.ts":
     "One client's daily tracking run in after(); runner.ts budgets 270s against this 300 and closes its own row.",
+  // 13 Oct 2026, DIY P1 (spec 10 sections 3.6 and 5.7): the DIY night worker.
+  // Not a scan pass, and posted only by the DIY dispatcher with an HMAC.
+  "src/app/api/diy/run/route.ts": "worker budgets 270 s in after(); closes its own diy_jobs rows",
 };
 
 // ---------------------------------------------------------------------------

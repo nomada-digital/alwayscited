@@ -1,0 +1,41 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "dataforseo_labs",
+        "status"
+      ],
+      "data": {
+        "api": "dataforseo_labs"
+      },
+      "result": [
+        {
+          "google": {
+            "date_update": "2026-10-10"
+          },
+          "bing": {
+            "date_update": "2026-10-10"
+          },
+          "amazon": {
+            "date_update": "2026-10-06"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/constant-time";
+import { dispatchDiyWork } from "@/lib/diy/core/dispatch";
+import { freeRead } from "@/lib/diy/core/doors";
+import { JOB_HANDLERS } from "@/lib/diy/wiring";
 import { reapStalledFreePass, reapStalledGatedPass, STALL_AFTER_MS } from "@/lib/scan/stall";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { reapStalledTrackingRuns } from "@/lib/tracking/runner";
@@ -38,6 +41,15 @@ export const maxDuration = 60;
  * that records it, so that money is spent and invisible to both ceilings. This
  * job cannot reconstruct it and does not guess at it. That gap is item 2 on the
  * OPEN list in blocked.md and is Danny's to decide.
+ *
+ * **And the second DIY night pass (13 Oct 2026, DIY P1; spec 10 section
+ * 5.7).** A new cron entry needs `vercel.json`, which builders cannot stage,
+ * so this 03:45 UTC job carries pass 2 of the DIY dispatch, as
+ * `/api/cron/purge-responses` carries pass 1 at 03:30. `dispatchDiyWork`
+ * re-queues what is due (idempotent) and posts two more signed workers only
+ * while claimable due jobs remain - pass 1's have finished by now (270 s
+ * budget), so no more than two run at once. Its own try, like the sweeps
+ * above; its errors are logged and answered under `diy`.
  *
  * Vercel Cron calls this with Authorization: Bearer <CRON_SECRET>.
  */
@@ -90,6 +102,19 @@ export async function GET(req: Request) {
   }
   if (tracking.length) console.warn(`[track] stall sweep closed ${tracking.length} tracking run(s): ${tracking.join(", ")}`);
 
+  // DIY pass 2 (13 Oct 2026). Its own try, for the reason above, and reported
+  // under its own key: a DIY fault is logged and answered, and does not turn
+  // this job's own answer into a 502 for sweeps that worked.
+  let diy: Record<string, unknown>;
+  try {
+    diy = await dispatchDiyWork({ db, handlers: JOB_HANDLERS, pass: 2, free: freeRead });
+    if ((diy.errors as string[]).length) console.warn(`[diy] night pass 2: ${(diy.errors as string[]).join("; ")}`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.warn(`[diy] night pass 2 failed: ${error}`);
+    diy = { error };
+  }
+
   // Logged as well as returned. The response goes to Vercel's cron log, which
   // nobody reads on a quiet day; a scan being closed by this job means a
   // function was killed, and that is worth finding in the log next to whatever
@@ -108,6 +133,7 @@ export async function GET(req: Request) {
       free_passes_closed: free.length,
       gated_passes_closed: gated.length,
       tracking_runs_closed: tracking.length,
+      diy,
       // The ids, because the whole point of this job is that something was
       // wrong with these scans and the next question is always which ones.
       scans: free.length || gated.length ? { free, gated } : undefined,

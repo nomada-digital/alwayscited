@@ -2,6 +2,7 @@ import "server-only";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { QUESTIONS } from "@/config/scan-shape";
@@ -14,6 +15,13 @@ import { sourceKindRequest, sourceKindSystem } from "./source-kind-prompt";
 import { normaliseCandidate } from "./target-keyword";
 
 const MODEL = "claude-opus-5";
+
+/**
+ * The DIY platform's model (13 Oct 2026, DIY P1; spec 10 section 5.3), for
+ * `classifyPages` and `writeReoptExample` at the foot of this file only. The
+ * scan's MODEL above is unchanged.
+ */
+export const DIY_MODEL = "claude-opus-5-5";
 
 /**
  * These are short extraction and generation tasks with explicit rules, so low
@@ -933,4 +941,55 @@ export function siteFacts(raw: unknown): { services: string[]; industries: strin
   const list = (v: unknown) =>
     Array.isArray(v) ? v.filter((s): s is string => typeof s === "string" && s.trim().length > 0).slice(0, 5) : [];
   return { services: list(o.services), industries: list(o.industries) };
+}
+
+// ------------------------------------------------------------- DIY calls
+
+/**
+ * The DIY platform's two model calls (13 Oct 2026, DIY P1; spec 10 section
+ * 5.3, Danny's 12 Oct brief). Written here so the one-file, `parse`-only,
+ * `anthropic(billed)` rules in `retry-policy.test.mts` hold them like the
+ * other eight. They are reached only through `src/lib/diy/core/model.ts`,
+ * which reserves each on the DIY ledger's model door (the scan keeps half of
+ * `anthropic_calls_per_day`), settles it from `usage`, and debits
+ * `model_call_debits` with `billed.calls`. P7 and P8 hand in the prompt and
+ * the zod schema; nothing here writes either.
+ *
+ * Both: `DIY_MODEL`; structured output through `parse`; no `thinking`
+ * parameter (Opus 5.5's thinking is adaptive and cannot be switched off;
+ * depth is `output_config.effort`, always set); `max_tokens` 16000, which
+ * bounds thinking and output together and bills only what is used. The
+ * refusal fallback is on (`server-side-fallback-2026-07-01`, `fallbacks:
+ * "default"`), which the installed SDK (0.125.0) takes on
+ * `beta.messages.parse`. A `refusal` or `max_tokens` stop is read as a
+ * failure by model.ts before anything is taken from the body; a truncated
+ * body fails the SDK's own parse first, and model.ts keeps the reservation's
+ * ceiling as that call's cost.
+ */
+export type DiyModelInput<T> = { system: string; user: string; schema: z.ZodType<T> };
+
+/** Page and domain types for up to 50 items a call (P7's classify job). Low effort; the system prompt is cached. */
+export async function classifyPages<T>(input: DiyModelInput<T>, billed: { calls: number }) {
+  return withRetry(() => anthropic(billed).beta.messages.parse({
+    model: DIY_MODEL,
+    max_tokens: 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "low", format: betaZodOutputFormat(input.schema) },
+    system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
+    messages: [{ role: "user", content: input.user }],
+  }));
+}
+
+/** One drafted re-optimisation example from the client's own page (P8, on demand). Medium effort. */
+export async function writeReoptExample<T>(input: DiyModelInput<T>, billed: { calls: number }) {
+  return withRetry(() => anthropic(billed).beta.messages.parse({
+    model: DIY_MODEL,
+    max_tokens: 16000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "medium", format: betaZodOutputFormat(input.schema) },
+    system: input.system,
+    messages: [{ role: "user", content: input.user }],
+  }));
 }

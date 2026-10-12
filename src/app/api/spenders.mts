@@ -36,7 +36,7 @@
  *
  * ## Nothing here is typed that can be walked
  *
- * `PAID` is five function names and every one is re-checked against the module
+ * `PAID` is a list of function names and every one is re-checked against the module
  * that exports it, so a rename fails loudly rather than emptying the set - the
  * failure mode a name-matching probe has by default. The mail senders are
  * walked for, not named. The routes are walked for, not named.
@@ -108,6 +108,28 @@ export const PAID: Record<string, { module: string; what: string }> = {
   checkClusterKeyword: {
     module: "src/lib/tracking/check-keyword.ts",
     what: "two DataForSEO reads, volume and intent, for one keyword a member typed",
+  },
+  /**
+   * 13 October 2026, DIY P1 (spec 10 sections 5.6 and 5.7): the DIY
+   * platform's four doors onto spend. Every paid read under them is reserved
+   * in the DIY ledger (`diy_reads`) before it goes out, behind `diy_enabled`,
+   * global daily caps, per-door daily counts and per-client month budgets.
+   */
+  runDiyWorker: {
+    module: "src/lib/diy/core/worker.ts",
+    what: "one DIY night worker: claims due diy_jobs and runs their handlers, whose paid reads go through diyRead",
+  },
+  dispatchDiyWork: {
+    module: "src/lib/diy/core/dispatch.ts",
+    what: "a DIY night pass: the two free vendor reads, each client's due jobs queued, and two signed workers posted",
+  },
+  runOnDemand: {
+    module: "src/lib/diy/core/runondemand.ts",
+    what: "a member's DIY button - a page check, a drafted example, a verify, a logged site, a link check",
+  },
+  diyRead: {
+    module: "src/lib/diy/core/doors.ts",
+    what: "one capped DataForSEO read on the DIY ledger",
   },
 };
 

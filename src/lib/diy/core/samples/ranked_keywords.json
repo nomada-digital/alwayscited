@@ -1,0 +1,495 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0.01236,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0.01236,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "dataforseo_labs",
+        "google",
+        "ranked_keywords",
+        "live"
+      ],
+      "data": {
+        "api": "dataforseo_labs"
+      },
+      "result": [
+        {
+          "se_type": "google",
+          "target": "tallyroo.com",
+          "location_code": 2826,
+          "language_code": "en",
+          "total_count": 1342,
+          "items_count": 3,
+          "metrics": {
+            "organic": {
+              "pos_1": 4,
+              "pos_2_3": 9,
+              "pos_4_10": 31,
+              "pos_11_20": 48,
+              "pos_21_30": 22,
+              "pos_31_40": 10,
+              "pos_41_50": 6,
+              "pos_51_60": 3,
+              "pos_61_70": 2,
+              "pos_71_80": 1,
+              "pos_81_90": 0,
+              "pos_91_100": 1,
+              "etv": 1840.5,
+              "count": 1342,
+              "estimated_paid_traffic_cost": 812.4,
+              "is_new": 12,
+              "is_up": 30,
+              "is_down": 18,
+              "is_lost": 5,
+              "clickstream_etv": null,
+              "clickstream_gender_distribution": null,
+              "clickstream_age_distribution": null
+            },
+            "paid": null,
+            "featured_snippet": null,
+            "local_pack": null,
+            "ai_overview_reference": null
+          },
+          "metrics_absolute": {
+            "organic": {
+              "pos_1": 4,
+              "pos_2_3": 9,
+              "pos_4_10": 31,
+              "pos_11_20": 48,
+              "pos_21_30": 22,
+              "pos_31_40": 10,
+              "pos_41_50": 6,
+              "pos_51_60": 3,
+              "pos_61_70": 2,
+              "pos_71_80": 1,
+              "pos_81_90": 0,
+              "pos_91_100": 1,
+              "etv": 1840.5,
+              "count": 1342,
+              "estimated_paid_traffic_cost": 812.4,
+              "is_new": 12,
+              "is_up": 30,
+              "is_down": 18,
+              "is_lost": 5,
+              "clickstream_etv": null,
+              "clickstream_gender_distribution": null,
+              "clickstream_age_distribution": null
+            },
+            "paid": null
+          },
+          "items": [
+            {
+              "se_type": "google",
+              "keyword_data": {
+                "se_type": "google",
+                "keyword": "payroll software for sole traders",
+                "location_code": 2826,
+                "language_code": "en",
+                "keyword_info": {
+                  "se_type": "google",
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00",
+                  "competition": 0.31,
+                  "competition_level": "MEDIUM",
+                  "cpc": 4.2,
+                  "search_volume": 880,
+                  "low_top_of_page_bid": 1.1,
+                  "high_top_of_page_bid": 6.3,
+                  "categories": [
+                    10019
+                  ],
+                  "monthly_searches": [
+                    {
+                      "year": 2026,
+                      "month": 9,
+                      "search_volume": 880
+                    }
+                  ],
+                  "search_volume_trend": {
+                    "monthly": 4,
+                    "quarterly": 12,
+                    "yearly": 30
+                  }
+                },
+                "keyword_properties": {
+                  "se_type": "google",
+                  "core_keyword": null,
+                  "synonym_clustering_algorithm": "text_processing",
+                  "keyword_difficulty": 38,
+                  "detected_language": "en",
+                  "is_another_language": false
+                },
+                "serp_info": {
+                  "se_type": "google",
+                  "check_url": "https://serp.example/check",
+                  "serp_item_types": [
+                    "organic",
+                    "ai_overview"
+                  ],
+                  "se_results_count": 1200000,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "avg_backlinks_info": {
+                  "se_type": "google",
+                  "backlinks": 120.4,
+                  "dofollow": 80.1,
+                  "referring_pages": 90.2,
+                  "referring_domains": 30.3,
+                  "rank": 210.0,
+                  "main_domain_rank": 400.1,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "search_intent_info": {
+                  "se_type": "google",
+                  "main_intent": "commercial",
+                  "foreign_intent": [
+                    "navigational"
+                  ],
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00"
+                }
+              },
+              "ranked_serp_element": {
+                "se_type": "google",
+                "serp_item": {
+                  "se_type": "google",
+                  "type": "organic",
+                  "rank_group": 6,
+                  "rank_absolute": 7,
+                  "position": "left",
+                  "xpath": "/html[1]/body[1]",
+                  "domain": "tallyroo.com",
+                  "title": "Tallyroo payroll",
+                  "url": "https://tallyroo.com/payroll",
+                  "breadcrumb": "https://tallyroo.com",
+                  "website_name": "Tallyroo",
+                  "is_image": false,
+                  "is_video": false,
+                  "is_featured_snippet": false,
+                  "is_malicious": false,
+                  "is_web_story": false,
+                  "description": "Made-up description.",
+                  "pre_snippet": null,
+                  "extended_snippet": null,
+                  "amp_version": false,
+                  "rating": null,
+                  "highlighted": [
+                    "payroll"
+                  ],
+                  "links": null,
+                  "about_this_result": null,
+                  "main_domain": "tallyroo.com",
+                  "relative_url": "/payroll",
+                  "etv": 41.2,
+                  "estimated_paid_traffic_cost": 3.2,
+                  "rank_changes": {
+                    "previous_rank_absolute": 14,
+                    "is_new": false,
+                    "is_up": true,
+                    "is_down": false
+                  },
+                  "backlinks_info": {
+                    "referring_domains": 12,
+                    "referring_main_domains": 11,
+                    "referring_pages": 40,
+                    "dofollow": 30,
+                    "backlinks": 45,
+                    "time_update": "2026-10-09 06:00:00 +00:00"
+                  },
+                  "rank_info": {
+                    "page_rank": 120,
+                    "main_domain_rank": 300
+                  }
+                },
+                "check_url": "https://serp.example/check",
+                "serp_item_types": [
+                  "organic"
+                ],
+                "se_results_count": 1200000,
+                "keyword_difficulty": 38,
+                "is_lost": false,
+                "last_updated_time": "2026-10-09 06:00:00 +00:00",
+                "previous_updated_time": "2026-09-09 06:00:00 +00:00"
+              }
+            },
+            {
+              "se_type": "google",
+              "keyword_data": {
+                "se_type": "google",
+                "keyword": "Small Business Payroll UK",
+                "location_code": 2826,
+                "language_code": "en",
+                "keyword_info": {
+                  "se_type": "google",
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00",
+                  "competition": 0.31,
+                  "competition_level": "MEDIUM",
+                  "cpc": 4.2,
+                  "search_volume": 1600,
+                  "low_top_of_page_bid": 1.1,
+                  "high_top_of_page_bid": 6.3,
+                  "categories": [
+                    10019
+                  ],
+                  "monthly_searches": [
+                    {
+                      "year": 2026,
+                      "month": 9,
+                      "search_volume": 1600
+                    }
+                  ],
+                  "search_volume_trend": {
+                    "monthly": 4,
+                    "quarterly": 12,
+                    "yearly": 30
+                  }
+                },
+                "keyword_properties": {
+                  "se_type": "google",
+                  "core_keyword": null,
+                  "synonym_clustering_algorithm": "text_processing",
+                  "keyword_difficulty": 52,
+                  "detected_language": "en",
+                  "is_another_language": false
+                },
+                "serp_info": {
+                  "se_type": "google",
+                  "check_url": "https://serp.example/check",
+                  "serp_item_types": [
+                    "organic",
+                    "ai_overview"
+                  ],
+                  "se_results_count": 1200000,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "avg_backlinks_info": {
+                  "se_type": "google",
+                  "backlinks": 120.4,
+                  "dofollow": 80.1,
+                  "referring_pages": 90.2,
+                  "referring_domains": 30.3,
+                  "rank": 210.0,
+                  "main_domain_rank": 400.1,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "search_intent_info": {
+                  "se_type": "google",
+                  "main_intent": "transactional",
+                  "foreign_intent": [
+                    "navigational"
+                  ],
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00"
+                }
+              },
+              "ranked_serp_element": {
+                "se_type": "google",
+                "serp_item": {
+                  "se_type": "google",
+                  "type": "organic",
+                  "rank_group": 13,
+                  "rank_absolute": 14,
+                  "position": "left",
+                  "xpath": "/html[1]/body[1]",
+                  "domain": "tallyroo.com",
+                  "title": "Tallyroo payroll",
+                  "url": "https://tallyroo.com/payroll/small-business",
+                  "breadcrumb": "https://tallyroo.com",
+                  "website_name": "Tallyroo",
+                  "is_image": false,
+                  "is_video": false,
+                  "is_featured_snippet": false,
+                  "is_malicious": false,
+                  "is_web_story": false,
+                  "description": "Made-up description.",
+                  "pre_snippet": null,
+                  "extended_snippet": null,
+                  "amp_version": false,
+                  "rating": null,
+                  "highlighted": [
+                    "payroll"
+                  ],
+                  "links": null,
+                  "about_this_result": null,
+                  "main_domain": "tallyroo.com",
+                  "relative_url": "/payroll/small-business",
+                  "etv": 12.9,
+                  "estimated_paid_traffic_cost": 3.2,
+                  "rank_changes": {
+                    "previous_rank_absolute": null,
+                    "is_new": true,
+                    "is_up": false,
+                    "is_down": false
+                  },
+                  "backlinks_info": {
+                    "referring_domains": 12,
+                    "referring_main_domains": 11,
+                    "referring_pages": 40,
+                    "dofollow": 30,
+                    "backlinks": 45,
+                    "time_update": "2026-10-09 06:00:00 +00:00"
+                  },
+                  "rank_info": {
+                    "page_rank": 120,
+                    "main_domain_rank": 300
+                  }
+                },
+                "check_url": "https://serp.example/check",
+                "serp_item_types": [
+                  "organic"
+                ],
+                "se_results_count": 1200000,
+                "keyword_difficulty": 52,
+                "is_lost": false,
+                "last_updated_time": "2026-10-09 06:00:00 +00:00",
+                "previous_updated_time": "2026-09-09 06:00:00 +00:00"
+              }
+            },
+            {
+              "se_type": "google",
+              "keyword_data": {
+                "se_type": "google",
+                "keyword": "how to run payroll",
+                "location_code": 2826,
+                "language_code": "en",
+                "keyword_info": {
+                  "se_type": "google",
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00",
+                  "competition": 0.31,
+                  "competition_level": "MEDIUM",
+                  "cpc": 4.2,
+                  "search_volume": 2400,
+                  "low_top_of_page_bid": 1.1,
+                  "high_top_of_page_bid": 6.3,
+                  "categories": [
+                    10019
+                  ],
+                  "monthly_searches": [
+                    {
+                      "year": 2026,
+                      "month": 9,
+                      "search_volume": 2400
+                    }
+                  ],
+                  "search_volume_trend": {
+                    "monthly": 4,
+                    "quarterly": 12,
+                    "yearly": 30
+                  }
+                },
+                "keyword_properties": {
+                  "se_type": "google",
+                  "core_keyword": null,
+                  "synonym_clustering_algorithm": "text_processing",
+                  "keyword_difficulty": 61,
+                  "detected_language": "en",
+                  "is_another_language": false
+                },
+                "serp_info": {
+                  "se_type": "google",
+                  "check_url": "https://serp.example/check",
+                  "serp_item_types": [
+                    "organic",
+                    "ai_overview"
+                  ],
+                  "se_results_count": 1200000,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "avg_backlinks_info": {
+                  "se_type": "google",
+                  "backlinks": 120.4,
+                  "dofollow": 80.1,
+                  "referring_pages": 90.2,
+                  "referring_domains": 30.3,
+                  "rank": 210.0,
+                  "main_domain_rank": 400.1,
+                  "last_updated_time": "2026-10-09 06:00:00 +00:00"
+                },
+                "search_intent_info": {
+                  "se_type": "google",
+                  "main_intent": "informational",
+                  "foreign_intent": [
+                    "navigational"
+                  ],
+                  "last_updated_time": "2026-10-01 11:00:00 +00:00"
+                }
+              },
+              "ranked_serp_element": {
+                "se_type": "google",
+                "serp_item": {
+                  "se_type": "google",
+                  "type": "organic",
+                  "rank_group": 24,
+                  "rank_absolute": 25,
+                  "position": "left",
+                  "xpath": "/html[1]/body[1]",
+                  "domain": "tallyroo.com",
+                  "title": "Tallyroo payroll",
+                  "url": "https://tallyroo.com/blog/run-payroll",
+                  "breadcrumb": "https://tallyroo.com",
+                  "website_name": "Tallyroo",
+                  "is_image": false,
+                  "is_video": false,
+                  "is_featured_snippet": false,
+                  "is_malicious": false,
+                  "is_web_story": false,
+                  "description": "Made-up description.",
+                  "pre_snippet": null,
+                  "extended_snippet": null,
+                  "amp_version": false,
+                  "rating": null,
+                  "highlighted": [
+                    "payroll"
+                  ],
+                  "links": null,
+                  "about_this_result": null,
+                  "main_domain": "tallyroo.com",
+                  "relative_url": "/blog/run-payroll",
+                  "etv": 3.1,
+                  "estimated_paid_traffic_cost": 3.2,
+                  "rank_changes": {
+                    "previous_rank_absolute": 22,
+                    "is_new": false,
+                    "is_up": false,
+                    "is_down": true
+                  },
+                  "backlinks_info": {
+                    "referring_domains": 12,
+                    "referring_main_domains": 11,
+                    "referring_pages": 40,
+                    "dofollow": 30,
+                    "backlinks": 45,
+                    "time_update": "2026-10-09 06:00:00 +00:00"
+                  },
+                  "rank_info": {
+                    "page_rank": 120,
+                    "main_domain_rank": 300
+                  }
+                },
+                "check_url": "https://serp.example/check",
+                "serp_item_types": [
+                  "organic"
+                ],
+                "se_results_count": 1200000,
+                "keyword_difficulty": 61,
+                "is_lost": false,
+                "last_updated_time": "2026-10-09 06:00:00 +00:00",
+                "previous_updated_time": "2026-09-09 06:00:00 +00:00"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

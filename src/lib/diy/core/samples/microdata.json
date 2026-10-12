@@ -1,0 +1,109 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "on_page",
+        "microdata"
+      ],
+      "data": {
+        "api": "on_page",
+        "function": "microdata",
+        "id": "10131234-1111-0066-0000-0123456789ab"
+      },
+      "result": [
+        {
+          "crawl_progress": "finished",
+          "crawl_status": {
+            "max_crawl_pages": 1,
+            "pages_in_queue": 0,
+            "pages_crawled": 1
+          },
+          "test_summary": {
+            "fatal": 0,
+            "error": 1,
+            "warning": 2,
+            "info": 0
+          },
+          "items_count": 1,
+          "items": [
+            {
+              "type": "json_ld",
+              "inspection_info": {
+                "types": [
+                  "Organization"
+                ],
+                "fields": [
+                  {
+                    "name": "@type",
+                    "types": null,
+                    "value": "Organization",
+                    "test_results": null,
+                    "fields": null
+                  },
+                  {
+                    "name": "name",
+                    "types": null,
+                    "value": "Tallyroo",
+                    "test_results": null,
+                    "fields": null
+                  },
+                  {
+                    "name": "logo",
+                    "types": [
+                      "ImageObject"
+                    ],
+                    "value": null,
+                    "test_results": {
+                      "level": "error",
+                      "message": "The property url is required for ImageObject."
+                    },
+                    "fields": [
+                      {
+                        "name": "width",
+                        "types": null,
+                        "value": "120",
+                        "test_results": {
+                          "level": "warning",
+                          "message": "The value is not a valid width."
+                        },
+                        "fields": null
+                      }
+                    ]
+                  },
+                  {
+                    "name": "sameAs",
+                    "types": null,
+                    "value": [
+                      "https://social.example/tallyroo",
+                      "https://video.example/tallyroo"
+                    ],
+                    "test_results": {
+                      "level": "warning",
+                      "message": "Duplicate value."
+                    },
+                    "fields": null
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

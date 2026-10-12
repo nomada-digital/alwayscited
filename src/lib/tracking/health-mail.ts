@@ -3,6 +3,8 @@ import { Resend } from "resend";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { mailFrom } from "@/config/mail-from";
 import { headerSafe } from "@/lib/email-header";
+import { diyHealthLineFor } from "@/lib/diy/core/health";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * The daily run-health summary to Danny (9 Oct 2026, audit reliability-6,
@@ -26,7 +28,8 @@ export async function sendRunHealth(input: { subject: string; text: string }): P
       from: mailFrom(),
       to: process.env.CONTACT_EMAIL_DESTINATION ?? CONTACT_EMAIL,
       subject: headerSafe(input.subject),
-      text: input.text,
+      // 13 Oct 2026, DIY P1: one line on last night's DIY reads, caps and carried jobs (spec 10 section 5.6).
+      text: `${input.text}\n\n${await diyHealthLineFor(supabaseAdmin)}`,
     });
     if (error) {
       console.error("[track] run-health summary rejected", error);

@@ -1,0 +1,247 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0.00015,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0.00015,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "on_page",
+        "content_parsing",
+        "live"
+      ],
+      "data": {
+        "api": "on_page"
+      },
+      "result": [
+        {
+          "crawl_progress": "finished",
+          "crawl_status": {
+            "max_crawl_pages": 1,
+            "pages_in_queue": 0,
+            "pages_crawled": 1
+          },
+          "items_count": 1,
+          "items": [
+            {
+              "type": "content_parsing_element",
+              "fetch_time": "2026-10-13 03:31:00 +00:00",
+              "status_code": 200,
+              "page_content": {
+                "header": {
+                  "primary_content": [
+                    {
+                      "type": "content_item",
+                      "text": "Home",
+                      "url": "https://roundup.example/",
+                      "urls": [
+                        {
+                          "url": "https://roundup.example/",
+                          "anchor_text": "Home"
+                        }
+                      ]
+                    }
+                  ],
+                  "secondary_content": null,
+                  "table_content": null
+                },
+                "footer": {
+                  "primary_content": [
+                    {
+                      "type": "content_item",
+                      "text": "Contact the editor",
+                      "url": null,
+                      "urls": null
+                    },
+                    {
+                      "type": "content_item",
+                      "text": "Write for the site",
+                      "url": "https://roundup.example/contribute",
+                      "urls": [
+                        {
+                          "url": "https://roundup.example/contribute",
+                          "anchor_text": "Contribute"
+                        }
+                      ]
+                    }
+                  ],
+                  "secondary_content": null,
+                  "table_content": null
+                },
+                "main_topic": [
+                  {
+                    "h_title": "The best payroll tools for sole traders",
+                    "main_title": "Best payroll tools for sole traders (2026)",
+                    "author": "A. Writer",
+                    "language": "en",
+                    "level": 1,
+                    "primary_content": [
+                      {
+                        "type": "content_item",
+                        "text": "Last updated 3 October 2026 by the editors.",
+                        "url": null,
+                        "urls": null
+                      },
+                      {
+                        "type": "content_item",
+                        "text": "We compared seven tools, including Ledgerline and Tallyroo.",
+                        "url": null,
+                        "urls": [
+                          {
+                            "url": "https://ledgerline.com/",
+                            "anchor_text": "Ledgerline"
+                          },
+                          {
+                            "url": "https://tallyroo.com/payroll",
+                            "anchor_text": "Tallyroo"
+                          }
+                        ]
+                      }
+                    ],
+                    "secondary_content": null,
+                    "table_content": null
+                  },
+                  {
+                    "h_title": "How we picked",
+                    "main_title": null,
+                    "author": null,
+                    "language": "en",
+                    "level": 2,
+                    "primary_content": [
+                      {
+                        "type": "content_item",
+                        "text": "Published 12 May 2026. Each tool was used for a month.",
+                        "url": null,
+                        "urls": null
+                      }
+                    ],
+                    "secondary_content": null,
+                    "table_content": [
+                      [
+                        {
+                          "type": "content_item",
+                          "text": "Tool",
+                          "url": null,
+                          "urls": null
+                        },
+                        {
+                          "type": "content_item",
+                          "text": "Starting price",
+                          "url": null,
+                          "urls": null
+                        }
+                      ],
+                      [
+                        {
+                          "type": "content_item",
+                          "text": "Ledgerline",
+                          "url": null,
+                          "urls": null
+                        },
+                        {
+                          "type": "content_item",
+                          "text": "12 a month",
+                          "url": null,
+                          "urls": null
+                        }
+                      ]
+                    ]
+                  },
+                  {
+                    "h_title": "Ledgerline",
+                    "main_title": null,
+                    "author": null,
+                    "language": "en",
+                    "level": 3,
+                    "primary_content": [
+                      {
+                        "type": "content_item",
+                        "text": "A made-up rival with a made-up feature list.",
+                        "url": null,
+                        "urls": null
+                      }
+                    ],
+                    "secondary_content": null,
+                    "table_content": null
+                  }
+                ],
+                "secondary_topic": [
+                  {
+                    "h_title": "Related reading",
+                    "main_title": null,
+                    "author": null,
+                    "language": "en",
+                    "level": 2,
+                    "primary_content": [
+                      {
+                        "type": "content_item",
+                        "text": "More round-ups",
+                        "url": "https://roundup.example/more",
+                        "urls": null
+                      }
+                    ],
+                    "secondary_content": null,
+                    "table_content": null
+                  }
+                ],
+                "ratings": [
+                  {
+                    "name": "Ledgerline",
+                    "rating_value": 4.1,
+                    "max_rating_value": 5,
+                    "rating_count": 12,
+                    "relative_rating": 0.82
+                  }
+                ],
+                "offers": [
+                  {
+                    "name": "Ledgerline Pro",
+                    "price": 12,
+                    "price_currency": "GBP",
+                    "price_valid_until": null
+                  }
+                ],
+                "comments": [
+                  {
+                    "rating": null,
+                    "title": "Useful",
+                    "publish_date": "2026-10-04",
+                    "author": "Reader",
+                    "primary_content": [
+                      {
+                        "type": "content_item",
+                        "text": "Thanks.",
+                        "url": null,
+                        "urls": null
+                      }
+                    ]
+                  }
+                ],
+                "contacts": {
+                  "telephones": [
+                    "+44 0000 000000"
+                  ],
+                  "emails": [
+                    "editor@roundup.example"
+                  ]
+                }
+              },
+              "page_as_markdown": "# Best payroll tools for sole traders\n\nMade-up markdown body."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

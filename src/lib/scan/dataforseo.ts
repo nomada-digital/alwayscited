@@ -2,8 +2,26 @@ import "server-only";
 
 import {
   budgetFor,
+  type CompetitorDomain,
+  DIY_FREE_PATHS,
+  DIY_PATHS,
+  type DiyRequest,
   firstTask,
+  type InstantPage,
   type Intent,
+  type LabsStatus,
+  type Microdata,
+  type ParsedPage,
+  parseBacklinksFilters,
+  parseCompetitorsDomain,
+  parseContentParsing,
+  parseInstantPage,
+  parseLabsStatus,
+  parseMicrodata,
+  parseRankedKeywords,
+  parseRelevantPages,
+  type RankedKeywords,
+  type RelevantPage,
   keywordIntentRequest,
   keywordIntents,
   keywordRankRequest,
@@ -205,4 +223,90 @@ export async function readKeywordPosition(
   // kept day by day rather than thrown away. No new request and no new cost.
   const top = organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
   return { rank, url, cost: taskCost(task), top };
+}
+
+// ───────────────────────────── DIY launch doors ─────────────────────────────
+
+/**
+ * One door per DIY launch endpoint (13 Oct 2026, DIY P1; spec 10 section 5.2).
+ * Each takes a request built in `dataforseo-request.ts`, refuses one built for
+ * another path, posts it, and answers the allow-listed parse with what the
+ * task billed. **Called only from `src/lib/diy/core/doors.ts`**, inside the
+ * capped `diyRead` - a reservation in the DIY ledger before every paid one -
+ * and `request-shape.test.mts` holds each door to that one caller. The two
+ * free reads are GETs with no body and cost 0, called only by `freeRead`.
+ */
+
+/** What a DIY door answers: the parse, what the task billed, and how many rows came back (Labs bills per row). */
+export type DiyAnswer<T> = { value: T; cost: number; rows: number | null; partial: boolean };
+
+async function get(path: string, timeoutMs: number): Promise<Record<string, unknown>> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "GET",
+    headers: { authorization: `Basic ${auth()}` },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    const err = new Error(`DataForSEO ${res.status}: ${detail.slice(0, 300)}`);
+    (err as { status?: number }).status = res.status;
+    throw err;
+  }
+  return (await res.json()) as Record<string, unknown>;
+}
+
+function diyTask(req: DiyRequest, path: string) {
+  if (req.path !== path) throw new Error(`a ${req.endpoint} request was handed to the ${path} door`);
+}
+
+const itemsOf = (result: unknown): number => {
+  const first = Array.isArray(result) ? (result[0] as { items?: unknown } | undefined) : undefined;
+  return Array.isArray(first?.items) ? first.items.length : 0;
+};
+
+export async function readDiyRankedKeywords(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<RankedKeywords>> {
+  diyTask(req, DIY_PATHS.ranked_keywords);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseRankedKeywords(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+export async function readDiyRelevantPages(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<RelevantPage[]>> {
+  diyTask(req, DIY_PATHS.relevant_pages);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseRelevantPages(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+export async function readDiyCompetitorsDomain(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<CompetitorDomain[]>> {
+  diyTask(req, DIY_PATHS.competitors_domain);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseCompetitorsDomain(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+export async function readDiyInstantPage(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ taskId: string | null; page: InstantPage | null }>> {
+  diyTask(req, DIY_PATHS.instant_pages);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseInstantPage(task), cost: taskCost(task), rows: 1, partial: task.partial === true };
+}
+
+export async function readDiyMicrodata(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<Microdata>> {
+  diyTask(req, DIY_PATHS.microdata);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseMicrodata(task), cost: taskCost(task), rows: 0, partial: task.partial === true };
+}
+
+export async function readDiyContentParsing(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<ParsedPage | null>> {
+  diyTask(req, DIY_PATHS.content_parsing);
+  const markdown = (req.body as { markdown_view?: unknown }[])[0]?.markdown_view === true;
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseContentParsing(task, { markdown }), cost: taskCost(task), rows: 1, partial: task.partial === true };
+}
+
+/** Free: when Labs data last refreshed. */
+export async function readLabsStatus(): Promise<LabsStatus> {
+  return parseLabsStatus(firstTask(await get(DIY_FREE_PATHS.labs_status, 15_000)));
+}
+
+/** Free: the Backlinks filter names. It answers whatever the account's access; it does not prove access (04 section 1). */
+export async function readBacklinksFilters(): Promise<{ groups: Record<string, string[]> }> {
+  return parseBacklinksFilters(firstTask(await get(DIY_FREE_PATHS.backlinks_filters, 15_000)));
 }
