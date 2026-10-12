@@ -1,0 +1,811 @@
+{
+  "_note": "13 Oct 2026, DIY P3: the Plan's fixture (src/lib/diy/plan/data.ts). Illustrative. Tallyroo and every brand shown are made up; hosts are the tracking fixture's made-up ones (privacy.test.mts). Dates sit against the tracking fixture's today, 29 Sep 2026. full: 23 items, 3 this week (1 done), 2 done 21+ days ago with readouts, 1 too early. day0: nothing read yet. zero: read, nothing open. dark and capped serve full: the Plan has no paid read.",
+  "full": {
+    "items": [
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-01",
+        "cluster_id": null,
+        "kind": "unblock_crawler",
+        "severity": "blocking",
+        "status": "suggested",
+        "title": "Let Googlebot crawl tallyroo.com/pricing",
+        "why": [
+          {
+            "text": "robots.txt on tallyroo.com disallows /pricing for Googlebot, read on 21 Sep and 28 Sep."
+          }
+        ],
+        "grade": "documented",
+        "source_id": "S41",
+        "effort": "minutes",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-2",
+        "dedupe_key": "crawl:googlebot:kp-2",
+        "week_of": "2026-09-28",
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-02",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c4",
+        "title": "Get named again for 'Which bookkeeping software makes tax…'",
+        "why": [
+          {
+            "text": "Named by Google AI Overviews, ChatGPT, Gemini and Perplexity earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c4"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c4",
+        "ref_table": "tracked_questions",
+        "ref_id": "q4-4",
+        "dedupe_key": "prompt-lost:q4-4",
+        "status": "doing",
+        "week_of": "2026-09-28",
+        "started_on": "2026-09-28",
+        "owner_email": "editor@example.com",
+        "created_at": "2026-09-26T03:31:00Z",
+        "status_at": "2026-09-28T09:12:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-03",
+        "cluster_id": "c3",
+        "kind": "rework_page",
+        "severity": "closest",
+        "status": "done",
+        "title": "Rework tallyroo.com/invoicing for 'invoicing software'",
+        "why": [
+          {
+            "text": "'invoicing software' was 12th on Google on 2 Sep and 11th at its latest reading, 28 Sep.",
+            "href": "/clusters/c3"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": null,
+        "ref_table": "tracked_keywords",
+        "ref_id": "k3",
+        "dedupe_key": "closest:k3",
+        "week_of": "2026-09-28",
+        "started_on": "2026-09-28",
+        "done_on": "2026-09-28",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T16:40:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-04",
+        "cluster_id": "c3",
+        "status": "done",
+        "title": "Rewrite the invoicing page intro around 'invoicing software'",
+        "dedupe_key": "task:pi-04",
+        "started_on": "2026-08-25",
+        "done_on": "2026-09-01",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "created_at": "2026-08-24T10:02:00Z",
+        "status_at": "2026-09-01T15:20:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-05",
+        "cluster_id": "c4",
+        "kind": "add_schema",
+        "severity": "tidy",
+        "status": "done",
+        "title": "Add Product schema to tallyroo.com/bookkeeping",
+        "why": [
+          {
+            "text": "No Product schema on tallyroo.com/bookkeeping, read on 1 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "hour",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-4",
+        "dedupe_key": "schema:product:kp-4",
+        "started_on": "2026-09-03",
+        "done_on": "2026-09-05",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "verified": {
+          "by": "key_pages_weekly",
+          "at": "2026-09-12",
+          "text": "Verified: Product found with name and description, 12 Sep"
+        },
+        "created_at": "2026-09-02T03:31:00Z",
+        "status_at": "2026-09-05T11:05:00Z",
+        "seen_on": "2026-09-04"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-06",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c4",
+        "title": "Get named again for 'Which bookkeeping software is better than…'",
+        "why": [
+          {
+            "text": "Named by Google AI Overviews, ChatGPT, Gemini and Perplexity earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c4"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c4",
+        "ref_table": "tracked_questions",
+        "ref_id": "q4-5",
+        "dedupe_key": "prompt-lost:q4-5",
+        "status": "suggested",
+        "created_at": "2026-09-27T03:31:00Z",
+        "status_at": "2026-09-27T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-07",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c8",
+        "title": "Get named again for 'What's the best cloud accounting software?'",
+        "why": [
+          {
+            "text": "Named by Google AI Overviews, ChatGPT, Gemini and Perplexity earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c8"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c8",
+        "ref_table": "tracked_questions",
+        "ref_id": "q8-1",
+        "dedupe_key": "prompt-lost:q8-1",
+        "status": "suggested",
+        "created_at": "2026-09-27T03:31:00Z",
+        "status_at": "2026-09-27T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-08",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c8",
+        "title": "Get named again for 'Which cloud accounting software cuts…'",
+        "why": [
+          {
+            "text": "Named by Google AI Overviews, ChatGPT, Gemini and Perplexity earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c8"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c8",
+        "ref_table": "tracked_questions",
+        "ref_id": "q8-4",
+        "dedupe_key": "prompt-lost:q8-4",
+        "status": "suggested",
+        "hidden_until": "2026-10-10",
+        "created_at": "2026-09-25T03:31:00Z",
+        "status_at": "2026-09-26T08:30:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-09",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c9",
+        "title": "Get named again for 'Which accounting software do small…'",
+        "why": [
+          {
+            "text": "Named by ChatGPT, Gemini and Perplexity earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c9"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c9",
+        "ref_table": "tracked_questions",
+        "ref_id": "q9-3",
+        "dedupe_key": "prompt-lost:q9-3",
+        "status": "suggested",
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-10",
+        "cluster_id": "c2",
+        "kind": "get_onto_page",
+        "severity": "gap",
+        "status": "suggested",
+        "title": "Get named on softwarecritic.com/accounting",
+        "why": [
+          {
+            "text": "Cited in 179 answers to your prompts in the last 28 days, to 29 Sep; 29 of them to this cluster's prompts.",
+            "href": "/cited?kind=others&open=softwarecritic.com/accounting"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": null,
+        "ref_table": "opportunities",
+        "ref_id": "op-1",
+        "dedupe_key": "opp:op-1",
+        "created_at": "2026-09-22T03:31:00Z",
+        "status_at": "2026-09-22T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-11",
+        "cluster_id": null,
+        "kind": "fix_schema",
+        "severity": "tidy",
+        "status": "suggested",
+        "title": "Fix the Organization schema on your homepage",
+        "why": [
+          {
+            "text": "Organization on tallyroo.com has no logo, read on 28 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "minutes",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-1",
+        "dedupe_key": "schema:org:kp-1",
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-12",
+        "cluster_id": "c8",
+        "kind": "rework_page",
+        "severity": "closest",
+        "status": "suggested",
+        "title": "Rework tallyroo.com/cloud for 'cloud accounting software'",
+        "why": [
+          {
+            "text": "'cloud accounting software' is 14th on Google at its latest reading, 29 Sep.",
+            "href": "/clusters/c8"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": null,
+        "ref_table": "tracked_keywords",
+        "ref_id": "k8",
+        "dedupe_key": "closest:k8",
+        "created_at": "2026-09-21T03:31:00Z",
+        "status_at": "2026-09-21T03:31:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-13",
+        "cluster_id": null,
+        "status": "todo",
+        "title": "Ask three customers for a review",
+        "dedupe_key": "task:pi-13",
+        "owner_email": "editor@example.com",
+        "note": "Start with the accountants' group",
+        "created_at": "2026-09-24T14:00:00Z",
+        "status_at": "2026-09-24T14:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "editor@example.com",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-14",
+        "cluster_id": "c7",
+        "status": "todo",
+        "title": "Draft a comparison page: Tallyroo against Ledgerline",
+        "dedupe_key": "task:pi-14",
+        "created_at": "2026-09-23T10:00:00Z",
+        "status_at": "2026-09-23T10:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-15",
+        "cluster_id": "c5",
+        "kind": "fix_page_status",
+        "severity": "blocking",
+        "status": "todo",
+        "title": "Fix the 404 on tallyroo.com/expenses",
+        "why": [
+          {
+            "text": "tallyroo.com/expenses answered 404 on 21 Sep and 28 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "minutes",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-5",
+        "dedupe_key": "status:kp-5",
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T09:15:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-16",
+        "cluster_id": "c9",
+        "kind": "publish_own",
+        "severity": "gap",
+        "status": "todo",
+        "title": "Publish a page for 'accounting software for nonprofits'",
+        "why": [
+          {
+            "text": "'accounting software for nonprofits' is not in Google's top 20 at its latest reading, 29 Sep.",
+            "href": "/clusters/c9"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": null,
+        "ref_table": "opportunities",
+        "ref_id": "op-2",
+        "dedupe_key": "opp:op-2",
+        "created_at": "2026-09-20T03:31:00Z",
+        "status_at": "2026-09-22T12:00:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-17",
+        "cluster_id": "c1",
+        "status": "todo",
+        "title": "Update the freelancer FAQ with this year's tax dates",
+        "dedupe_key": "task:pi-17",
+        "created_at": "2026-09-27T16:00:00Z",
+        "status_at": "2026-09-27T16:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-18",
+        "cluster_id": "c6",
+        "status": "doing",
+        "title": "Write the contractor invoicing guide",
+        "dedupe_key": "task:pi-18",
+        "owner_email": "owner@example.com",
+        "started_on": "2026-09-22",
+        "created_at": "2026-09-21T09:00:00Z",
+        "status_at": "2026-09-22T09:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-19",
+        "cluster_id": "c2",
+        "kind": "add_schema",
+        "severity": "tidy",
+        "status": "doing",
+        "title": "Add Product schema to tallyroo.com/small-business",
+        "why": [
+          {
+            "text": "No Product schema on tallyroo.com/small-business, read on 21 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "hour",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-3",
+        "dedupe_key": "schema:product:kp-3",
+        "started_on": "2026-09-23",
+        "created_at": "2026-09-21T03:31:00Z",
+        "status_at": "2026-09-23T10:30:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "editor@example.com",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-20",
+        "cluster_id": "c2",
+        "status": "doing",
+        "title": "Brief the designer on the small business landing page",
+        "dedupe_key": "task:pi-20",
+        "started_on": "2026-09-26",
+        "created_at": "2026-09-25T11:00:00Z",
+        "status_at": "2026-09-26T11:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 2,
+        "id": "pi-21",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c2",
+        "title": "Get named again for 'Which accounting software do small retail…'",
+        "why": [
+          {
+            "text": "Named by ChatGPT and Gemini earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c2"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c2",
+        "ref_table": "tracked_questions",
+        "ref_id": "q2-3",
+        "dedupe_key": "prompt-lost:q2-3",
+        "status": "dropped",
+        "note": "No longer applies (checked 27 Sep)",
+        "created_at": "2026-09-20T03:31:00Z",
+        "status_at": "2026-09-27T03:31:00Z",
+        "seen_on": "2026-09-25",
+        "missed_on": "2026-09-27"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-22",
+        "cluster_id": null,
+        "status": "dropped",
+        "title": "Redo the homepage hero",
+        "dedupe_key": "task:pi-22",
+        "created_at": "2026-09-10T10:00:00Z",
+        "status_at": "2026-09-18T10:00:00Z"
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-23",
+        "cluster_id": "c1",
+        "kind": "add_schema",
+        "severity": "tidy",
+        "status": "dropped",
+        "title": "Add FAQPage schema to tallyroo.com/freelancers",
+        "why": [
+          {
+            "text": "No FAQPage schema on tallyroo.com/freelancers, read on 14 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "hour",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-6",
+        "dedupe_key": "schema:faq:kp-6",
+        "note": "Not for us right now",
+        "created_at": "2026-09-14T03:31:00Z",
+        "status_at": "2026-09-16T12:00:00Z",
+        "seen_on": "2026-09-29"
+      }
+    ]
+  },
+  "day0": {
+    "items": []
+  },
+  "zero": {
+    "items": [
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-03",
+        "cluster_id": "c3",
+        "kind": "rework_page",
+        "severity": "closest",
+        "status": "done",
+        "title": "Rework tallyroo.com/invoicing for 'invoicing software'",
+        "why": [
+          {
+            "text": "'invoicing software' was 12th on Google on 2 Sep and 11th at its latest reading, 28 Sep.",
+            "href": "/clusters/c3"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": null,
+        "ref_table": "tracked_keywords",
+        "ref_id": "k3",
+        "dedupe_key": "closest:k3",
+        "week_of": null,
+        "started_on": "2026-09-28",
+        "done_on": "2026-09-28",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "created_at": "2026-09-28T03:31:00Z",
+        "status_at": "2026-09-28T16:40:00Z",
+        "seen_on": "2026-09-29"
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-04",
+        "cluster_id": "c3",
+        "status": "done",
+        "title": "Rewrite the invoicing page intro around 'invoicing software'",
+        "dedupe_key": "task:pi-04",
+        "started_on": "2026-08-25",
+        "done_on": "2026-09-01",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "created_at": "2026-08-24T10:02:00Z",
+        "status_at": "2026-09-01T15:20:00Z",
+        "week_of": null
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-05",
+        "cluster_id": "c4",
+        "kind": "add_schema",
+        "severity": "tidy",
+        "status": "done",
+        "title": "Add Product schema to tallyroo.com/bookkeeping",
+        "why": [
+          {
+            "text": "No Product schema on tallyroo.com/bookkeeping, read on 1 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "hour",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-4",
+        "dedupe_key": "schema:product:kp-4",
+        "started_on": "2026-09-03",
+        "done_on": "2026-09-05",
+        "readout_base": {
+          "changed": "yes"
+        },
+        "verified": {
+          "by": "key_pages_weekly",
+          "at": "2026-09-12",
+          "text": "Verified: Product found with name and description, 12 Sep"
+        },
+        "created_at": "2026-09-02T03:31:00Z",
+        "status_at": "2026-09-05T11:05:00Z",
+        "seen_on": "2026-09-04",
+        "week_of": null
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "system",
+        "new_since_monday": false,
+        "missed": 2,
+        "id": "pi-21",
+        "kind": "recover_prompt",
+        "severity": "slipping",
+        "cluster_id": "c2",
+        "title": "Get named again for 'Which accounting software do small retail…'",
+        "why": [
+          {
+            "text": "Named by ChatGPT and Gemini earlier in the last 28 days; named by none of the 4 engines that answered, at their last 2 readings each, to 29 Sep.",
+            "href": "/clusters/c2"
+          }
+        ],
+        "grade": "your_data",
+        "effort": "days",
+        "href": "/clusters/c2",
+        "ref_table": "tracked_questions",
+        "ref_id": "q2-3",
+        "dedupe_key": "prompt-lost:q2-3",
+        "status": "dropped",
+        "note": "No longer applies (checked 27 Sep)",
+        "created_at": "2026-09-20T03:31:00Z",
+        "status_at": "2026-09-27T03:31:00Z",
+        "seen_on": "2026-09-25",
+        "missed_on": "2026-09-27",
+        "week_of": null
+      },
+      {
+        "client_domain_id": "fixture",
+        "kind": "own_task",
+        "severity": "own",
+        "why": [],
+        "grade": null,
+        "effort": null,
+        "href": null,
+        "created_by": "owner@example.com",
+        "status_by": "owner@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-22",
+        "cluster_id": null,
+        "status": "dropped",
+        "title": "Redo the homepage hero",
+        "dedupe_key": "task:pi-22",
+        "created_at": "2026-09-10T10:00:00Z",
+        "status_at": "2026-09-18T10:00:00Z",
+        "week_of": null
+      },
+      {
+        "client_domain_id": "fixture",
+        "created_by": "system",
+        "status_by": "editor@example.com",
+        "new_since_monday": false,
+        "missed": 0,
+        "id": "pi-23",
+        "cluster_id": "c1",
+        "kind": "add_schema",
+        "severity": "tidy",
+        "status": "dropped",
+        "title": "Add FAQPage schema to tallyroo.com/freelancers",
+        "why": [
+          {
+            "text": "No FAQPage schema on tallyroo.com/freelancers, read on 14 Sep."
+          }
+        ],
+        "grade": "practice",
+        "effort": "hour",
+        "href": null,
+        "ref_table": "key_pages",
+        "ref_id": "kp-6",
+        "dedupe_key": "schema:faq:kp-6",
+        "note": "Not for us right now",
+        "created_at": "2026-09-14T03:31:00Z",
+        "status_at": "2026-09-16T12:00:00Z",
+        "seen_on": "2026-09-29",
+        "week_of": null
+      }
+    ]
+  }
+}
