@@ -4,10 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { siteUrl } from "@/lib/scan/verify-email";
 import { appUrl } from "@/lib/app-host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
-import { clustersToMake, orderEmailText, orderRow, packsOn, signupResume, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
+import { clustersToMake, orderEmailText, orderRow, packsOn, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
 import { readSubscription } from "@/lib/checkout/stripe";
 import { afterSubscription } from "@/lib/checkout/payment";
 import { clientOfSubscription, recordPayment } from "@/lib/checkout/subscription-events";
+import { recordTrialCancel } from "@/lib/checkout/trial-cancel";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { trialCharge, trialMoment } from "@/config/trial";
 import { dayAfter, slugFor, trackingDay } from "@/lib/tracking/decide";
@@ -340,6 +341,9 @@ export async function onSubscriptionUpdated(db: SupabaseClient, sub: Record<stri
     console.error(`[stripe] cluster_limit${trialEndsAt === undefined ? "" : " and trial_ends_at"} not set: ${error.message}`);
     return false;
   }
+  // 12 Oct 2026 (email review H1): a trial cancelled in Stripe - by us on a client's email, or in the portal - is
+  // recorded as the dashboard's Cancel trial records it, so no trial email tells that client it will be charged.
+  if (!(await recordTrialCancel(db, client.id, sub, previous, at))) return false;
   return recordPayment(db, client, String(sub.id), at, (row) => afterSubscription(row, sub, at), () => endClient(db, client.id, sub));
 }
 
@@ -402,7 +406,9 @@ async function endClient(db: SupabaseClient, clientId: string, sub: Record<strin
  * longer trialing - a trial ended early - is left alone.
  */
 export async function onTrialWillEnd(db: SupabaseClient, sub: Record<string, unknown>): Promise<boolean> {
-  if (!trialStillRunning(sub)) return true;
+  // 12 Oct 2026 (email review H1): nor one set to end before its first charge, whoever cancelled it and whether or
+  // not the .updated that records it has landed yet - "From then it is $129 a month" would be false.
+  if (!trialStillRunning(sub) || trialCancelPending(sub)) return true;
   const client = await clientOfSubscription(db, sub);
   if (client === false) return false;
   // An email goes only to a client an order row ties to the subscription, never one guessed from its scan (9 Oct 2026, review of 2c6dc99).

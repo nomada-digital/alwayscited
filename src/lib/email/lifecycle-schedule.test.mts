@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { test } from "node:test";
 
 import type { AnswerRow } from "../tracking/figures.ts";
-import { ENDING_BEFORE_MS, SETUP_MAIL_EVENTS, TRIAL_MAIL_EVENT, endedInTrial, planEndedInTrial, setupReminderDue, setupStillEmpty, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
+import { ENDING_BEFORE_MS, SETUP_MAIL_EVENTS, TRIAL_MAIL_EVENT, endedInTrial, firstChargeFailed, planEndedInTrial, setupReminderDue, setupStillEmpty, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
 
 /**
  * When the daily cron sends a trial or setup email (8 Oct 2026, audit
@@ -90,7 +90,8 @@ test("the recap is the Overview's figures, from the first finished check", () =>
   const row = (run_date: string, named: boolean, brands: string[], answered = true): AnswerRow => ({ run_date, question_id: "q1", engine: "chatgpt", answered, named, brands });
   const rows = [row("2026-10-09", true, ["Xero"]), row("2026-10-10", false, ["Xero", "QuickBooks"]), row("2026-10-10", false, ["QuickBooks"]), row("2026-10-11", false, ["Xero"], false), row("2026-10-08", true, [])];
   const r = trialRecap({ rows, firstDay: "2026-10-09", today: "2026-10-15", you: "Tallyroo", clustersInUse: 2, clusterLimit: 10, livePrompts: 7 });
-  assert.deepEqual(r, { named: 1, answers: 3, since: "9 Oct", topOther: { name: "Xero", answers: 2 }, clustersInUse: 2, clusterLimit: 10, livePrompts: 7 });
+  // firstAsk joined 12 Oct 2026 (email review L3): null unless the sweep passes when new prompts are first asked.
+  assert.deepEqual(r, { named: 1, answers: 3, since: "9 Oct", topOther: { name: "Xero", answers: 2 }, clustersInUse: 2, clusterLimit: 10, livePrompts: 7, firstAsk: null });
   const before = trialRecap({ rows: [], firstDay: null, today: "2026-10-15", you: "Tallyroo", clustersInUse: 1, clusterLimit: 10, livePrompts: 0 });
   assert.equal(before.since, null);
   assert.equal(before.answers, 0);
@@ -125,6 +126,33 @@ test("plan_ended's trial copy is Stripe's trial_end first, the column only when 
   assert.equal(planEndedInTrial({ trialEndsAt: null, sub: neverATrial, now }), false);
   assert.equal(planEndedInTrial({ trialEndsAt: "2026-10-22T19:30:00Z", sub: { ended_at: end - 86_400 }, now }), true, "no trial_end on the payload: the column stands in");
   assert.equal(planEndedInTrial({ trialEndsAt: null, sub: { trial_end: end }, now: now + 2 * DAY }), false, "no ended_at or canceled_at: now stands in, and now is past the trial");
+});
+
+/**
+ * Email review H2 (12 Oct 2026): a trial whose first charge failed, and which
+ * Stripe cancelled after its retries, ends after trial_end, so endedInTrial
+ * gave a client who was never charged the paid copy. Stripe's
+ * cancellation_details and the period the subscription is in tell the two
+ * apart; anything less certain keeps the paid copy, because the trial copy
+ * says "You were not charged".
+ */
+test("H2: a trial whose first charge failed and was cancelled by Stripe gets the trial copy; a renewal that failed does not", () => {
+  const end = Date.parse("2026-10-22T19:30:00Z") / 1000;
+  const failed = { status: "canceled", trial_end: end, ended_at: end + 15 * 86_400, cancellation_details: { reason: "payment_failed" } };
+  const at = (sub: Record<string, unknown>) => planEndedInTrial({ trialEndsAt: null, sub, now: (end + 15 * 86_400) * 1000 });
+  // API 2025-03-31 on: the period is on the subscription's items.
+  assert.equal(at({ ...failed, items: { data: [{ current_period_start: end, current_period_end: end + 31 * 86_400 }] } }), true, "first period after the trial, cancelled for payment");
+  // Before it: on the subscription itself.
+  assert.equal(at({ ...failed, current_period_start: end }), true);
+  assert.equal(firstChargeFailed({ ...failed, current_period_start: end }), true);
+  // A trial that converted, paid its first month, then failed a renewal: a later period, so the paid copy.
+  assert.equal(at({ ...failed, ended_at: end + 45 * 86_400, current_period_start: end + 31 * 86_400 }), false);
+  // Cancelled at the client's request after the trial: not a failed charge.
+  assert.equal(at({ ...failed, cancellation_details: { reason: "cancellation_requested" }, current_period_start: end }), false);
+  // No period on the payload, or no trial: nothing assumed.
+  assert.equal(at(failed), false);
+  assert.equal(firstChargeFailed({ ...failed, trial_end: null, current_period_start: end }), false);
+  assert.equal(firstChargeFailed({ ...failed, cancellation_details: null, current_period_start: end }), false);
 });
 
 test("the migration's unique index names exactly the events the sweep claims", () => {
