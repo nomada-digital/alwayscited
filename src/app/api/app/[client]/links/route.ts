@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 
-import { room } from "@/lib/diy/core/allowances";
 import { isFixtureCtx } from "@/lib/diy/core/ctx";
 import { diyFixtureState, diyFixtureWrites } from "@/lib/diy/core/fixture";
 import type { ReadCtx } from "@/lib/diy/core/jobs";
@@ -9,7 +8,8 @@ import { decideOpp, newRow } from "@/lib/diy/opportunities/status";
 import { ACTIVE } from "@/lib/diy/opportunities/types";
 import { addFixtureLogged, fixtureState as oppFixtureState, loadOppWorld } from "@/lib/diy/opportunities/world";
 import { type FallbackRead, checkLink, checkUrl } from "@/lib/diy/links/check-link";
-import { linksChecksUsedFixture, linkChecksUsed, linksFixture, linksStore } from "@/lib/diy/links/data";
+import { linksFixture, linksStore } from "@/lib/diy/links/data";
+import { gapEvidence, mentionEvidence, targetEvidence } from "@/lib/diy/links/evidence";
 import { liveLinksIO } from "@/lib/diy/links/io";
 import { linksPath } from "@/lib/diy/links/paths";
 import { planReveal, targetRows } from "@/lib/diy/links/targets";
@@ -17,7 +17,7 @@ import { type LinksDone, type LinksWhy, whyOfRefusal } from "@/lib/diy/links/toa
 import { type LinkLens, type LinkView, LINK_LENSES, LINK_URL_MAX, pickView } from "@/lib/diy/links/types";
 import { linksPage } from "@/lib/diy/links/view";
 import { diyClientFor, loadLinksWorld } from "@/lib/diy/links/world";
-import { type LinkRowInput, domainUrl, pursueLink, revealPages, routeOf, writeCheck } from "@/lib/diy/links/write";
+import { type LinkRowInput, domainUrl, linkRowEvidence, pursueLink, revealPages, routeOf, writeCheck } from "@/lib/diy/links/write";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 import { writeRole } from "@/lib/tracking/member";
@@ -52,9 +52,13 @@ export const maxDuration = 60;
  * - `check`: "Check a link" on one public address (500 characters at most,
  *   not the client's own site): our own fetch first, which is free, then the
  *   `content_parsing` fallback through `runOnDemand` when robots.txt keeps us
- *   out, which refuses the paid read while DIY is dark, at a cap, or while a
- *   tracking run is reading. 30 a month (10 in the trial), shared with Verify
- *   now and Log a site, counted before anything is read.
+ *   out, which refuses the paid read while DIY is dark, at a cap, at the
+ *   month's allowance, or while a tracking run is reading. The allowance - 30
+ *   a month, 10 in the trial, shared with Verify now and Log a site - is
+ *   runOnDemand's own count (usage-meter.ts countUsage "link_checks"): a page
+ *   our fetch reads uses none, so a used-up month still checks the pages we
+ *   can read (13 Oct 2026, review of DIY P10: this route counted its free
+ *   checks too, a second count that Settings and Opportunities did not keep).
  *
  * The session decides the member; the slug must be one of their clients.
  * Owners and editors write; a viewer, and anyone on an ended client
@@ -101,9 +105,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const world = await loadLinksWorld(repo, client);
     const page = linksPage(world, { client: { domain: client.domain, trial, market: client.market }, now: nowMs, today });
     if (page.state === "dark") return back("refused", "dark");
+    if (page.state === "error") return back("refused", "failed");
     if (page.state !== "ready") return back("refused", "gone");
 
     if (action === "reveal") {
+      if (page.errors.includes("targets")) return back("refused", "failed", "targets");
       if (!page.targets || !world.pages || page.few) return back("refused", "gone", "targets");
       const rows = targetRows(world.pages.value.rows, { client: client.domain, targets: world.set?.domains ?? [], placed: world.placed });
       const revealed = new Set(world.linkRows.filter((o) => o.lens === "link_page" && o.revealedAt).map((o) => o.urlKey));
@@ -117,7 +123,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         if (!store.write({ revealed: [...held.revealed, ...added], checks: held.checks })) return back("refused", "readonly", "targets");
         return back("revealed", null, "targets");
       }
-      await revealPages(supabaseAdmin(), client.id, plan.pages.map((p) => ({ url: p.urlFrom, domain: p.domain, title: p.title })), { today, now: nowMs });
+      const readOn = world.pages.readOn;
+      await revealPages(supabaseAdmin(), client.id, plan.pages.map((p) => ({ url: p.urlFrom, domain: p.domain, title: p.title, evidence: targetEvidence(p, readOn) })), { today, now: nowMs });
       await usage("link_reveal");
       return back("revealed", null, "targets");
     }
@@ -126,6 +133,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const lens = String(form?.get("lens") ?? "") as LinkLens;
     const key = String(form?.get("key") ?? "").slice(0, 520);
     if (!(LINK_LENSES as readonly string[]).includes(lens) || !KEY.test(key)) return back("refused", "gone");
+    const section = lens === "link_domain" ? "gap" : lens === "link_page" ? "targets" : "mentions";
+    if (page.errors.includes(section)) return back("refused", "failed");
     const row = findRow(page, lens, key);
     if (!row) return back("refused", "gone");
     if (fixture) {
@@ -135,7 +144,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       const active = opp.rows.filter((o) => ACTIVE.includes(o.status)).length;
       const d = decideOpp({ do: "pursue" }, { status: "new", pursuedOn: null, note: null }, { role, ended: false, trial, active, today, now, by: email });
       if (d.op === "refuse") return back("refused", d.why === "cap" ? "cap" : "gone");
-      const made = newRow(client.id, { lens: row.lens, url: row.url, urlKey: key, domain: row.domain, title: row.title, route: row.route, today, now });
+      const made = newRow(client.id, { lens: row.lens, url: row.url, urlKey: key, domain: row.domain, title: row.title, route: row.route, evidence: linkRowEvidence(row.evidence, today), today, now });
       if (!made) return back("refused", "gone");
       addFixtureLogged(entry, { ...made, ...d.patch, id: `opp-link-${Date.now().toString(36)}`, history: [d.entry] });
       return back("pursued");
@@ -156,14 +165,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const mode = (await repo.upgradeContext(client!.id, email!, today)).mode;
     const diy = await diyClientFor(client!, repo, mode);
     if (!diy) return back("refused", "failed", "check");
-    try {
-      const used = fixture ? linksChecksUsedFixture(linksFixture(), linksStore().get()) : await linkChecksUsed(supabaseAdmin(), diy, nowMs);
-      if (room("link_checks", used, diy).out) return back("refused", "allowance", "check");
-    } catch (err) {
-      // An unreadable count is never read as room.
-      console.warn(`[diy] links check allowance: ${msg(err)}`);
-      return back("refused", "spend", "check");
-    }
+    // The allowance is runOnDemand's: it refuses the paid fallback, never our own free read (FREE_FIRST link_check).
     const db = fixture ? null : supabaseAdmin();
     // The real clock, not the request's frozen one: the ledger reads it for each read's deadline and retries (25 s).
     const answer = await runOnDemand({ db, client: diy, member: email!, action: "link_check" }, async (rctx: ReadCtx) => {
@@ -198,16 +200,16 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   }
 }
 
-/** The row a Pursue names, from what the page lists - after the subtraction - or null. */
+/** The row a Pursue names, from what the page lists - after the subtraction - or null; with the facts it was listed on, which the opportunity keeps. */
 function findRow(page: ReturnType<typeof linksPage>, lens: LinkLens, key: string): LinkRowInput | null {
   if (lens === "link_domain") {
     const r = page.gap?.rows.find((g) => g.key === key && !g.pursued);
-    return r ? { lens, url: domainUrl(r.domain), domain: r.domain, title: r.domain, route: routeOf(lens) } : null;
+    return r && page.gap ? { lens, url: domainUrl(r.domain), domain: r.domain, title: r.domain, route: routeOf(lens), evidence: gapEvidence(r, page.gap.readOn) } : null;
   }
   if (lens === "link_page") {
     const r = [...(page.targets?.thisMonth ?? []), ...(page.targets?.earlier ?? [])].find((t) => t.key === key && !t.pursued);
-    return r && urlKey(r.url) === key ? { lens, url: r.url, domain: r.domain, title: r.title, route: routeOf(lens) } : null;
+    return r && urlKey(r.url) === key ? { lens, url: r.url, domain: r.domain, title: r.title, route: routeOf(lens), evidence: targetEvidence(r, page.targets?.readOn ?? r.revealedOn ?? "") } : null;
   }
   const r = page.mentions?.rows.find((m) => m.key === key && !m.pursued);
-  return r ? { lens, url: r.url, domain: r.domain, title: r.title, route: routeOf(lens) } : null;
+  return r ? { lens, url: r.url, domain: r.domain, title: r.title, route: routeOf(lens), evidence: mentionEvidence(r.readOn) } : null;
 }

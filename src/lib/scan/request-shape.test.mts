@@ -702,7 +702,7 @@ test("DIY wave 3: the row ceilings - 100 a list, 20 for backlinks competitors, a
     m.domainGapRequest({ targets: three, exclude: "tallyroo.com", mode: "partial", countFilter: true }),
     m.pageGapRequest({ targets: three, exclude: "tallyroo.com" }),
     m.backlinksCompetitorsRequest("tallyroo.com"),
-    m.contentSearchRequest({ brand: "Tallyroo" }),
+    m.contentSearchRequest({ phrase: "Tallyroo" }),
   ];
   for (const req of reqs) {
     const limit = (req.body as { limit: number }[])[0]!.limit;
@@ -710,7 +710,7 @@ test("DIY wave 3: the row ceilings - 100 a list, 20 for backlinks competitors, a
     assert.equal(limit, req.rows, `${req.endpoint}: the rows reserved are the rows asked for`);
   }
   assert.throws(() => m.backlinksNewLostRequest({ target: "tallyroo.com", which: "lost", since: "2026-10-06", limit: 101 }));
-  assert.throws(() => m.contentSearchRequest({ brand: "Tallyroo", limit: 1000 }));
+  assert.throws(() => m.contentSearchRequest({ phrase: "Tallyroo", limit: 1000 }));
   assert.equal(m.backlinksSummaryRequest("tallyroo.com").rows, 1, "the summary reserves one row");
   assert.equal(m.bulkRanksRequest(["tallyroo.com", ...three]).rows, 4, "a bulk read reserves a row a target");
   assert.throws(() => m.bulkRanksRequest(["tallyroo.com", ...three, "sumly.example"]), "the client and three at most");

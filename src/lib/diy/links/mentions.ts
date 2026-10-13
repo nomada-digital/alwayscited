@@ -7,7 +7,7 @@ import { blockedFacts, factsFromHtml, factsFromParsed } from "../opportunities/r
 import type { PageFacts } from "../opportunities/types.ts";
 
 import type { FallbackRead } from "./check-link.ts";
-import { type Placed, bareHost, isPlacedUrl, onPlacedDomain } from "./nomada-placements.ts";
+import { type Placed, bareHost, excludePlacedDomains } from "./nomada-placements.ts";
 import type { Mention, Mentions } from "./types.ts";
 
 /**
@@ -36,10 +36,9 @@ export function mentionCandidates(rows: readonly MentionCandidate[], p: { client
   const compared = new Set(p.compared.map(bareHost));
   const seen = new Set<string>();
   const out: MentionCandidate[] = [];
-  for (const r of rows) {
+  for (const r of excludePlacedDomains(rows, p.placed)) {
     const d = bareHost(r.domain);
     if (d === own || d.endsWith(`.${own}`) || compared.has(d)) continue;
-    if (onPlacedDomain(d, p.placed) || isPlacedUrl(r.url, p.placed)) continue;
     const key = urlKey(r.url);
     if (!key || seen.has(key)) continue;
     seen.add(key);

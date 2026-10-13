@@ -1,4 +1,5 @@
 import type { AdviceLine } from "../core/evidence.ts";
+import { ASK_FOR_LINK, EARN_LINK } from "../links/links.advice.ts";
 
 import type { Route } from "./types.ts";
 
@@ -16,7 +17,12 @@ import type { Route } from "./types.ts";
  * appear nowhere in rendered DIY text (gating.test.mts bans both).
  *
  * The link routes (earn_link, ask_for_link) are P10's playbooks, in
- * links.advice.ts, in wave 3.
+ * links.advice.ts, in wave 3. They are registered here too (13 Oct 2026,
+ * DIY P10's review, outside P10's 7.11 edit list: a row pursued from Links
+ * opened on "This route's method is on its own page.", with no link to it),
+ * so the one lookup the detail page makes finds every route's method. Their
+ * lines are graded in links.advice.ts's own ADVICE, so they are not listed
+ * again below (advice-grades.test.mts holds each id to one file).
  */
 
 const practice = (id: string, text: string): AdviceLine => ({ id, text, grade: "practice" });
@@ -58,7 +64,8 @@ export type Playbook = {
   line: AdviceLine | null;
 };
 
-export const PLAYBOOKS: Partial<Record<Route, Playbook>> = {
+/** P7's own playbooks: the routes of the pages the engines cite. */
+const OWN_PLAYBOOKS: Partial<Record<Route, Playbook>> = {
   ask_added: {
     route: "ask_added",
     steps: [
@@ -146,9 +153,12 @@ export const PLAYBOOKS: Partial<Record<Route, Playbook>> = {
   },
 };
 
-/** Every line, for the census: each playbook's, then the shared ones. */
+/** Every route's playbook: P7's own, and Links' two (links.advice.ts). */
+export const PLAYBOOKS: Partial<Record<Route, Playbook>> = { ...OWN_PLAYBOOKS, earn_link: EARN_LINK, ask_for_link: ASK_FOR_LINK };
+
+/** Every line of P7's, for the census: each of its playbooks', then the shared ones. Links' are in links.advice.ts's ADVICE. */
 export const ADVICE: readonly AdviceLine[] = [
-  ...Object.values(PLAYBOOKS).flatMap((p) => (p ? [...p.steps, ...(p.send ? [p.send] : []), ...(p.pointTo ? [p.pointTo] : []), ...(p.line ? [p.line] : [])] : [])),
+  ...Object.values(OWN_PLAYBOOKS).flatMap((p) => (p ? [...p.steps, ...(p.send ? [p.send] : []), ...(p.pointTo ? [p.pointTo] : []), ...(p.line ? [p.line] : [])] : [])),
   LINE_G1,
   ...LINE_ANCHOR,
   LINE_WHO,

@@ -23,9 +23,22 @@ export type NewLost = { since: Day; added: LinkRow[]; lost: LinkRow[]; addedTota
 export type Series = { weeks: SeriesWeek[] };
 export type BulkRow = { domain: string; rank: number | null; referringDomains: number | null; newDomains: number | null; lostDomains: number | null };
 export type Bulk = { from: Day; rows: BulkRow[] };
-/** The gap as stored: the compared sites, how the n >= 2 set was read, its rows sorted (gap.ts) with Nomada's placements gone. */
-export type DomainGap = { targets: string[]; via: "filter" | "pairwise"; rows: GapDomain[] };
-export type PageGap = { targets: string[]; rows: GapPage[] };
+/**
+ * How much of a capped list was read (13 Oct 2026, review of DIY P10: the
+ * "N more" counts were counted from the 100 rows read and shown as exact):
+ * `read`, the rows the read returned that met the list's rule, before
+ * Nomada's placements and the client's and compared sites' own were taken
+ * out; `total`, DataForSEO's `total_count` for the same rule (the filtered
+ * read's, or the largest pair's), null when it sent none; `capped`, whether
+ * rows were left unread. A count is exact only when nothing was left unread
+ * (gap.ts gapCount, targets.ts targetCount).
+ */
+export type ListCount = { read: number; total: number | null; capped: boolean };
+/** The gap as stored: the compared sites, how the n >= 2 set was read, its rows sorted (gap.ts) with Nomada's placements gone, and how much was read. */
+export type DomainGap = { targets: string[]; via: "filter" | "pairwise"; rows: GapDomain[]; count: ListCount };
+export type PageGap = { targets: string[]; rows: GapPage[]; count: ListCount };
+/** How a count is worded: exact, DataForSEO's estimate ("about"), or a floor ("at least"). */
+export type Hedge = "exact" | "about" | "at_least";
 /** A mention we read ourselves and found naming the client with no link to it. */
 export type Mention = { url: string; urlKey: string; domain: string; title: string | null; published: Day | null; snippet: string | null; readOn: Day; via: "own" | "content_parsing" };
 export type Mentions = { candidates: number; confirmed: Mention[]; dropped: { unreadable: number; linked: number; unnamed: number } };

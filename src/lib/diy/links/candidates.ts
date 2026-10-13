@@ -1,14 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { formatDay } from "../../tracking/figures.ts";
+import { type Day, addDays, formatDay } from "../../tracking/figures.ts";
 import { urlKey } from "../../tracking/placements.ts";
 import type { DiyClient } from "../core/client.ts";
 import { loadDiyEnabled } from "../core/settings.ts";
 import { readKeyPages } from "../opportunities/data.ts";
 import type { Candidate, CandidateSource } from "../plan/types.ts";
 
+import { readLinksAccess } from "./access.ts";
 import { readLatest } from "./data.ts";
-import { type Placed, readPlacedDomains, withoutPlacedDomains } from "./nomada-placements.ts";
+import { type Placed, excludePlacedDomains, readPlacedDomains } from "./nomada-placements.ts";
 import { ESTIMATE, type NewLost, type Stored } from "./types.ts";
 
 /**
@@ -24,9 +25,20 @@ import { ESTIMATE, type NewLost, type Stored } from "./types.ts";
  * off, so gather reads the switch first and offers nothing while it is off.
  * Domains where Nomada has placed another client are left out, as on every
  * Links list. At most MAX_RECLAIM cards.
+ *
+ * **This week's lost set only** (13 Oct 2026, review of DIY P10): the latest
+ * new and lost read counts only when it was made in the last RECLAIM_DAYS
+ * (the weekly read, with a day's slack for a deferred night). When the
+ * weekly job stops - Backlinks access inactive, the month's budget falling
+ * back to monthly, repeated failures - an old loss would otherwise make a
+ * fresh Slipping card every day. And none while the latest Backlinks call
+ * failed with an access code: the card's link opens a section the page then
+ * hides.
  */
 
 export const MAX_RECLAIM = 3;
+/** How old the new and lost read may be for its losses to be this week's: the weekly read, and a day for a deferred night. */
+export const RECLAIM_DAYS = 8;
 
 const pathOf = (url: string): string => {
   try {
@@ -36,11 +48,11 @@ const pathOf = (url: string): string => {
   }
 };
 
-/** The cards, pure: lost links to a live key page, newest loss first. */
-export function reclaimCandidates(read: Stored<NewLost> | null, keyPages: readonly { url: string; clusterIds: string[] }[], placed: Placed): Candidate[] {
-  if (!read) return [];
+/** The cards, pure: lost links to a live key page, newest loss first, from a read made this week. */
+export function reclaimCandidates(read: Stored<NewLost> | null, keyPages: readonly { url: string; clusterIds: string[] }[], placed: Placed, today: Day): Candidate[] {
+  if (!read || read.readOn < addDays(today, -(RECLAIM_DAYS - 1)) || read.readOn > today) return [];
   const pages = new Map(keyPages.map((k) => [urlKey(k.url), k] as const).filter(([k]) => k !== null) as [string, { url: string; clusterIds: string[] }][]);
-  const lost = withoutPlacedDomains(read.value.lost.map((l) => ({ ...l, url: l.urlFrom })), placed)
+  const lost = excludePlacedDomains(read.value.lost, placed, (l) => ({ domain: l.domain, url: l.urlFrom }))
     .filter((l) => l.urlTo && pages.has(urlKey(l.urlTo) ?? ""))
     .sort((a, b) => (b.lastSeen ?? "").localeCompare(a.lastSeen ?? "") || a.domain.localeCompare(b.domain));
   const seen = new Set<string>();
@@ -68,9 +80,10 @@ export function reclaimCandidates(read: Stored<NewLost> | null, keyPages: readon
 
 export const linksCandidates: CandidateSource = {
   name: "links",
-  async gather(db: SupabaseClient, client: DiyClient): Promise<Candidate[]> {
+  async gather(db: SupabaseClient, client: DiyClient, today: Day): Promise<Candidate[]> {
     if (!(await loadDiyEnabled(db))) return [];
+    if ((await readLinksAccess(db)).state === "inactive") return [];
     const [read, keyPages, placed] = await Promise.all([readLatest<NewLost>(db, client.id, "new_lost"), readKeyPages(db, client.id), readPlacedDomains(db, client.id)]);
-    return reclaimCandidates(read, keyPages, placed);
+    return reclaimCandidates(read, keyPages, placed, today);
   },
 };

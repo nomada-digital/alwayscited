@@ -1,6 +1,6 @@
 import { type Day, addDays, formatDay } from "../../tracking/figures.ts";
 
-import { type Placed, bareHost, onPlacedDomain } from "./nomada-placements.ts";
+import { type Placed, bareHost, excludePlacedDomains } from "./nomada-placements.ts";
 import { type Basis, type ComparisonSet, ESTIMATE } from "./types.ts";
 
 /**
@@ -10,8 +10,10 @@ import { type Basis, type ComparisonSet, ESTIMATE } from "./types.ts";
  *
  * 1. From the last 28 days of `tracking_serp.top`, count each domain's page-1
  *    places (rank 10 or better) across every live cluster keyword: one place
- *    a keyword a day it was read there, however many of its pages ranked.
- *    The client is not counted, nor its subdomains.
+ *    a keyword it held on page 1 on any day of the window, however many of
+ *    its pages ranked and however many days (13 Oct 2026, review of DIY P10:
+ *    it counted keyword-days, up to 28 a keyword, under words that read as a
+ *    count of keywords). The client is not counted, nor its subdomains.
  * 2. Keep the domains `source_kinds` types `vendor`. Publishers, platforms,
  *    review sites, directories, communities and reference sites are left out.
  *    A domain with no type yet is held back, never used ("fail closed": the
@@ -36,10 +38,10 @@ export type Fallback = { domain: string; shares: number | null };
 const typeOf = (kinds: Kinds, domain: string) => kinds.get(`d:${domain}`) ?? null;
 const ownOf = (domain: string, client: string) => domain === client || domain.endsWith(`.${client}`);
 
-/** Page-1 places per domain over the window, with each domain's average best position. */
+/** Page-1 places per domain over the window - the live keywords it held on page 1 - with its average best position over the readings it was there. */
 export function pageOnePlaces(rows: readonly SerpRow[], live: ReadonlySet<string>, today: Day): Map<string, { places: number; avg: number }> {
   const from = addDays(today, -(WINDOW_DAYS - 1));
-  const acc = new Map<string, { places: number; sum: number }>();
+  const acc = new Map<string, { keywords: Set<string>; readings: number; sum: number }>();
   for (const r of rows) {
     if (!live.has(r.keyword_id) || r.run_date < from || r.run_date > today) continue;
     const best = new Map<string, number>();
@@ -58,13 +60,14 @@ export function pageOnePlaces(rows: readonly SerpRow[], live: ReadonlySet<string
       best.set(d, Math.min(best.get(d) ?? 99, t.rank));
     }
     for (const [d, rank] of best) {
-      const a = acc.get(d) ?? { places: 0, sum: 0 };
-      a.places += 1;
+      const a = acc.get(d) ?? { keywords: new Set<string>(), readings: 0, sum: 0 };
+      a.keywords.add(r.keyword_id);
+      a.readings += 1;
       a.sum += rank;
       acc.set(d, a);
     }
   }
-  return new Map([...acc].map(([d, a]) => [d, { places: a.places, avg: Math.round((a.sum / a.places) * 10) / 10 }]));
+  return new Map([...acc].map(([d, a]) => [d, { places: a.keywords.size, avg: Math.round((a.sum / a.readings) * 10) / 10 }]));
 }
 
 export type Derivation = ComparisonSet & {
@@ -86,7 +89,7 @@ export function deriveSet(p: {
   backlinks?: readonly Fallback[] | null;
 }): Derivation {
   const client = bareHost(p.client);
-  const usable = (d: string) => !ownOf(d, client) && !onPlacedDomain(d, p.placed);
+  const usable = (d: string) => !ownOf(d, client) && excludePlacedDomains([{ domain: d }], p.placed).length === 1;
   const waiting: string[] = [];
   const page1 = [...p.places]
     .filter(([d]) => usable(d))
@@ -125,12 +128,18 @@ export const needsFallback = (d: Pick<ComparisonSet, "domains" | "basis">) => d.
 
 const join = (xs: readonly string[]) => (xs.length <= 1 ? (xs[0] ?? "") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
-/** One domain's basis in words. A fallback domain is never described as holding page-1 places. */
+/**
+ * One domain's basis in words. A fallback domain is never described as
+ * holding page-1 places. backlinks/competitors' `intersections` is "the
+ * number of backlink intersections with the target" in DataForSEO's
+ * documentation, so that is what it is called (13 Oct 2026, review of DIY
+ * P10: it was called linking domains).
+ */
 export function basisWords(b: Basis | undefined): string {
   if (!b) return "basis not recorded";
   if (b.from === "page1") return `page-1 places for your keywords: ${b.places}`;
   const n = b.shares === null ? "an unread number of" : b.shares.toLocaleString("en-GB");
-  return b.from === "labs" ? `shares ${n} keywords with you, ${ESTIMATE}` : `shares ${n} linking domains with you, ${ESTIMATE}`;
+  return b.from === "labs" ? `shares ${n} keywords with you, ${ESTIMATE}` : `shares ${n} backlink intersections with you, ${ESTIMATE}`;
 }
 
 /**

@@ -152,7 +152,8 @@ test("Your links (full): the profile, every DataForSEO number labelled with its 
   assert.match(t, /Referring domains\s+312/);
   assert.match(t, /Backlinks\s+1,840/);
   assert.match(t, /DataForSEO rank\s+212\s+DataForSEO estimate, 0-1000/);
-  assert.match(t, /Followed\s+84%\s+Not followed 14%, other 2%/);
+  assert.match(t, /Followed\s+86%\s+Not followed 14%: links marked nofollow/, "followed is every link not marked nofollow; no overlapping attribute taken off twice");
+  assert.doesNotMatch(t, /other \d+%/);
   assert.match(t, /DataForSEO estimate, read 24 Sep\. Counted from DataForSEO's index, not from Google\./);
   assert.equal(await page.locator('section[aria-labelledby="lk-weeks"] tbody tr').count(), 13);
   assert.match(t, /New and lost since 17 Sep/);
@@ -221,17 +222,22 @@ test("Link targets (full), then a reveal with JS off: the next 5 shown, the mont
   assert.match(over.headers.get("location")!, /done=refused&why=reveal_cap#targets$/);
 });
 
-test("capped: this month's reveals are used, so the cap line and U5 show at once; Check a link is used up too", async () => {
+test("capped: this month's reveals are used, so the cap line and U5 show at once; DataForSEO counted more than was read, so its counts are worded as its estimate; Check a link's allowance is used, and a page we can read still checks", async () => {
   as("default", { diy: "capped" });
   const { ctx, page } = await open(`${LINKS}?view=targets`);
   assert.equal(await page.locator("[data-links-cap]").innerText(), "You've used this month's 5 link targets. They reset on 1 Oct.");
   assert.equal(await page.locator('[role="note"][aria-label="Upgrade"]').count(), 1);
-  assert.match(await text(page), /18 more pages link to the sites you compete with/);
+  assert.equal(await page.locator("[data-links-more]").innerText(), "About 400 more pages link to the sites you compete with from inside an article, and not to you (DataForSEO estimate, read 10 Sep). Next reveals from 1 Oct.");
   await ctx.close();
   await save(`${LINKS}?view=targets`, "links-targets", "capped");
+  const { ctx: cg, page: pg } = await open(`${LINKS}?view=gap`);
+  assert.equal(await pg.locator("[data-links-more]").innerText(), "About 1,900 more sites link to two or more of these and not to you (DataForSEO estimate, read 10 Sep).");
+  assert.match(await text(pg), /Top 25 of the 74 sites read, most of the 3 first\. DataForSEO estimate, read 10 Sep\./);
+  await cg.close();
+  await save(`${LINKS}?view=gap`, "links-gap", "capped");
   const { ctx: c2, page: p2 } = await open(`${LINKS}?view=check`);
-  assert.equal(await p2.locator("[data-links-cap]").innerText(), "You've used this month's 30 link checks. They reset on 1 Oct.");
-  assert.equal(await p2.locator("#lk-url").count(), 0);
+  assert.equal(await p2.locator("[data-links-cap]").innerText(), "You've used this month's 30 link checks. They reset on 1 Oct. A page we can read ourselves is still checked; one that blocks our reader waits until then.");
+  assert.equal(await p2.locator("#lk-url").count(), 1, "the free check still works");
   await c2.close();
 });
 
@@ -254,7 +260,8 @@ test("Mentions: pages we read ourselves that name Tallyroo with no link, each wi
 test("JS off: Check a link - a link found, followed; a page with none; your own site and a bad address refused", async () => {
   as("default", { write: true });
   const { ctx, page } = await open(`${LINKS}?view=check`, 1280, false);
-  assert.match(await text(page), /Link checks this month: 3 of 30, shared with Verify now and Log a site on Opportunities\. They reset on 1 Oct\./);
+  const line = /Link checks this month: 3 of 30, shared with Verify now and Log a site on Opportunities\. A check uses one only when the page blocks our own reader; a logged site always does\. They reset on 1 Oct\./;
+  assert.match(await text(page), line, "the one count: a paid verification and two logged sites");
   await page.locator("#lk-url").fill("https://startupnotes.example/2026/09/software-we-pay-for");
   await page.locator('button[value="check"]').click();
   await page.waitForURL(/view=check&done=checked#check$/, { timeout: 15_000 });
@@ -262,7 +269,7 @@ test("JS off: Check a link - a link found, followed; a page with none; your own 
   const first = await page.locator("[data-links-checks] > li").first().innerText();
   assert.match(first, /startupnotes\.example\/2026\/09\/software-we-pay-for/);
   assert.match(first, /Links to tallyroo\.com\/invoicing: anchor 'Tallyroo', followed\. Read 29 Sep\./);
-  assert.match(await text(page), /Link checks this month: 4 of 30/);
+  assert.match(await text(page), line, "a page our own fetch read uses none of the allowance, as Settings counts it");
   await page.locator("#lk-url").fill("https://plainbooksdigest.example/nolink-here");
   await page.locator('button[value="check"]').click();
   await page.waitForURL(/done=checked/, { timeout: 15_000 });
@@ -296,7 +303,34 @@ test("JS off: Pursue from the gap - the toast, the row marked Pursuing here, and
   await c2.close();
   const { ctx: c3, page: p3 } = await open(LINKS);
   assert.ok((await p3.locator("[data-links-wins]").innerText()).includes(domain), "and in the wins on Links");
+  const href = await p3.locator(`[data-links-wins] a:text-is("${domain}")`).first().getAttribute("href");
   await c3.close();
+  // Its Opportunities page: the method, an outline with blanks, and where it came from - never "This route's method is on its own page".
+  const { ctx: c4, page: p4 } = await open(href!);
+  const detail = await text(p4);
+  assert.doesNotMatch(detail, /This route's method is on its own page/);
+  assert.match(detail, /Open the site and find the pages that link to the sites you compete with\./, "Earn a link's steps");
+  assert.match(detail, /Links to .+, \d of the 3 sites you compete with, and not to you\. First seen \d{1,2} \w{3} \d{4}\. DataForSEO estimate, read 10 Sep\./, "why this page, from the gap's read");
+  assert.match(detail, /A whole site, not one page/);
+  assert.match(await p4.locator("[data-opp-pitch]").innerText(), /\[what you made\]/);
+  assert.deepEqual(await axe(p4), []);
+  await c4.close();
+  await save(href!, "opportunity-pursued-gap", "full");
+  // A mention pursued: thanked and asked, not the best-of-list pitch.
+  const { ctx: c5, page: p5 } = await open(`${LINKS}?view=mentions`, 1280, false);
+  const mention = p5.locator("[data-links-mentions] > li:has(button[value=pursue])").first();
+  const key = (await mention.getAttribute("data-links-mention"))!;
+  await mention.locator('button[value="pursue"]').click();
+  await p5.waitForURL(/view=mentions&done=pursued#mentions$/, { timeout: 15_000 });
+  const mhref = await p5.locator(`[data-links-mention="${key}"] a[href*="/opportunities/"]`).first().getAttribute("href");
+  await c5.close();
+  const { ctx: c6, page: p6 } = await open(mhref!);
+  const md = await text(p6);
+  assert.doesNotMatch(md, /This route's method is on its own page|rank tools on/);
+  assert.match(md, /Thank them for the mention\./);
+  assert.match(await p6.locator("[data-opp-pitch]").innerText(), /^Subject: Thanks for mentioning Tallyroo/);
+  assert.match(md, /Names you, with no link to your site: we read the page ourselves on 10 Sep\./);
+  await c6.close();
   const gone = await post({ do: "pursue", lens: "link_domain", key: "softwarecritic.com" }, "gap");
   assert.match(gone.headers.get("location")!, /done=refused&why=gone#gap$/, "a placed domain is no row to pursue, and the words say nothing about why");
 });

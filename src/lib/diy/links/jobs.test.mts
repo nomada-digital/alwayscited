@@ -12,7 +12,10 @@ import type { LinksIO } from "./io.ts";
 import { backlinksMonthlyHandler, runMonthly } from "./monthly.job.ts";
 import { NONE_PLACED } from "./nomada-placements.ts";
 import { backlinksWeeklyHandler, runWeekly } from "./weekly.job.ts";
+import { gapEvidence, mentionEvidence, targetEvidence } from "./evidence.ts";
 import { pursueLink, revealPages } from "./write.ts";
+import { contentSearchRequest, domainGapRequest } from "../../scan/dataforseo-request.ts";
+import { planCandidate, opportunityOf } from "../opportunities/status.ts";
 
 /**
  * The Backlinks jobs, the Reclaim card and Links' writes (13 Oct 2026, DIY
@@ -33,7 +36,7 @@ const noWeb: GuardedGet = async (): Promise<Guarded> => ({ ok: false, why: "netw
 
 /** A fake io: each read's answer by name, every call recorded. */
 function fakeIO(over: Partial<Record<keyof LinksIO, unknown>> = {}, calls: string[] = []): LinksIO {
-  const summary: BacklinksSummary = { rank: 212, backlinks: 1840, referringDomains: 312, referringMainDomains: 288, firstSeen: "2021-03-02", follow: { followed: 1538, notFollowed: 260, other: 42 } };
+  const summary: BacklinksSummary = { rank: 212, backlinks: 1840, referringDomains: 312, referringMainDomains: 288, firstSeen: "2021-03-02", follow: { followed: 1580, notFollowed: 260 } };
   const base: Record<string, unknown> = {
     get: noWeb,
     summary: async () => (calls.push("summary"), ok(summary)),
@@ -45,9 +48,9 @@ function fakeIO(over: Partial<Record<keyof LinksIO, unknown>> = {}, calls: strin
     domainGap: async (_c: unknown, p: { targets: string[]; mode: string }) => {
       calls.push(`domainGap:${p.mode}:${p.targets.length}`);
       const rows: GapDomain[] = [
-        { domain: "thesmallbizstack.com", linksTo: p.targets.slice(0, 2), rank: 300, firstSeen: "2025-01-01", platform: "blog" },
-        { domain: "softwarecritic.com", linksTo: p.targets.slice(0, 2), rank: 900, firstSeen: "2025-01-01", platform: null },
-        { domain: "single.example", linksTo: p.targets.slice(0, 1), rank: 100, firstSeen: "2025-01-01", platform: null },
+        { domain: "thesmallbizstack.com", linksTo: p.targets.slice(0, 2), rank: 300, firstSeen: "2025-01-01" },
+        { domain: "softwarecritic.com", linksTo: p.targets.slice(0, 2), rank: 900, firstSeen: "2025-01-01" },
+        { domain: "single.example", linksTo: p.targets.slice(0, 1), rank: 100, firstSeen: "2025-01-01" },
       ];
       return ok({ total: rows.length, rows });
     },
@@ -61,7 +64,7 @@ function fakeIO(over: Partial<Record<keyof LinksIO, unknown>> = {}, calls: strin
     },
     labsCompetitors: async () => (calls.push("labs"), ok([])),
     backlinksCompetitors: async () => (calls.push("backlinksCompetitors"), ok([])),
-    contentSearch: async () => (calls.push("contentSearch"), ok({ total: 1, rows: [{ url: "https://named.example/a", domain: "named.example", title: "A", published: null, snippet: "Tallyroo" } as MentionCandidate] })),
+    contentSearch: async (_c: unknown, phrase: string) => (calls.push(`contentSearch:${phrase}`), ok({ total: 1, rows: [{ url: "https://named.example/a", domain: "named.example", title: "A", published: null, snippet: "Tallyroo" } as MentionCandidate] })),
     parse: async () => (calls.push("parse"), ok(null)),
     classify: async () => (calls.push("classify"), failed("not expected")),
   };
@@ -99,6 +102,10 @@ test("weekly: an access refusal on the summary stops the lists; a cap defers the
   const timeout = await runWeekly(w.db, testCtx(w.db, w.clock), fakeIO({ summary: async () => failed("timeout") }), CLIENT, TODAY);
   assert.equal(timeout.outcome, "ok", "the lists still read when only the summary timed out");
   assert.match(timeout.note!, /summary failed: timeout/, "and the note says so");
+  // A request that throws while it is built is that step's noted failure, never a thrown job retried and bought again.
+  const thrown = await runWeekly(w.db, testCtx(w.db, w.clock), fakeIO({ summary: () => { throw new Error("not a domain: x"); } }), CLIENT, TODAY);
+  assert.equal(thrown.outcome, "ok");
+  assert.match(thrown.note!, /summary failed: not asked: not a domain: x/);
 });
 
 /** The tables a monthly run reads: a live cluster, its SERPs, the domain types, a placement, the client and the filter names. */
@@ -132,7 +139,7 @@ test("monthly with the count filter: the set from page-1 places (vendor only, ne
   const out = await runMonthly(w.db, testCtx(w.db, w.clock), fakeIO({}, calls), CLIENT, TODAY);
   assert.equal(out.outcome, "ok", out.note);
   assert.deepEqual(w.tables.comparison_sets!.map((r) => r.domains), [THREE]);
-  assert.deepEqual((w.tables.comparison_sets![0]!.basis as Record<string, { from: string; places: number }>)["ledgerline.com"], { from: "page1", places: 2, avg: 1 });
+  assert.deepEqual((w.tables.comparison_sets![0]!.basis as Record<string, { from: string; places: number }>)["ledgerline.com"], { from: "page1", places: 1, avg: 1 }, "one keyword, on page 1 on two days: one place");
   assert.ok(!calls.includes("labs"), "no fallback with 3 page-1 vendors");
   assert.deepEqual(calls.filter((c) => c.startsWith("domainGap")), ["domainGap:partial:3"]);
   const stored = Object.fromEntries(w.tables.backlink_reads!.map((r) => [r.kind as string, r.payload as Record<string, unknown>]));
@@ -142,6 +149,62 @@ test("monthly with the count filter: the set from page-1 places (vendor only, ne
   assert.deepEqual((stored.page_gap!.rows as GapPage[]).map((r) => r.domain), ["guide.example"]);
   assert.doesNotMatch(JSON.stringify(w.tables.backlink_reads), /softwarecritic/);
   assert.equal((stored.mentions!.confirmed as unknown[]).length, 0, "a candidate we could not read is never shown");
+  // How much was read is stored beside the rows: here every row (DataForSEO's total is the rows it sent).
+  assert.deepEqual(stored.domain_gap!.count, { read: 2, total: 3, capped: false }, "2 met n >= 2 before the placement went; the vendor's 3 were all sent");
+  assert.deepEqual(stored.page_gap!.count, { read: 2, total: 2, capped: false });
+  assert.ok(calls.includes("contentSearch:Tallyroo"), "the mentions are searched for the brand");
+});
+
+test("monthly: DataForSEO counting more than the 100 rows read is stored as capped, with its total, so no page calls the count exact", async () => {
+  const w = fakeDiyDb(monthlyTables({ filters: true }));
+  const many = (n: number, targets: string[]): GapDomain[] => Array.from({ length: n }, (_, i) => ({ domain: `site${i}.example`, linksTo: targets.slice(0, 2), rank: 500 - i, firstSeen: "2025-01-01" }));
+  const io = fakeIO({
+    domainGap: async (_c: unknown, p: { targets: string[] }) => ok({ total: 1937, rows: [...many(99, p.targets), { domain: "softwarecritic.com", linksTo: p.targets.slice(0, 2), rank: 900, firstSeen: "2025-01-01" }] }),
+    pageGap: async () => ok({ total: 412, rows: [{ urlFrom: "https://guide.example/best", title: "Best tools", domain: "guide.example", links: [{ target: THREE[0]!, urlTo: "https://ledgerline.com/", anchor: "Ledgerline" }], pageRank: 300, firstSeen: "2026-01-01" }] }),
+  });
+  const out = await runMonthly(w.db, testCtx(w.db, w.clock), io, CLIENT, TODAY);
+  assert.equal(out.outcome, "ok", out.note);
+  const stored = Object.fromEntries(w.tables.backlink_reads!.map((r) => [r.kind as string, r as { total_count: unknown; payload: { count: unknown; rows: unknown[] } }]));
+  assert.deepEqual(stored.domain_gap!.payload.count, { read: 100, total: 1937, capped: true });
+  assert.equal(stored.domain_gap!.total_count, 1937);
+  assert.equal(stored.domain_gap!.payload.rows.length, 99, "the placed row is gone; the count is DataForSEO's, never shown as exact");
+  assert.deepEqual(stored.page_gap!.payload.count, { read: 1, total: 412, capped: true });
+});
+
+test("monthly: a brand the search can't take as a phrase is tidied or skipped before anything is bought, and a request that throws is a noted step, never a failed job bought again", async () => {
+  // The door's own builder, as the live door builds it: it throws on a phrase it can't take.
+  const viaBuilder = (calls: string[]) => async (_c: unknown, phrase: string) => {
+    contentSearchRequest({ phrase });
+    calls.push(`contentSearch:${phrase}`);
+    return ok({ total: 0, rows: [] });
+  };
+  for (const [brand, domain, phrase] of [
+    ["Smith, Jones & Co", "smithjones.example", "Smith Jones & Co"],
+    ["Yahoo!", "yahoo.example", "Yahoo"],
+    ["Brand (UK)", "brand.example", "Brand"],
+    ["Pay+", "payplus.example", "Pay"],
+    ["X", "xcorp.example", "xcorp"],
+  ] as const) {
+    const w = fakeDiyDb(monthlyTables({ filters: true }));
+    const calls: string[] = [];
+    const out = await runMonthly(w.db, testCtx(w.db, w.clock), fakeIO({ contentSearch: viaBuilder(calls) }, calls), { ...CLIENT, brand, domain }, TODAY);
+    assert.equal(out.outcome, "ok", `${brand}: ${out.note}`);
+    assert.deepEqual(calls.filter((c) => c.startsWith("contentSearch")), [`contentSearch:${phrase}`], brand);
+  }
+  // Nothing that can be asked: the mentions are noted as not read, everything else is kept, and the job is not failed.
+  const none = fakeDiyDb(monthlyTables({ filters: true }));
+  const calls: string[] = [];
+  const out = await runMonthly(none.db, testCtx(none.db, none.clock), fakeIO({ contentSearch: viaBuilder(calls) }, calls), { ...CLIENT, brand: "X", domain: "x.example" }, TODAY);
+  assert.equal(out.outcome, "ok", out.note);
+  assert.match(out.note!, /mentions not read: "X" can't be searched for as a phrase/);
+  assert.ok(!calls.some((c) => c.startsWith("contentSearch")), "the search is never bought");
+  assert.ok(none.tables.backlink_reads!.some((r) => r.kind === "domain_gap"), "the rest of the month is stored");
+  // A request that throws while it is built: noted as that step's failure, and the job goes on.
+  const t = fakeDiyDb(monthlyTables({ filters: true }));
+  const thrown = await runMonthly(t.db, testCtx(t.db, t.clock), fakeIO({ domainGap: () => Promise.resolve(domainGapRequest({ targets: ["a.example"], exclude: "tallyroo.com", mode: "partial", countFilter: true }) as never) }), CLIENT, TODAY);
+  assert.equal(thrown.outcome, "ok", thrown.note);
+  assert.match(thrown.note!, /domain gap failed: not asked: 1 targets: at least 2/);
+  assert.ok(t.tables.backlink_reads!.some((r) => r.kind === "page_gap"), "the steps after it still ran");
 });
 
 test("monthly without the count filter: the three pairwise reads, their union stored", async () => {
@@ -149,9 +212,10 @@ test("monthly without the count filter: the three pairwise reads, their union st
   const calls: string[] = [];
   await runMonthly(w.db, testCtx(w.db, w.clock), fakeIO({}, calls), CLIENT, TODAY);
   assert.deepEqual(calls.filter((c) => c.startsWith("domainGap")), ["domainGap:all:2", "domainGap:all:2", "domainGap:all:2"]);
-  const gap = w.tables.backlink_reads!.find((r) => r.kind === "domain_gap")!.payload as { via: string; rows: GapDomain[] };
+  const gap = w.tables.backlink_reads!.find((r) => r.kind === "domain_gap")!.payload as { via: string; rows: GapDomain[]; count: unknown };
   assert.equal(gap.via, "pairwise");
   assert.deepEqual(gap.rows.map((r) => r.domain), ["thesmallbizstack.com"]);
+  assert.deepEqual(gap.count, { read: 2, total: 3, capped: false }, "every pair read whole: the union is the n >= 2 set");
 });
 
 test("monthly with one page-1 vendor: Labs fills, a fallback domain with no type is typed first, and the set says each basis; under 3, no gap", async () => {
@@ -223,21 +287,27 @@ test("Reclaim: a lost link that pointed at a live key page, newest first, never 
       lostTotal: 3,
     },
   };
-  const cards = reclaimCandidates(read, [{ url: "https://tallyroo.com/invoicing/", clusterIds: ["c1"] }], { domains: new Set(["softwarecritic.com"]), keys: new Set() });
+  const cards = reclaimCandidates(read, [{ url: "https://tallyroo.com/invoicing/", clusterIds: ["c1"] }], { domains: new Set(["softwarecritic.com"]), keys: new Set() }, TODAY);
   assert.equal(cards.length, 1);
   const c = cards[0]!;
   assert.deepEqual([c.dedupeKey, c.kind, c.severity, c.clusterId, c.grade, c.href], ["reclaim:ledgerjournal.example", "reclaim_link", "slipping", "c1", "practice", "/links?view=profile#lost"]);
   assert.equal(c.title, "Reclaim the link from ledgerjournal.example");
   assert.equal(c.why[0]!.text, "ledgerjournal.example linked to /invoicing and the link is gone (DataForSEO estimate, read 14 Oct).");
   assert.ok(c.title.length <= 70);
-  assert.deepEqual(reclaimCandidates(null, [], NONE_PLACED), []);
+  assert.deepEqual(reclaimCandidates(null, [], NONE_PLACED, TODAY), []);
+  // Only this week's lost set: a read 8 days old (the weekly job stopped) makes no card, however often plan_refresh runs.
+  const key = [{ url: "https://tallyroo.com/invoicing/", clusterIds: ["c1"] }];
+  const placed = { domains: new Set(["softwarecritic.com"]), keys: new Set<string>() };
+  assert.equal(reclaimCandidates({ ...read, readOn: "2026-10-07" }, key, placed, TODAY).length, 1, "7 days old: this week's");
+  assert.deepEqual(reclaimCandidates({ ...read, readOn: "2026-10-06" }, key, placed, TODAY), [], "8 days old: not");
 });
 
 test("reveal and Pursue write P7's rows through P7's own functions: a revealed page keeps its first time, a pursuit is capped", async () => {
   const w = fakeDiyDb({ opportunities: [], plan_items: [] });
+  const ev = targetEvidence({ links: [{ target: "ledgerline.com", anchor: "Ledgerline" }], firstSeen: "2026-01-01" }, "2026-10-10");
   const pages = [
-    { url: "https://guide.example/best", domain: "guide.example", title: "Best tools" },
-    { url: "https://guide2.example/top", domain: "guide2.example", title: "Top tools" },
+    { url: "https://guide.example/best", domain: "guide.example", title: "Best tools", evidence: ev },
+    { url: "https://guide2.example/top", domain: "guide2.example", title: "Top tools", evidence: ev },
   ];
   assert.equal(await revealPages(w.db, CLIENT.id, pages, { today: TODAY, now: Date.parse("2026-10-14T09:00:00Z") }), 2);
   assert.deepEqual(w.tables.opportunities!.map((r) => [r.lens, r.url_key, r.route, r.status, r.revealed_at]), [
@@ -248,14 +318,20 @@ test("reveal and Pursue write P7's rows through P7's own functions: a revealed p
   assert.equal(w.tables.opportunities![0]!.revealed_at, "2026-10-14T09:00:00.000Z");
 
   const p = { role: "owner", by: "owner@example.com", today: TODAY, now: "2026-10-14T09:05:00.000Z" };
-  const got = await pursueLink(w.db, { id: CLIENT.id, trial: false, ended: false }, { lens: "link_domain", url: "https://thesmallbizstack.com/", domain: "thesmallbizstack.com", title: "thesmallbizstack.com", route: "earn_link" }, p);
+  const gapEv = gapEvidence({ names: ["ledgerline.com", "brightbook.example"], of: 3, firstSeen: "2025-01-01" }, "2026-10-10");
+  const got = await pursueLink(w.db, { id: CLIENT.id, trial: false, ended: false }, { lens: "link_domain", url: "https://thesmallbizstack.com/", domain: "thesmallbizstack.com", title: "thesmallbizstack.com", route: "earn_link", evidence: gapEv }, p);
   assert.equal(got.ok, true);
   const row = w.tables.opportunities!.find((r) => r.lens === "link_domain")!;
   assert.deepEqual([row.url_key, row.status, row.route], ["thesmallbizstack.com", "pursuing", "earn_link"]);
+  // The row keeps what it was listed on, so its page and its Actions card say where it came from.
+  const opp = opportunityOf(row)!;
+  assert.deepEqual(opp.evidence.link, gapEv);
+  assert.equal(planCandidate(opp).why[0]!.text, "Links to ledgerline.com and brightbook.example, 2 of the 3 sites you compete with, and not to you. First seen 1 Jan 2025. DataForSEO estimate, read 10 Oct.");
+  assert.deepEqual(opportunityOf(w.tables.opportunities![0]!)!.evidence.link, ev, "a revealed page keeps its facts too");
   // At the trial's cap of 3 the next is refused by P7's rule.
-  for (const d of ["a.example", "b.example"]) await pursueLink(w.db, { id: CLIENT.id, trial: true, ended: false }, { lens: "link_domain", url: `https://${d}/`, domain: d, title: d, route: "earn_link" }, p);
-  const over = await pursueLink(w.db, { id: CLIENT.id, trial: true, ended: false }, { lens: "mention", url: "https://named.example/a", domain: "named.example", title: "A", route: "ask_for_link" }, p);
+  for (const d of ["a.example", "b.example"]) await pursueLink(w.db, { id: CLIENT.id, trial: true, ended: false }, { lens: "link_domain", url: `https://${d}/`, domain: d, title: d, route: "earn_link", evidence: gapEv }, p);
+  const over = await pursueLink(w.db, { id: CLIENT.id, trial: true, ended: false }, { lens: "mention", url: "https://named.example/a", domain: "named.example", title: "A", route: "ask_for_link", evidence: mentionEvidence("2026-10-10") }, p);
   assert.deepEqual(over, { ok: false, why: "cap", id: over.id });
-  const viewer = await pursueLink(w.db, { id: CLIENT.id, trial: false, ended: false }, { lens: "mention", url: "https://named.example/b", domain: "named.example", title: "B", route: "ask_for_link" }, { ...p, role: "viewer" });
+  const viewer = await pursueLink(w.db, { id: CLIENT.id, trial: false, ended: false }, { lens: "mention", url: "https://named.example/b", domain: "named.example", title: "B", route: "ask_for_link", evidence: mentionEvidence("2026-10-10") }, { ...p, role: "viewer" });
   assert.equal(viewer.ok, false);
 });

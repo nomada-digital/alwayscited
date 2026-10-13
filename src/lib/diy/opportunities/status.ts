@@ -7,6 +7,7 @@ import { refuseRole } from "../../tracking/stop.ts";
 import { allowanceFor } from "../core/allowances.ts";
 import { type RefusalCode, refusalWords } from "../core/caps.ts";
 import type { Candidate } from "../plan/types.ts";
+import { linkWhyLine } from "../links/evidence.ts";
 import { getPlanItem, updatePlanItem, upsertPlanItemFor } from "../plan/write.ts";
 
 import { bare } from "./classify-rules.ts";
@@ -19,6 +20,7 @@ import {
   HISTORY_MAX,
   type HistoryEntry,
   type Lens,
+  type LinkEvidence,
   OPP_COLUMNS,
   OPP_LIMITS,
   type OppEvidence,
@@ -386,6 +388,8 @@ export function planCandidate(o: Pick<Opportunity, "id" | "route" | "domain" | "
   const why: Candidate["why"] = [];
   if (e.answers > 0) why.push({ text: `Cited in ${e.answers} answer${e.answers === 1 ? "" : "s"} to ${e.prompt_count} of your prompts in the 28 days to ${formatDay(e.to)}; ${e.leaves_out} left you out.`, href: `/opportunities/${o.id}` });
   if (e.rank !== null && e.keyword) why.push({ text: `Ranks #${e.rank} on Google for '${e.keyword}'.`, href: `/opportunities/${o.id}` });
+  // 13 Oct 2026, DIY P10's review: a Links row says where it came from, not "Pursued from Opportunities.".
+  if (e.link) why.push({ text: linkWhyLine(e.link), href: `/opportunities/${o.id}` });
   if (!why.length) why.push({ text: "Pursued from Opportunities.", href: `/opportunities/${o.id}` });
   const effort: Candidate["effort"] = o.route === "answer_thread" || o.route === "send_correction" ? "minutes" : o.route === "publish_own" ? "days" : "hour";
   return {
@@ -459,6 +463,21 @@ export async function pursueOpportunity(
 
 // ---- Reading a row back. Here rather than in data.ts, so status.ts stands alone for P10. ----
 
+/** A Links row's evidence read back (13 Oct 2026, DIY P10's review), the allow-listed keys only; null for any other shape. */
+function linkEvidenceOf(v: unknown): LinkEvidence | null {
+  const o = v && typeof v === "object" ? (v as Record<string, unknown>) : null;
+  if (!o || (o.from !== "gap" && o.from !== "target" && o.from !== "mention") || !day(o.read_on)) return null;
+  const links = Array.isArray(o.links_to) ? o.links_to.filter((s): s is string => typeof s === "string" && s.length > 0 && s.length <= 253).slice(0, 3) : [];
+  return {
+    from: o.from,
+    read_on: day(o.read_on)!,
+    links_to: links,
+    of: typeof o.of === "number" && Number.isInteger(o.of) && o.of >= 1 && o.of <= 3 ? o.of : null,
+    anchor: typeof o.anchor === "string" && o.anchor ? o.anchor.slice(0, 120) : null,
+    first_seen: day(o.first_seen),
+  };
+}
+
 /** An evidence snapshot read back: the allow-listed keys only, each checked. */
 export function evidenceOf(v: unknown, fallbackTo: Day): OppEvidence {
   const o = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
@@ -483,6 +502,7 @@ export function evidenceOf(v: unknown, fallbackTo: Day): OppEvidence {
     open,
     ...(o.own_type !== undefined ? { own_type: pickPageType(o.own_type) } : {}),
     ...(o.own_seen !== undefined ? { own_seen: n(o.own_seen) } : {}),
+    ...(o.link !== undefined && linkEvidenceOf(o.link) ? { link: linkEvidenceOf(o.link)! } : {}),
   };
 }
 

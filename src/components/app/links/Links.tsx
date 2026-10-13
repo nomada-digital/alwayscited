@@ -7,7 +7,7 @@ import { appPath } from "@/lib/app-host";
 import { formatDay } from "@/lib/tracking/figures";
 import { ASK_FOR_LINK, EARN_LINK, LINE_WHO_LINKS } from "@/lib/diy/links/links.advice";
 import { linksAction, linksPath } from "@/lib/diy/links/paths";
-import { ESTIMATE, LINK_URL_MAX, type LinkLens, type LinkView, VIEW_LABEL } from "@/lib/diy/links/types";
+import { ESTIMATE, type Hedge, LINK_URL_MAX, type LinkLens, type LinkView, VIEW_LABEL } from "@/lib/diy/links/types";
 import type { LinksPage } from "@/lib/diy/links/view";
 
 import LinksStyle from "./LinksStyle";
@@ -41,6 +41,16 @@ const read = (d: string) => `${ESTIMATE}, read ${formatDay(d)}`;
 const STATUS_WORD: Record<string, string> = { pursuing: "Pursuing", pitched: "Pitched", won: "Won", declined: "Declined", dismissed: "Not for us", new: "New" };
 
 type Off = { disabled?: boolean; "aria-describedby"?: string };
+
+/** A count as its hedge words it: "47", "About 1,900", "At least 300" (gap.ts gapCount, targets.ts targetCount). */
+const counted = (n: number, hedge: Hedge) => {
+  const v = n.toLocaleString("en-GB");
+  return hedge === "about" ? `About ${v}` : hedge === "at_least" ? `At least ${v}` : v;
+};
+
+/** The gap's header: what the rows are, and - when the read left rows unread - that the top rows are of those read. */
+const gapHeader = (g: NonNullable<LinksPage["gap"]>) =>
+  `Sites linking to at least 2 of the ${g.of} sites you compete with, and not to you, with followed links. Top ${g.limit}${g.capped ? ` of the ${g.read.toLocaleString("en-GB")} sites read` : ""}, most of the ${g.of} first. ${read(g.readOn)}.`;
 
 export type LinksProps = {
   slug: string;
@@ -90,14 +100,10 @@ export default function Links(p: LinksProps) {
         ))}
       </nav>
 
-      {p.page === null ? (
-        <section style={SECTION}>
-          <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
-            {SECTION_ERROR}
-          </p>
-        </section>
-      ) : view === "check" ? (
+      {view === "check" ? (
         <Check {...p} off={off} offStyle={offStyle} />
+      ) : p.page === null ? (
+        <ErrorCard />
       ) : !ready ? (
         <Unread {...p} page={p.page} />
       ) : view === "gap" ? (
@@ -113,9 +119,25 @@ export default function Links(p: LinksProps) {
   );
 }
 
-/** Dark, inactive, or not read yet: no paid section, the wins and the method (spec 10 section 4.8, "States"). */
+/** A section whose read failed: it says so, never "none" (section 3.4). */
+function ErrorCard({ id, title }: { id?: string; title?: string }) {
+  return (
+    <section id={id} aria-labelledby={title ? `${id}-h` : undefined} style={{ ...SECTION, scrollMarginTop: "16px" }}>
+      {title ? (
+        <h2 id={`${id}-h`} style={H2}>
+          {title}
+        </h2>
+      ) : null}
+      <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+        {SECTION_ERROR}
+      </p>
+    </section>
+  );
+}
+
+/** Dark, inactive, not read yet, or not known: no paid section, the wins and the method (spec 10 section 4.8, "States"). */
 function Unread(p: LinksProps & { page: LinksPage }) {
-  const line = p.page.state === "inactive" ? NOT_AVAILABLE : p.page.state === "not_read" ? `Your link profile is read weekly.${p.page.firstRead ? ` First read ${formatDay(p.page.firstRead)}.` : ""}` : null;
+  const line = p.page.state === "inactive" ? NOT_AVAILABLE : p.page.state === "not_read" ? `Your link profile is read weekly.${p.page.firstRead ? ` First read ${formatDay(p.page.firstRead)}.` : ""}` : p.page.state === "error" ? SECTION_ERROR : null;
   return (
     <>
       {line ? (
@@ -142,7 +164,11 @@ function Profile(p: LinksProps & { page: LinksPage }) {
         <h2 id="lk-you" style={H2}>
           Your links
         </h2>
-        {!pr ? (
+        {p.page.errors.includes("profile") ? (
+          <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+            {SECTION_ERROR}
+          </p>
+        ) : !pr ? (
           <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>{`Your link profile is read weekly.${p.page.firstRead ? ` First read ${formatDay(p.page.firstRead)}.` : ""}`}</p>
         ) : pr.notIndexed ? (
           <p data-links-state="not-indexed" style={{ margin: 0, fontSize: "14px", color: T.ink }}>{`No links found in DataForSEO's index for ${p.domain} (read ${formatDay(pr.readOn)}). Check a link still works.`}</p>
@@ -152,21 +178,25 @@ function Profile(p: LinksProps & { page: LinksPage }) {
               <Figure label="Referring domains" value={n(pr.referringDomains)} />
               <Figure label="Backlinks" value={n(pr.backlinks)} />
               <Figure label="DataForSEO rank" value={n(pr.rank)} note="DataForSEO estimate, 0-1000" />
-              {pr.follow ? <Figure label="Followed" value={`${pr.follow.followed}%`} note={`Not followed ${pr.follow.notFollowed}%, other ${pr.follow.other}%`} /> : null}
+              {pr.follow ? <Figure label="Followed" value={`${pr.follow.followed}%`} note={`Not followed ${pr.follow.notFollowed}%: links marked nofollow`} /> : null}
             </div>
             <p style={SMALL}>{`${read(pr.readOn)}. Counted from DataForSEO's index, not from Google.`}</p>
           </>
         )}
       </section>
 
-      {p.page.weeks && p.page.weeks.bars.length ? <Weeks weeks={p.page.weeks} /> : null}
-      {p.page.moved ? <Moved moved={p.page.moved} /> : null}
+      {p.page.errors.includes("weeks") ? <ErrorCard id="lk-weeks-err" title="New and lost referring domains, by week" /> : p.page.weeks && p.page.weeks.bars.length ? <Weeks weeks={p.page.weeks} /> : null}
+      {p.page.errors.includes("moved") ? <ErrorCard id="lk-moved-err" title="New and lost referring domains" /> : p.page.moved ? <Moved moved={p.page.moved} /> : null}
 
       <section aria-labelledby="lk-cmp" style={SECTION}>
         <h2 id="lk-cmp" style={H2}>
           You and the sites you compete with
         </h2>
-        {p.page.compare ? (
+        {p.page.errors.includes("compare") ? (
+          <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+            {SECTION_ERROR}
+          </p>
+        ) : p.page.compare ? (
           <>
             <p data-links-basis="" style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink, maxWidth: "820px" }}>
               {p.page.compare.line}
@@ -309,7 +339,11 @@ function Wins({ page, slug }: { page: LinksPage; slug: string }) {
       <h2 id="lk-wins" style={H2}>
         Links you are pursuing
       </h2>
-      {page.wins.length ? (
+      {page.errors.includes("wins") ? (
+        <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+          {SECTION_ERROR}
+        </p>
+      ) : page.wins.length ? (
         <ul data-links-wins="" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "12px" }}>
           {page.wins.map((w) => (
             <li key={w.id} style={{ display: "flex", flexDirection: "column", gap: "4px", fontSize: "14px", lineHeight: 1.45, color: T.ink }}>
@@ -375,12 +409,16 @@ function Gap(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.CSSPro
           <h2 id="lk-gap" style={H2}>
             Link gap
           </h2>
-          {p.page.few ? (
+          {p.page.errors.includes("gap") ? (
+            <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+              {SECTION_ERROR}
+            </p>
+          ) : p.page.few ? (
             <p data-links-state="few" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
               {FEW_LINE}
             </p>
           ) : g ? (
-            <p style={SMALL}>{`Sites linking to at least 2 of the ${g.of} sites you compete with, and not to you, with followed links. Top ${g.limit}, most of the ${g.of} first. ${read(g.readOn)}.`}</p>
+            <p style={SMALL}>{gapHeader(g)}</p>
           ) : (
             <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>The link gap is read monthly, with the sites you compete with.</p>
           )}
@@ -397,7 +435,6 @@ function Gap(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.CSSPro
                       </span>
                       <span style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                         <span style={ROUTE_PILL}>Earn a link</span>
-                        {r.platform ? <span style={SOFT_CHIP}>{r.platform}</span> : null}
                       </span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>
@@ -417,7 +454,7 @@ function Gap(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.CSSPro
         ) : null}
         {g && !p.page.few && g.more > 0 ? (
           <p data-links-more="" style={{ margin: 0, padding: "14px 20px", borderTop: `1px solid ${T.line}`, fontSize: "14px", color: T.ink }}>
-            {`${g.more.toLocaleString("en-GB")} more ${g.more === 1 ? "site links" : "sites link"} to two or more of these and not to you.`}
+            {`${counted(g.more, g.hedge)} more ${g.more === 1 && g.hedge === "exact" ? "site links" : "sites link"} to two or more of these and not to you${g.hedge === "exact" ? "." : ` (${read(g.readOn)}).`}`}
           </p>
         ) : null}
       </section>
@@ -465,7 +502,11 @@ function Targets(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.CS
           <h2 id="lk-tg" style={H2}>
             Link targets
           </h2>
-          {p.page.few || !t ? (
+          {p.page.errors.includes("targets") ? (
+            <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+              {SECTION_ERROR}
+            </p>
+          ) : p.page.few || !t ? (
             <p data-links-state="few" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
               {FEW_LINE}
             </p>
@@ -486,18 +527,20 @@ function Targets(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.CS
               <p style={{ margin: 0, padding: "0 20px 14px", fontSize: "14px", color: T.ink }}>None revealed yet this month.</p>
             )}
             <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.line}`, display: "flex", flexDirection: "column", gap: "10px" }}>
-              {t.left > 0 && t.more > 0 ? (
+              {t.left > 0 && t.unrevealedRead > 0 ? (
                 <form method="post" action={linksAction(p.slug, { view: "targets" })} style={{ margin: 0 }}>
                   <input id="lk-seen" type="hidden" name="seen" value={String(t.used)} />
                   <button type="submit" name="do" value="reveal" {...p.off} style={{ ...DARK, minHeight: "44px", ...p.offStyle }}>
-                    {`Show the next ${Math.min(5, t.left, t.more)}`}
+                    {`Show the next ${Math.min(5, t.left, t.unrevealedRead)}`}
                   </button>
                 </form>
               ) : t.left === 0 ? (
                 <p data-links-cap="" style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: T.ink }}>{`You've used this month's ${t.limit} link targets. They reset on ${t.resetsLabel}.`}</p>
               ) : null}
               <p data-links-more="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
-                {t.more > 0 ? `${t.more.toLocaleString("en-GB")} more ${t.more === 1 ? "page links" : "pages link"} to the sites you compete with from inside an article, and not to you. Next reveals from ${t.resetsLabel}${t.left > 0 ? `, or ${t.left} left this month` : ""}.` : "Every page in this month's read is revealed."}
+                {t.unrevealedRead > 0
+                  ? `${counted(t.more, t.hedge)} more ${t.more === 1 && t.hedge === "exact" ? "page links" : "pages link"} to the sites you compete with from inside an article, and not to you${t.hedge === "exact" || !t.readOn ? "" : ` (${read(t.readOn)})`}. Next reveals from ${t.resetsLabel}${t.left > 0 ? `, or ${t.left} left this month` : ""}.`
+                  : "Every page in this month's read is revealed."}
               </p>
             </div>
             {t.earlier.length ? (
@@ -527,7 +570,11 @@ function Mentions(p: LinksProps & { page: LinksPage; off: Off; offStyle: React.C
           <h2 id="lk-mn" style={H2}>
             Mentions without a link
           </h2>
-          {m ? (
+          {p.page.errors.includes("mentions") ? (
+            <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+              {SECTION_ERROR}
+            </p>
+          ) : m ? (
             <p style={SMALL}>{`Pages that name ${p.brand} and don't link to you. DataForSEO's index found the pages; we read each one ourselves (${formatDay(m.readOn)}) and list only those we could read that name you with no link.`}</p>
           ) : (
             <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>Mentions are read monthly.</p>
@@ -583,19 +630,22 @@ function Check(p: LinksProps & { off: Off; offStyle: React.CSSProperties }) {
         <p data-links-cap="" style={{ margin: 0, fontSize: "14px", fontWeight: 600, color: T.ink }}>
           {p.checks.usedUp}
         </p>
-      ) : (
-        <form method="post" action={linksAction(p.slug, { view: "check" })} style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "flex-end" }}>
-          <label htmlFor="lk-url" style={{ display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 260px", minWidth: 0, fontSize: "12px", fontWeight: 600, color: T.soft }}>
-            The page&apos;s address
-            <input id="lk-url" name="url" type="url" inputMode="url" required maxLength={LINK_URL_MAX} placeholder="https://" autoCapitalize="none" autoCorrect="off" spellCheck={false} {...p.off} style={{ ...FIELD, width: "100%", fontSize: "16px", ...p.offStyle }} />
-          </label>
-          <button type="submit" name="do" value="check" {...p.off} style={{ ...DARK, minHeight: "44px", ...p.offStyle }}>
-            Check this page
-          </button>
-        </form>
-      )}
+      ) : null}
+      <form method="post" action={linksAction(p.slug, { view: "check" })} style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "flex-end" }}>
+        <label htmlFor="lk-url" style={{ display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 260px", minWidth: 0, fontSize: "12px", fontWeight: 600, color: T.soft }}>
+          The page&apos;s address
+          <input id="lk-url" name="url" type="url" inputMode="url" required maxLength={LINK_URL_MAX} placeholder="https://" autoCapitalize="none" autoCorrect="off" spellCheck={false} {...p.off} style={{ ...FIELD, width: "100%", fontSize: "16px", ...p.offStyle }} />
+        </label>
+        <button type="submit" name="do" value="check" {...p.off} style={{ ...DARK, minHeight: "44px", ...p.offStyle }}>
+          Check this page
+        </button>
+      </form>
       {p.checks.line ? <p style={SMALL}>{p.checks.line}</p> : null}
-      {p.page && p.page.checks.length ? (
+      {!p.page || p.page.errors.includes("checks") ? (
+        <p role="status" data-links-error="" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+          {`Your earlier checks: ${SECTION_ERROR}`}
+        </p>
+      ) : p.page.checks.length ? (
         <ul data-links-checks="" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "10px" }}>
           {p.page.checks.map((c) => (
             <li key={c.id} style={{ display: "flex", flexDirection: "column", gap: "2px", paddingTop: "10px", borderTop: `1px solid ${T.line}`, fontSize: "14px", lineHeight: 1.45, color: T.ink }}>

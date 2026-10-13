@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Day } from "../../tracking/figures.ts";
 import { urlKey } from "../../tracking/placements.ts";
 import { ensureOpportunity, pursueOpportunity, type PursueAnswer } from "../opportunities/status.ts";
-import type { Route } from "../opportunities/types.ts";
+import { EMPTY_EVIDENCE, type LinkEvidence, type Route } from "../opportunities/types.ts";
 
 import { bareHost } from "./nomada-placements.ts";
 import type { ComparisonSet, LinkCheck, LinkKind, LinkLens } from "./types.ts";
@@ -50,8 +50,16 @@ export async function writeCheck(db: SupabaseClient, clientId: string, c: Omit<L
   return String((data as { id: unknown }).id);
 }
 
-/** What a Links row becomes in opportunities: its lens, address, route and title. */
-export type LinkRowInput = { lens: LinkLens; url: string; domain: string; title: string | null; route: Route };
+/**
+ * What a Links row becomes in opportunities: its lens, address, route and
+ * title, and the facts it was listed on (13 Oct 2026, review of DIY P10), kept
+ * in the row's evidence so its Opportunities page and Actions card say where
+ * it came from (links/evidence.ts).
+ */
+export type LinkRowInput = { lens: LinkLens; url: string; domain: string; title: string | null; route: Route; evidence: LinkEvidence };
+
+/** A row's evidence: none of P7's counts (the page was not cited), and Links' facts. */
+export const linkRowEvidence = (e: LinkEvidence, today: Day) => ({ ...EMPTY_EVIDENCE(today), link: e });
 
 export const routeOf = (lens: LinkLens): Route => (lens === "mention" ? "ask_for_link" : "earn_link");
 
@@ -64,10 +72,10 @@ export const domainUrl = (domain: string) => `https://${bareHost(domain)}/`;
  * millisecond apart so the order they were revealed in is the order shown.
  * Answers how many were newly revealed.
  */
-export async function revealPages(db: SupabaseClient, clientId: string, pages: readonly { url: string; domain: string; title: string | null }[], p: { today: Day; now: number }): Promise<number> {
+export async function revealPages(db: SupabaseClient, clientId: string, pages: readonly { url: string; domain: string; title: string | null; evidence: LinkEvidence }[], p: { today: Day; now: number }): Promise<number> {
   let n = 0;
   for (const [i, page] of pages.entries()) {
-    const made = await ensureOpportunity(db, clientId, { lens: "link_page", url: page.url, domain: bareHost(page.domain), title: page.title, route: "earn_link", today: p.today, now: new Date(p.now).toISOString() });
+    const made = await ensureOpportunity(db, clientId, { lens: "link_page", url: page.url, domain: bareHost(page.domain), title: page.title, route: "earn_link", evidence: linkRowEvidence(page.evidence, p.today), today: p.today, now: new Date(p.now).toISOString() });
     if (!made) continue;
     const { data, error } = await db
       .from("opportunities")
@@ -89,7 +97,7 @@ export async function pursueLink(
   row: LinkRowInput,
   p: { role: string; by: string; today: Day; now: string },
 ): Promise<PursueAnswer & { id?: string }> {
-  const made = await ensureOpportunity(db, client.id, { lens: row.lens, url: row.url, domain: bareHost(row.domain), title: row.title, route: row.route, today: p.today, now: p.now });
+  const made = await ensureOpportunity(db, client.id, { lens: row.lens, url: row.url, domain: bareHost(row.domain), title: row.title, route: row.route, evidence: linkRowEvidence(row.evidence, p.today), today: p.today, now: p.now });
   if (!made) return { ok: false, why: "gone" };
   const answer = await pursueOpportunity(db, client, made.id, p);
   return { ...answer, id: made.id };

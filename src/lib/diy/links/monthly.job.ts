@@ -6,6 +6,7 @@ import { type Subject, readSubject } from "../../tracking/limits.ts";
 import { jobOutcomeFor } from "../core/caps.ts";
 import type { JobContext, JobHandler, JobResult, ReadCtx } from "../core/jobs.ts";
 import type { ReadResult } from "../core/ledger.ts";
+import { DIY_LINK_LIMIT, brandPhrase } from "../../scan/dataforseo-request.ts";
 import { classifyAll } from "../opportunities/classify.job.ts";
 import { domainKey } from "../opportunities/classify-rules.ts";
 import type { Unclassified } from "../opportunities/derive.ts";
@@ -13,11 +14,11 @@ import type { Unclassified } from "../opportunities/derive.ts";
 import { accessFrom, readFilterNames } from "./access.ts";
 import type { FallbackRead } from "./check-link.ts";
 import { type Fallback, type Kinds, type SerpRow, WINDOW_DAYS, deriveSet, monthOf, needsFallback, pageOnePlaces } from "./comparison-set.ts";
-import { gapRows, pairRows, pairsOf } from "./gap.ts";
-import { type LinksIO, liveLinksIO } from "./io.ts";
+import { gapRead, listCount, pairRows, pairsOf } from "./gap.ts";
+import { type LinksIO, ask, liveLinksIO } from "./io.ts";
 import { confirmMentions, mentionCandidates } from "./mentions.ts";
 import { type Placed, bareHost, readPlacedDomains } from "./nomada-placements.ts";
-import { targetRows } from "./targets.ts";
+import { targetRead } from "./targets.ts";
 import type { Bulk, ComparisonSet, DomainGap, Mentions, PageGap } from "./types.ts";
 import { writeLinkRead, writeSet } from "./write.ts";
 
@@ -44,10 +45,21 @@ import { writeLinkRead, writeSet } from "./write.ts";
  *    (a content_parsing fallback when robots.txt keeps us out) to confirm.
  *
  * Every list is stored with Nomada's placements for other clients already
- * subtracted (and the page subtracts again on read). A daily cap stops the
- * job and defers it; the month's budget skips what is left; a failed read is
- * named in the note. When the first Backlinks read fails with an access
- * code, nothing more is asked for that night.
+ * subtracted (and the page subtracts again on read), and with how much of it
+ * was read: the rows that met its rule and DataForSEO's `total_count`, so
+ * the page never shows a count from 100 rows as exact (types.ts ListCount).
+ * A daily cap stops the job and defers it; the month's budget skips what is
+ * left; a failed read is named in the note. When the first Backlinks read
+ * fails with an access code, nothing more is asked for that night.
+ *
+ * **Nothing that would fail the same way next time fails the job** (13 Oct
+ * 2026, review of DIY P10): a failed job is retried, up to three attempts
+ * (worker.ts), and every retry buys the month's reads again. So the phrase
+ * the mentions are searched for is worked out before the first paid read
+ * (dataforseo-request.ts brandPhrase) - a brand the search cannot take is
+ * noted and the mentions skipped - and a request that throws while it is
+ * built or sent is a noted step failure, like a failed read, never a thrown
+ * job.
  */
 
 export const SERIES_WEEKS = 13;
@@ -135,7 +147,7 @@ export async function deriveMonthSet(db: SupabaseClient, ctx: ReadCtx, io: Links
   let set = deriveSet({ ...base, kinds });
   if (set.waiting.length) note(`${set.waiting.length} page-1 domains wait for a type`);
   if (needsFallback(set)) {
-    const labs = take(await io.labsCompetitors(ctx), "Labs competitors", note, done);
+    const labs = take(await ask(() => io.labsCompetitors(ctx)), "Labs competitors", note, done);
     let backlinks: Fallback[] | null = null;
     const lab: Fallback[] = (labs?.value ?? []).map((c) => ({ domain: bareHost(c.domain), shares: c.intersections }));
     kinds = await readDomainKinds(db, [...places.keys(), ...lab.map((l) => l.domain)]);
@@ -143,7 +155,7 @@ export async function deriveMonthSet(db: SupabaseClient, ctx: ReadCtx, io: Links
     if (set.domains.length < 3) {
       backlinks = await recentBacklinksFallback(db, client.id, today);
       if (!backlinks) {
-        const got = take(await io.backlinksCompetitors(ctx), "backlinks competitors", note, done);
+        const got = take(await ask(() => io.backlinksCompetitors(ctx)), "backlinks competitors", note, done);
         backlinks = (got?.value ?? []).map((c) => ({ domain: bareHost(c.domain), shares: c.intersections }));
       }
       kinds = await readDomainKinds(db, [...places.keys(), ...lab.map((l) => l.domain), ...backlinks.map((b) => b.domain)]);
@@ -168,6 +180,8 @@ export async function runMonthly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, 
   const problems: string[] = [];
   const note = notes(problems);
   const now = deps.now ?? Date.now;
+  // Before anything is bought: the phrase the mentions are searched for, or null when the brand cannot be asked.
+  const phrase = brandPhrase(client.brand, client.domain);
   try {
     let placed: Placed;
     try {
@@ -179,7 +193,7 @@ export async function runMonthly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, 
     const set = await deriveMonthSet(db, ctx, io, client, today, placed, note, done);
     const compared = set.domains;
 
-    const series = take(await io.series(ctx, addDays(today, -SERIES_WEEKS * 7), today), "series", note, done);
+    const series = take(await ask(() => io.series(ctx, addDays(today, -SERIES_WEEKS * 7), today)), "series", note, done);
     if (series) {
       await writeLinkRead(db, client.id, { kind: "timeseries", readOn: today, payload: { weeks: series.value }, readId: series.readId, total: series.value.length });
       done.push("series");
@@ -187,9 +201,9 @@ export async function runMonthly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, 
 
     if (compared.length) {
       const from = addDays(today, -BULK_DAYS);
-      const ranks = take(await io.bulkRanks(ctx, compared), "bulk ranks", note, done);
-      const domains = take(await io.bulkDomains(ctx, compared), "bulk referring domains", note, done);
-      const newLost = take(await io.bulkNewLost(ctx, compared, from), "bulk new and lost", note, done);
+      const ranks = take(await ask(() => io.bulkRanks(ctx, compared)), "bulk ranks", note, done);
+      const domains = take(await ask(() => io.bulkDomains(ctx, compared)), "bulk referring domains", note, done);
+      const newLost = take(await ask(() => io.bulkNewLost(ctx, compared, from)), "bulk new and lost", note, done);
       if (ranks || domains || newLost) {
         const rows: Bulk["rows"] = [client.domain, ...compared].map((d) => {
           const k = bareHost(d);
@@ -207,38 +221,50 @@ export async function runMonthly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, 
       } catch (err) {
         note(`filter names not read (${err instanceof Error ? err.message : String(err)}); pairwise`);
       }
-      const reads: { rows: DomainGap["rows"]; readId: string }[] = [];
+      const reads: { rows: DomainGap["rows"]; returned: number; total: number | null; readId: string }[] = [];
       if (countFilter) {
-        const one = take(await io.domainGap(ctx, { targets: compared, mode: "partial", countFilter: true }), "domain gap", note, done);
-        if (one) reads.push({ rows: one.value.rows, readId: one.readId });
+        const one = take(await ask(() => io.domainGap(ctx, { targets: compared, mode: "partial", countFilter: true })), "domain gap", note, done);
+        if (one) reads.push({ rows: one.value.rows, returned: one.value.rows.length, total: one.value.total, readId: one.readId });
       } else {
         for (const pair of pairsOf(compared)) {
-          const one = take(await io.domainGap(ctx, { targets: pair, mode: "all", countFilter: false }), "domain gap pair", note, done);
-          if (one) reads.push({ rows: pairRows(one.value.rows, pair), readId: one.readId });
+          const one = take(await ask(() => io.domainGap(ctx, { targets: pair, mode: "all", countFilter: false })), "domain gap pair", note, done);
+          if (one) reads.push({ rows: pairRows(one.value.rows, pair), returned: one.value.rows.length, total: one.value.total, readId: one.readId });
         }
       }
       if (reads.length && (countFilter || reads.length === 3)) {
-        const gap: DomainGap = { targets: compared, via: countFilter ? "filter" : "pairwise", rows: gapRows(reads.map((r) => r.rows), { client: client.domain, targets: compared, placed }) };
-        await writeLinkRead(db, client.id, { kind: "domain_gap", readOn: today, payload: gap, readId: reads[0]!.readId, total: gap.rows.length });
-        done.push(`gap of ${gap.rows.length}`);
+        const got = gapRead(
+          reads.map((r) => r.rows),
+          { client: client.domain, targets: compared, placed },
+        );
+        const count = listCount(
+          reads.map((r) => ({ rows: r.returned, total: r.total })),
+          got.seen,
+          DIY_LINK_LIMIT.backlinks_domain_gap,
+        );
+        const gap: DomainGap = { targets: compared, via: countFilter ? "filter" : "pairwise", rows: got.rows, count };
+        await writeLinkRead(db, client.id, { kind: "domain_gap", readOn: today, payload: gap, readId: reads[0]!.readId, total: count.total });
+        done.push(`gap of ${gap.rows.length}${count.capped ? `, ${count.total ?? "an unread number"} by DataForSEO's count` : ""}`);
       } else if (reads.length) note("the pairwise gap was cut short; nothing stored, tried again next month");
 
-      const pages = take(await io.pageGap(ctx, compared), "page gap", note, done);
+      const pages = take(await ask(() => io.pageGap(ctx, compared)), "page gap", note, done);
       if (pages) {
-        const pg: PageGap = { targets: compared, rows: targetRows(pages.value.rows, { client: client.domain, targets: compared, placed }) };
-        await writeLinkRead(db, client.id, { kind: "page_gap", readOn: today, payload: pg, readId: pages.readId, total: pg.rows.length });
+        const got = targetRead(pages.value.rows, { client: client.domain, targets: compared, placed });
+        const count = listCount([{ rows: pages.value.rows.length, total: pages.value.total }], got.seen, DIY_LINK_LIMIT.backlinks_page_gap);
+        const pg: PageGap = { targets: compared, rows: got.rows, count };
+        await writeLinkRead(db, client.id, { kind: "page_gap", readOn: today, payload: pg, readId: pages.readId, total: count.total });
         done.push(`${pg.rows.length} target pages`);
       }
     } else note(`${compared.length} compared sites: no gap or targets until there are 3`);
 
-    const search = take(await io.contentSearch(ctx), "content search", note, done);
+    if (phrase === null) note(`mentions not read: "${client.brand.slice(0, 60)}" can't be searched for as a phrase, nor can the domain's name`);
+    const search = phrase === null ? null : take(await ask(() => io.contentSearch(ctx, phrase)), "content search", note, done);
     if (search) {
       const subject = deps.subject ?? (await readSubject(db, client.id));
       if (typeof subject === "string") note(`mentions not confirmed: ${subject}`);
       else {
         const candidates = mentionCandidates(search.value.rows, { client: client.domain, compared, placed });
         const fallback = async (url: string): Promise<FallbackRead> => {
-          const r = await io.parse(ctx, url);
+          const r = await ask(() => io.parse(ctx, url));
           return r.kind === "read" ? { kind: "read", value: r.value } : r.kind === "refused" ? { kind: "refused" } : { kind: "failed", reason: r.reason };
         };
         const got = await confirmMentions(candidates, { ...subject, brand: subject.brand ?? client.brand }, { get: io.get, fallback, today, now, deadlineMs: ctx.deadlineMs });

@@ -8,6 +8,7 @@ import { CLASSIFIED_LABEL } from "../core/evidence.ts";
 import { compareOrder, orderKey } from "./order.ts";
 import { pursuingLine } from "./verify.ts";
 import type { CitedSummary } from "./derive.ts";
+import { linkEvidenceHref, linkWhyLine } from "../links/evidence.ts";
 
 /**
  * What the Opportunities pages are handed (13 Oct 2026, DIY P7; spec 10
@@ -327,6 +328,8 @@ export function whyFacts(o: Opportunity, ctx: ViewCtx): WhyFact[] {
   const open = e.open ? ctx.answerLink(e.open.prompt, e.open.day, e.open.engine) : null;
   const out: WhyFact[] = [];
   if (o.lens === "own" || o.lens === "logged" || o.lens === "lists") out.push({ text: whyLine(o), href: null });
+  // 13 Oct 2026, DIY P10's review (outside P10's 7.11 edit list): a Links row says what links to what, from where, opening its Links view.
+  if (e.link) out.push({ text: linkWhyLine(e.link), href: ctx.path(linkEvidenceHref(e.link)) });
   if (e.answers) {
     out.push({ text: `Cited by ${and(e.engines.map(engineName))} for ${e.prompt_count} of your prompts in ${plural(e.answers, "answer")} over the 28 days to ${formatDay(e.to)}, on ${e.days_14} of the last 14 days.`, href: open });
     if (e.leaves_out) {

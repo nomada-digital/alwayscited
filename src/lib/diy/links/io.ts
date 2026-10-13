@@ -24,7 +24,7 @@ export type LinksIO = {
   pageGap(ctx: ReadCtx, targets: readonly string[]): Promise<ReadResult<{ total: number | null; rows: GapPage[] }>>;
   labsCompetitors(ctx: ReadCtx): Promise<ReadResult<CompetitorDomain[]>>;
   backlinksCompetitors(ctx: ReadCtx): Promise<ReadResult<BacklinkCompetitor[]>>;
-  contentSearch(ctx: ReadCtx): Promise<ReadResult<{ total: number | null; rows: MentionCandidate[] }>>;
+  contentSearch(ctx: ReadCtx, phrase: string): Promise<ReadResult<{ total: number | null; rows: MentionCandidate[] }>>;
   parse(ctx: ReadCtx, url: string): Promise<ReadResult<ParsedPage | null>>;
   classify(ctx: ReadCtx, input: { system: string; user: string; items: number }): Promise<ReadResult<ClassifyAnswer>>;
 };
@@ -44,8 +44,22 @@ export async function liveLinksIO(): Promise<LinksIO> {
     pageGap: (ctx, targets) => doors.readPageGap(ctx, targets),
     labsCompetitors: (ctx) => doors.readCompetitorsDomain(ctx),
     backlinksCompetitors: (ctx) => doors.readBacklinksCompetitors(ctx),
-    contentSearch: (ctx) => doors.readContentSearch(ctx),
+    contentSearch: (ctx, phrase) => doors.readContentSearch(ctx, phrase),
     parse: (ctx, url) => doors.readContentParsing(ctx, url),
     classify: (ctx, input) => model.classifyPages(ctx, { system: input.system, user: input.user, schema: prompt.ClassifySchema, items: input.items }),
   };
+}
+
+/**
+ * One read asked for: a request that throws while it is built or sent (a
+ * builder refusing its input) answers as a failed read, so the job notes it
+ * and goes on, rather than failing and being retried - which buys every read
+ * of the night again (13 Oct 2026, review of DIY P10).
+ */
+export async function ask<T>(run: () => Promise<ReadResult<T>>): Promise<ReadResult<T>> {
+  try {
+    return await run();
+  } catch (err) {
+    return { kind: "failed", reason: `not asked: ${err instanceof Error ? err.message : String(err)}`, cost: null, readId: "" };
+  }
 }

@@ -6,8 +6,8 @@ import type { JobContext, JobHandler, JobResult, ReadCtx } from "../core/jobs.ts
 import type { ReadResult } from "../core/ledger.ts";
 
 import { accessFrom } from "./access.ts";
-import { type LinksIO, liveLinksIO } from "./io.ts";
-import { NONE_PLACED, type Placed, readPlacedDomains, withoutPlacedDomains } from "./nomada-placements.ts";
+import { type LinksIO, ask, liveLinksIO } from "./io.ts";
+import { NONE_PLACED, type Placed, excludePlacedDomains, readPlacedDomains } from "./nomada-placements.ts";
 import type { NewLost } from "./types.ts";
 import { writeLinkRead } from "./write.ts";
 
@@ -60,7 +60,7 @@ async function placedFor(db: SupabaseClient, clientId: string): Promise<{ placed
 
 export async function runWeekly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, client: { id: string }, today: Day): Promise<JobResult> {
   const notes: string[] = [];
-  const summary = step(await io.summary(ctx), "summary");
+  const summary = step(await ask(() => io.summary(ctx)), "summary");
   if (!summary.ok) {
     if (summary.stop) return summary.stop;
     // An access refusal: the lists would be refused too.
@@ -73,14 +73,14 @@ export async function runWeekly(db: SupabaseClient, ctx: ReadCtx, io: LinksIO, c
   }
 
   const since = addDays(today, -NEW_LOST_DAYS);
-  const added = step(await io.newLost(ctx, "new", since), "new links");
+  const added = step(await ask(() => io.newLost(ctx, "new", since)), "new links");
   if (!added.ok && added.stop) return { ...added.stop, note: [...notes, added.stop.note].join("; ") };
-  const lost = step(await io.newLost(ctx, "lost", since), "lost links");
+  const lost = step(await ask(() => io.newLost(ctx, "lost", since)), "lost links");
   if (!lost.ok && lost.stop) return { ...lost.stop, note: [...notes, lost.stop.note].join("; ") };
   if (added.ok && lost.ok) {
     const { placed, note } = await placedFor(db, client.id);
     if (note) notes.push(note);
-    const keep = <R extends { domain: string; urlFrom: string | null }>(rows: readonly R[]): R[] => rows.filter((r) => withoutPlacedDomains([{ domain: r.domain, url: r.urlFrom }], placed).length === 1);
+    const keep = <R extends { domain: string; urlFrom: string | null }>(rows: readonly R[]): R[] => excludePlacedDomains(rows, placed, (r) => ({ domain: r.domain, url: r.urlFrom }));
     const payload: NewLost = { since, added: keep(added.value.rows), lost: keep(lost.value.rows), addedTotal: added.value.total, lostTotal: lost.value.total };
     await writeLinkRead(db, client.id, { kind: "new_lost", readOn: today, payload, readId: added.readId, total: (added.value.total ?? 0) + (lost.value.total ?? 0) });
     notes.push(`${payload.added.length} new and ${payload.lost.length} lost domains`);

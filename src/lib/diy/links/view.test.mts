@@ -7,8 +7,9 @@ import { pickRow, rowCopy, serviceLine } from "../../tracking/upgrade-prompts.ts
 import type { DiyFixtureState } from "../core/fixture.ts";
 
 import { fixtureLinksWorld, linksChecksUsedFixture, linksFixture } from "./data.ts";
+import type { Opportunity } from "../opportunities/types.ts";
 import { linksToast, readDone, readWhy } from "./toast.ts";
-import { type LinksPage, linksPage, revealFacts, stateOf } from "./view.ts";
+import { type LinksPage, type WorldPart, linksPage, revealFacts, stateOf } from "./view.ts";
 
 /**
  * What the Links page draws, on every fixture state (13 Oct 2026, DIY P10;
@@ -38,14 +39,15 @@ test("full: every section, read and labelled; Nomada's placements nowhere - not 
   assert.equal(page.state, "ready");
   assert.ok(world.gap!.value.rows.some((r) => PLACED.test(r.domain)), "the fixture does carry the two placement rows, so this test is not vacuous");
   assert.doesNotMatch(JSON.stringify(page), PLACED, "the page model names no placement anywhere");
-  assert.deepEqual(page.profile, { readOn: "2026-09-24", notIndexed: false, rank: 212, backlinks: 1840, referringDomains: 312, follow: { followed: 84, notFollowed: 14, other: 2, of: 1840 } });
+  assert.deepEqual(page.profile, { readOn: "2026-09-24", notIndexed: false, rank: 212, backlinks: 1840, referringDomains: 312, follow: { followed: 86, notFollowed: 14, of: 1840 } });
+  assert.deepEqual(page.errors, [], "every read came back");
   assert.equal(page.weeks!.bars.length, 13);
   assert.equal(page.moved!.lost.length, 2, "the lost row on a placed domain is gone");
   assert.equal(page.gap!.rows.length, 25);
-  assert.equal(page.gap!.more, 47, "72 after the subtraction, 25 shown");
+  assert.deepEqual([page.gap!.more, page.gap!.hedge, page.gap!.capped], [47, "exact", false], "72 after the subtraction, 25 shown, every row read");
   assert.equal(page.gap!.rows[0]!.linksTo, 3, "links to 3 first");
   assert.equal(page.gap!.rows.filter((r) => r.pursued).length, 1, "the seeded pursuit is marked, not offered again");
-  assert.deepEqual([page.targets!.earlier.length, page.targets!.thisMonth.length, page.targets!.more, page.targets!.left, page.targets!.used], [5, 0, 23, 5, 0], "28 after the subtraction, 5 revealed last month and kept");
+  assert.deepEqual([page.targets!.earlier.length, page.targets!.thisMonth.length, page.targets!.more, page.targets!.hedge, page.targets!.unrevealedRead, page.targets!.left, page.targets!.used], [5, 0, 23, "exact", 23, 5, 0], "28 after the subtraction, 5 revealed last month and kept");
   assert.equal(page.mentions!.rows.length, 6, "the placed mention is gone");
   assert.equal(page.compare!.rows.length, 4);
   assert.match(page.compare!.line, /the vendor sites holding the most page-1 places/);
@@ -99,7 +101,9 @@ test("fewcompetitors: no gap or targets, and the compare line gives each domain 
 
 test("capped: this month's 5 are revealed, so U5 fires - and its body is the cited service line, its count after the subtraction", () => {
   const { page } = pageFor("capped");
-  assert.deepEqual([page.targets!.thisMonth.length, page.targets!.left, page.targets!.more], [5, 0, 18]);
+  // DataForSEO counted more than was read (412 pages, 1,937 sites): the counts are its estimate, worded so; U5 counts only pages read.
+  assert.deepEqual([page.targets!.thisMonth.length, page.targets!.left, page.targets!.unrevealedRead, page.targets!.more, page.targets!.hedge], [5, 0, 18, 400, "about"]);
+  assert.deepEqual([page.gap!.more, page.gap!.hedge, page.gap!.read, page.gap!.capped], [1900, "about", 74, true]);
   const facts = { tier: "tracked" as const, mode: "nomada" as const, state: "ok" as const, startedOn: "2026-06-10", today: TODAY, hidden: new Set<never>(), reveals: revealFacts(page.targets) };
   assert.deepEqual(facts.reveals, { used: 5, of: 5, more: 18, resetsOn: "2026-10-01" });
   assert.equal(pickRow(facts), "U5");
@@ -116,7 +120,7 @@ test("capped: this month's 5 are revealed, so U5 fires - and its body is the cit
 test("the trial: 10 gap rows, 2 targets a month", () => {
   const { page } = pageFor("full", { ...CLIENT, trial: true });
   assert.equal(page.gap!.rows.length, 10);
-  assert.equal(page.gap!.more, 62);
+  assert.deepEqual([page.gap!.more, page.gap!.hedge], [62, "exact"]);
   assert.equal(page.targets!.limit, 2);
 });
 
@@ -130,6 +134,57 @@ test("the toast's words are fixed: a code outside the list says nothing, and not
   assert.equal(linksToast("<b>hi</b>", null, p), null);
   assert.equal(readDone("checked"), "checked");
   assert.equal(readWhy("nope"), null);
-  const fx = linksFixture({ TRACKING_FIXTURE: "1", VERCEL_ENV: "development", DIY_FIXTURE_STATE: "full" }, ROOT);
-  assert.equal(linksChecksUsedFixture(fx, { checks: [...fx.checks, { id: "x" }] }), fx.checksUsed + 1, "a check made on the fixture counts");
+});
+
+test("link checks: one count - the ledger's paid checks and verifications, and the sites logged; a check our own fetch answered uses none", () => {
+  const since = "2026-09-01T04:00:00.000Z";
+  const logged = (id: string, at: string) => ({ id, lens: "logged", createdAt: at }) as Opportunity;
+  const ledger = [{ action: "link_check", status: "ok" }, { action: "verify", status: "partial" }, { action: "verify", status: "failed" }, { action: "page_check", status: "ok" }, { action: "log", status: "ok" }];
+  assert.equal(linksChecksUsedFixture(ledger, [logged("a", "2026-09-10T00:00:00.000Z"), logged("b", "2026-08-30T00:00:00.000Z")], since), 3, "2 from the ledger, 1 site logged this month; a logged site's own paid read is not counted twice");
+});
+
+/** The full world with some reads failed. */
+function failedWorld(...parts: WorldPart[]) {
+  const env = { TRACKING_FIXTURE: "1", VERCEL_ENV: "development", DIY_FIXTURE_STATE: "full" };
+  const fx = linksFixture(env, ROOT);
+  return fixtureLinksWorld(fx, { revealed: fx.revealed, checks: fx.checks }, { clientId: "fixture", today: TODAY, enabled: true, unread: new Set(parts) });
+}
+
+test("each section stands on its own read: one that fails says so in its own card, and the rest - Check a link's list among them - still draw", () => {
+  const summary = linksPage(failedWorld("summary"), { client: CLIENT, now: NOW, today: TODAY });
+  assert.equal(summary.state, "ready", "a failed summary is not 'not read yet'");
+  assert.deepEqual(summary.errors, ["profile"]);
+  assert.equal(summary.profile, null);
+  assert.ok(summary.gap && summary.targets && summary.mentions, "the other sections draw");
+  // The placements: no list is drawn without them to subtract - but the profile, the weeks and the checks are.
+  const placed = linksPage(failedWorld("placed"), { client: CLIENT, now: NOW, today: TODAY });
+  assert.deepEqual(placed.errors, ["moved", "compare", "gap", "targets", "mentions", "wins"]);
+  assert.deepEqual([placed.gap, placed.targets, placed.mentions, placed.moved, placed.compare, placed.wins], [null, null, null, null, null, []]);
+  assert.equal(placed.few, false, "unknown, not fewer than 3");
+  assert.ok(placed.profile && placed.weeks);
+  assert.equal(placed.checks.length, 1);
+  // The new tables not there yet (a deploy before its migration): each Backlinks section says so; the wins and the checks' form don't need them.
+  const tables = linksPage(failedWorld("summary", "new_lost", "timeseries", "bulk", "domain_gap", "page_gap", "mentions", "set", "checks"), { client: CLIENT, now: NOW, today: TODAY });
+  assert.deepEqual(tables.errors, ["profile", "weeks", "moved", "compare", "gap", "targets", "mentions", "checks"]);
+  assert.equal(tables.wins.length, 2, "the pursued wins still draw");
+  // Whether DIY is on, or whether access is active, unknown: nothing paid is drawn, and the page says it could not read.
+  for (const part of ["enabled", "access"] as const) {
+    const unknown = linksPage(failedWorld(part), { client: CLIENT, now: NOW, today: TODAY });
+    assert.equal(unknown.state, "error", part);
+    assert.equal(unknown.gap, null);
+    assert.equal(unknown.wins.length, 2);
+  }
+});
+
+test("reveals count against the month from the table, before any subtraction: a reveal whose domain later became a placement still uses one", () => {
+  const env = { TRACKING_FIXTURE: "1", VERCEL_ENV: "development", DIY_FIXTURE_STATE: "capped" };
+  const fx = linksFixture(env, ROOT);
+  const world = fixtureLinksWorld(fx, { revealed: fx.revealed, checks: fx.checks }, { clientId: "fixture", today: TODAY, enabled: true });
+  assert.equal(world.revealsThisMonth, 5);
+  const first = world.linkRows.find((o) => o.revealedAt && o.revealedAt >= "2026-09-01")!;
+  const later = { ...world, placed: { domains: new Set([...world.placed.domains, first.domain]), keys: world.placed.keys } };
+  const t = linksPage(later, { client: CLIENT, now: NOW, today: TODAY }).targets!;
+  assert.equal(t.thisMonth.length, 4, "the placed page is no longer drawn");
+  assert.deepEqual([t.used, t.left], [5, 0], "but the month's 5 stay used, as Settings counts them");
+  assert.doesNotMatch(JSON.stringify(t), new RegExp(first.domain.replace(/\./g, "\\.")));
 });

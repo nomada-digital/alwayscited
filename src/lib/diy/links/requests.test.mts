@@ -28,7 +28,7 @@ import {
   parseDomainIntersection,
   parseNewLostSeries,
   parsePageIntersection,
-  platformOf,
+  brandPhrase,
   searchBrand,
 } from "../../scan/dataforseo-request.ts";
 import { DOOR_OF, dfsEstimate } from "../core/prices.ts";
@@ -82,14 +82,21 @@ test("the samples are the documented shapes, and carry the fields the parsers mu
   }
 });
 
-test("the summary: rank, links, domains, first seen, and the follow split with sponsored folded into other", () => {
+test("the summary: rank, links, domains, first seen, and the follow split from nofollow alone", () => {
   const s = parseBacklinksSummary(sample("backlinks_summary"))!;
-  assert.deepEqual(s, { rank: 212, backlinks: 1840, referringDomains: 312, referringMainDomains: 288, firstSeen: "2021-03-02", follow: { followed: 1538, notFollowed: 260, other: 42 } });
+  assert.deepEqual(s, { rank: 212, backlinks: 1840, referringDomains: 312, referringMainDomains: 288, firstSeen: "2021-03-02", follow: { followed: 1580, notFollowed: 260 } });
   clean(s, "parseBacklinksSummary");
-  assert.deepEqual(followSplit(100, { nofollow: 10, ugc: 3, sponsored: 2, noopener: 80 }), { followed: 85, notFollowed: 10, other: 5 }, "noopener is a followed link");
-  assert.deepEqual(followSplit(10, { nofollow: 30 }), { followed: 0, notFollowed: 10, other: 0 }, "never more than the links");
+  assert.deepEqual(followSplit(100, { nofollow: 10, ugc: 3, sponsored: 2, noopener: 80 }), { followed: 90, notFollowed: 10 }, "only nofollow is not followed; no other attribute is summed");
+  assert.deepEqual(followSplit(10, { nofollow: 30 }), { followed: 0, notFollowed: 10 }, "never more than the links");
   assert.equal(followSplit(null, {}), null);
   assert.equal(parseBacklinksSummary({ status_code: 20000, result: [] }), null, "no result is no profile, never zeros");
+});
+
+test("the follow split when the attribute counts overlap: a link is counted under every attribute it carries, so none is taken off twice", () => {
+  // 13 Oct 2026, review of DIY P10: 400 links rel="nofollow ugc" are in both counts; subtracting ugc too showed 20% followed for 60%.
+  assert.deepEqual(followSplit(1000, { nofollow: 400, ugc: 400, noopener: 300 }), { followed: 600, notFollowed: 400 });
+  assert.deepEqual(followSplit(1000, { nofollow: 400, sponsored: 400 }), { followed: 600, notFollowed: 400 }, "nofollow sponsored, the same");
+  assert.deepEqual(followSplit(1000, {}), { followed: 1000, notFollowed: 0 }, "no nofollow count: every link followed");
 });
 
 test("the week's new or lost links: the domain, both pages, follow status, first and last seen; never the attributes", () => {
@@ -123,16 +130,15 @@ test("the series, the three bulk reads and the competitors parse by target, name
 test("the domain gap: which compared sites each domain links to, from the result's own targets, a missing or null target read alike", () => {
   const got = parseDomainIntersection(sample("backlinks_domain_intersection"));
   assert.equal(got.total, 4);
-  assert.deepEqual(got.rows.map((r) => [r.domain, r.linksTo, r.rank, r.firstSeen, r.platform]), [
-    ["thesmallbizstack.com", THREE, 310, "2024-05-11", "blog"],
-    ["freelancefieldnotes.com", ["ledgerline.com", "countwise.example"], 240, "2025-02-19", null],
-    ["accountingforum.example", ["ledgerline.com", "brightbook.example"], 205, "2025-08-02", "forum"],
-    ["softwarecritic.com", ["brightbook.example", "countwise.example"], 330, "2023-11-30", "CMS"],
+  assert.deepEqual(got.rows.map((r) => [r.domain, r.linksTo, r.rank, r.firstSeen]), [
+    ["thesmallbizstack.com", THREE, 310, "2024-05-11"],
+    ["freelancefieldnotes.com", ["ledgerline.com", "countwise.example"], 240, "2025-02-19"],
+    ["accountingforum.example", ["ledgerline.com", "brightbook.example"], 205, "2025-08-02"],
+    ["softwarecritic.com", ["brightbook.example", "countwise.example"], 330, "2023-11-30"],
   ]);
   clean(got, "parseDomainIntersection");
-  assert.equal(platformOf({ unknown: 40, cms: 3, blogs: 5 }), "blog");
-  assert.equal(platformOf({ unknown: 40 }), null, "unknown is no platform");
-  assert.equal(platformOf({ news: 4, cms: 4 }), "CMS", "a tie goes to the type first by name, so the word is stable");
+  // referring_links_platform_types counts links per platform, not the site's own type: no platform is kept (spec 10 section 4.8 row 3).
+  assert.ok(![...keysDeep(got)].some((k) => /platform/.test(k)), "no platform word built from link counts");
 });
 
 test("the page gap keeps only followed links inside an article, per target, and drops a page with none", () => {
@@ -172,7 +178,7 @@ test("every builder: its path, its door, a fixed body, and the reservation at it
     domainGapRequest({ targets: THREE, exclude: "tallyroo.com", mode: "partial", countFilter: true }),
     pageGapRequest({ targets: THREE, exclude: "tallyroo.com" }),
     backlinksCompetitorsRequest("tallyroo.com"),
-    contentSearchRequest({ brand: "Tallyroo" }),
+    contentSearchRequest({ phrase: "Tallyroo" }),
   ];
   for (const r of reqs) {
     assert.equal(r.path, DIY_LINK_PATHS[r.endpoint as keyof typeof DIY_LINK_PATHS], `${r.endpoint}: its own path`);
@@ -197,18 +203,42 @@ test("the request shapes: lost links come from the lost set, the gap is followed
   assert.deepEqual(gap.targets, { "1": "ledgerline.com", "2": "brightbook.example", "3": "countwise.example" });
   assert.deepEqual(gap.exclude_targets, ["tallyroo.com"]);
   assert.deepEqual(gap.backlinks_filters, [["dofollow", "=", true], "and", ["backlink_spam_score", "<", 30]], "spam used as a request filter only");
-  assert.deepEqual(gap.filters, ["intersections_count", ">=", 2]);
+  assert.deepEqual(gap.filters, ["intersections_count", ">", 1], "n >= 2, with the operator the documentation's examples use");
+  assert.deepEqual(gap.order_by, ["intersections_count,desc", "1.rank,desc", "2.rank,desc"], "the 100 read are the head: most of the 3 first, then rank (three rules at most)");
   const pair = (domainGapRequest({ targets: THREE.slice(0, 2), exclude: "tallyroo.com", mode: "all", countFilter: false }).body as Record<string, unknown>[])[0]!;
   assert.equal(pair.intersection_mode, "all");
   assert.equal(pair.filters, undefined, "no count filter on the pairwise read");
+  assert.deepEqual(pair.order_by, ["1.rank,desc", "2.rank,desc"]);
   assert.throws(() => domainGapRequest({ targets: THREE, exclude: "tallyroo.com", mode: "all", countFilter: false }), /one pair/);
   const pages = (pageGapRequest({ targets: THREE, exclude: "tallyroo.com" }).body as Record<string, unknown>[])[0]!;
   assert.equal(JSON.stringify(pages.filters).match(/dofollow/g)!.length, 3, "followed, per target");
   assert.equal(JSON.stringify(pages.filters).match(/"article"/g)!.length, 3, "inside an article, per target");
-  const search = (contentSearchRequest({ brand: "Tallyroo" }).body as Record<string, unknown>[])[0]!;
+  assert.deepEqual(pages.order_by, ["intersections_count,desc", "1.page_from_rank,desc", "2.page_from_rank,desc"]);
+  assert.deepEqual((pageGapRequest({ targets: THREE.slice(0, 1), exclude: "tallyroo.com" }).body as Record<string, unknown>[])[0]!.order_by, ["1.page_from_rank,desc"]);
+  const search = (contentSearchRequest({ phrase: "Tallyroo" }).body as Record<string, unknown>[])[0]!;
   assert.equal(search.keyword, '"Tallyroo"', "the brand as an exact phrase");
   assert.equal(search.search_mode, "one_per_domain");
+  // Not the documented default order (content_info.sentiment_connotations.anger,desc): the most prominent citation first, English pages only.
+  assert.deepEqual(search.order_by, ["score,desc"]);
+  assert.deepEqual(search.filters, ["content_info.language", "=", "en"]);
   assert.throws(() => searchBrand('Tally"roo'), "nothing that breaks the phrase");
   assert.throws(() => backlinksSummaryRequest("not a domain"));
   assert.throws(() => backlinksSeriesRequest({ target: "tallyroo.com", from: "2026-01-01", to: "2026-10-12" }), /26 weeks/);
+});
+
+test("the mentions phrase, worked out before anything is bought: a company name tidied, a domain's name when the brand can't be asked, else none", () => {
+  assert.equal(brandPhrase("Tallyroo", "tallyroo.com"), "Tallyroo");
+  assert.equal(brandPhrase("Smith, Jones & Co.", "smithjones.example"), "Smith Jones & Co");
+  assert.equal(brandPhrase("Yahoo!", "yahoo.example"), "Yahoo");
+  assert.equal(brandPhrase("Brand (UK)", "brand.example"), "Brand", "a bracketed qualifier is dropped");
+  assert.equal(brandPhrase("Pay+", "payplus.example"), "Pay");
+  assert.equal(brandPhrase("O'Neill & Sons", "oneill.example"), "O'Neill & Sons", "what the phrase can take is kept");
+  assert.equal(brandPhrase("X", "xcorp.example"), "xcorp", "too short: the domain's first label");
+  assert.equal(brandPhrase(null, "www.tallyroo.com"), "tallyroo");
+  assert.equal(brandPhrase("X", "x.example"), null, "nothing that can be asked");
+  assert.equal(brandPhrase("™®", "q.example"), null);
+  const long = "The Very Long Company Name Of Accounting Software For Small Businesses Limited";
+  const cut = brandPhrase(long, "long.example")!;
+  assert.ok(cut.length <= 60 && long.startsWith(cut) && !cut.endsWith(" "), `cut at a word: ${cut}`);
+  for (const b of ["Smith, Jones & Co.", "Yahoo!", "Brand (UK)", "Pay+", long]) assert.doesNotThrow(() => contentSearchRequest({ phrase: brandPhrase(b, "fallback.example")! }), b);
 });

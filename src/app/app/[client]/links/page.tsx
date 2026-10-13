@@ -42,10 +42,12 @@ export const runtime = "nodejs";
  * words. The spec's `page` key is not read: the gap shows its top 25 and a
  * count, never a second page, which would be a way round the cap.
  *
- * Each section reads on its own and a failed read says so (section 3.4). No
- * loading.tsx, as on Actions and Opportunities: a segment loading boundary
- * streams before the login redirect and the membership 404 run, so both
- * would answer 200 (node_modules/next/dist/docs, loading.md "Status Codes").
+ * Each section reads on its own and a failed read says so in its own card
+ * (section 3.4; loadLinksWorld, view.ts `errors`): Check a link and the
+ * pursued wins never wait on the paid sections' reads. No loading.tsx, as on
+ * Actions and Opportunities: a segment loading boundary streams before the
+ * login redirect and the membership 404 run, so both would answer 200
+ * (node_modules/next/dist/docs, loading.md "Status Codes").
  */
 export default async function ClientLinks({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const repo = trackingRepo();
@@ -71,15 +73,19 @@ export default async function ClientLinks({ params, searchParams }: { params: Pr
     repo.upgradeContext(client.id, email, today),
     section("links", () => loadLinksWorld(repo, client)),
     section("links pursuits", () => loadActivePursuits(repo, client)),
-    section("links checks", () => loadChecksUsed(client, now)),
+    section("links checks", () => loadChecksUsed(repo, client, now)),
   ]);
+  // loadLinksWorld reads each part on its own and never throws for one; `world` fails only if the page model can't be built.
   const page = world.ok ? linksPage(world.value, { client: { domain: client.domain, trial, market: client.market }, now, today }) : null;
   const month = allowanceMonth(client.market, now);
   const cap = allowanceFor("pursuits", { trial });
   const checkLimit = allowanceFor("link_checks", { trial });
+  // One count for one allowance (usage-meter.ts countUsage "link_checks"): the checks that needed our paid reader, Verify
+  // now's the same, and each site logged. A page our own fetch reads uses none (13 Oct 2026, review of DIY P10).
+  const usedUp = checksUsed.ok ? usedUpLine("link_checks", checksUsed.value, { trial, market: client.market }, now) : null;
   const checks = {
-    line: checksUsed.ok ? `Link checks this month: ${Math.min(checksUsed.value, checkLimit)} of ${checkLimit}, shared with Verify now and Log a site on Opportunities. They reset on ${month.resetsLabel}.` : null,
-    usedUp: checksUsed.ok ? usedUpLine("link_checks", checksUsed.value, { trial, market: client.market }, now) : null,
+    line: checksUsed.ok ? `Link checks this month: ${Math.min(checksUsed.value, checkLimit)} of ${checkLimit}, shared with Verify now and Log a site on Opportunities. A check uses one only when the page blocks our own reader; a logged site always does. They reset on ${month.resetsLabel}.` : null,
+    usedUp: usedUp ? `${usedUp} A page we can read ourselves is still checked; one that blocks our reader waits until then.` : null,
   };
   const revealLine = page?.targets ? usedUpLine("link_targets", page.targets.used, { trial, market: client.market }, now) : null;
 

@@ -16,9 +16,8 @@
      "referringMainDomains": 288,
      "firstSeen": "2021-03-02",
      "follow": {
-      "followed": 1538,
-      "notFollowed": 260,
-      "other": 42
+      "followed": 1580,
+      "notFollowed": 260
      }
     }
    },
@@ -224,8 +223,7 @@
         "countwise.example"
        ],
        "rank": 620,
-       "firstSeen": "2024-01-01",
-       "platform": "blog"
+       "firstSeen": "2024-01-01"
       },
       {
        "domain": "cashflowwire.example",
@@ -235,8 +233,7 @@
         "countwise.example"
        ],
        "rank": 613,
-       "firstSeen": "2025-02-02",
-       "platform": "CMS"
+       "firstSeen": "2025-02-02"
       },
       {
        "domain": "taxdaylab.example",
@@ -246,8 +243,7 @@
         "countwise.example"
        ],
        "rank": 606,
-       "firstSeen": "2026-03-03",
-       "platform": "forum"
+       "firstSeen": "2026-03-03"
       },
       {
        "domain": "softwarecritic.com",
@@ -257,8 +253,7 @@
         "countwise.example"
        ],
        "rank": 700,
-       "firstSeen": "2025-02-02",
-       "platform": "news"
+       "firstSeen": "2025-02-02"
       },
       {
        "domain": "taxdaywire.example",
@@ -268,8 +263,7 @@
         "countwise.example"
        ],
        "rank": 599,
-       "firstSeen": "2024-04-04",
-       "platform": "news"
+       "firstSeen": "2024-04-04"
       },
       {
        "domain": "numbersnotes.example",
@@ -279,8 +273,7 @@
         "countwise.example"
        ],
        "rank": 592,
-       "firstSeen": "2025-05-05",
-       "platform": null
+       "firstSeen": "2025-05-05"
       },
       {
        "domain": "solelab.example",
@@ -290,8 +283,7 @@
         "countwise.example"
        ],
        "rank": 585,
-       "firstSeen": "2026-06-06",
-       "platform": null
+       "firstSeen": "2026-06-06"
       },
       {
        "domain": "freelancelab.example",
@@ -301,8 +293,7 @@
         "countwise.example"
        ],
        "rank": 578,
-       "firstSeen": "2024-07-07",
-       "platform": "ecommerce"
+       "firstSeen": "2024-07-07"
       },
       {
        "domain": "accountsdigest.example",
@@ -312,8 +303,7 @@
         "countwise.example"
        ],
        "rank": 571,
-       "firstSeen": "2025-08-08",
-       "platform": "wiki"
+       "firstSeen": "2025-08-08"
       },
       {
        "domain": "bookkeeperweekly.example",
@@ -323,8 +313,7 @@
         "countwise.example"
        ],
        "rank": 564,
-       "firstSeen": "2026-09-09",
-       "platform": "blog"
+       "firstSeen": "2026-09-09"
       },
       {
        "domain": "receiptslab.example",
@@ -334,8 +323,7 @@
         "countwise.example"
        ],
        "rank": 557,
-       "firstSeen": "2024-10-10",
-       "platform": "CMS"
+       "firstSeen": "2024-10-10"
       },
       {
        "domain": "tallytimes.example",
@@ -345,8 +333,7 @@
         "countwise.example"
        ],
        "rank": 550,
-       "firstSeen": "2025-11-11",
-       "platform": "forum"
+       "firstSeen": "2025-11-11"
       },
       {
        "domain": "solepost.example",
@@ -356,8 +343,7 @@
         "countwise.example"
        ],
        "rank": 543,
-       "firstSeen": "2026-12-12",
-       "platform": "news"
+       "firstSeen": "2026-12-12"
       },
       {
        "domain": "payrolllab.example",
@@ -367,8 +353,7 @@
         "countwise.example"
        ],
        "rank": 536,
-       "firstSeen": "2024-01-13",
-       "platform": null
+       "firstSeen": "2024-01-13"
       },
       {
        "domain": "ownerdigest.example",
@@ -378,8 +363,7 @@
         "countwise.example"
        ],
        "rank": 529,
-       "firstSeen": "2025-02-14",
-       "platform": null
+       "firstSeen": "2025-02-14"
       },
       {
        "domain": "accountsguide.example",
@@ -389,8 +373,7 @@
         "countwise.example"
        ],
        "rank": 522,
-       "firstSeen": "2026-03-15",
-       "platform": "ecommerce"
+       "firstSeen": "2026-03-15"
       },
       {
        "domain": "bookkeeperforum.example",
@@ -400,8 +383,7 @@
         "countwise.example"
        ],
        "rank": 515,
-       "firstSeen": "2024-04-16",
-       "platform": "wiki"
+       "firstSeen": "2024-04-16"
       },
       {
        "domain": "receiptsjournal.example",
@@ -411,8 +393,7 @@
         "countwise.example"
        ],
        "rank": 508,
-       "firstSeen": "2025-05-17",
-       "platform": "blog"
+       "firstSeen": "2025-05-17"
       },
       {
        "domain": "solecorner.example",
@@ -422,8 +403,7 @@
         "countwise.example"
        ],
        "rank": 501,
-       "firstSeen": "2026-06-18",
-       "platform": "CMS"
+       "firstSeen": "2026-06-18"
       },
       {
        "domain": "numbersdigest.example",
@@ -432,8 +412,7 @@
         "ledgerline.com"
        ],
        "rank": 494,
-       "firstSeen": "2024-07-19",
-       "platform": "forum"
+       "firstSeen": "2024-07-19"
       },
       {
        "domain": "accountsweekly.example",
@@ -442,8 +421,7 @@
         "brightbook.example"
        ],
        "rank": 512,
-       "firstSeen": "2025-05-05",
-       "platform": "blog"
+       "firstSeen": "2025-05-05"
       },
       {
        "domain": "accountscorner.example",
@@ -452,8 +430,7 @@
         "brightbook.example"
        ],
        "rank": 487,
-       "firstSeen": "2025-08-20",
-       "platform": "news"
+       "firstSeen": "2025-08-20"
       },
       {
        "domain": "soleguide.example",
@@ -462,8 +439,7 @@
         "brightbook.example"
        ],
        "rank": 480,
-       "firstSeen": "2026-09-21",
-       "platform": null
+       "firstSeen": "2026-09-21"
       },
       {
        "domain": "tradeweekly.example",
@@ -472,8 +448,7 @@
         "ledgerline.com"
        ],
        "rank": 473,
-       "firstSeen": "2024-10-22",
-       "platform": null
+       "firstSeen": "2024-10-22"
       },
       {
        "domain": "startuptimes.example",
@@ -482,8 +457,7 @@
         "brightbook.example"
        ],
        "rank": 466,
-       "firstSeen": "2025-11-23",
-       "platform": "ecommerce"
+       "firstSeen": "2025-11-23"
       },
       {
        "domain": "tradeclub.example",
@@ -492,8 +466,7 @@
         "brightbook.example"
        ],
        "rank": 459,
-       "firstSeen": "2026-12-24",
-       "platform": "wiki"
+       "firstSeen": "2026-12-24"
       },
       {
        "domain": "freelancedesk.example",
@@ -502,8 +475,7 @@
         "countwise.example"
        ],
        "rank": 452,
-       "firstSeen": "2024-01-25",
-       "platform": "blog"
+       "firstSeen": "2024-01-25"
       },
       {
        "domain": "plainbookstimes.example",
@@ -512,8 +484,7 @@
         "countwise.example"
        ],
        "rank": 445,
-       "firstSeen": "2025-02-26",
-       "platform": "CMS"
+       "firstSeen": "2025-02-26"
       },
       {
        "domain": "shopfrontreview.example",
@@ -522,8 +493,7 @@
         "ledgerline.com"
        ],
        "rank": 438,
-       "firstSeen": "2026-03-27",
-       "platform": "forum"
+       "firstSeen": "2026-03-27"
       },
       {
        "domain": "ledgerweekly.example",
@@ -532,8 +502,7 @@
         "ledgerline.com"
        ],
        "rank": 431,
-       "firstSeen": "2024-04-01",
-       "platform": "news"
+       "firstSeen": "2024-04-01"
       },
       {
        "domain": "billingforum.example",
@@ -542,8 +511,7 @@
         "brightbook.example"
        ],
        "rank": 424,
-       "firstSeen": "2025-05-02",
-       "platform": null
+       "firstSeen": "2025-05-02"
       },
       {
        "domain": "plainbookspost.example",
@@ -552,8 +520,7 @@
         "brightbook.example"
        ],
        "rank": 417,
-       "firstSeen": "2026-06-03",
-       "platform": null
+       "firstSeen": "2026-06-03"
       },
       {
        "domain": "tallydigest.example",
@@ -562,8 +529,7 @@
         "countwise.example"
        ],
        "rank": 410,
-       "firstSeen": "2024-07-04",
-       "platform": "ecommerce"
+       "firstSeen": "2024-07-04"
       },
       {
        "domain": "tradenotes.example",
@@ -572,8 +538,7 @@
         "ledgerline.com"
        ],
        "rank": 403,
-       "firstSeen": "2025-08-05",
-       "platform": "wiki"
+       "firstSeen": "2025-08-05"
       },
       {
        "domain": "tradelab.example",
@@ -582,8 +547,7 @@
         "countwise.example"
        ],
        "rank": 396,
-       "firstSeen": "2026-09-06",
-       "platform": "blog"
+       "firstSeen": "2026-09-06"
       },
       {
        "domain": "ownernotes.example",
@@ -592,8 +556,7 @@
         "countwise.example"
        ],
        "rank": 389,
-       "firstSeen": "2024-10-07",
-       "platform": "CMS"
+       "firstSeen": "2024-10-07"
       },
       {
        "domain": "accountsclub.example",
@@ -602,8 +565,7 @@
         "brightbook.example"
        ],
        "rank": 382,
-       "firstSeen": "2025-11-08",
-       "platform": "forum"
+       "firstSeen": "2025-11-08"
       },
       {
        "domain": "solejournal.example",
@@ -612,8 +574,7 @@
         "ledgerline.com"
        ],
        "rank": 375,
-       "firstSeen": "2026-12-09",
-       "platform": "news"
+       "firstSeen": "2026-12-09"
       },
       {
        "domain": "invoicejournal.example",
@@ -622,8 +583,7 @@
         "ledgerline.com"
        ],
        "rank": 368,
-       "firstSeen": "2024-01-10",
-       "platform": null
+       "firstSeen": "2024-01-10"
       },
       {
        "domain": "ownerjournal.example",
@@ -632,8 +592,7 @@
         "brightbook.example"
        ],
        "rank": 361,
-       "firstSeen": "2025-02-11",
-       "platform": null
+       "firstSeen": "2025-02-11"
       },
       {
        "domain": "ownertimes.example",
@@ -642,8 +601,7 @@
         "brightbook.example"
        ],
        "rank": 354,
-       "firstSeen": "2026-03-12",
-       "platform": "ecommerce"
+       "firstSeen": "2026-03-12"
       },
       {
        "domain": "startupjournal.example",
@@ -652,8 +610,7 @@
         "countwise.example"
        ],
        "rank": 347,
-       "firstSeen": "2024-04-13",
-       "platform": "wiki"
+       "firstSeen": "2024-04-13"
       },
       {
        "domain": "invoicenotes.example",
@@ -662,8 +619,7 @@
         "countwise.example"
        ],
        "rank": 340,
-       "firstSeen": "2025-05-14",
-       "platform": "blog"
+       "firstSeen": "2025-05-14"
       },
       {
        "domain": "tallywire.example",
@@ -672,8 +628,7 @@
         "countwise.example"
        ],
        "rank": 333,
-       "firstSeen": "2026-06-15",
-       "platform": "CMS"
+       "firstSeen": "2026-06-15"
       },
       {
        "domain": "bookkeeperpost.example",
@@ -682,8 +637,7 @@
         "brightbook.example"
        ],
        "rank": 326,
-       "firstSeen": "2024-07-16",
-       "platform": "forum"
+       "firstSeen": "2024-07-16"
       },
       {
        "domain": "plainbooksweekly.example",
@@ -692,8 +646,7 @@
         "ledgerline.com"
        ],
        "rank": 319,
-       "firstSeen": "2025-08-17",
-       "platform": "news"
+       "firstSeen": "2025-08-17"
       },
       {
        "domain": "taxdayhub.example",
@@ -702,8 +655,7 @@
         "ledgerline.com"
        ],
        "rank": 312,
-       "firstSeen": "2026-09-18",
-       "platform": null
+       "firstSeen": "2026-09-18"
       },
       {
        "domain": "invoicecorner.example",
@@ -712,8 +664,7 @@
         "countwise.example"
        ],
        "rank": 305,
-       "firstSeen": "2024-10-19",
-       "platform": null
+       "firstSeen": "2024-10-19"
       },
       {
        "domain": "booksforum.example",
@@ -722,8 +673,7 @@
         "brightbook.example"
        ],
        "rank": 298,
-       "firstSeen": "2025-11-20",
-       "platform": "ecommerce"
+       "firstSeen": "2025-11-20"
       },
       {
        "domain": "tradetimes.example",
@@ -732,8 +682,7 @@
         "brightbook.example"
        ],
        "rank": 291,
-       "firstSeen": "2026-12-21",
-       "platform": "wiki"
+       "firstSeen": "2026-12-21"
       },
       {
        "domain": "cashflowforum.example",
@@ -742,8 +691,7 @@
         "countwise.example"
        ],
        "rank": 284,
-       "firstSeen": "2024-01-22",
-       "platform": "blog"
+       "firstSeen": "2024-01-22"
       },
       {
        "domain": "bookkeeperdesk.example",
@@ -752,8 +700,7 @@
         "brightbook.example"
        ],
        "rank": 277,
-       "firstSeen": "2025-02-23",
-       "platform": "CMS"
+       "firstSeen": "2025-02-23"
       },
       {
        "domain": "taxdayjournal.example",
@@ -762,8 +709,7 @@
         "ledgerline.com"
        ],
        "rank": 270,
-       "firstSeen": "2026-03-24",
-       "platform": "forum"
+       "firstSeen": "2026-03-24"
       },
       {
        "domain": "freelancejournal.example",
@@ -772,8 +718,7 @@
         "brightbook.example"
        ],
        "rank": 263,
-       "firstSeen": "2024-04-25",
-       "platform": "news"
+       "firstSeen": "2024-04-25"
       },
       {
        "domain": "plainbooksforum.example",
@@ -782,8 +727,7 @@
         "ledgerline.com"
        ],
        "rank": 256,
-       "firstSeen": "2025-05-26",
-       "platform": null
+       "firstSeen": "2025-05-26"
       },
       {
        "domain": "accountsreview.example",
@@ -792,8 +736,7 @@
         "brightbook.example"
        ],
        "rank": 249,
-       "firstSeen": "2026-06-27",
-       "platform": null
+       "firstSeen": "2026-06-27"
       },
       {
        "domain": "payrollclub.example",
@@ -802,8 +745,7 @@
         "countwise.example"
        ],
        "rank": 242,
-       "firstSeen": "2024-07-01",
-       "platform": "ecommerce"
+       "firstSeen": "2024-07-01"
       },
       {
        "domain": "numbersreview.example",
@@ -812,8 +754,7 @@
         "countwise.example"
        ],
        "rank": 235,
-       "firstSeen": "2025-08-02",
-       "platform": "wiki"
+       "firstSeen": "2025-08-02"
       },
       {
        "domain": "plainbookslab.example",
@@ -822,8 +763,7 @@
         "countwise.example"
        ],
        "rank": 228,
-       "firstSeen": "2026-09-03",
-       "platform": "blog"
+       "firstSeen": "2026-09-03"
       },
       {
        "domain": "tradehub.example",
@@ -832,8 +772,7 @@
         "ledgerline.com"
        ],
        "rank": 221,
-       "firstSeen": "2024-10-04",
-       "platform": "CMS"
+       "firstSeen": "2024-10-04"
       },
       {
        "domain": "cashflowclub.example",
@@ -842,8 +781,7 @@
         "brightbook.example"
        ],
        "rank": 214,
-       "firstSeen": "2025-11-05",
-       "platform": "forum"
+       "firstSeen": "2025-11-05"
       },
       {
        "domain": "bookkeeperclub.example",
@@ -852,8 +790,7 @@
         "ledgerline.com"
        ],
        "rank": 207,
-       "firstSeen": "2026-12-06",
-       "platform": "news"
+       "firstSeen": "2026-12-06"
       },
       {
        "domain": "startupweekly.example",
@@ -862,8 +799,7 @@
         "ledgerline.com"
        ],
        "rank": 200,
-       "firstSeen": "2024-01-07",
-       "platform": null
+       "firstSeen": "2024-01-07"
       },
       {
        "domain": "bookkeeperlab.example",
@@ -872,8 +808,7 @@
         "countwise.example"
        ],
        "rank": 193,
-       "firstSeen": "2025-02-08",
-       "platform": null
+       "firstSeen": "2025-02-08"
       },
       {
        "domain": "freelancedigest.example",
@@ -882,8 +817,7 @@
         "brightbook.example"
        ],
        "rank": 186,
-       "firstSeen": "2026-03-09",
-       "platform": "ecommerce"
+       "firstSeen": "2026-03-09"
       },
       {
        "domain": "ledgerhub.example",
@@ -892,8 +826,7 @@
         "brightbook.example"
        ],
        "rank": 179,
-       "firstSeen": "2024-04-10",
-       "platform": "wiki"
+       "firstSeen": "2024-04-10"
       },
       {
        "domain": "smallbizreview.example",
@@ -902,8 +835,7 @@
         "ledgerline.com"
        ],
        "rank": 172,
-       "firstSeen": "2025-05-11",
-       "platform": "blog"
+       "firstSeen": "2025-05-11"
       },
       {
        "domain": "booksdesk.example",
@@ -912,8 +844,7 @@
         "ledgerline.com"
        ],
        "rank": 165,
-       "firstSeen": "2026-06-12",
-       "platform": "CMS"
+       "firstSeen": "2026-06-12"
       },
       {
        "domain": "booksnotes.example",
@@ -922,8 +853,7 @@
         "countwise.example"
        ],
        "rank": 158,
-       "firstSeen": "2024-07-13",
-       "platform": "forum"
+       "firstSeen": "2024-07-13"
       },
       {
        "domain": "startupclub.example",
@@ -932,8 +862,7 @@
         "countwise.example"
        ],
        "rank": 151,
-       "firstSeen": "2025-08-14",
-       "platform": "news"
+       "firstSeen": "2025-08-14"
       },
       {
        "domain": "freelancenotes.example",
@@ -942,8 +871,7 @@
         "countwise.example"
        ],
        "rank": 144,
-       "firstSeen": "2026-09-15",
-       "platform": null
+       "firstSeen": "2026-09-15"
       },
       {
        "domain": "accountslab.example",
@@ -952,8 +880,7 @@
         "ledgerline.com"
        ],
        "rank": 137,
-       "firstSeen": "2024-10-16",
-       "platform": null
+       "firstSeen": "2024-10-16"
       },
       {
        "domain": "payrolldigest.example",
@@ -962,8 +889,7 @@
         "brightbook.example"
        ],
        "rank": 130,
-       "firstSeen": "2025-11-17",
-       "platform": "ecommerce"
+       "firstSeen": "2025-11-17"
       },
       {
        "domain": "bookkeeperjournal.example",
@@ -972,10 +898,14 @@
         "countwise.example"
        ],
        "rank": 123,
-       "firstSeen": "2026-12-18",
-       "platform": "wiki"
+       "firstSeen": "2026-12-18"
       }
-     ]
+     ],
+     "count": {
+      "read": 74,
+      "total": 74,
+      "capped": false
+     }
     }
    },
    "page_gap": {
@@ -1527,7 +1457,12 @@
        "pageRank": 237,
        "firstSeen": "2026-04-01"
       }
-     ]
+     ],
+     "count": {
+      "read": 30,
+      "total": 30,
+      "capped": false
+     }
     }
    },
    "mentions": {
@@ -1765,8 +1700,7 @@
     "anchor": null,
     "target": null
    }
-  },
-  "checksUsed": 3
+  }
  },
  "dark": {
   "base": "full"
@@ -1843,7 +1777,1268 @@
     "revealedAt": "2026-09-20T09:00:04.000Z"
    }
   ],
-  "checksUsed": 30
+  "reads": {
+   "domain_gap": {
+    "read_on": "2026-09-10",
+    "payload": {
+     "targets": [
+      "ledgerline.com",
+      "brightbook.example",
+      "countwise.example"
+     ],
+     "via": "filter",
+     "rows": [
+      {
+       "domain": "freelancetimes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 620,
+       "firstSeen": "2024-01-01"
+      },
+      {
+       "domain": "cashflowwire.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 613,
+       "firstSeen": "2025-02-02"
+      },
+      {
+       "domain": "taxdaylab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 606,
+       "firstSeen": "2026-03-03"
+      },
+      {
+       "domain": "softwarecritic.com",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 700,
+       "firstSeen": "2025-02-02"
+      },
+      {
+       "domain": "taxdaywire.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 599,
+       "firstSeen": "2024-04-04"
+      },
+      {
+       "domain": "numbersnotes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 592,
+       "firstSeen": "2025-05-05"
+      },
+      {
+       "domain": "solelab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 585,
+       "firstSeen": "2026-06-06"
+      },
+      {
+       "domain": "freelancelab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 578,
+       "firstSeen": "2024-07-07"
+      },
+      {
+       "domain": "accountsdigest.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 571,
+       "firstSeen": "2025-08-08"
+      },
+      {
+       "domain": "bookkeeperweekly.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 564,
+       "firstSeen": "2026-09-09"
+      },
+      {
+       "domain": "receiptslab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 557,
+       "firstSeen": "2024-10-10"
+      },
+      {
+       "domain": "tallytimes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 550,
+       "firstSeen": "2025-11-11"
+      },
+      {
+       "domain": "solepost.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 543,
+       "firstSeen": "2026-12-12"
+      },
+      {
+       "domain": "payrolllab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 536,
+       "firstSeen": "2024-01-13"
+      },
+      {
+       "domain": "ownerdigest.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 529,
+       "firstSeen": "2025-02-14"
+      },
+      {
+       "domain": "accountsguide.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 522,
+       "firstSeen": "2026-03-15"
+      },
+      {
+       "domain": "bookkeeperforum.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 515,
+       "firstSeen": "2024-04-16"
+      },
+      {
+       "domain": "receiptsjournal.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 508,
+       "firstSeen": "2025-05-17"
+      },
+      {
+       "domain": "solecorner.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 501,
+       "firstSeen": "2026-06-18"
+      },
+      {
+       "domain": "numbersdigest.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 494,
+       "firstSeen": "2024-07-19"
+      },
+      {
+       "domain": "accountsweekly.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 512,
+       "firstSeen": "2025-05-05"
+      },
+      {
+       "domain": "accountscorner.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 487,
+       "firstSeen": "2025-08-20"
+      },
+      {
+       "domain": "soleguide.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 480,
+       "firstSeen": "2026-09-21"
+      },
+      {
+       "domain": "tradeweekly.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 473,
+       "firstSeen": "2024-10-22"
+      },
+      {
+       "domain": "startuptimes.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 466,
+       "firstSeen": "2025-11-23"
+      },
+      {
+       "domain": "tradeclub.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 459,
+       "firstSeen": "2026-12-24"
+      },
+      {
+       "domain": "freelancedesk.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 452,
+       "firstSeen": "2024-01-25"
+      },
+      {
+       "domain": "plainbookstimes.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 445,
+       "firstSeen": "2025-02-26"
+      },
+      {
+       "domain": "shopfrontreview.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 438,
+       "firstSeen": "2026-03-27"
+      },
+      {
+       "domain": "ledgerweekly.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 431,
+       "firstSeen": "2024-04-01"
+      },
+      {
+       "domain": "billingforum.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 424,
+       "firstSeen": "2025-05-02"
+      },
+      {
+       "domain": "plainbookspost.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 417,
+       "firstSeen": "2026-06-03"
+      },
+      {
+       "domain": "tallydigest.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 410,
+       "firstSeen": "2024-07-04"
+      },
+      {
+       "domain": "tradenotes.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 403,
+       "firstSeen": "2025-08-05"
+      },
+      {
+       "domain": "tradelab.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 396,
+       "firstSeen": "2026-09-06"
+      },
+      {
+       "domain": "ownernotes.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 389,
+       "firstSeen": "2024-10-07"
+      },
+      {
+       "domain": "accountsclub.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 382,
+       "firstSeen": "2025-11-08"
+      },
+      {
+       "domain": "solejournal.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 375,
+       "firstSeen": "2026-12-09"
+      },
+      {
+       "domain": "invoicejournal.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 368,
+       "firstSeen": "2024-01-10"
+      },
+      {
+       "domain": "ownerjournal.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 361,
+       "firstSeen": "2025-02-11"
+      },
+      {
+       "domain": "ownertimes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 354,
+       "firstSeen": "2026-03-12"
+      },
+      {
+       "domain": "startupjournal.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 347,
+       "firstSeen": "2024-04-13"
+      },
+      {
+       "domain": "invoicenotes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 340,
+       "firstSeen": "2025-05-14"
+      },
+      {
+       "domain": "tallywire.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 333,
+       "firstSeen": "2026-06-15"
+      },
+      {
+       "domain": "bookkeeperpost.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 326,
+       "firstSeen": "2024-07-16"
+      },
+      {
+       "domain": "plainbooksweekly.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 319,
+       "firstSeen": "2025-08-17"
+      },
+      {
+       "domain": "taxdayhub.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 312,
+       "firstSeen": "2026-09-18"
+      },
+      {
+       "domain": "invoicecorner.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 305,
+       "firstSeen": "2024-10-19"
+      },
+      {
+       "domain": "booksforum.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 298,
+       "firstSeen": "2025-11-20"
+      },
+      {
+       "domain": "tradetimes.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 291,
+       "firstSeen": "2026-12-21"
+      },
+      {
+       "domain": "cashflowforum.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 284,
+       "firstSeen": "2024-01-22"
+      },
+      {
+       "domain": "bookkeeperdesk.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 277,
+       "firstSeen": "2025-02-23"
+      },
+      {
+       "domain": "taxdayjournal.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 270,
+       "firstSeen": "2026-03-24"
+      },
+      {
+       "domain": "freelancejournal.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 263,
+       "firstSeen": "2024-04-25"
+      },
+      {
+       "domain": "plainbooksforum.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 256,
+       "firstSeen": "2025-05-26"
+      },
+      {
+       "domain": "accountsreview.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 249,
+       "firstSeen": "2026-06-27"
+      },
+      {
+       "domain": "payrollclub.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 242,
+       "firstSeen": "2024-07-01"
+      },
+      {
+       "domain": "numbersreview.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 235,
+       "firstSeen": "2025-08-02"
+      },
+      {
+       "domain": "plainbookslab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 228,
+       "firstSeen": "2026-09-03"
+      },
+      {
+       "domain": "tradehub.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 221,
+       "firstSeen": "2024-10-04"
+      },
+      {
+       "domain": "cashflowclub.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 214,
+       "firstSeen": "2025-11-05"
+      },
+      {
+       "domain": "bookkeeperclub.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 207,
+       "firstSeen": "2026-12-06"
+      },
+      {
+       "domain": "startupweekly.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 200,
+       "firstSeen": "2024-01-07"
+      },
+      {
+       "domain": "bookkeeperlab.example",
+       "linksTo": [
+        "ledgerline.com",
+        "countwise.example"
+       ],
+       "rank": 193,
+       "firstSeen": "2025-02-08"
+      },
+      {
+       "domain": "freelancedigest.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 186,
+       "firstSeen": "2026-03-09"
+      },
+      {
+       "domain": "ledgerhub.example",
+       "linksTo": [
+        "countwise.example",
+        "brightbook.example"
+       ],
+       "rank": 179,
+       "firstSeen": "2024-04-10"
+      },
+      {
+       "domain": "smallbizreview.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 172,
+       "firstSeen": "2025-05-11"
+      },
+      {
+       "domain": "booksdesk.example",
+       "linksTo": [
+        "countwise.example",
+        "ledgerline.com"
+       ],
+       "rank": 165,
+       "firstSeen": "2026-06-12"
+      },
+      {
+       "domain": "booksnotes.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 158,
+       "firstSeen": "2024-07-13"
+      },
+      {
+       "domain": "startupclub.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 151,
+       "firstSeen": "2025-08-14"
+      },
+      {
+       "domain": "freelancenotes.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 144,
+       "firstSeen": "2026-09-15"
+      },
+      {
+       "domain": "accountslab.example",
+       "linksTo": [
+        "brightbook.example",
+        "ledgerline.com"
+       ],
+       "rank": 137,
+       "firstSeen": "2024-10-16"
+      },
+      {
+       "domain": "payrolldigest.example",
+       "linksTo": [
+        "ledgerline.com",
+        "brightbook.example"
+       ],
+       "rank": 130,
+       "firstSeen": "2025-11-17"
+      },
+      {
+       "domain": "bookkeeperjournal.example",
+       "linksTo": [
+        "brightbook.example",
+        "countwise.example"
+       ],
+       "rank": 123,
+       "firstSeen": "2026-12-18"
+      }
+     ],
+     "count": {
+      "read": 74,
+      "total": 1937,
+      "capped": true
+     }
+    }
+   },
+   "page_gap": {
+    "read_on": "2026-09-10",
+    "payload": {
+     "targets": [
+      "ledgerline.com",
+      "brightbook.example",
+      "countwise.example"
+     ],
+     "rows": [
+      {
+       "urlFrom": "https://receiptsreview.example/guides/the-best-invoicing-apps-for-freelancers",
+       "title": "The best invoicing apps for freelancers",
+       "domain": "receiptsreview.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 480,
+       "firstSeen": "2026-01-01"
+      },
+      {
+       "urlFrom": "https://invoiceclub.example/blog/bookkeeping-tools-we-tested",
+       "title": "Bookkeeping tools we tested",
+       "domain": "invoiceclub.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 471,
+       "firstSeen": "2026-02-02"
+      },
+      {
+       "urlFrom": "https://softwarecritic.com/accounting",
+       "title": "Accounting software, rated",
+       "domain": "softwarecritic.com",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "here"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "here"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "here"
+        }
+       ],
+       "pageRank": 610,
+       "firstSeen": "2026-03-03"
+      },
+      {
+       "urlFrom": "https://payrollreview.example/reviews/how-to-choose-accounting-software",
+       "title": "How to choose accounting software",
+       "domain": "payrollreview.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 462,
+       "firstSeen": "2026-03-03"
+      },
+      {
+       "urlFrom": "https://numberstimes.example/news/payroll-for-sole-traders-compared",
+       "title": "Payroll for sole traders, compared",
+       "domain": "numberstimes.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 453,
+       "firstSeen": "2026-04-04"
+      },
+      {
+       "urlFrom": "https://shopfrontdigest.example/guides/cash-flow-tools-worth-a-look",
+       "title": "Cash-flow tools worth a look",
+       "domain": "shopfrontdigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 444,
+       "firstSeen": "2026-05-05"
+      },
+      {
+       "urlFrom": "https://solehub.example/blog/our-small-business-software-stack",
+       "title": "Our small business software stack",
+       "domain": "solehub.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        },
+        {
+         "target": "countwise.example",
+         "urlTo": "https://countwise.example/",
+         "anchor": "Countwise"
+        }
+       ],
+       "pageRank": 435,
+       "firstSeen": "2026-06-06"
+      },
+      {
+       "urlFrom": "https://tallyforum.example/reviews/receipt-apps-that-save-hours",
+       "title": "Receipt apps that save hours",
+       "domain": "tallyforum.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 426,
+       "firstSeen": "2026-07-07"
+      },
+      {
+       "urlFrom": "https://cashflowreview.example/news/getting-paid-on-time-a-guide",
+       "title": "Getting paid on time: a guide",
+       "domain": "cashflowreview.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 417,
+       "firstSeen": "2026-08-08"
+      },
+      {
+       "urlFrom": "https://accountsweekly.example/roundup/best-ledgers",
+       "title": "Best ledgers this year",
+       "domain": "accountsweekly.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 400,
+       "firstSeen": "2026-04-04"
+      },
+      {
+       "urlFrom": "https://numbersguide.example/guides/tax-season-checklist-for-owners",
+       "title": "Tax-season checklist for owners",
+       "domain": "numbersguide.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 408,
+       "firstSeen": "2026-01-09"
+      },
+      {
+       "urlFrom": "https://receiptsforum.example/blog/five-tools-for-new-founders",
+       "title": "Five tools for new founders",
+       "domain": "receiptsforum.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 399,
+       "firstSeen": "2026-02-10"
+      },
+      {
+       "urlFrom": "https://tradedigest.example/reviews/the-best-invoicing-apps-for-freelancers-2025",
+       "title": "The best invoicing apps for freelancers (2025)",
+       "domain": "tradedigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 390,
+       "firstSeen": "2026-03-11"
+      },
+      {
+       "urlFrom": "https://accountswire.example/news/bookkeeping-tools-we-tested-2026",
+       "title": "Bookkeeping tools we tested (2026)",
+       "domain": "accountswire.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 381,
+       "firstSeen": "2026-04-12"
+      },
+      {
+       "urlFrom": "https://freelancewire.example/guides/how-to-choose-accounting-software-2024",
+       "title": "How to choose accounting software (2024)",
+       "domain": "freelancewire.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 372,
+       "firstSeen": "2026-05-13"
+      },
+      {
+       "urlFrom": "https://ledgerguide.example/blog/payroll-for-sole-traders-compared-2025",
+       "title": "Payroll for sole traders, compared (2025)",
+       "domain": "ledgerguide.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 363,
+       "firstSeen": "2026-06-14"
+      },
+      {
+       "urlFrom": "https://shopfronthub.example/reviews/cash-flow-tools-worth-a-look-2026",
+       "title": "Cash-flow tools worth a look (2026)",
+       "domain": "shopfronthub.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 354,
+       "firstSeen": "2026-07-15"
+      },
+      {
+       "urlFrom": "https://ownerweekly.example/news/our-small-business-software-stack-2024",
+       "title": "Our small business software stack (2024)",
+       "domain": "ownerweekly.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        },
+        {
+         "target": "brightbook.example",
+         "urlTo": "https://brightbook.example/",
+         "anchor": "Brightbook"
+        }
+       ],
+       "pageRank": 345,
+       "firstSeen": "2026-08-16"
+      },
+      {
+       "urlFrom": "https://tallyguide.example/guides/receipt-apps-that-save-hours-2025",
+       "title": "Receipt apps that save hours (2025)",
+       "domain": "tallyguide.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 336,
+       "firstSeen": "2026-01-17"
+      },
+      {
+       "urlFrom": "https://smallbizpost.example/blog/getting-paid-on-time-a-guide-2026",
+       "title": "Getting paid on time: a guide (2026)",
+       "domain": "smallbizpost.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 327,
+       "firstSeen": "2026-02-18"
+      },
+      {
+       "urlFrom": "https://bookscorner.example/reviews/tax-season-checklist-for-owners-2024",
+       "title": "Tax-season checklist for owners (2024)",
+       "domain": "bookscorner.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 318,
+       "firstSeen": "2026-03-19"
+      },
+      {
+       "urlFrom": "https://plainbooksreview.example/news/five-tools-for-new-founders-2025",
+       "title": "Five tools for new founders (2025)",
+       "domain": "plainbooksreview.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 309,
+       "firstSeen": "2026-04-20"
+      },
+      {
+       "urlFrom": "https://tallydesk.example/guides/the-best-invoicing-apps-for-freelancers-2026",
+       "title": "The best invoicing apps for freelancers (2026)",
+       "domain": "tallydesk.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 300,
+       "firstSeen": "2026-05-21"
+      },
+      {
+       "urlFrom": "https://startupdigest.example/blog/bookkeeping-tools-we-tested-2024",
+       "title": "Bookkeeping tools we tested (2024)",
+       "domain": "startupdigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 291,
+       "firstSeen": "2026-06-22"
+      },
+      {
+       "urlFrom": "https://billingdigest.example/reviews/how-to-choose-accounting-software-2025",
+       "title": "How to choose accounting software (2025)",
+       "domain": "billingdigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 282,
+       "firstSeen": "2026-07-23"
+      },
+      {
+       "urlFrom": "https://ledgerdigest.example/news/payroll-for-sole-traders-compared-2026",
+       "title": "Payroll for sole traders, compared (2026)",
+       "domain": "ledgerdigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 273,
+       "firstSeen": "2026-08-24"
+      },
+      {
+       "urlFrom": "https://cashflowdigest.example/guides/cash-flow-tools-worth-a-look-2024",
+       "title": "Cash-flow tools worth a look (2024)",
+       "domain": "cashflowdigest.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 264,
+       "firstSeen": "2026-01-25"
+      },
+      {
+       "urlFrom": "https://tallyweekly.example/blog/our-small-business-software-stack-2025",
+       "title": "Our small business software stack (2025)",
+       "domain": "tallyweekly.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 255,
+       "firstSeen": "2026-02-26"
+      },
+      {
+       "urlFrom": "https://bookkeepertimes.example/reviews/receipt-apps-that-save-hours-2026",
+       "title": "Receipt apps that save hours (2026)",
+       "domain": "bookkeepertimes.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 246,
+       "firstSeen": "2026-03-27"
+      },
+      {
+       "urlFrom": "https://billingtimes.example/news/getting-paid-on-time-a-guide-2024",
+       "title": "Getting paid on time: a guide (2024)",
+       "domain": "billingtimes.example",
+       "links": [
+        {
+         "target": "ledgerline.com",
+         "urlTo": "https://ledgerline.com/",
+         "anchor": "Ledgerline"
+        }
+       ],
+       "pageRank": 237,
+       "firstSeen": "2026-04-01"
+      }
+     ],
+     "count": {
+      "read": 30,
+      "total": 412,
+      "capped": true
+     }
+    }
+   }
+  }
  },
  "fewcompetitors": {
   "base": "full",

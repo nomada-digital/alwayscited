@@ -342,6 +342,8 @@ function WhatIt({ w, dark }: { w: WhatItIs | null; dark: boolean }) {
         {SECTION_ERROR}
       </p>
     );
+  // 13 Oct 2026, DIY P10's review (outside P10's 7.11 edit list): a Links gap domain is a whole site, never read as a page.
+  if (w.kind === "site") return <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>{w.text}</p>;
   if (w.kind === "unread" || dark) return <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>{dark ? "Not read yet." : "Not read yet. It is read overnight."}</p>;
   if (w.kind === "unreadable")
     return (

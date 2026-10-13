@@ -67,8 +67,13 @@ export function planKindFor(route: Route): "get_onto_page" | "claim_profile" | "
   }
 }
 
-/** The routes whose detail page carries a pitch outline (section 4.7). */
-export const PITCH_ROUTES: readonly Route[] = ["ask_added", "send_correction", "offer_resource", "ask_for_link"];
+/**
+ * The routes whose detail page carries a pitch outline (section 4.7), and
+ * Earn a link (13 Oct 2026, DIY P10's review, outside P10's 7.11 edit list:
+ * section 2.4 gives every route a pitch outline with blanks, and a gap domain
+ * pursued from Links had none).
+ */
+export const PITCH_ROUTES: readonly Route[] = ["ask_added", "send_correction", "offer_resource", "ask_for_link", "earn_link"];
 
 /** The routes U3 may show on (section 2.7). */
 export const U3_ROUTES: readonly Route[] = ["ask_added", "send_correction", "offer_resource"];

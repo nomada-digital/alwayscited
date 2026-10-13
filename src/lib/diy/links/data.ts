@@ -5,19 +5,18 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { urlKey } from "../../tracking/placements.ts";
-import { allowanceMonth } from "../core/allowances.ts";
 import type { DiyClient } from "../core/client.ts";
 import { type DiyFixtureState, FIXTURE_DIR, diyFixtureState, diyFixtureStore, diyFixtureWrites } from "../core/fixture.ts";
 import { MAX_ATTEMPTS } from "../core/jobs.ts";
-import { countUsage } from "../core/usage-meter.ts";
-import { countLoggedSince } from "../opportunities/data.ts";
+import { type LedgerCountRow, countLedger, countUsage } from "../core/usage-meter.ts";
+import { loggedSince } from "../opportunities/data.ts";
 import { opportunityOf } from "../opportunities/status.ts";
 import { OPP_COLUMNS, type Opportunity } from "../opportunities/types.ts";
 
 import { type Access, accessFrom } from "./access.ts";
 import { type Placed, bareHost } from "./nomada-placements.ts";
-import { type Basis, type Bulk, type ComparisonSet, type DomainGap, LINK_LENSES, type LinkCheck, type LinkKind, type Mentions, type NewLost, type PageGap, type Series, type Stored, type BacklinksSummary } from "./types.ts";
-import type { LinksWorld } from "./view.ts";
+import { type Basis, type Bulk, type ComparisonSet, type DomainGap, LINK_LENSES, type LinkCheck, type LinkKind, type ListCount, type Mentions, type NewLost, type PageGap, type Series, type Stored, type BacklinksSummary } from "./types.ts";
+import type { LinksWorld, WorldPart } from "./view.ts";
 
 /**
  * Where Links reads from (13 Oct 2026, DIY P10; spec 10 sections 4.8 and
@@ -48,6 +47,19 @@ const strs = (v: unknown, max: number, n: number) => arr(v).filter((x): x is str
 
 // ---- reading a payload back: named fields only ----
 
+/**
+ * A stored list's count back (types.ts ListCount). A payload without one -
+ * none is stored before 13 Oct 2026's review of DIY P10 - is read as a
+ * floor when it holds a full read's 100 rows, so no count is ever drawn as
+ * exact without the read saying it was.
+ */
+function countOf(v: unknown, rows: number): ListCount {
+  const o = obj(v);
+  const read = num(o.read);
+  if (read === null) return { read: rows, total: null, capped: rows >= 100 };
+  return { read, total: num(o.total), capped: o.capped === true };
+}
+
 const linkRow = (r: unknown) => {
   const o = obj(r);
   const domain = str(o.domain, 253);
@@ -58,7 +70,7 @@ export const PAYLOAD: { [K in LinkKind]: (v: unknown) => unknown } = {
   summary: (v): BacklinksSummary => {
     const o = obj(v);
     const f = obj(o.follow);
-    const follow = num(f.followed) !== null ? { followed: num(f.followed)!, notFollowed: num(f.notFollowed) ?? 0, other: num(f.other) ?? 0 } : null;
+    const follow = num(f.followed) !== null ? { followed: num(f.followed)!, notFollowed: num(f.notFollowed) ?? 0 } : null;
     return { rank: num(o.rank), backlinks: num(o.backlinks), referringDomains: num(o.referringDomains), referringMainDomains: num(o.referringMainDomains), firstSeen: day(o.firstSeen), follow };
   },
   new_lost: (v): NewLost => {
@@ -86,37 +98,32 @@ export const PAYLOAD: { [K in LinkKind]: (v: unknown) => unknown } = {
   },
   domain_gap: (v): DomainGap => {
     const o = obj(v);
-    return {
-      targets: strs(o.targets, 253, 3),
-      via: o.via === "pairwise" ? "pairwise" : "filter",
-      rows: arr(o.rows)
-        .map((r) => obj(r))
-        .filter((r) => str(r.domain, 253))
-        .map((r) => ({ domain: str(r.domain, 253)!, linksTo: strs(r.linksTo, 253, 3), rank: num(r.rank), firstSeen: day(r.firstSeen), platform: str(r.platform, 40) }))
-        .slice(0, 300),
-    };
+    const rows = arr(o.rows)
+      .map((r) => obj(r))
+      .filter((r) => str(r.domain, 253))
+      .map((r) => ({ domain: str(r.domain, 253)!, linksTo: strs(r.linksTo, 253, 3), rank: num(r.rank), firstSeen: day(r.firstSeen) }))
+      .slice(0, 300);
+    return { targets: strs(o.targets, 253, 3), via: o.via === "pairwise" ? "pairwise" : "filter", rows, count: countOf(o.count, rows.length) };
   },
   page_gap: (v): PageGap => {
     const o = obj(v);
-    return {
-      targets: strs(o.targets, 253, 3),
-      rows: arr(o.rows)
-        .map((r) => obj(r))
-        .filter((r) => str(r.urlFrom, 500) && str(r.domain, 253))
-        .map((r) => ({
-          urlFrom: str(r.urlFrom, 500)!,
-          title: str(r.title, 300),
-          domain: str(r.domain, 253)!,
-          links: arr(r.links)
-            .map((l) => obj(l))
-            .filter((l) => str(l.target, 253))
-            .map((l) => ({ target: str(l.target, 253)!, urlTo: str(l.urlTo, 500), anchor: str(l.anchor, 200) }))
-            .slice(0, 3),
-          pageRank: num(r.pageRank),
-          firstSeen: day(r.firstSeen),
-        }))
-        .slice(0, 100),
-    };
+    const rows = arr(o.rows)
+      .map((r) => obj(r))
+      .filter((r) => str(r.urlFrom, 500) && str(r.domain, 253))
+      .map((r) => ({
+        urlFrom: str(r.urlFrom, 500)!,
+        title: str(r.title, 300),
+        domain: str(r.domain, 253)!,
+        links: arr(r.links)
+          .map((l) => obj(l))
+          .filter((l) => str(l.target, 253))
+          .map((l) => ({ target: str(l.target, 253)!, urlTo: str(l.urlTo, 500), anchor: str(l.anchor, 200) }))
+          .slice(0, 3),
+        pageRank: num(r.pageRank),
+        firstSeen: day(r.firstSeen),
+      }))
+      .slice(0, 100);
+    return { targets: strs(o.targets, 253, 3), rows, count: countOf(o.count, rows.length) };
   },
   mentions: (v): Mentions => {
     const o = obj(v);
@@ -208,9 +215,15 @@ export async function readChecks(db: SupabaseClient, clientId: string, n = 5): P
   return ((data ?? []) as Row[]).map(checkOf).filter((c): c is LinkCheck => c !== null);
 }
 
-/** The client's opportunities rows in the link lenses (P7's table), with P7's row reader. */
+/**
+ * The client's opportunities rows in the link lenses (P7's table), with P7's
+ * row reader: the newest 500 (13 Oct 2026, review of DIY P10: the oldest 500
+ * were read, so a long history would have dropped this month's reveals). The
+ * month's reveal count is not taken from these rows but from the table
+ * (revealsUsed), so it never depends on how many are read here.
+ */
 export async function readLinkRows(db: SupabaseClient, clientId: string): Promise<Opportunity[]> {
-  const { data, error } = await db.from("opportunities").select(OPP_COLUMNS).eq("client_domain_id", clientId).in("lens", [...LINK_LENSES]).order("created_at", { ascending: true }).limit(500);
+  const { data, error } = await db.from("opportunities").select(OPP_COLUMNS).eq("client_domain_id", clientId).in("lens", [...LINK_LENSES]).order("created_at", { ascending: false }).limit(500);
   if (error) throw new Error(`could not read the link opportunities: ${error.message}`);
   return ((data ?? []) as Row[]).map(opportunityOf).filter((o): o is Opportunity => o !== null);
 }
@@ -236,20 +249,14 @@ export async function readLinkJobs(db: SupabaseClient, clientId: string): Promis
 }
 
 /**
- * "Check a link" uses this month (spec 10 section 2.5: 30, 10 in the trial):
- * the paid link checks and verifications the ledger holds (usage-meter.ts),
- * the free checks our own fetch answered (link_checks rows read `own`, which
- * write no ledger row), and the pages logged on Opportunities, which use one
- * each (spec 10 section 4.7 row 6). Throws when a count cannot be read: it is
- * never read as room.
+ * "Check a link" uses this month: usage-meter.ts `countUsage("link_checks")`,
+ * the one count Settings, runOnDemand and Opportunities' Log a site read too
+ * (13 Oct 2026, review of DIY P10: Links had counted its own free checks as
+ * well, so Links could say 30 of 30 while Settings said 2). Throws when it
+ * cannot be counted: it is never read as room.
  */
 export async function linkChecksUsed(db: SupabaseClient, client: Pick<DiyClient, "id" | "market">, now: number): Promise<number> {
-  const since = allowanceMonth(client.market, now).start;
-  const { count: own, error } = await db.from("link_checks").select("id", { count: "exact", head: true }).eq("client_domain_id", client.id).eq("via", "own").gte("checked_at", since);
-  if (error) throw new Error(`could not count the link checks: ${error.message}`);
-  if (typeof own !== "number") throw new Error("could not count the link checks: no count came back");
-  const [ledger, logged] = await Promise.all([countUsage(db, client, "link_checks", now), countLoggedSince(db, client.id, since)]);
-  return own + ledger + logged;
+  return countUsage(db, client, "link_checks", now);
 }
 
 /** Link targets revealed this month (allowances.ts `link_targets`), from the table. */
@@ -283,7 +290,6 @@ export type LinksFixture = {
   jobs: { weekly: JobFact | null; monthly: JobFact | null };
   /** What a fixture "Check a link" reads instead of the network: the result for an address containing "nolink", and for any other. */
   canned: { found: Row; none: Row };
-  checksUsed: number;
 };
 
 /** The state's entry of links.json, its `base` (or `full`) under it, key by key. */
@@ -334,9 +340,15 @@ export function fixtureAccess(fx: LinksFixture): Access {
   return fx.access ?? { state: "not_read", at: null, code: null };
 }
 
-/** The fixture's link checks used this month: the recorded count, plus the checks made since the fixture was served. */
-export function linksChecksUsedFixture(fx: LinksFixture, held: Pick<LinksHeld, "checks">): number {
-  return fx.checksUsed + Math.max(0, held.checks.length - fx.checks.length);
+/**
+ * The fixture's link checks this month, counted as the fixture branch of
+ * Opportunities' Log a site counts them: the core fixture's ledger rows (link
+ * checks and verifications, usage-meter.ts countLedger) and the sites logged
+ * in P7's fixture world. A check our own fetch answered counts nothing, as on
+ * Supabase (13 Oct 2026, review of DIY P10).
+ */
+export function linksChecksUsedFixture(ledger: readonly LedgerCountRow[], oppRows: readonly Opportunity[], since: string): number {
+  return countLedger(ledger, "link_checks") + loggedSince(oppRows, since);
 }
 
 /**
@@ -345,7 +357,7 @@ export function linksChecksUsedFixture(fx: LinksFixture, held: Pick<LinksHeld, "
  * `oppRows` - the link rows P7's fixture world holds, where this page's
  * Pursue writes them (world.ts reads them; a test passes its own).
  */
-export function fixtureLinksWorld(fx: LinksFixture, held: Pick<LinksHeld, "revealed" | "checks">, p: { clientId: string; today: Day; enabled: boolean; oppRows?: readonly Opportunity[] }): LinksWorld {
+export function fixtureLinksWorld(fx: LinksFixture, held: Pick<LinksHeld, "revealed" | "checks">, p: { clientId: string; today: Day; enabled: boolean; oppRows?: readonly Opportunity[]; monthStart?: string; unread?: ReadonlySet<WorldPart> }): LinksWorld {
   const KINDS: LinkKind[] = ["summary", "new_lost", "timeseries", "bulk", "domain_gap", "page_gap", "mentions"];
   const reads = Object.fromEntries(KINDS.map((k) => [k, storedOf(k, fx.reads[k] ?? null)])) as Record<LinkKind, never>;
   const seeded = fx.wins.map((r) => opportunityOf({ ...r, client_domain_id: p.clientId })).filter((o): o is Opportunity => o !== null);
@@ -366,7 +378,10 @@ export function fixtureLinksWorld(fx: LinksFixture, held: Pick<LinksHeld, "revea
     set: setOf(fx.set),
     placed: fixturePlaced(fx),
     linkRows,
+    // As the table counts them: every reveal this month, before any subtraction.
+    revealsThisMonth: held.revealed.filter((r) => Date.parse(r.revealedAt) >= Date.parse(p.monthStart ?? `${p.today.slice(0, 7)}-01T00:00:00.000Z`)).length,
     checks: held.checks.map(checkOf).filter((c): c is LinkCheck => c !== null).sort((a, b) => b.checkedAt.localeCompare(a.checkedAt)).slice(0, 5),
+    unread: p.unread ?? new Set(),
     firstRead: firstReadOn(fx.jobs.weekly, p.today),
     jobFailed: [fx.jobs.weekly, fx.jobs.monthly].some((j) => j?.outcome === "failed"),
     ...(p.oppRows ? { opened: new Set(p.oppRows.map((o) => o.id)) } : {}),

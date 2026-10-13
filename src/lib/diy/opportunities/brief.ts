@@ -75,6 +75,22 @@ export function pitchOutline(p: { route: Opportunity["route"]; facts: PageFacts 
         `It says ${blank("what it says now")} about ${brand}. The current fact is ${blank("the fact")}, dated on our site here: ${proof}.`,
         sign,
       ].join("\n");
+    // 13 Oct 2026, DIY P10's review (outside P10's 7.11 edit list): Links' two routes, each its own outline. A mention
+    // fell to the best-of-list default ("You rank tools on ..."), the wrong pitch for thanking someone for a mention.
+    case "ask_for_link":
+      return [
+        `Subject: Thanks for mentioning ${brand}`,
+        `Hi ${blank("first name")}, thanks for naming ${brand} in ${title}.`,
+        `Would a link to ${proof} help your readers who ${blank("what they would do there")}?`,
+        sign,
+      ].join("\n");
+    case "earn_link":
+      return [
+        `Subject: ${blank("what you made")} for readers of ${title}`,
+        `Hi ${blank("first name")}, I read ${title} (${updated}). It points readers to ${blank("the page it links to now, and what it offers")}.`,
+        `${brand} has made ${blank("what you made")}, here: ${proof}. ${blank("The one reason it helps their readers")}.`,
+        sign,
+      ].join("\n");
     case "offer_resource":
       return [
         `Subject: A resource for ${title}`,
@@ -94,10 +110,14 @@ export function pitchOutline(p: { route: Opportunity["route"]; facts: PageFacts 
   }
 }
 
-/** "What it is" (section 4.7): what we read on the page, or why there is nothing yet. */
-export type WhatItIs = { kind: "read"; pageType: string; criteria: string[]; updated: Day | null; readOn: Day; via: PageFacts["via"] } | { kind: "unread" } | { kind: "unreadable"; text: string };
+/** "What it is" (section 4.7): what we read on the page, or why there is nothing yet; a whole site (a Links gap domain) says it is one. */
+export type WhatItIs = { kind: "read"; pageType: string; criteria: string[]; updated: Day | null; readOn: Day; via: PageFacts["via"] } | { kind: "unread" } | { kind: "unreadable"; text: string } | { kind: "site"; text: string };
 
-export function whatItIs(opp: Pick<Opportunity, "pageType">, facts: PageFacts | null): WhatItIs {
+/** A gap domain's "What it is" (13 Oct 2026, DIY P10's review): no page is read for a whole site, so "It is read overnight" was never true of one. */
+export const SITE_LINE = "A whole site, not one page, so no one page of it is read. Open it and find the pages that link to the sites you compete with.";
+
+export function whatItIs(opp: Pick<Opportunity, "pageType"> & { lens?: Opportunity["lens"] }, facts: PageFacts | null): WhatItIs {
+  if (opp.lens === "link_domain") return { kind: "site", text: SITE_LINE };
   const type = opp.pageType ? PAGE_TYPE_LABEL[opp.pageType as PageType] : NOT_CLASSIFIED;
   if (!facts) return { kind: "unread" };
   if (facts.status !== "ok") return { kind: "unreadable", text: unreadableLine(facts) };

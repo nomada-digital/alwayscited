@@ -2,10 +2,14 @@
 -- only, under the 19 Sep 2026 authorisation: three new tables, one index on
 -- them beside their keys' own, row level security on with no policies. No
 -- existing table, column, row, constraint or policy is touched. Harmless
--- landing before or after the deploy: the Links page reads every section on
--- its own and says a section could not be read rather than reading it as
--- empty, and the Backlinks jobs are paid kinds, queued only while
--- diy_enabled is on.
+-- landing before or after the deploy: the Links page reads each of its
+-- tables on its own (src/lib/diy/links/world.ts), and a section whose table
+-- is not there yet says it could not be read rather than reading it as
+-- empty, while Check a link's form and the pursued wins (which read
+-- opportunities, not these tables) still draw; a check made before this
+-- lands is refused as not saved. The Backlinks jobs are paid kinds, queued
+-- only while diy_enabled is on. (13 Oct 2026, review of DIY P10: this
+-- comment described per-section reads the page did not yet make.)
 --
 -- backlink_reads: one row per client, kind and night - the profile summary,
 -- the week's new and lost referring domains, the 13-week series, the bulk

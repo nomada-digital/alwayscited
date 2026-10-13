@@ -1,8 +1,9 @@
 import { allowanceFor } from "../core/allowances.ts";
 import { urlKey } from "../../tracking/placements.ts";
 
-import { type Placed, bareHost, isPlacedUrl, onPlacedDomain } from "./nomada-placements.ts";
-import type { GapPage } from "./types.ts";
+import { roughly } from "./gap.ts";
+import { type Placed, bareHost, excludePlacedDomains } from "./nomada-placements.ts";
+import type { GapPage, Hedge, ListCount } from "./types.ts";
 
 /**
  * Link targets by page, and the reveal (13 Oct 2026, DIY P10; spec 10
@@ -42,21 +43,43 @@ export const pageKeyOf = (p: Pick<GapPage, "urlFrom">): string => urlKey(p.urlFr
 
 /** The target rows: followed in-article links to the compared sites, nothing on the client's, a compared site's or a placed domain; sorted. */
 export function targetRows(rows: readonly GapPage[], p: { client: string; targets: readonly string[]; placed: Placed }): GapPage[] {
+  return targetRead(rows, p).rows;
+}
+
+/** The target rows as read, and `seen`: how many pages met the rule before the client's, the compared sites' and the placed ones were taken out (ListCount.read). */
+export function targetRead(rows: readonly GapPage[], p: { client: string; targets: readonly string[]; placed: Placed }): { rows: GapPage[]; seen: number } {
   const client = bareHost(p.client);
   const targets = new Set(p.targets.map(bareHost));
-  const seen = new Set<string>();
-  return rows
+  const keys = new Set<string>();
+  const met = rows
     .map((r) => ({ ...r, domain: bareHost(r.domain), links: r.links.filter((l) => targets.has(bareHost(l.target))) }))
     .filter((r) => r.links.length > 0)
-    .filter((r) => r.domain !== client && !r.domain.endsWith(`.${client}`) && !targets.has(r.domain))
-    .filter((r) => !onPlacedDomain(r.domain, p.placed) && !isPlacedUrl(r.urlFrom, p.placed))
     .filter((r) => {
       const k = pageKeyOf(r);
-      if (seen.has(k)) return false;
-      seen.add(k);
+      if (keys.has(k)) return false;
+      keys.add(k);
       return true;
-    })
-    .sort(byTarget);
+    });
+  const own = met.filter((r) => r.domain !== client && !r.domain.endsWith(`.${client}`) && !targets.has(r.domain));
+  return { rows: excludePlacedDomains(own, p.placed, (r) => ({ domain: r.domain, url: r.urlFrom })).sort(byTarget), seen: met.length };
+}
+
+/**
+ * The "N more pages" count (13 Oct 2026, review of DIY P10: it was counted
+ * from the 100 rows read and shown as exact). Every row read: the unrevealed
+ * pages left, exactly. Rows left unread: DataForSEO's total less the rows the
+ * read showed were taken out and the pages already revealed, never below the
+ * unrevealed pages read - worded "about" (DataForSEO's estimate; a placed
+ * page among the unread rows cannot be seen), or "at least" with no total.
+ * `unrevealedRead` is the strict count, of pages actually read: what a reveal
+ * can show and what U5 counts. Pure.
+ */
+export function targetCount(p: { kept: number; unrevealedRead: number; count: ListCount }): { more: number; hedge: Hedge } {
+  if (!p.count.capped) return { more: p.unrevealedRead, hedge: "exact" };
+  if (p.count.total === null) return { more: p.unrevealedRead, hedge: "at_least" };
+  const dropped = Math.max(0, p.count.read - p.kept);
+  const revealed = p.kept - p.unrevealedRead;
+  return { more: Math.max(p.unrevealedRead, roughly(p.count.total - dropped - revealed, "about")), hedge: "about" };
 }
 
 export type RevealPlan = { ok: true; pages: GapPage[] } | { ok: false; why: "cap" | "none" | "stale" };

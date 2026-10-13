@@ -202,9 +202,14 @@ export function readBacklinksCompetitors(ctx: ReadCtx): Promise<ReadResult<Backl
   return diyRead(ctx, "backlinks", backlinksCompetitorsRequest(ctx.client.domain), readDiyBacklinksCompetitors);
 }
 
-/** Pages that mention the client's brand, one per domain (mention candidates). */
-export function readContentSearch(ctx: ReadCtx): Promise<ReadResult<{ total: number | null; rows: MentionCandidate[] }>> {
-  return diyRead(ctx, "content", contentSearchRequest({ brand: ctx.client.brand }), readDiyContentSearch);
+/**
+ * Pages that mention the client, one per domain (mention candidates), for the
+ * phrase the links job worked out before its first paid read
+ * (dataforseo-request.ts brandPhrase), so a brand the search cannot take is
+ * known before anything is bought.
+ */
+export function readContentSearch(ctx: ReadCtx, phrase: string): Promise<ReadResult<{ total: number | null; rows: MentionCandidate[] }>> {
+  return diyRead(ctx, "content", contentSearchRequest({ phrase }), readDiyContentSearch);
 }
 
 export type FreeAnswer =
