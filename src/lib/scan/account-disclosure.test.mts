@@ -152,6 +152,10 @@ const RECORDED: Record<string, string> = {
   // to us or the agency contact, never back to the requester's page.
   "src/app/api/app/[client]/ask/route.ts :: account_id, brand_aliases":
     "the ask route's recipient lookup; the redirect carries only sent|refused and us|agency.",
+  // 13 Oct 2026, DIY P7 (spec 10 section 4.7): the opportunity ask's own recipient lookup, on the member's own
+  // client, already membership-checked; the 303 carries only Opportunities' done and why codes.
+  "src/app/api/app/[client]/ask/route.ts :: account_id":
+    "the opportunity ask's recipient lookup; the redirect carries only the asked or refused code, never the id.",
   // 29 Sep 2026, T2. Both render only on /admin/tracking, behind the /admin
   // Basic auth; the requester is Nomada, and the id is used only to group
   // members and post it back as a hidden field to the admin's own action.

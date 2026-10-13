@@ -39,7 +39,12 @@ const ROUTES = join(ROOT, "src", "app", "api", "app", "[client]");
  * 13 Oct 2026, DIY P6: `keywords` joins - gaining ground's Dismiss and Restore (spec 10 section 3.6), owner and
  * editor only, refused through refuseRole(writeRole(client)) on the fixture and in Supabase alike.
  */
-const TRACKED_WRITES = ["check", "cluster", "edit", "group", "keyword", "keywords", "note", "plan", "prompt", "setup", "stop"];
+const TRACKED_WRITES = [
+  "check", "cluster", "edit", "group", "keyword", "keywords", "note", "plan", "prompt", "setup", "stop",
+  // 13 Oct 2026, DIY P7 (spec 10 section 3.6): Opportunities' statuses, with the Plan items and prompts a pursuit
+  // writes, and the prompt step's add, undo and swap. Both judge writeRole(client), so an ended client is read-only.
+  "opportunity", "prompt-offer",
+];
 
 /** Routes that read the member's own role, and why that is not writeRole's question. */
 const ACCOUNT_ROLE: Record<string, string> = {

@@ -296,6 +296,10 @@ test("the upsert sites are the ones we think they are", () => {
       // Session (checkout/signup.ts writeOrder), on the unique column in
       // 20260930020000_orders.sql, so a replayed event writes nothing.
       "orders:stripe_session_id",
+      // 13 Oct 2026, DIY P7 (spec 10 section 6.2): a page's latest read replaces the one before
+      // (opportunities/record.ts writePageRead), on page_reads' unique (client_domain_id, url_key)
+      // in 20261014070000_opportunities.sql.
+      "page_reads:client_domain_id,url_key",
         "scan_answers:engine,question_id",
       "scan_brands:brand,engine,scan_id",
       "scan_sources:domain,scan_id",

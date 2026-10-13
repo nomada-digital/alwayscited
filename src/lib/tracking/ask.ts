@@ -106,6 +106,38 @@ export function aliasAskMail(p: { brand: string; domain: string; member: string;
   };
 }
 
+/**
+ * "Suggest this to your account lead" (13 Oct 2026, DIY P7; spec 10 sections
+ * 2.2, 3.6 and 4.7): an ask about pages on Opportunities - one from its
+ * detail page on a placed tier ("Ask your agency about this page" in agency
+ * mode), or the pages U3 and U8 were shown for. The action carries
+ * `kind=opportunity` and the ids, and nothing else: the server reads each
+ * page's URL, title and our counts from this client's own rows, and no text
+ * a form sent reaches the mail. Nomada sees the URL; the client never sees
+ * Nomada's targets. The recipient and the daily cap are the asks' own.
+ */
+export const readAskKind = (raw: unknown): "opportunity" | null => (raw === "opportunity" ? "opportunity" : null);
+
+/** The most pages one opportunity ask names: the pursuit cap. */
+export const ASK_PAGES_MAX = 10;
+
+/** One page as the opportunity ask's mail lists it: read from the row, never from the form. */
+export type AskPage = { url: string; title: string | null; route: string; answers: number; prompts: number; to: string | null; competitors: string[] };
+
+export function opportunityAskMail(p: { brand: string; domain: string; member: string; pages: AskPage[]; mode: UpsellMode }): { subject: string; text: string } {
+  const where = p.mode === "agency" ? "their dashboard" : "their alwaystracked dashboard";
+  const one = p.pages.length === 1;
+  const line = (g: AskPage) => {
+    const cited = g.answers ? `cited in ${g.answers} answer${g.answers === 1 ? "" : "s"} to ${g.prompts} of their prompts${g.to ? ` in the 28 days to ${g.to}` : ""}` : "not cited in their answers yet";
+    const names = g.competitors.length ? `; the answers citing it name ${g.competitors.join(", ")}` : "";
+    return [`- ${g.url}`, ...(g.title ? [`  ${g.title}`] : []), `  ${g.route}: ${cited}${names}.`];
+  };
+  return {
+    subject: one ? `${p.brand} suggested a page` : `${p.brand} suggested ${p.pages.length} pages`,
+    text: [`${p.member} (${p.brand}, ${p.domain}) suggested ${one ? "this page" : "these pages"} from ${where}, on Opportunities.`, "", ...p.pages.flatMap(line), "", "Reply to this email to answer them."].join("\n"),
+  };
+}
+
 /** The most ids one ask carries: every prompt a client could track, with packs. */
 export const ASK_ITEMS_MAX = 100;
 

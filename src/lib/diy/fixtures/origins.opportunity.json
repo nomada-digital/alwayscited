@@ -1,0 +1,11 @@
+{
+ "capped": [
+  {
+   "id": "q1-5",
+   "source": "client",
+   "origin_kind": "opportunity",
+   "origin_ref": "opp-solo",
+   "allowance": null
+  }
+ ]
+}

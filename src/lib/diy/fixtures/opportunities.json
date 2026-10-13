@@ -1,0 +1,1972 @@
+{
+ "full": {
+  "tracking": true,
+  "world": [
+   {
+    "url": "https://smallbizdesk.example/best-invoicing-apps-for-freelancers",
+    "prompts": [
+     "q3-1",
+     "q3-2"
+    ],
+    "days": 9,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Brightbook",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://bookkeeperweekly.example/top-10-bookkeeping-tools",
+    "prompts": [
+     "q4-1",
+     "q4-3"
+    ],
+    "days": 7,
+    "engines": [
+     "chatgpt",
+     "gemini",
+     "perplexity"
+    ],
+    "brands": [
+     "Countwise",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://brightbook.example/brightbook-vs-ledgerline",
+    "prompts": [
+     "q2-2"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Brightbook",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://shopify.example/blog/accounting-apps-for-online-stores",
+    "prompts": [
+     "q2-4"
+    ],
+    "days": 4,
+    "engines": [
+     "chatgpt",
+     "google_aio"
+    ],
+    "brands": [
+     "Shopify",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://reddit.com/r/smallbusiness/comments/abc123/best_invoicing_app_for_a_oneperson_business",
+    "prompts": [
+     "q3-3"
+    ],
+    "days": 5,
+    "engines": [
+     "perplexity",
+     "chatgpt"
+    ],
+    "brands": [
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://quora.com/What-is-the-best-bookkeeping-software-for-sole-traders",
+    "prompts": [
+     "q4-2"
+    ],
+    "days": 4,
+    "engines": [
+     "chatgpt"
+    ],
+    "brands": [
+     "Countwise"
+    ]
+   },
+   {
+    "url": "https://community.freelancehub.example/t/which-accounting-app-do-you-use/482",
+    "prompts": [
+     "q1-3"
+    ],
+    "days": 3,
+    "engines": [
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://g2.com/categories/accounting",
+    "prompts": [
+     "q2-1",
+     "q2-3"
+    ],
+    "days": 10,
+    "engines": [
+     "chatgpt",
+     "gemini"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook",
+     "Countwise"
+    ]
+   },
+   {
+    "url": "https://capterra.com/accounting-software",
+    "prompts": [
+     "q8-1"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Sumly"
+    ]
+   },
+   {
+    "url": "https://trustpilot.com/categories/accounting_software",
+    "prompts": [
+     "q10-2"
+    ],
+    "days": 3,
+    "engines": [
+     "gemini"
+    ],
+    "brands": [
+     "Sumly"
+    ]
+   },
+   {
+    "url": "https://payrollpulse.example/best-payroll-and-accounting-software",
+    "prompts": [
+     "q10-1",
+     "q10-3"
+    ],
+    "days": 8,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Sumly",
+     "Countwise"
+    ]
+   },
+   {
+    "url": "https://nonprofittechreview.example/accounting-software-for-nonprofits",
+    "prompts": [
+     "q9-1"
+    ],
+    "days": 7,
+    "engines": [
+     "chatgpt",
+     "gemini"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://contractorledger.example/guides/how-to-choose-accounting-software",
+    "prompts": [
+     "q6-2"
+    ],
+    "days": 5,
+    "engines": [
+     "perplexity"
+    ],
+    "brands": [
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://cloudfinanceblog.example/blog/cloud-accounting-compared",
+    "prompts": [
+     "q8-3"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt",
+     "google_aio"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Sumly"
+    ]
+   },
+   {
+    "url": "https://expensewise.example/best-expense-tracking-apps",
+    "prompts": [
+     "q5-1",
+     "q5-2"
+    ],
+    "days": 9,
+    "engines": [
+     "chatgpt",
+     "perplexity",
+     "gemini"
+    ],
+    "brands": [
+     "Countwise",
+     "Sumly"
+    ]
+   },
+   {
+    "url": "https://receiptreport.example/top-expense-apps",
+    "prompts": [
+     "q5-3"
+    ],
+    "days": 5,
+    "engines": [
+     "chatgpt"
+    ],
+    "brands": [
+     "Sumly"
+    ]
+   },
+   {
+    "url": "https://softwarecompare.example/ledgerline-alternatives",
+    "prompts": [
+     "q7-1",
+     "q7-2"
+    ],
+    "days": 10,
+    "engines": [
+     "chatgpt",
+     "perplexity",
+     "gemini"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://softwarecompare.example/tallyroo-vs-ledgerline",
+    "prompts": [
+     "q7-3"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://freelancerstoolkit.example/best-accounting-apps",
+    "prompts": [
+     "q1-2"
+    ],
+    "days": 8,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Brightbook",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://smbtechdigest.example/accounting-software-roundup",
+    "prompts": [
+     "q2-5"
+    ],
+    "days": 4,
+    "engines": [
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://bookkeepingbasics.example/news/bookkeeping-trends",
+    "prompts": [
+     "q4-4"
+    ],
+    "days": 2,
+    "engines": [
+     "gemini"
+    ],
+    "brands": [
+     "Countwise"
+    ]
+   },
+   {
+    "url": "https://smallbizdesk.example/top-accounting-tools",
+    "prompts": [
+     "q2-1"
+    ],
+    "days": 7,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://partnerpicks.example/best-cloud-accounting-tools",
+    "prompts": [
+     "q8-2"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://wikipedia.org/wiki/Accounting_software",
+    "prompts": [
+     "q8-1"
+    ],
+    "days": 8,
+    "engines": [
+     "chatgpt",
+     "gemini"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://irs.gov/businesses/small-businesses-self-employed",
+    "prompts": [
+     "q4-4"
+    ],
+    "days": 6,
+    "engines": [
+     "google_aio"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://startupcfo.example/best-accounting-software-for-startups",
+    "prompts": [
+     "q2-1"
+    ],
+    "days": [
+     3
+    ],
+    "engines": [
+     "chatgpt"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://mixedreview.example/best-cloud-accounting",
+    "prompts": [
+     "q8-2"
+    ],
+    "days": 5,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "named": 3,
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://invoiceninjaguide.example/invoicing-software-compared",
+    "prompts": [
+     "q3-4"
+    ],
+    "days": 6,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline",
+     "Brightbook"
+    ]
+   },
+   {
+    "url": "https://contractorsdaily.example/best-accounting-software-for-contractors",
+    "prompts": [
+     "q6-1"
+    ],
+    "days": 7,
+    "engines": [
+     "chatgpt",
+     "gemini"
+    ],
+    "brands": [
+     "Brightbook",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://soloworker.example/best-accounting-apps-for-freelancers-2026",
+    "prompts": [
+     "q1-4"
+    ],
+    "days": 6,
+    "engines": [
+     "perplexity",
+     "chatgpt"
+    ],
+    "brands": [
+     "Brightbook",
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://cloudledgerreview.example/best-cloud-accounting-software",
+    "prompts": [
+     "q8-4"
+    ],
+    "days": 8,
+    "engines": [
+     "chatgpt",
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://nonprofitbooks.example/blog/grant-reporting-guide",
+    "prompts": [
+     "q9-4"
+    ],
+    "days": 5,
+    "engines": [
+     "perplexity"
+    ],
+    "brands": [
+     "Ledgerline"
+    ]
+   },
+   {
+    "url": "https://restaurantops.example/best-restaurant-bookkeeping-software",
+    "prompts": [
+     "q4-3"
+    ],
+    "days": 4,
+    "engines": [
+     "chatgpt"
+    ],
+    "brands": [
+     "Countwise"
+    ]
+   },
+   {
+    "url": "https://salesexpenses.example/expense-apps-for-sales-teams",
+    "prompts": [
+     "q5-3"
+    ],
+    "days": 5,
+    "engines": [
+     "gemini",
+     "perplexity"
+    ],
+    "brands": [
+     "Sumly",
+     "Countwise"
+    ]
+   }
+  ],
+  "serpTop": [
+   {
+    "keyword_id": "k3",
+    "top": [
+     {
+      "rank": 1,
+      "url": "https://tallyroo.com/invoicing",
+      "domain": "tallyroo.com"
+     },
+     {
+      "rank": 2,
+      "url": "https://invoicehq.example/best-invoicing-software",
+      "domain": "invoicehq.example"
+     },
+     {
+      "rank": 3,
+      "url": "https://ledgerline.com/invoicing",
+      "domain": "ledgerline.com"
+     },
+     {
+      "rank": 4,
+      "url": "https://smallbizdesk.example/best-invoicing-apps-for-freelancers",
+      "domain": "smallbizdesk.example"
+     },
+     {
+      "rank": 5,
+      "url": "https://appreviewhub.example/top-10-invoicing-tools",
+      "domain": "appreviewhub.example"
+     },
+     {
+      "rank": 7,
+      "url": "https://invoicingtips.example/how-to-send-an-invoice",
+      "domain": "invoicingtips.example"
+     }
+    ]
+   },
+   {
+    "keyword_id": "k4",
+    "top": [
+     {
+      "rank": 1,
+      "url": "https://bookkeeperweekly.example/top-10-bookkeeping-tools",
+      "domain": "bookkeeperweekly.example"
+     },
+     {
+      "rank": 2,
+      "url": "https://booksguide.example/best-bookkeeping-software-2026",
+      "domain": "booksguide.example"
+     },
+     {
+      "rank": 6,
+      "url": "https://tallyroo.com/bookkeeping",
+      "domain": "tallyroo.com"
+     }
+    ]
+   },
+   {
+    "keyword_id": "k7",
+    "top": [
+     {
+      "rank": 1,
+      "url": "https://ledgerline.com/compare",
+      "domain": "ledgerline.com"
+     },
+     {
+      "rank": 2,
+      "url": "https://softwarecompare.example/ledgerline-alternatives",
+      "domain": "softwarecompare.example"
+     },
+     {
+      "rank": 3,
+      "url": "https://altfinder.example/ledgerline-alternatives",
+      "domain": "altfinder.example"
+     },
+     {
+      "rank": 9,
+      "url": "https://tallyroo.com/vs/ledgerline",
+      "domain": "tallyroo.com"
+     }
+    ]
+   },
+   {
+    "keyword_id": "k1",
+    "top": [
+     {
+      "rank": 1,
+      "url": "https://tallyroo.com/freelancers",
+      "domain": "tallyroo.com"
+     },
+     {
+      "rank": 2,
+      "url": "https://thesmallbizstack.com/best-accounting-apps",
+      "domain": "thesmallbizstack.com"
+     },
+     {
+      "rank": 3,
+      "url": "https://freelancerstoolkit.example/best-accounting-apps",
+      "domain": "freelancerstoolkit.example"
+     }
+    ]
+   },
+   {
+    "keyword_id": "k2",
+    "top": [
+     {
+      "rank": 2,
+      "url": "https://g2.com/categories/accounting",
+      "domain": "g2.com"
+     },
+     {
+      "rank": 4,
+      "url": "https://bizsoftwarelist.example/best-small-business-accounting-software",
+      "domain": "bizsoftwarelist.example"
+     },
+     {
+      "rank": 5,
+      "url": "https://tallyroo.com/small-business",
+      "domain": "tallyroo.com"
+     }
+    ]
+   }
+  ],
+  "reads": [
+   {
+    "url_key": "smallbizdesk.example/best-invoicing-apps-for-freelancers",
+    "url": "https://smallbizdesk.example/best-invoicing-apps-for-freelancers",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The 9 best invoicing apps for freelancers (2026) - SmallBizDesk",
+    "h1": "The 9 best invoicing apps for freelancers",
+    "updated_on": "2026-09-02",
+    "headings": [
+     "How we chose",
+     "Ease of use",
+     "Invoice templates",
+     "Payment reminders",
+     "Mobile app",
+     "Integrations",
+     "Customer support"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Brightbook",
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "bookkeeperweekly.example/top-10-bookkeeping-tools",
+    "url": "https://bookkeeperweekly.example/top-10-bookkeeping-tools",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Top 10 bookkeeping tools for small businesses",
+    "h1": "Top 10 bookkeeping tools",
+    "updated_on": "2026-08-21",
+    "headings": [
+     "Bank feeds",
+     "Receipt capture",
+     "Reporting",
+     "Ease of setup"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Countwise",
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "reddit.com/r/smallbusiness/comments/abc123/best_invoicing_app_for_a_oneperson_business",
+    "url": "https://reddit.com/r/smallbusiness/comments/abc123/best_invoicing_app_for_a_oneperson_business",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Best invoicing app for a one-person business? : r/smallbusiness",
+    "h1": null,
+    "updated_on": null,
+    "headings": [],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Brightbook"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "g2.com/categories/accounting",
+    "url": "https://g2.com/categories/accounting",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Best Accounting Software: user reviews",
+    "h1": "Accounting software",
+    "updated_on": null,
+    "headings": [
+     "Top rated",
+     "Most reviewed"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Ledgerline",
+     "Brightbook",
+     "Countwise"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "payrollpulse.example/best-payroll-and-accounting-software",
+    "url": "https://payrollpulse.example/best-payroll-and-accounting-software",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best payroll and accounting software, compared",
+    "h1": "Best payroll and accounting software",
+    "updated_on": "2026-07-14",
+    "headings": [
+     "Payroll runs",
+     "Tax filing",
+     "Employee self-service"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Sumly",
+     "Countwise"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "receiptreport.example/top-expense-apps",
+    "url": "https://receiptreport.example/top-expense-apps",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "error",
+    "http_status": 403,
+    "title": null,
+    "h1": null,
+    "updated_on": null,
+    "headings": [],
+    "names_client": null,
+    "client_snippet": null,
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "softwarecompare.example/ledgerline-alternatives",
+    "url": "https://softwarecompare.example/ledgerline-alternatives",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "8 Ledgerline alternatives worth a look",
+    "h1": "Ledgerline alternatives",
+    "updated_on": "2026-09-10",
+    "headings": [
+     "Why people switch",
+     "Feature comparison",
+     "Migration support"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Ledgerline",
+     "Brightbook"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "softwarecompare.example/tallyroo-vs-ledgerline",
+    "url": "https://softwarecompare.example/tallyroo-vs-ledgerline",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Tallyroo vs Ledgerline: which suits a small team?",
+    "h1": "Tallyroo vs Ledgerline",
+    "updated_on": "2025-11-03",
+    "headings": [
+     "Invoicing",
+     "Bank feeds",
+     "Support"
+    ],
+    "names_client": true,
+    "client_snippet": "Tallyroo vs Ledgerline: which suits a small team? We compared invoicing, bank feeds and support.",
+    "brands_found": [
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "freelancerstoolkit.example/best-accounting-apps",
+    "url": "https://freelancerstoolkit.example/best-accounting-apps",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Best accounting apps for freelancers (2026)",
+    "h1": "Best accounting apps for freelancers",
+    "updated_on": "2026-09-15",
+    "headings": [
+     "Time tracking",
+     "Invoicing",
+     "Tax estimates"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Brightbook",
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "soloworker.example/best-accounting-apps-for-freelancers-2026",
+    "url": "https://soloworker.example/best-accounting-apps-for-freelancers-2026",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best accounting apps for freelancers in 2026",
+    "h1": "Best accounting apps for freelancers",
+    "updated_on": "2026-09-01",
+    "headings": [
+     "Our picks",
+     "How we tested"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Brightbook",
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "ownerledger.co/guides/switching-accounting-software",
+    "url": "https://ownerledger.co/guides/switching-accounting-software",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "How to switch accounting software without losing a month",
+    "h1": "Switching accounting software",
+    "updated_on": "2026-08-19",
+    "headings": [
+     "Before you switch",
+     "Moving your data",
+     "The first month"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Ledgerline"
+    ],
+    "links_to_client": true,
+    "link_rel": "followed",
+    "link_anchor": "Tallyroo's switching checklist"
+   },
+   {
+    "url_key": "softwarecritic.com/accounting",
+    "url": "https://softwarecritic.com/accounting",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Accounting software reviews",
+    "h1": "Accounting software",
+    "updated_on": null,
+    "headings": [
+     "Our ratings"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Ledgerline",
+     "Brightbook"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "freelancefieldnotes.com/bookkeeping-tools",
+    "url": "https://freelancefieldnotes.com/bookkeeping-tools",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Bookkeeping tools we use",
+    "h1": "Bookkeeping tools",
+    "updated_on": "2026-09-02",
+    "headings": [
+     "Tallyroo",
+     "Ledgerline"
+    ],
+    "names_client": true,
+    "client_snippet": "We moved our books to Tallyroo last spring and have not looked back.",
+    "brands_found": [
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "thesmallbizstack.com/best-accounting-apps",
+    "url": "https://thesmallbizstack.com/best-accounting-apps",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best accounting apps for small businesses",
+    "h1": "Best accounting apps",
+    "updated_on": "2026-08-12",
+    "headings": [
+     "Tallyroo",
+     "Ledgerline",
+     "Brightbook"
+    ],
+    "names_client": true,
+    "client_snippet": "Tallyroo is our pick for freelancers who invoice weekly.",
+    "brands_found": [
+     "Ledgerline",
+     "Brightbook"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "contractorledger.example/guides/how-to-choose-accounting-software",
+    "url": "https://contractorledger.example/guides/how-to-choose-accounting-software",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "content_parsing",
+    "status": "ok",
+    "http_status": 200,
+    "title": "How to choose accounting software for a contracting business",
+    "h1": "How to choose accounting software",
+    "updated_on": "2026-06-30",
+    "headings": [
+     "Job costing",
+     "Mobile receipts",
+     "Payroll"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Brightbook"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "consultingtools.example/best-accounting-software-for-consultants",
+    "url": "https://consultingtools.example/best-accounting-software-for-consultants",
+    "read_at": "2026-09-26T14:00:05Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best accounting software for consultants",
+    "h1": "Best accounting software for consultants",
+    "updated_on": "2026-08-30",
+    "headings": [
+     "Retainer billing",
+     "Time tracking",
+     "Expenses"
+    ],
+    "names_client": false,
+    "client_snippet": null,
+    "brands_found": [
+     "Ledgerline"
+    ],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "agencyfinance.example/blog/tools-we-use",
+    "url": "https://agencyfinance.example/blog/tools-we-use",
+    "read_at": "2026-09-24T10:00:03Z",
+    "via": "own",
+    "status": "blocked",
+    "http_status": null,
+    "title": null,
+    "h1": null,
+    "updated_on": null,
+    "headings": [],
+    "names_client": null,
+    "client_snippet": null,
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   }
+  ],
+  "kinds": [
+   {
+    "key": "d:ledgerline.com",
+    "domain_type": "vendor",
+    "set_by": "model"
+   },
+   {
+    "key": "d:brightbook.example",
+    "domain_type": "vendor",
+    "set_by": "model"
+   },
+   {
+    "key": "d:shopify.example",
+    "domain_type": "platform",
+    "set_by": "model"
+   },
+   {
+    "key": "d:softwarecritic.com",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:thesmallbizstack.com",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:freelancefieldnotes.com",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:ownerledger.co",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:smallbizdesk.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:bookkeeperweekly.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:payrollpulse.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:nonprofittechreview.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "p:nonprofittechreview.example/accounting-software-for-nonprofits",
+    "page_type": "best_of",
+    "set_by": "model"
+   },
+   {
+    "key": "d:contractorledger.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:cloudfinanceblog.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:expensewise.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:receiptreport.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:softwarecompare.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:freelancerstoolkit.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:smbtechdigest.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "p:smbtechdigest.example/accounting-software-roundup",
+    "page_type": "best_of",
+    "set_by": "model"
+   },
+   {
+    "key": "d:invoiceninjaguide.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:contractorsdaily.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:soloworker.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:cloudledgerreview.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:invoicehq.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:appreviewhub.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:booksguide.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:altfinder.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:bizsoftwarelist.example",
+    "domain_type": "directory",
+    "set_by": "model"
+   },
+   {
+    "key": "d:partnerpicks.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:nonprofitbooks.example",
+    "domain_type": "vendor",
+    "set_by": "model"
+   },
+   {
+    "key": "d:restaurantops.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   },
+   {
+    "key": "d:salesexpenses.example",
+    "domain_type": "publisher",
+    "set_by": "model"
+   }
+  ],
+  "placed": [
+   "softwarecritic.com/accounting",
+   "smallbizdesk.example/top-accounting-tools"
+  ],
+  "keyPages": [
+   {
+    "url": "https://tallyroo.com/compare/best-invoicing-apps",
+    "clusterIds": [
+     "c3"
+    ]
+   }
+  ],
+  "state": {
+   "cited|smallbizdesk.example/best-invoicing-apps-for-freelancers": {
+    "id": "opp-invoicing"
+   },
+   "cited|bookkeeperweekly.example/top-10-bookkeeping-tools": {
+    "id": "opp-bookkeeping"
+   },
+   "cited|freelancerstoolkit.example/best-accounting-apps": {
+    "id": "opp-toolkit"
+   },
+   "cited|expensewise.example/best-expense-tracking-apps": {
+    "id": "opp-expense"
+   },
+   "threads|reddit.com/r/smallbusiness/comments/abc123/best_invoicing_app_for_a_oneperson_business": {
+    "id": "opp-reddit"
+   },
+   "cited|softwarecompare.example/tallyroo-vs-ledgerline": {
+    "id": "opp-correction"
+   },
+   "cited|receiptreport.example/top-expense-apps": {
+    "id": "opp-unreadable"
+   },
+   "cited|soloworker.example/best-accounting-apps-for-freelancers-2026": {
+    "id": "opp-solo",
+    "status": "pursuing",
+    "status_at": "2026-09-20T10:12:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-20",
+    "prompt_id": "q1-5",
+    "verified": {
+     "at": "2026-09-27",
+     "via": "own",
+     "ok": true,
+     "http": 200,
+     "names": true,
+     "link": false,
+     "rel": null,
+     "anchor": null,
+     "text": "Verified: the page names Tallyroo, 27 Sep",
+     "names_since": "2026-09-27"
+    },
+    "first_cited": {
+     "perplexity": {
+      "day": "2026-09-24",
+      "prompt": "q1-4"
+     }
+    },
+    "history": [
+     {
+      "at": "2026-09-20T10:12:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-20T10:12:01Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Added the prompt 'What's a good alternative to Ledgerline for freelancers?'."
+     },
+     {
+      "at": "2026-09-27T03:41:00Z",
+      "kind": "verify",
+      "by": "system",
+      "text": "Verified: the page names Tallyroo, 27 Sep"
+     }
+    ]
+   },
+   "cited|payrollpulse.example/best-payroll-and-accounting-software": {
+    "id": "opp-payroll",
+    "status": "pitched",
+    "status_at": "2026-09-18T15:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-11",
+    "prompt_id": "q10-1",
+    "note": "Wrote to the editor on 18 Sep.",
+    "history": [
+     {
+      "at": "2026-09-11T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-11T09:00:01Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Already measured by 'What's the best payroll and accounting software?'."
+     },
+     {
+      "at": "2026-09-18T15:00:00Z",
+      "kind": "status",
+      "status": "pitched",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "profiles|g2.com/categories/accounting": {
+    "id": "opp-g2",
+    "status": "won",
+    "status_at": "2026-09-12T11:30:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-08-30",
+    "verified": {
+     "at": "2026-09-26",
+     "via": "own",
+     "ok": true,
+     "http": 200,
+     "names": true,
+     "link": true,
+     "rel": "followed",
+     "anchor": "Tallyroo",
+     "text": "Verified: link to tallyroo.com found on the page, followed, 26 Sep",
+     "names_since": "2026-09-12"
+    },
+    "first_cited": {
+     "chatgpt": {
+      "day": "2026-09-16",
+      "prompt": "q2-1"
+     },
+     "gemini": {
+      "day": "2026-09-19",
+      "prompt": "q2-3"
+     }
+    },
+    "history": [
+     {
+      "at": "2026-08-30T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-12T11:30:00Z",
+      "kind": "status",
+      "status": "won",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|cloudledgerreview.example/best-cloud-accounting-software": {
+    "id": "opp-cloud",
+    "status": "won",
+    "status_at": "2026-09-05T09:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-08-20",
+    "verified": {
+     "at": "2026-09-26",
+     "via": "content_parsing",
+     "ok": true,
+     "http": 200,
+     "names": null,
+     "link": true,
+     "rel": null,
+     "anchor": "Tallyroo",
+     "text": "Verified: link to tallyroo.com found on the page, 26 Sep. Follow status not read."
+    },
+    "history": [
+     {
+      "at": "2026-08-20T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-05T09:00:00Z",
+      "kind": "status",
+      "status": "won",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "threads|quora.com/What-is-the-best-bookkeeping-software-for-sole-traders": {
+    "id": "opp-quora",
+    "status": "declined",
+    "status_at": "2026-09-22T12:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-15",
+    "history": [
+     {
+      "at": "2026-09-15T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-22T12:00:00Z",
+      "kind": "status",
+      "status": "declined",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|bookkeepingbasics.example/news/bookkeeping-trends": {
+    "id": "opp-trends",
+    "status": "dismissed",
+    "status_at": "2026-09-25T16:00:00Z",
+    "status_by": "owner@example.com",
+    "dismiss_reason": "not_relevant",
+    "history": [
+     {
+      "at": "2026-09-25T16:00:00Z",
+      "kind": "status",
+      "status": "dismissed",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|contractorledger.example/guides/how-to-choose-accounting-software": {
+    "id": "opp-contractor",
+    "status": "pursuing",
+    "status_at": "2026-09-23T09:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-23",
+    "history": [
+     {
+      "at": "2026-09-23T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-23T09:00:02Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Chose to watch the page, with no prompt."
+     }
+    ]
+   }
+  },
+  "logged": [
+   {
+    "id": "opp-log-1",
+    "lens": "logged",
+    "url": "https://consultingtools.example/best-accounting-software-for-consultants",
+    "url_key": "consultingtools.example/best-accounting-software-for-consultants",
+    "domain": "consultingtools.example",
+    "title": "The best accounting software for consultants",
+    "page_type": "best_of",
+    "domain_type": null,
+    "route": "ask_added",
+    "status": "new",
+    "evidence": {
+     "to": "2026-09-29"
+    },
+    "first_seen": "2026-09-26",
+    "last_seen": "2026-09-26",
+    "live": true,
+    "created_at": "2026-09-26T14:00:00Z",
+    "history": [
+     {
+      "at": "2026-09-26T14:00:00Z",
+      "kind": "status",
+      "status": "new",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   {
+    "id": "opp-log-2",
+    "lens": "logged",
+    "url": "https://agencyfinance.example/blog/tools-we-use",
+    "url_key": "agencyfinance.example/blog/tools-we-use",
+    "domain": "agencyfinance.example",
+    "title": null,
+    "page_type": "article",
+    "domain_type": null,
+    "route": "offer_resource",
+    "status": "new",
+    "evidence": {
+     "to": "2026-09-29"
+    },
+    "first_seen": "2026-09-24",
+    "last_seen": "2026-09-24",
+    "live": true,
+    "created_at": "2026-09-24T10:00:00Z",
+    "history": []
+   }
+  ],
+  "canned": {
+   "log": {
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best accounting tools for consultants",
+    "h1": "Accounting tools for consultants",
+    "updated_on": "2026-09-18",
+    "headings": [
+     "Billing",
+     "Expenses",
+     "Reports"
+    ],
+    "names_client": false,
+    "brands_found": [
+     "Ledgerline"
+    ],
+    "links_to_client": false
+   },
+   "verify": {
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "names_client": true,
+    "client_snippet": "Tallyroo made our list this month.",
+    "links_to_client": true,
+    "link_rel": "followed",
+    "link_anchor": "Tallyroo",
+    "brands_found": [
+     "Ledgerline"
+    ]
+   }
+  },
+  "jobFailed": false
+ },
+ "dark": {
+  "base": "full",
+  "reads": [],
+  "kinds": [],
+  "canned": null
+ },
+ "day0": {
+  "base": "full",
+  "tracking": false,
+  "world": [],
+  "state": {},
+  "logged": [],
+  "reads": [],
+  "kinds": []
+ },
+ "zero": {
+  "base": "full",
+  "world": [],
+  "logged": [],
+  "state": {},
+  "reads": [
+   {
+    "url_key": "ledgerline.com/pricing",
+    "url": "https://ledgerline.com/pricing",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Ledgerline pricing",
+    "h1": "Plans and pricing",
+    "updated_on": "2026-09-01",
+    "headings": [
+     "Plans",
+     "Switching from Tallyroo"
+    ],
+    "names_client": true,
+    "client_snippet": "Switching from Tallyroo? Bring your invoices across in one step.",
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "ownerledger.co/guides/switching-accounting-software",
+    "url": "https://ownerledger.co/guides/switching-accounting-software",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "How to switch accounting software without losing a month",
+    "h1": "Switching accounting software",
+    "updated_on": "2026-08-19",
+    "headings": [
+     "Before you switch",
+     "Moving your data",
+     "The first month"
+    ],
+    "names_client": true,
+    "client_snippet": null,
+    "brands_found": [],
+    "links_to_client": true,
+    "link_rel": "followed",
+    "link_anchor": "Tallyroo's switching checklist"
+   },
+   {
+    "url_key": "softwarecritic.com/accounting",
+    "url": "https://softwarecritic.com/accounting",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Accounting software reviews",
+    "h1": "Accounting software",
+    "updated_on": null,
+    "headings": [
+     "Our ratings"
+    ],
+    "names_client": true,
+    "client_snippet": null,
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "freelancefieldnotes.com/bookkeeping-tools",
+    "url": "https://freelancefieldnotes.com/bookkeeping-tools",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Bookkeeping tools we use",
+    "h1": "Bookkeeping tools",
+    "updated_on": "2026-09-02",
+    "headings": [
+     "Tallyroo",
+     "Ledgerline"
+    ],
+    "names_client": true,
+    "client_snippet": "We moved our books to Tallyroo last spring and have not looked back.",
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
+    "url_key": "thesmallbizstack.com/best-accounting-apps",
+    "url": "https://thesmallbizstack.com/best-accounting-apps",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "The best accounting apps for small businesses",
+    "h1": "Best accounting apps",
+    "updated_on": "2026-08-12",
+    "headings": [
+     "Tallyroo",
+     "Ledgerline",
+     "Brightbook"
+    ],
+    "names_client": true,
+    "client_snippet": "Tallyroo is our pick for freelancers who invoice weekly.",
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   }
+  ]
+ },
+ "capped": {
+  "base": "full",
+  "state": {
+   "cited|smallbizdesk.example/best-invoicing-apps-for-freelancers": {
+    "id": "opp-invoicing",
+    "status": "pursuing",
+    "status_at": "2026-09-20T09:00:00Z",
+    "pursued_on": "2026-09-20",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-20T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|bookkeeperweekly.example/top-10-bookkeeping-tools": {
+    "id": "opp-bookkeeping",
+    "status": "pursuing",
+    "status_at": "2026-09-21T09:00:00Z",
+    "pursued_on": "2026-09-21",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-21T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|freelancerstoolkit.example/best-accounting-apps": {
+    "id": "opp-toolkit",
+    "status": "pursuing",
+    "status_at": "2026-09-22T09:00:00Z",
+    "pursued_on": "2026-09-22",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-22T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|expensewise.example/best-expense-tracking-apps": {
+    "id": "opp-expense",
+    "status": "pursuing",
+    "status_at": "2026-09-23T09:00:00Z",
+    "pursued_on": "2026-09-23",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-23T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "threads|reddit.com/r/smallbusiness/comments/abc123/best_invoicing_app_for_a_oneperson_business": {
+    "id": "opp-reddit",
+    "status": "pursuing",
+    "status_at": "2026-09-24T09:00:00Z",
+    "pursued_on": "2026-09-24",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-24T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|softwarecompare.example/tallyroo-vs-ledgerline": {
+    "id": "opp-correction"
+   },
+   "cited|receiptreport.example/top-expense-apps": {
+    "id": "opp-unreadable"
+   },
+   "cited|soloworker.example/best-accounting-apps-for-freelancers-2026": {
+    "id": "opp-solo",
+    "status": "pursuing",
+    "status_at": "2026-09-20T10:12:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-20",
+    "prompt_id": "q1-5",
+    "verified": {
+     "at": "2026-09-27",
+     "via": "own",
+     "ok": true,
+     "http": 200,
+     "names": true,
+     "link": false,
+     "rel": null,
+     "anchor": null,
+     "text": "Verified: the page names Tallyroo, 27 Sep",
+     "names_since": "2026-09-27"
+    },
+    "first_cited": {
+     "perplexity": {
+      "day": "2026-09-24",
+      "prompt": "q1-4"
+     }
+    },
+    "history": [
+     {
+      "at": "2026-09-20T10:12:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-20T10:12:01Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Added the prompt 'What's a good alternative to Ledgerline for freelancers?'."
+     },
+     {
+      "at": "2026-09-27T03:41:00Z",
+      "kind": "verify",
+      "by": "system",
+      "text": "Verified: the page names Tallyroo, 27 Sep"
+     }
+    ]
+   },
+   "cited|payrollpulse.example/best-payroll-and-accounting-software": {
+    "id": "opp-payroll",
+    "status": "pitched",
+    "status_at": "2026-09-18T15:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-11",
+    "prompt_id": "q10-1",
+    "note": "Wrote to the editor on 18 Sep.",
+    "history": [
+     {
+      "at": "2026-09-11T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-11T09:00:01Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Already measured by 'What's the best payroll and accounting software?'."
+     },
+     {
+      "at": "2026-09-18T15:00:00Z",
+      "kind": "status",
+      "status": "pitched",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "profiles|g2.com/categories/accounting": {
+    "id": "opp-g2",
+    "status": "won",
+    "status_at": "2026-09-12T11:30:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-08-30",
+    "verified": {
+     "at": "2026-09-26",
+     "via": "own",
+     "ok": true,
+     "http": 200,
+     "names": true,
+     "link": true,
+     "rel": "followed",
+     "anchor": "Tallyroo",
+     "text": "Verified: link to tallyroo.com found on the page, followed, 26 Sep",
+     "names_since": "2026-09-12"
+    },
+    "first_cited": {
+     "chatgpt": {
+      "day": "2026-09-16",
+      "prompt": "q2-1"
+     },
+     "gemini": {
+      "day": "2026-09-19",
+      "prompt": "q2-3"
+     }
+    },
+    "history": [
+     {
+      "at": "2026-08-30T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-12T11:30:00Z",
+      "kind": "status",
+      "status": "won",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|cloudledgerreview.example/best-cloud-accounting-software": {
+    "id": "opp-cloud",
+    "status": "won",
+    "status_at": "2026-09-05T09:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-08-20",
+    "verified": {
+     "at": "2026-09-26",
+     "via": "content_parsing",
+     "ok": true,
+     "http": 200,
+     "names": null,
+     "link": true,
+     "rel": null,
+     "anchor": "Tallyroo",
+     "text": "Verified: link to tallyroo.com found on the page, 26 Sep. Follow status not read."
+    },
+    "history": [
+     {
+      "at": "2026-08-20T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-05T09:00:00Z",
+      "kind": "status",
+      "status": "won",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "threads|quora.com/What-is-the-best-bookkeeping-software-for-sole-traders": {
+    "id": "opp-quora",
+    "status": "declined",
+    "status_at": "2026-09-22T12:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-15",
+    "history": [
+     {
+      "at": "2026-09-15T08:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-22T12:00:00Z",
+      "kind": "status",
+      "status": "declined",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|bookkeepingbasics.example/news/bookkeeping-trends": {
+    "id": "opp-trends",
+    "status": "dismissed",
+    "status_at": "2026-09-25T16:00:00Z",
+    "status_by": "owner@example.com",
+    "dismiss_reason": "not_relevant",
+    "history": [
+     {
+      "at": "2026-09-25T16:00:00Z",
+      "kind": "status",
+      "status": "dismissed",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|contractorledger.example/guides/how-to-choose-accounting-software": {
+    "id": "opp-contractor",
+    "status": "pursuing",
+    "status_at": "2026-09-23T09:00:00Z",
+    "status_by": "owner@example.com",
+    "pursued_on": "2026-09-23",
+    "history": [
+     {
+      "at": "2026-09-23T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     },
+     {
+      "at": "2026-09-23T09:00:02Z",
+      "kind": "prompt",
+      "by": "owner@example.com",
+      "text": "Chose to watch the page, with no prompt."
+     }
+    ]
+   },
+   "cited|softwarecompare.example/ledgerline-alternatives": {
+    "id": "opp-cap-6",
+    "status": "pursuing",
+    "status_at": "2026-09-25T09:00:00Z",
+    "pursued_on": "2026-09-25",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-25T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   },
+   "cited|invoiceninjaguide.example/invoicing-software-compared": {
+    "id": "opp-cap-7",
+    "status": "pursuing",
+    "status_at": "2026-09-26T09:00:00Z",
+    "pursued_on": "2026-09-26",
+    "status_by": "owner@example.com",
+    "history": [
+     {
+      "at": "2026-09-26T09:00:00Z",
+      "kind": "status",
+      "status": "pursuing",
+      "by": "owner@example.com"
+     }
+    ]
+   }
+  }
+ }
+}
