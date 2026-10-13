@@ -119,6 +119,15 @@ export const LIST_TYPES: readonly PageType[] = ["best_of", "comparison", "altern
 /** The bounds of what a member types here, read by the inputs and by the route alike. */
 export const OPP_LIMITS = { url: 500, note: APP_LIMITS.note } as const;
 
+/**
+ * The longest page address and page key a row holds (the table checks url at
+ * 500 and url_key at 520). A cited page past it is skipped and counted in the
+ * night's note rather than written cut short: a cut address is a broken link,
+ * and a key past the check fails the insert every night.
+ */
+export const URL_MAX = OPP_LIMITS.url;
+export const fitsRow = (url: string, urlKey: string): boolean => url.length <= URL_MAX && urlKey.length <= URL_MAX;
+
 /** A row the lists keep while new: derived by the latest refresh. Older new rows are no longer cited and drop out. */
 export const LIVE_DAYS = 14;
 
@@ -241,9 +250,17 @@ export type PageFacts = {
   linksToClient: boolean | null;
   linkRel: "followed" | "not_followed" | null;
   linkAnchor: string | null;
+  /**
+   * The last time a read was tried, when that try could not see the page and
+   * the facts above are an earlier read's (record.ts writePageRead keeps a
+   * good read over a failed one). The night's picker waits STALE_DAYS from
+   * whichever is later, so a page that has started failing does not take a
+   * read slot every night. Absent or null when the latest try is the read above.
+   */
+  attemptedAt?: string | null;
 };
 
-export const PAGE_READ_COLUMNS = "url_key, url, read_at, via, status, http_status, title, h1, updated_on, headings, names_client, client_snippet, brands_found, links_to_client, link_rel, link_anchor";
+export const PAGE_READ_COLUMNS = "url_key, url, read_at, via, status, http_status, title, h1, updated_on, headings, names_client, client_snippet, brands_found, links_to_client, link_rel, link_anchor, attempted_at";
 
 /** A source_kinds row. */
 export type KindRow = { key: string; level: "domain" | "page"; domain_type: DomainType | null; page_type: PageType | null; set_by: "rule" | "model" };

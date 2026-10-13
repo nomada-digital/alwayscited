@@ -151,7 +151,7 @@ async function opportunityAsk(req: Request, slug: string, sp: URLSearchParams, f
   const one = sp.get("id");
   const fromQuery = one && OPP_ID.test(one) ? [one] : [];
   const ids = (fromQuery.length ? fromQuery : readAskItems(String(form?.get("items") ?? "").split(","))).slice(0, ASK_PAGES_MAX);
-  const back = (done: "asked" | "asked_agency" | "refused", why: "ask_refused" | "ask_capped" | null = null) => {
+  const back = (done: "asked" | "asked_agency" | "refused", why: "ask_refused" | "ask_capped" | "ended" | null = null) => {
     const q = new URLSearchParams({ done, ...(why ? { why } : {}) });
     const page = ids.length === 1 ? `/${slug}/opportunities/${encodeURIComponent(ids[0]!)}` : `/${slug}/opportunities`;
     return NextResponse.redirect(dashUrl(req, appPath(`${page}?${q}`)), 303);
@@ -162,6 +162,8 @@ async function opportunityAsk(req: Request, slug: string, sp: URLSearchParams, f
   if (!email) return NextResponse.redirect(dashUrl(req, dashPath(req, "/login")), 303);
   const client = (await clientsFor(email)).find((c) => c.slug === slug);
   if (!client) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  // An ended client has no ask or upgrade surface (spec 10 section 2.2; 13 Oct 2026, review of DIY P7).
+  if (client.status === "ended") return back("refused", "ended");
   const db = supabaseAdmin();
   const { data: row, error: rowErr } = await db.from("client_domains").select("account_id").eq("id", client.id).maybeSingle();
   if (rowErr || !row) {

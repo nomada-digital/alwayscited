@@ -10,11 +10,11 @@ import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
 import { section } from "@/lib/diy/plan/data";
 import { answerLinker, promptPlaces } from "@/lib/diy/opportunities/links";
-import { headerCounts, headerLine, listRow, listed, pursuing, pursuingRow, tabCounts } from "@/lib/diy/opportunities/payload";
+import { citedEmpty, headerCounts, headerLine, listRow, listed, pursuing, pursuingRow, tabCounts } from "@/lib/diy/opportunities/payload";
 import { type OppKeep } from "@/lib/diy/opportunities/paths";
 import { ENDED_REASON, VIEWER_REASON, oppToast, pursuitCap } from "@/lib/diy/opportunities/status";
-import { ACTIVE, AI_CITED_LENSES, TAB_LENSES, type TabLens } from "@/lib/diy/opportunities/types";
-import { loadOppWorld } from "@/lib/diy/opportunities/world";
+import { ACTIVE, TAB_LENSES, type TabLens } from "@/lib/diy/opportunities/types";
+import { linkCheckWords, loadCitedSummary, loadOppWorld } from "@/lib/diy/opportunities/world";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 import { ENGINE_SPECS } from "@/lib/scan/engines";
 import { clusterSearch } from "@/lib/tracking/cluster-figures";
@@ -104,23 +104,18 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   const pages = Math.max(1, Math.ceil(all.length / PER_PAGE));
   const shown = all.slice((Math.min(page, pages) - 1) * PER_PAGE, Math.min(page, pages) * PER_PAGE);
   const usedClusters = new Set(listed(rows, lens).map((o) => o.clusterId).filter((c): c is string => c !== null));
-  const reads = world.ok ? world.value.reads : new Map();
-  const anyCitedNamesYou = [...reads.values()].some((f) => f.status === "ok" && f.namesClient === true);
-  const aiRows = rows.filter((o) => AI_CITED_LENSES.includes(o.lens));
-  // The cited tab's empty states (section 4.7): no citations yet (no AI-cited row of any status and no page read); every
-  // cited page read names the client; or, between the two, none leaves the client out today.
-  const empty =
-    lens === "cited" && !aiRows.some((o) => o.status === "new" && o.live)
-      ? !aiRows.length && !reads.size
-        ? "Opportunities come from the pages the engines cite for your prompts. They fill in overnight once your checks start citing pages."
-        : anyCitedNamesYou
-          ? "Every page the engines cite for these prompts names you. The next gains are on Google: see Your pages."
-          : "No page the engines cite leaves you out right now. Best-of lists on Google and your own pages are in the other tabs."
-      : null;
+  // The cited tab's empty states (section 4.7), said only as far as the reads show (payload.ts citedEmpty). The
+  // summary needs the window's answers, so it is read only when the tab is empty.
+  let empty: string | null = null;
+  if (world.ok && lens === "cited" && !listed(rows, "cited").length) {
+    const cited = await section("cited pages", () => loadCitedSummary(repo, client, world.value));
+    empty = citedEmpty(cited.ok ? cited.value : null, rows);
+  }
 
-  // U8 at the pursuit limit (section 2.7), by the one-per-screen rule; never on an empty, error or dark state.
+  // U8 at the pursuit limit (section 2.7), by the one-per-screen rule; never on an empty, error or dark state, and
+  // none for an ended client (section 2.2).
   const facts = { tier, mode: upgrade.mode, state: !world.ok ? ("error" as const) : dark ? ("dark" as const) : ("ok" as const), startedOn: client.started_on ?? today, today, hidden: upgrade.hidden, pursuits: { active: active.length, cap } };
-  const row = pickRow(facts);
+  const row = client.status === "ended" ? null : pickRow(facts);
   const copy = row === "U8" ? rowCopy("U8", facts) : null;
   const upgradeSlot = copy ? <UpgradePrompt copy={copy} cta="mentioned" slug={slug} items={active.map((o) => o.id).filter((id) => /^[0-9a-f-]{36}$/i.test(id))} keep={{ kind: "opportunity" }} surface="opportunities" /> : null;
   const prompts = new Map(structure.questions.map((x) => [x.id, x.text]));
@@ -145,7 +140,7 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
           engines={engines.map((e) => ({ key: e, label: ENGINE_SPECS[e].label }))}
           engine={engine}
           q={q}
-          toast={oppToast(one("done"), one("why"), { cap })}
+          toast={oppToast(one("done"), one("why"), { cap, ...linkCheckWords(client, repo.now()) })}
           readOnly={canWrite ? null : reason}
           canWrite={canWrite}
           cap={{ active: active.length, cap, atCap: active.length >= cap, line: `You're working ${cap} pages at once. Mark one won, declined or not for us to pursue another.` }}

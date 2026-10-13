@@ -8,7 +8,7 @@ import type { ReadCtx } from "../core/jobs.ts";
 import { opportunityCandidatesFrom } from "./candidates.ts";
 import { CHUNK, CHUNKS_PER_NIGHT, chunks, classifyAll, classifyHandler, kindsFromAnswer } from "./classify.job.ts";
 import { classifyUser } from "./classify-prompt.ts";
-import type { Unclassified } from "./derive.ts";
+import { derive, type Unclassified } from "./derive.ts";
 import type { OppIO } from "./io.ts";
 import { pageReadsHandler, pickFallbacks, pickReads } from "./page-reads.job.ts";
 import { opportunityRefreshHandler, planRefresh } from "./refresh.job.ts";
@@ -139,7 +139,7 @@ test("page reads: listed and new, never read first, then read 14 days ago, in li
 
 test("the refresh plan: new rows inserted, rows still derived updated, new rows no longer derived set not live, moved rows keep their status", () => {
   const derived = { lens: "cited" as const, url: "https://a.example/x", urlKey: "a.example/x", domain: "a.example", clusterId: "k1", route: "ask_added" as const, pageType: "best_of" as const, domainType: "publisher" as const, title: "A", evidence: { to: TODAY, answers: 4, leaves_out: 4, others_named: 4, prompts: ["q1"], prompt_count: 1, engines: ["chatgpt"], competitors: [], days_14: 2, days_7: 2, last_cited: TODAY, rank: null, keyword: null, open: null }, orderKey: [4, 1, 1, 0, 1, "0000-00-00"] as [number, number, number, number, number, string] };
-  const result = { rows: [derived, { ...derived, url: "https://b.example/x", urlKey: "b.example/x" }, { ...derived, url: "https://p.example/x", urlKey: "p.example/x" }], ruleKinds: [], unclassified: [], competitors: new Map() };
+  const result = { rows: [derived, { ...derived, url: "https://b.example/x", urlKey: "b.example/x" }, { ...derived, url: "https://p.example/x", urlKey: "p.example/x" }], ruleKinds: [], unclassified: [], competitors: new Map(), tooLong: 0 };
   const existing = [
     opp({ id: "b", url_key: "b.example/x", status: "new", first_seen: "2026-11-01" }),
     opp({ id: "p", url_key: "p.example/x", status: "pursuing", route: "offer_resource", cluster_id: "k9", pursued_on: addDays(TODAY, -5) }),
@@ -158,6 +158,74 @@ test("the refresh plan: new rows inserted, rows still derived updated, new rows 
   assert.deepEqual(by.get("z"), { live: false, updated_at: `${TODAY}T03:30:00Z` });
   assert.equal(by.has("zp"), false, "a won row the night no longer derives is left as it is");
   assert.equal(by.has("logged"), false, "a logged row is never touched by the refresh");
+});
+
+test("the refresh plan across lenses: a page whose lens changes is never doubled (review of DIY P7, 13 Oct 2026)", () => {
+  const base = { url: "https://pub.example/best-x", urlKey: "pub.example/best-x", domain: "pub.example", clusterId: "k1", route: "ask_added" as const, pageType: "best_of" as const, domainType: "publisher" as const, title: "Best X", evidence: { to: TODAY, answers: 6, leaves_out: 6, others_named: 6, prompts: ["q1"], prompt_count: 1, engines: ["chatgpt"], competitors: ["Rival"], days_14: 3, days_7: 1, last_cited: TODAY, rank: 4, keyword: "x", open: null }, orderKey: [6, 1, 1, 1, 1, "0000-00-00"] as [number, number, number, number, number, string] };
+  const run = (derived: Record<string, unknown>[], existing: Opportunity[]) => {
+    const plan = planRefresh({ clientId: "c1", today: TODAY, now: `${TODAY}T03:30:00Z`, result: { rows: derived as never, ruleKinds: [], unclassified: [], competitors: new Map(), tooLong: 0 }, existing, answers: [], kinds: new Map() });
+    return { plan, by: new Map(plan.updates.map((u) => [u.id, u.patch])) };
+  };
+  const cited = { ...base, lens: "cited" as const };
+  const page = { url: base.url, url_key: base.urlKey, domain: base.domain };
+
+  // A Google list the member set aside starts being cited: no new cited row; the set-aside row takes the evidence and keeps its lens and status.
+  for (const status of ["dismissed", "declined", "pursuing", "pitched", "won"]) {
+    const { plan, by } = run([cited], [opp({ id: "kept", lens: "lists", status, ...page })]);
+    assert.deepEqual(plan.inserts, [], `${status}: no second row`);
+    const patch = by.get("kept")!;
+    assert.deepEqual(patch.evidence, base.evidence, status);
+    assert.equal(patch.lens, undefined, `${status}: it keeps its lens`);
+    assert.equal(patch.status, undefined, `${status}: and its status`);
+  }
+  // A new cited row whose domain the model typed a night later (cited to threads) moves to its new lens and route.
+  {
+    const thread = { ...base, lens: "threads" as const, route: "answer_thread" as const, pageType: "thread" as const, domainType: "community" as const };
+    const { plan, by } = run([thread], [opp({ id: "moved", lens: "cited", status: "new", ...page })]);
+    assert.deepEqual(plan.inserts, []);
+    assert.equal(by.get("moved")!.lens, "threads");
+    assert.equal(by.get("moved")!.route, "answer_thread");
+    assert.equal(by.get("moved")!.live, true);
+  }
+  // A page the member logged that the engines now cite stays the logged row, with the evidence; its route and types are the ones it was logged with.
+  {
+    const { plan, by } = run([cited], [opp({ id: "log", lens: "logged", status: "new", route: "offer_resource", ...page })]);
+    assert.deepEqual(plan.inserts, []);
+    assert.deepEqual(by.get("log")!.evidence, base.evidence);
+    assert.equal(by.get("log")!.route, undefined);
+    assert.equal(by.get("log")!.page_type, undefined);
+  }
+  // A member's decision wins over a new row of the same page in the derived lens, which goes not live.
+  {
+    const { plan, by } = run([cited], [opp({ id: "dup", lens: "cited", status: "new", ...page }), opp({ id: "no", lens: "lists", status: "dismissed", ...page })]);
+    assert.deepEqual(plan.inserts, []);
+    assert.deepEqual(by.get("dup"), { live: false, updated_at: `${TODAY}T03:30:00Z` });
+    assert.deepEqual(by.get("no")!.evidence, base.evidence);
+  }
+  // P10's link lenses are about a domain or a link: a link row of the same page is not this page's row.
+  {
+    const { plan } = run([cited], [opp({ id: "link", lens: "link_page", status: "pursuing", route: "ask_for_link", ...page })]);
+    assert.equal(plan.inserts.length, 1);
+  }
+});
+
+test("the night skips a page whose address is longer than a row holds, and counts it in the note", () => {
+  const long = `https://long.example/${"%E3%81%82".repeat(60)}`;
+  const answers = [0, 1, 2].map((d) => ({ run_date: addDays(TODAY, -d), question_id: "q1", engine: "chatgpt", answered: true, named: false, brands: ["Rival"], citations: [{ source_domain: "long.example", url: long }, { source_domain: "short.example", url: "https://short.example/best-tools" }] }));
+  const r = derive({ domain: "client.example", today: TODAY, engines: ["chatgpt"], answers, questions: [{ id: "q1", cluster_id: "k1" }], clusters: [{ id: "k1", keyword_id: null }], keywords: [], serpTop: [], reads: new Map(), kinds: new Map([["d:short.example", { domain_type: "publisher", page_type: null, set_by: "model" }], ["d:long.example", { domain_type: "publisher", page_type: null, set_by: "model" }]]), placedKeys: new Set(), keyPages: [] });
+  assert.ok(long.length > 500);
+  assert.deepEqual(r.rows.map((x) => x.urlKey), ["short.example/best-tools"]);
+  assert.equal(r.tooLong, 1);
+  assert.ok(!r.unclassified.some((u) => u.urlKey.startsWith("long.example")), "nor is it sent to be typed");
+  assert.ok(r.ruleKinds.every((k) => k.key.length <= 520));
+});
+
+test("page reads: a page whose reads started failing waits from its last try, not its last good read", () => {
+  const read = (over: Partial<PageFacts>): PageFacts => ({ urlKey: "lists.example/best", url: "https://lists.example/best", readAt: `${addDays(TODAY, -30)}T03:00:00Z`, via: "own", status: "ok", http: 200, title: "Best", h1: null, updatedOn: null, headings: [], namesClient: false, snippet: null, brandsFound: [], linksToClient: null, linkRel: null, linkAnchor: null, ...over });
+  const rows = [opp({ id: "a" })];
+  assert.deepEqual(pickReads(rows, new Map([["lists.example/best", read({})]]), TODAY).map((o) => o.id), ["a"], "a good read 30 days old is due");
+  assert.deepEqual(pickReads(rows, new Map([["lists.example/best", read({ attemptedAt: `${addDays(TODAY, -2)}T03:00:00Z` })]]), TODAY), [], "tried two nights ago: not again for 14 days");
+  assert.deepEqual(pickReads(rows, new Map([["lists.example/best", read({ attemptedAt: `${addDays(TODAY, -15)}T03:00:00Z` })]]), TODAY).map((o) => o.id), ["a"]);
 });
 
 test("Plan candidates: Biggest gap is the top cited row still new; Slipping when a link or mention is found removed this week", () => {

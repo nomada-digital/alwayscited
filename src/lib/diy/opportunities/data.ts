@@ -4,7 +4,8 @@ import { selectAll } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, FIXTURE_DIR, type DiyFixtureState } from "../core/fixture.ts";
 
-import { type DeriveAnswer, type DeriveInput, type Derived, type SerpTop, WINDOW_DAYS, derive, readPlacedKeys, withoutPlaced } from "./derive.ts";
+import { type CitedSummary, type DeriveAnswer, type DeriveInput, type Derived, type SerpTop, WINDOW_DAYS, citedSummary, derive, readPlacedKeys, withoutPlaced } from "./derive.ts";
+import { placeDerived } from "./place.ts";
 import { historyOf, opportunityOf } from "./status.ts";
 import { type KindRow, OPP_COLUMNS, type Opportunity, PAGE_READ_COLUMNS, type PageFacts, pickDomainType, pickPageType } from "./types.ts";
 
@@ -59,6 +60,7 @@ export function factsOf(r: Record<string, unknown>): PageFacts | null {
     linksToClient: tri(r.links_to_client),
     linkRel: r.link_rel === "followed" || r.link_rel === "not_followed" ? r.link_rel : null,
     linkAnchor: typeof r.link_anchor === "string" ? r.link_anchor.slice(0, 200) : null,
+    attemptedAt: typeof r.attempted_at === "string" ? r.attempted_at : null,
   };
 }
 
@@ -82,6 +84,8 @@ export function readRow(clientId: string, f: PageFacts, readId: string | null = 
     links_to_client: f.linksToClient,
     link_rel: f.linkRel,
     link_anchor: f.linkAnchor ? f.linkAnchor.slice(0, 200) : null,
+    // A read that replaces the row is itself the latest try.
+    attempted_at: null,
     read_id: readId,
   };
 }
@@ -98,6 +102,13 @@ export type OppWorld = {
   refreshedTo: Day | null;
   /** The latest run of one of this package's jobs failed: "Some checks didn't finish last night; they retry tonight." */
   jobFailed: boolean;
+  /**
+   * What the cited pages in the window say about naming the client, for the
+   * cited tab's empty state. The fixture has its answers to hand and fills it;
+   * Supabase's world leaves it out, and the page reads it only when the tab is
+   * empty (world.ts loadCitedSummary).
+   */
+  cited?: CitedSummary;
 };
 
 /** This package's night jobs, for the failed-job line. */
@@ -183,6 +194,20 @@ export async function countOpenOpportunities(db: SupabaseClient, clientId: strin
     console.warn(`[diy] opportunities count: ${error?.message || "no count came back"}`);
     return null;
   }
+  return count;
+}
+
+/** Pages this client logged since an instant (its allowance month's start): Log a site uses one "check a link" each. */
+export function loggedSince(rows: readonly Opportunity[], since: string): number {
+  const from = Date.parse(since);
+  return rows.filter((o) => o.lens === "logged" && Date.parse(o.createdAt) >= from).length;
+}
+
+/** The same count from the table. A failed count throws: it is never read as room. */
+export async function countLoggedSince(db: SupabaseClient, clientId: string, since: string): Promise<number> {
+  const { count, error } = await db.from("opportunities").select("id", { count: "exact", head: true }).eq("client_domain_id", clientId).eq("lens", "logged").gte("created_at", since);
+  if (error) throw new Error(`could not count the logged pages: ${error.message}`);
+  if (typeof count !== "number") throw new Error("could not count the logged pages: no count came back");
   return count;
 }
 
@@ -335,11 +360,32 @@ export function fixtureWorld(entry: OppFixtureState, t: TrackingWorld, clientId:
   const serpTop: SerpTop[] = (entry.serpTop ?? []).map((s) => ({ keyword_id: s.keyword_id, run_date: t.today, top: s.top }));
   const result = derive({ domain: t.domain, today: t.today, engines: t.engines, answers, questions: t.questions, clusters: t.clusters, keywords: t.keywords, serpTop, reads, kinds, placedKeys, keyPages: entry.keyPages ?? [] });
   const state = held?.state ?? entry.state ?? {};
-  const derivedRows = result.rows.map((d) => storedRow(clientId, d, state[`${d.lens}|${d.urlKey}`], t.today));
-  const logged = held?.logged ?? (entry.logged ?? []).map((r) => ({ ...r, client_domain_id: clientId }));
+  const logged: Record<string, unknown>[] = held?.logged ?? (entry.logged ?? []).map((r) => ({ ...r, client_domain_id: clientId }));
+  // The stored rows a derived row may be, matched by the night's own rule (refresh.job.ts placeDerived): a page held in
+  // another lens is never doubled - a moved or logged row keeps its lens and status, a new one moves to the new lens.
+  const stored = [
+    ...Object.entries(state).map(([key, o]) => {
+      const [lens, ...rest] = key.split("|");
+      return { key, lens: lens!, urlKey: rest.join("|"), status: o.status ?? "new", overlay: o as Overlay | undefined };
+    }),
+    ...logged.map((r) => ({ key: `logged|${String(r.url_key ?? "")}`, lens: "logged", urlKey: String(r.url_key ?? ""), status: typeof r.status === "string" ? r.status : "new", overlay: undefined })),
+  ];
+  const used = new Set<string>();
+  const derivedRows: Record<string, unknown>[] = [];
+  for (const d of result.rows) {
+    const placed = placeDerived(d, stored.filter((x) => !used.has(x.key)));
+    if (placed.kind === "none") {
+      derivedRows.push(storedRow(clientId, d, undefined, t.today));
+      continue;
+    }
+    used.add(placed.row.key);
+    // A logged row stands as it was logged.
+    if (placed.row.lens === "logged") continue;
+    derivedRows.push(storedRow(clientId, placed.kind === "kept" ? { ...d, lens: placed.row.lens as Derived["lens"] } : d, placed.row.overlay, t.today));
+  }
   // A row moved by a member stays when the night no longer derives it, as the stored row would.
   const kept = Object.entries(state)
-    .filter(([key, o]) => o.status && o.status !== "new" && !derivedRows.some((r) => `${r.lens}|${r.url_key}` === key))
+    .filter(([key, o]) => o.status && o.status !== "new" && !used.has(key))
     .map(([key, o]) => ({ key, o }));
   const stale = kept.map(({ key, o }) => {
     const [lens, ...rest] = key.split("|");
@@ -347,7 +393,8 @@ export function fixtureWorld(entry: OppFixtureState, t: TrackingWorld, clientId:
     return { ...storedRow(clientId, { lens: lens as Derived["lens"], url: `https://${urlKey}`, urlKey, domain: urlKey.split("/")[0]!, clusterId: null, route: "offer_resource", pageType: null, domainType: null, title: null, evidence: { ...emptyEvidence(t.today) }, orderKey: [0, 0, 0, 0, 0, t.today] }, o, t.today), live: false };
   });
   const rows = withoutPlaced([...derivedRows, ...stale, ...logged].map(opportunityOf).filter((o): o is Opportunity => o !== null), placedKeys);
-  return { rows, reads, placedKeys, refreshedTo: t.today, jobFailed: entry.jobFailed === true, derived: result.rows };
+  const cited = citedSummary({ answers, questions: t.questions, today: t.today, domain: t.domain, engines: t.engines }, reads);
+  return { rows, reads, placedKeys, refreshedTo: t.today, jobFailed: entry.jobFailed === true, cited, derived: result.rows };
 }
 
 const emptyEvidence = (to: Day) => ({ to, answers: 0, leaves_out: 0, others_named: 0, prompts: [], prompt_count: 0, engines: [], competitors: [], days_14: 0, days_7: 0, last_cited: null, rank: null, keyword: null, open: null });

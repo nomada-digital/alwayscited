@@ -4,7 +4,7 @@ import { urlKey } from "../../tracking/placements.ts";
 import { bare, domainTypeByRule, isEngineProperty } from "./classify-rules.ts";
 import { domainTypeOf, isOwnHost, pageTypeOf } from "./derive.ts";
 import { routeFor } from "./routes.ts";
-import { type DomainType, type KindRow, OPP_LIMITS, type PageFacts, type PageType, type Route } from "./types.ts";
+import { type DomainType, type KindRow, OPP_LIMITS, type PageFacts, type PageType, type Route, fitsRow } from "./types.ts";
 
 /**
  * "Log a site you found" (13 Oct 2026, DIY P7; spec 10 sections 3.6 and 4.7
@@ -33,12 +33,14 @@ export function checkLogUrl(raw: unknown, p: { domain: string; placedKeys: Reado
   }
   if ((u.protocol !== "https:" && u.protocol !== "http:") || !u.hostname.includes(".") || u.username || u.password) return { ok: false, why: "url" };
   const key = urlKey(u.toString());
-  if (!key) return { ok: false, why: "url" };
+  // The address as the URL parser writes it can be longer than what was typed (an encoded path): one past what a row
+  // holds is refused, never kept cut short as a broken link (13 Oct 2026, review of DIY P7).
+  if (!key || !fitsRow(u.toString(), key)) return { ok: false, why: "url" };
   const host = bare(u.hostname);
   if (isOwnHost(host, p.domain) || isEngineProperty(host) || p.placedKeys.has(key)) return { ok: false, why: "cannot_log" };
   const known = knownKind(host);
   if (known?.kind === "other" && domainTypeByRule(host) !== "community") return { ok: false, why: "cannot_log" };
-  return { ok: true, url: u.toString().slice(0, OPP_LIMITS.url), key, host };
+  return { ok: true, url: u.toString(), key, host };
 }
 
 /** A logged page's types and route, from what we read and the cache. Null when the route is "Leave it": nothing to approach. */

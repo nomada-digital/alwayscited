@@ -51,7 +51,8 @@ export type DetailProps = {
   whatItIs: WhatItIs | null;
   target: { label: string; url: string | null };
   targetRule: AdviceLine;
-  anchor: AdviceLine;
+  /** The anchor: our practice line, then Google's dated one (playbooks.advice.ts LINE_ANCHOR). */
+  anchor: readonly AdviceLine[];
   playbook: Book | null;
   playbookExtra: string | null;
   pitch: string | null;
@@ -64,6 +65,8 @@ export type DetailProps = {
   /** The pursue route's 303 when the cluster is full: the picker is the page's point now. */
   swapOpen: boolean;
   history: { at: string; text: string }[];
+  /** First cited by engine since it was pursued (payload.ts firstCitedLines); empty for a page never pursued. */
+  firstCited: string[];
   ask: { label: string } | null;
   upgrade: React.ReactNode;
 };
@@ -179,7 +182,9 @@ export default function OppDetail(p: DetailProps) {
               )}
             </p>
             <Advice line={p.targetRule} />
-            <Advice line={p.anchor} />
+            {p.anchor.map((line) => (
+              <Advice key={line.id} line={line} />
+            ))}
           </section>
 
           <section aria-labelledby="method-h" style={SECTION}>
@@ -313,6 +318,16 @@ export default function OppDetail(p: DetailProps) {
             ) : (
               <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>No changes yet.</p>
             )}
+            {p.firstCited.length ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderTop: `1px solid ${T.hair}`, paddingTop: "12px" }}>
+                <h3 style={{ margin: 0, fontSize: "14px", fontWeight: 700, color: T.ink }}>In the answers since you pursued it</h3>
+                <ul data-opp-first-cited="" style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "4px", fontSize: "14px", lineHeight: 1.5, color: T.ink }}>
+                  {p.firstCited.map((t, i) => (
+                    <li key={i}>{t}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </section>
         </div>
       </div>

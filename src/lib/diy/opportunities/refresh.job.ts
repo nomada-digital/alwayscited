@@ -10,7 +10,8 @@ import { citationKey, type DeriveInput, type DeriveResult, type Derived, type Se
 import { domainKey, pageKey } from "./classify-rules.ts";
 import { readKeyPages, readKinds, readOpportunityRows, readPageReads } from "./data.ts";
 import { compareOrder } from "./order.ts";
-import { type KindRow, type Opportunity } from "./types.ts";
+import { DERIVED_LENSES, placeDerived } from "./place.ts";
+import { type KindRow, type Opportunity, URL_MAX } from "./types.ts";
 
 /**
  * `opportunity_refresh` (13 Oct 2026, DIY P7; spec 10 sections 5.7 and 6.2):
@@ -29,8 +30,6 @@ import { type KindRow, type Opportunity } from "./types.ts";
 /** Every engine in the tier order the evidence lists them in. */
 export const ENGINE_ORDER: readonly string[] = Object.keys(ENGINE_SPECS);
 
-/** The lenses this job derives; a row of another lens (logged, P10's) is never touched by it. */
-const DERIVED_LENSES = new Set(["cited", "threads", "profiles", "lists", "own"]);
 
 type SerpRow = { keyword_id: string; run_date: Day; top: unknown };
 
@@ -75,22 +74,27 @@ export type RefreshPlan = {
  * What one refresh writes, from what derive made and what is stored. Pure.
  * A new row of a lens it derives that is not derived this run is set not
  * live; a moved row (pursued, won, not for us) keeps its status, and only its
- * evidence and first_cited are refreshed.
+ * evidence and first_cited are refreshed. A page already held in another
+ * lens is never doubled (`placeDerived`): a moved or logged row keeps its
+ * lens and status and takes the evidence; a new one moves to the new lens.
  */
 export function planRefresh(p: { clientId: string; today: Day; now: string; result: DeriveResult; existing: readonly Opportunity[]; answers: DeriveInput["answers"]; kinds: DeriveInput["kinds"] }): RefreshPlan {
-  const byKey = new Map(p.existing.map((o) => [rowKey(o.lens, o.urlKey), o]));
   const seen = new Set<string>();
   const inserts: Record<string, unknown>[] = [];
   const updates: { id: string; patch: Record<string, unknown> }[] = [];
+  /** Rows a derived row has claimed this run, so two derived rows never take one stored row. */
+  const claimed = new Set<string>();
   const sorted = [...p.result.rows].sort((a, b) => compareOrder({ key: a.orderKey, urlKey: a.urlKey }, { key: b.orderKey, urlKey: b.urlKey }));
   for (const d of sorted) {
-    const k = rowKey(d.lens, d.urlKey);
-    seen.add(k);
-    const had = byKey.get(k);
-    if (!had) {
+    const placed = placeDerived(d, p.existing.filter((o) => !claimed.has(o.id)));
+    if (placed.kind === "none") {
+      seen.add(rowKey(d.lens, d.urlKey));
       inserts.push(insertOf(p.clientId, d, p.today, p.now));
       continue;
     }
+    const had = placed.row;
+    claimed.add(had.id);
+    seen.add(rowKey(had.lens, had.urlKey));
     const firstSeen = had.firstSeen ?? p.today;
     const patch: Record<string, unknown> = {
       evidence: d.evidence,
@@ -98,11 +102,14 @@ export function planRefresh(p: { clientId: string; today: Day; now: string; resu
       last_seen: p.today,
       live: true,
       title: d.title ?? had.title,
-      page_type: d.pageType,
-      domain_type: d.domainType,
       updated_at: p.now,
     };
-    if (had.status === "new") Object.assign(patch, { route: d.route, cluster_id: d.clusterId });
+    // A logged row keeps the types and route it was logged with; any other takes tonight's types.
+    if (had.lens !== "logged") Object.assign(patch, { page_type: d.pageType, domain_type: d.domainType });
+    if (placed.kind === "relens") {
+      Object.assign(patch, { lens: d.lens, route: d.route, cluster_id: d.clusterId });
+      seen.add(rowKey(d.lens, d.urlKey));
+    } else if (had.status === "new" && had.lens !== "logged") Object.assign(patch, { route: d.route, cluster_id: d.clusterId });
     updates.push({ id: had.id, patch });
   }
   for (const o of p.existing) {
@@ -198,7 +205,8 @@ export function opportunityRefreshHandler(): JobHandler {
       const plan = planRefresh({ clientId: ctx.client.id, today: ctx.today, now: new Date().toISOString(), result, existing: input.existing, answers: input.answers, kinds: input.kinds });
       const done = await applyRefresh(ctx.db, ctx.client.id, plan);
       const live = result.rows.length;
-      return { outcome: "ok", note: `${live} rows derived; ${done.inserted} new, ${done.updated} updated; ${done.kinds} types set by rule; ${result.unclassified.length} pages wait for a type` };
+      const long = result.tooLong ? `; ${result.tooLong} pages skipped: address longer than ${URL_MAX} characters` : "";
+      return { outcome: "ok", note: `${live} rows derived; ${done.inserted} new, ${done.updated} updated; ${done.kinds} types set by rule; ${result.unclassified.length} pages wait for a type${long}` };
     },
   };
 }

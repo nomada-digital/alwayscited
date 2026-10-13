@@ -146,13 +146,15 @@ test("list (full) at 1280: header counts, the lenses with counts, the order line
   const header = await page.locator("[data-opp-header]").innerText();
   assert.match(header, /^\d+ pages the engines cite leave you out\. \d+ are best-of lists or comparisons\. 2 are threads\. Updated overnight from your checks to 29 Sep\.$/);
   const tabs = await page.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lenses"] a')].map((a) => a.textContent));
-  assert.deepEqual(tabs.map((t) => t!.replace(/\d+$/, "")), ["Cited, leaves you out", "Best-of lists on Google", "Threads", "Review and listing profiles", "Pages to publish or refresh", "Sites you logged"]);
+  // Each tab's name carries a separator before its count for screen readers ("Threads, 2", not "Threads2").
+  assert.deepEqual(tabs.map((t) => t!.replace(/, \d+$/, "")), ["Cited, leaves you out", "Best-of lists on Google", "Threads", "Review and listing profiles", "Pages to publish or refresh", "Sites you logged"]);
   // The order line sits in a closed disclosure: its words are in the page, shown on a click.
   assert.equal(await page.evaluate(() => document.querySelector("[data-opp-order]")!.textContent), "Most answers that cite it and leave you out first, then most of your prompts, then best-of lists and comparisons, then pages that rank on page 1 for one of your keywords, then still cited this week, then newest.");
   const row = await page.locator('[data-opp-row="opp-invoicing"]').innerText();
   assert.match(row, /The 9 best invoicing apps for freelancers \(2026\) - SmallBizDesk/);
   assert.match(row, /Ask to be added/);
-  assert.match(row, /Publisher · Best-of list · classified automatically/);
+  // The label sits on the half the model wrote; the page type here is the rules' ("best" in the address).
+  assert.match(row, /Publisher \(classified automatically\) · Best-of list/);
   assert.match(row, /Cited by ChatGPT and Perplexity for 2 of your prompts in the last 28 days \(36 answers\)\./);
   assert.match(row, /Names Brightbook and Ledgerline, not you \(read 27 Sep\)\./);
   assert.match(row, /updated on the page: Sep 2026 · still cited this week/);
@@ -186,7 +188,7 @@ test("the lenses: each tab lists its own rows, and its count is its rows", async
   }
   const { ctx, page } = await open(`${OPP}?lens=own`);
   assert.match(await text(page), /Publish your own best-of list/);
-  assert.match(await text(page), /The answers and Google's top 10 for 'accounting app for freelancers' show 5 best-of lists; you have none\./);
+  assert.match(await text(page), /The answers and Google's top 10 for 'accounting app for freelancers' show 5 best-of lists; none of yours ranks or is cited for it\./);
   assert.match(await text(page), /Your best-of list for 'invoicing software' isn't cited for its prompts and isn't in Google's top 5\./);
   assert.match(await text(page), /Your site · Best-of list/);
   await ctx.close();
@@ -204,13 +206,18 @@ test("one opportunity (Ask to be added, with U3): why, what it is, what to point
   assert.match(t, /Page type: Best-of list/);
   assert.match(await page.locator("[data-opp-criteria]").innerText(), /Ease of use/);
   assert.match(t, /Your page that ranks for this cluster's keyword:\s*https:\/\/tallyroo\.com\/invoicing/);
-  assert.match(t, /Anchor: your brand name or the page's title\. Never a keyword-rich anchor on an article you supply\.\s*Google documents this/);
+  // Two lines, each graded: the anchor to ask for is common practice; Google documents only the second (G1).
+  assert.match(t, /Anchor: your brand name or the page's title\.\s*Common practice/);
+  assert.match(t, /Never a keyword-rich anchor on an article you supply\.\s*Google documents this/);
+  assert.doesNotMatch(t, /Anchor: your brand name or the page's title\.\s*Google documents this/);
   assert.match(t, /Google's spam policies \(updated 28 Aug 2026\) treat buying links that pass ranking credit, excessive link exchanges, and keyword-rich anchor text in articles you supply as link spam\./);
   assert.match(t, /about an hour \(our estimate\)/);
   const pitch = await page.locator("[data-opp-pitch]").innerText();
   assert.match(pitch, /^Subject: An addition for 'The 9 best invoicing apps for freelancers \(2026\) - SmallBizDesk'/);
   assert.match(pitch, /\[first name\]/);
   assert.match(pitch, /Tallyroo \[the one fact that meets it\], shown here: https:\/\/tallyroo\.com\/invoicing\./);
+  // The copy button says its result in a status region, so a screen reader hears it.
+  assert.equal(await page.locator('section:has(#pitch-h) span[role="status"]').count(), 1);
   assert.match(t, /Start with the byline's author page, then the site's contact page or its team page\. We never supply names or addresses\./);
   assert.match(t, /Pursuing it adds the prompt 'best invoicing apps for freelancers' to 'invoicing software'/);
   // U3, the one upgrade slot: the mentioned service line, and why it shows.
@@ -347,7 +354,8 @@ test("the Pursuing view: status and date, the prompt added or the one that measu
   const { ctx, page } = await open(`${OPP}?view=pursuing`);
   const t = await page.locator("[data-opp-pursuing]").innerText();
   assert.match(t, /Pursuing since 20 Sep/);
-  assert.match(t, /Prompt added:\s*'What's a good alternative to Ledgerline for freelancers\?'/);
+  // On `full` P2's q1-5 keeps the origin P2 recorded, so it measures the page; the `capped` state has it added from the page.
+  assert.match(t, /Measured by:\s*'What's a good alternative to Ledgerline for freelancers\?'/);
   assert.match(t, /Measured by:\s*'What's the best payroll and accounting software\?'/);
   assert.match(t, /Your brand appears on the page: yes, since 27 Sep\. Link to tallyroo\.com: no\. Checked 27 Sep\./);
   assert.match(t, /Link to tallyroo\.com: yes, followed\./);
@@ -356,6 +364,57 @@ test("the Pursuing view: status and date, the prompt added or the one that measu
   assert.match(t, /Note: Wrote to the editor on 18 Sep\./);
   await ctx.close();
   await save(`${OPP}?view=pursuing`, "opportunities-pursuing", "full");
+  as("default", { diy: "capped" });
+  const { ctx: c2, page: p2 } = await open(`${OPP}?view=pursuing`);
+  assert.match(await p2.locator("[data-opp-pursuing]").innerText(), /Prompt added:\s*'What's a good alternative to Ledgerline for freelancers\?'/);
+  await c2.close();
+});
+
+test("U3 never on a page we have not read, nor on one that names you; History shows first cited by engine", async () => {
+  as("default");
+  for (const id of ["opp-rjs5lw", "opp-dmeqse", "opp-correction"]) {
+    const { ctx, page } = await open(`${OPP}/${id}`);
+    const t = await text(page);
+    assert.doesNotMatch(t, /Shown because this page names/, id);
+    assert.equal(await page.locator('[role="note"][aria-label="Upgrade"]').count(), 0, id);
+    if (id !== "opp-correction") assert.match(t, /What it is\s+Not read yet\. It is read overnight\./, id);
+    await ctx.close();
+  }
+  const { ctx, page } = await open(`${OPP}/opp-solo`);
+  assert.match(await page.locator("[data-opp-first-cited]").innerText(), /^First cited by \w+/);
+  await ctx.close();
+});
+
+test("JS off: every new cited, thread and profile page set aside - the cited tab never says every page names you", async () => {
+  as("default", { write: true });
+  const { ctx, page } = await open(OPP, 1280, false);
+  const ids = new Set<string>();
+  for (const lens of ["", "?lens=threads", "?lens=profiles"]) {
+    const { ctx: c, page: p } = await open(`${OPP}${lens}`, 1280, false);
+    for (const id of await p.evaluate(() => [...document.querySelectorAll("[data-opp-rows] > li")].map((li) => li.getAttribute("data-opp-row")!))) ids.add(id);
+    await c.close();
+  }
+  assert.ok(ids.size >= 15, `${ids.size} rows`);
+  for (const id of ids) {
+    const r = await post(`opportunity?id=${id}`, { do: "dismiss:not_relevant" });
+    assert.match(r.headers.get("location")!, /done=dismissed/, id);
+  }
+  await page.goto(BASE + OPP, { waitUntil: "load" });
+  const empty = await page.locator("[data-opp-empty]").innerText();
+  assert.doesNotMatch(empty, /names you/);
+  assert.match(empty, /^Nothing new to list right now\..*under Pursuing/);
+  await ctx.close();
+});
+
+test("JS off: logging a page you already have opens that row, and adds nothing", async () => {
+  as("default", { write: true });
+  const r = await post("opportunity", { do: "log", url: "https://consultingtools.example/best-accounting-software-for-consultants" });
+  assert.match(r.headers.get("location")!, /\/opportunities\/opp-log-1\?done=already$/);
+  const { ctx, page } = await open(`${OPP}/opp-log-1?done=already`);
+  assert.equal(await toast(page), "This page is already in your opportunities. Here it is.");
+  await ctx.close();
+  const cited = await post("opportunity", { do: "log", url: "https://smallbizdesk.example/best-invoicing-apps-for-freelancers" });
+  assert.match(cited.headers.get("location")!, /\/opportunities\/opp-invoicing\?done=already$/, "a page cited and listed already is that row");
 });
 
 test("the Methods view: every route's playbook, graded line by line, with Google's dated line", async () => {
@@ -420,8 +479,8 @@ test("day 0: no citations, so only best-of lists on Google and your own pages", 
   const { ctx, page } = await open(OPP);
   assert.match(await page.locator("[data-opp-empty]").innerText(), /^Opportunities come from the pages the engines cite for your prompts\./);
   const tabs = await page.evaluate(() => [...document.querySelectorAll('nav[aria-label="Lenses"] a')].map((a) => a.textContent));
-  assert.ok(tabs.some((x) => /^Best-of lists on Google[1-9]/.test(x!)));
-  assert.ok(tabs.some((x) => /^Threads0$/.test(x!)));
+  assert.ok(tabs.some((x) => /^Best-of lists on Google, [1-9]/.test(x!)));
+  assert.ok(tabs.some((x) => /^Threads, 0$/.test(x!)));
   await ctx.close();
   await save(OPP, "opportunities-list", "day0");
 });

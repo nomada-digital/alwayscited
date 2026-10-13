@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { allowanceFor, allowanceMonth, usedUpLine } from "@/lib/diy/core/allowances";
 import { loadDiyClient, fixtureDiyClient, type DiyClient } from "@/lib/diy/core/client";
 import { diyFixtureState } from "@/lib/diy/core/fixture";
 import { loadDiyEnabled } from "@/lib/diy/core/settings";
@@ -15,7 +16,7 @@ import type { MemberClient } from "@/lib/tracking/member";
 import { type TrackingRepo, writableFixture, writeFixture } from "@/lib/tracking/repo";
 
 import { type OppFixtureState, type OppWorld, type Overlay, fixtureEntry, fixtureWorld, oppFixture, overlayKey, readFixtureFile, readKeyPages, readRankingUrl, readWorld } from "./data";
-import { citationKey } from "./derive";
+import { type CitedSummary, citationKey, citedSummary } from "./derive";
 import type { PromptPort } from "./prompt-step";
 import { ENGINE_ORDER } from "./refresh.job";
 import type { Opportunity } from "./types";
@@ -56,6 +57,30 @@ export async function loadOppWorld(repo: TrackingRepo, client: Client): Promise<
   const db = supabaseAdmin();
   const [world, enabled] = await Promise.all([readWorld(db, client.id), loadDiyEnabled(db)]);
   return { ...world, enabled, entry: null };
+}
+
+/**
+ * What the cited pages in the window say about naming the client, for the
+ * cited tab's empty state: the fixture's from its world, Supabase's from the
+ * last 28 days of answers. Read only when that tab is empty, so the list's
+ * usual load reads no answers. A failed read throws: the caller's section
+ * then shows the plain line, never a claim.
+ */
+export async function loadCitedSummary(repo: TrackingRepo, client: Client, world: OppWorld): Promise<CitedSummary> {
+  if (world.cited) return world.cited;
+  const t = await trackingWorld(repo, client);
+  return citedSummary({ answers: t.answers, questions: t.questions, today: t.today, domain: t.domain, engines: t.engines }, world.reads);
+}
+
+/**
+ * The words a refused read's toast needs from this client: the day its
+ * allowance month turns, and the used-up line for its link checks (which Log
+ * a site and Verify now share).
+ */
+export function linkCheckWords(client: Pick<Client, "market" | "trial_ends_at">, now: number): { resets: string; allowanceLine: string | null } {
+  const trial = Boolean(client.trial_ends_at && Date.parse(client.trial_ends_at) > now);
+  const limit = allowanceFor("link_checks", { trial });
+  return { resets: allowanceMonth(client.market, now).resetsLabel, allowanceLine: usedUpLine("link_checks", limit, { trial, market: client.market }, now) };
 }
 
 /** The client's ranking page for a keyword and its key pages, for "What to point it at". */

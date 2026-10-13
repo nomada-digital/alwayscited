@@ -16,7 +16,10 @@
 -- whether it names the client with a snippet of at most 200 characters, which
 -- competitors from the evidence it names, and whether it links to the client.
 -- No body text is stored (section 8.1, copyright). One row per client and page,
--- replaced by each read.
+-- replaced by each read - except that a failed read never replaces a good one:
+-- it sets attempted_at only, and the night's picker waits 14 days from the
+-- later of read_at and attempted_at (13 Oct 2026, review of DIY P7: a page
+-- that had started failing was picked every night).
 --
 -- opportunities: one row per client, page and lens. Departures from the spec's
 -- SQL (section 5.8), each made before this file was ever applied:
@@ -70,6 +73,7 @@ create table if not exists page_reads (
   links_to_client boolean,
   link_rel text check (link_rel is null or link_rel in ('followed','not_followed')),
   link_anchor text check (link_anchor is null or char_length(link_anchor) <= 200),
+  attempted_at timestamptz,
   read_id uuid references diy_reads(id) on delete set null,
   unique (client_domain_id, url_key)
 );

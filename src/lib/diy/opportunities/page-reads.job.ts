@@ -39,14 +39,21 @@ export const STALE_DAYS = 14;
 
 const READ_LENSES = new Set(["cited", "threads", "profiles", "lists", "logged"]);
 
-/** The pages to read tonight: listed and new, never read or read STALE_DAYS ago, in list order. Pure. */
+/** When a page was last tried: its read, or a later try that could not see it (record.ts writePageRead). */
+const lastTry = (r: PageFacts): string => (r.attemptedAt && r.attemptedAt > r.readAt ? r.attemptedAt : r.readAt);
+
+/**
+ * The pages to read tonight: listed and new, never read, or last tried
+ * STALE_DAYS ago, in list order. A page whose reads have started failing
+ * waits from its last try, not its last good read. Pure.
+ */
 export function pickReads(rows: readonly Opportunity[], reads: ReadonlyMap<string, PageFacts>, today: Day, max = READS_PER_NIGHT): Opportunity[] {
   const stale = addDays(today, -STALE_DAYS);
   return rows
     .filter((o) => o.status === "new" && o.live && READ_LENSES.has(o.lens) && /^https?:\/\//.test(o.url))
     .filter((o) => {
       const r = reads.get(o.urlKey);
-      return !r || r.readAt.slice(0, 10) <= stale;
+      return !r || lastTry(r).slice(0, 10) <= stale;
     })
     .sort((a, b) => {
       const unread = Number(reads.has(a.urlKey)) - Number(reads.has(b.urlKey));

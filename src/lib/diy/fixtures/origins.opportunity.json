@@ -1,5 +1,5 @@
 {
- "full": [
+ "capped": [
   {
    "id": "q1-5",
    "source": "client",

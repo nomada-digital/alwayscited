@@ -252,8 +252,7 @@ describe("AI visibility", () => {
     // draws its recorded origin's chip (origins.json: q1-1 by its legacy source scan and q1-2 setup, q1-3 and q1-5
     // you, q1-4 and q2-1 nomada digital) and every other row none - the fact this line held moved with the wiring.
     const chips = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-prompt]")].flatMap((r) => { const o = r.querySelector("[data-origin]")?.getAttribute("data-origin"); return o ? [[r.getAttribute("data-prompt"), o]] : []; })));
-    // 13 Oct 2026, DIY P7: q1-5 was added from a pursued page in wave 2 (src/lib/diy/fixtures/origins.opportunity.json), so its chip is Opportunity.
-    assert.deepEqual(chips, { "q1-1": "setup", "q1-2": "setup", "q1-3": "client", "q1-4": "nomada", "q1-5": "opportunity", "q2-1": "nomada" });
+    assert.deepEqual(chips, { "q1-1": "setup", "q1-2": "setup", "q1-3": "client", "q1-4": "nomada", "q1-5": "client", "q2-1": "nomada" });
     // The chip's words run into the next cell's figure in textContent ("Origin: Setup0 of 4"), so the words are matched whole.
     assert.equal((await text(page, "[data-prompt]")).filter((t) => /Origin: Setup/.test(t)).length, 2, "Setup on a row with no recorded origin");
     // Every row link resolves; the never-named upgrade prompt shows with its reason.

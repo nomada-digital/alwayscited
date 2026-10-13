@@ -123,8 +123,11 @@ function List(p: Parameters<typeof Opportunities>[0] & { href: (over: Partial<Re
       {p.tabs ? (
         <ChipRow label="Lenses" current={p.lens}>
           {TAB_LENSES.map((l) => (
-            <Link key={l} href={p.href({ lens: l === "cited" ? null : l, page: null })} aria-current={p.lens === l ? "page" : undefined} style={PILL(p.lens === l)}>
+            // Positioned, so the absolute .sr-only separator stays inside the tab rather than escaping the scroller (globals.css).
+            <Link key={l} href={p.href({ lens: l === "cited" ? null : l, page: null })} aria-current={p.lens === l ? "page" : undefined} style={{ ...PILL(p.lens === l), position: "relative" }}>
               {LENS_LABEL[l]}
+              {/* A separator for screen readers, so the name is "Threads, 2", not "Threads2" (13 Oct 2026, review of DIY P7). */}
+              <span className="sr-only">, </span>
               <span style={{ fontWeight: 400, color: T.soft }}>{p.tabs?.[l] ?? 0}</span>
             </Link>
           ))}

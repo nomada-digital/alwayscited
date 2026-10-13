@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { promptsDb } from "../prompts/fake-prompts-db.mts";
 
-import { ENDED_REASON, VIEWER_REASON, decideOpp, ensureOpportunity, historyOf, oppToast, opportunityOf, pursueOpportunity, pursuitCap, planCandidate, planMoveFor } from "./status.ts";
+import { ENDED_REASON, VIEWER_REASON, decideOpp, ensureOpportunity, historyOf, oppToast, opportunityOf, pursueOpportunity, pursuitCap, planCandidate, planMoveFor, readWhy } from "./status.ts";
 import { EMPTY_EVIDENCE } from "./types.ts";
 
 /**
@@ -75,6 +75,23 @@ test("toasts are fixed words; an unknown code draws nothing, and nothing is echo
   assert.equal(oppToast("<script>", null), null);
   assert.equal(oppToast("refused", "<b>x</b>")!.text, "That didn't save. Try again in a moment.");
   assert.match(oppToast("asked", null, { cap: 10, who: "your account contact", member: "a@example.com" })!.text, /^Sent to your account contact\. They'll reply to a@example\.com\.$/);
+});
+
+test("a refused paid read answers with section 5.6's own words; a log whose read was refused is still logged (review of DIY P7, 13 Oct 2026)", () => {
+  const p = { cap: 10, resets: "1 Nov", allowanceLine: "You've used this month's 30 link checks. They reset on 1 Nov." };
+  const codes = ["tracking_running", "global_daily", "model_headroom", "door_daily", "month_budget", "allowance", "disabled", "client_inactive", "ledger_unreadable", "deadline", "fixture"] as const;
+  for (const c of codes) {
+    const t = oppToast("refused", readWhy(c), p)!;
+    assert.equal(t.tone, "bad", c);
+    assert.ok(t.text.length > 0, c);
+  }
+  assert.equal(oppToast("refused", readWhy("door_daily"), p)!.text, "That's today's limit for this check. More tomorrow.");
+  assert.equal(oppToast("refused", readWhy("month_budget"), p)!.text, "This month's research is used. It resets on 1 Nov.");
+  assert.equal(oppToast("refused", "allowance", p)!.text, "You've used this month's 30 link checks. They reset on 1 Nov.");
+  assert.equal(oppToast("refused", readWhy("disabled"), p)!.text, "This check isn't switched on yet.");
+  assert.equal(oppToast("logged", readWhy("door_daily"), p)!.text, "Logged. It wasn't read just now: that's today's limit for this check. More tomorrow.");
+  assert.equal(oppToast("logged", null, p)!.text, "Logged. Its facts are below once it has been read.");
+  assert.equal(oppToast("already", null, p)!.text, "This page is already in your opportunities. Here it is.");
 });
 
 test("ensureOpportunity: every lens, link_domain included; idempotent on (client, page, lens); a bad lens or URL is refused", async () => {

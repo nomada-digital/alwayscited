@@ -5,7 +5,7 @@
  * Illustrative: Tallyroo and every brand and site shown are made up.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -148,11 +148,9 @@ test("the fixture: origins.json's rows and the fixture's own origin columns, for
   assert.equal(m.get("q1-pl1")?.placement, true);
 });
 
-test("origins.json: the six prompts with chips on the full fixture, and only setup, client and nomada (no opportunity or momentum prompt in P2's own file)", async () => {
-  // 13 Oct 2026, DIY P7: wave 2 adds its own origins.<pkg>.json beside P2's file (spec 10 section 7.0 item 6) - P7's
-  // opportunity rows, P6's momentum rows - so the fact this records is now P2's file alone, read alone. The merge of
-  // the files is the next test's, and P7's opportunity row is its own package's fixture test's (opportunities/data.test.mts).
-  const p2 = ((JSON.parse(readFileSync(join(ROOT, "src", "lib", "diy", "fixtures", "origins.json"), "utf8")) as { full: { id: string }[] }).full as Parameters<typeof originOf>[0][]).filter((r) => /^q\d+-\d+$/.test(r.id));
+test("origins.json: the six prompts with chips on the full fixture, and only setup, client and nomada (no opportunity or momentum prompt exists before W2)", async () => {
+  const rows = await readOriginsFiles(join(ROOT, "src", "lib", "diy", "fixtures"), "full");
+  const p2 = rows.filter((r) => /^q\d+-\d+$/.test(r.id));
   assert.equal(p2.length, 6);
   const kinds = new Set(p2.map((r) => originOf(r)?.kind));
   assert.deepEqual([...kinds].sort(), ["client", "nomada", "setup"]);

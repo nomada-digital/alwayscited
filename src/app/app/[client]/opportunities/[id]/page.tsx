@@ -12,12 +12,12 @@ import { section } from "@/lib/diy/plan/data";
 import { brief, targetPage } from "@/lib/diy/opportunities/brief";
 import { askLabel, historyLines, movesFor, promptState, statusLine } from "@/lib/diy/opportunities/detail";
 import { answerLinker, promptPlaces } from "@/lib/diy/opportunities/links";
-import { lastCitedText, pathOf, typesLine, whyFacts } from "@/lib/diy/opportunities/payload";
+import { firstCitedLines, lastCitedText, pathOf, typesLine, u3LeavesOut, whyFacts } from "@/lib/diy/opportunities/payload";
 import { offeredPrompt } from "@/lib/diy/opportunities/prompt-step";
 import { U3_ROUTES } from "@/lib/diy/opportunities/routes";
 import { ENDED_REASON, VIEWER_REASON, oppToast, pursuitCap } from "@/lib/diy/opportunities/status";
 import { ACTIVE, OPP_ID, PAGE_TYPE_LABEL, ROUTE_LABEL } from "@/lib/diy/opportunities/types";
-import { loadOppWorld, loadTargets } from "@/lib/diy/opportunities/world";
+import { linkCheckWords, loadOppWorld, loadTargets } from "@/lib/diy/opportunities/world";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 import { swapCandidates } from "@/lib/diy/prompts/swap";
 import { addDays } from "@/lib/tracking/figures";
@@ -107,13 +107,15 @@ export default async function ClientOpportunity({ params, searchParams }: { para
     candidates,
   });
 
+  const prompts = new Map(structure.questions.map((q) => [q.id, q.text]));
   const trial = Boolean(client.trial_ends_at && Date.parse(client.trial_ends_at) > repo.now());
   const cap = pursuitCap({ trial });
   const active = world.rows.filter((o) => ACTIVE.includes(o.status)).length;
-  const names = shown?.status === "ok" && shown.namesClient === false && shown.brandsFound.length ? shown.brandsFound : opp.evidence.competitors;
   const clusterOpen = world.rows.filter((o) => o.clusterId === opp.clusterId && o.status === "new" && o.live).length;
-  const facts3 = { tier, mode: upgrade.mode, state: dark ? ("dark" as const) : ("ok" as const), startedOn: client.started_on ?? today, today, hidden: upgrade.hidden, leavesOut: U3_ROUTES.includes(opp.route) && opp.status !== "won" ? { names, answers: opp.evidence.answers, days: 28, status: opp.status, clusterOpen } : undefined };
-  const row = pickRow(facts3);
+  // U3 only from the page as read (payload.ts u3LeavesOut), and no upgrade surface for an ended client (section 2.2).
+  const ended = client.status === "ended";
+  const facts3 = { tier, mode: upgrade.mode, state: dark ? ("dark" as const) : ("ok" as const), startedOn: client.started_on ?? today, today, hidden: upgrade.hidden, leavesOut: u3LeavesOut(opp, shown, { dark, clusterOpen, routes: U3_ROUTES }) };
+  const row = ended ? null : pickRow(facts3);
   const copy = row === "U3" ? rowCopy("U3", facts3) : null;
   const upgradeSlot = copy ? <UpgradePrompt copy={copy} cta="mentioned" slug={slug} items={/^[0-9a-f-]{36}$/i.test(opp.id) ? [opp.id] : []} keep={{ kind: "opportunity", id: opp.id }} surface="opportunity" /> : null;
   const who = upgrade.mode === "agency" ? "your account contact" : "nomada digital";
@@ -135,7 +137,7 @@ export default async function ClientOpportunity({ params, searchParams }: { para
           statusLine={statusLine(opp)}
           cluster={cluster ? { id: cluster.id, name: cluster.name } : null}
           clusterHref={cluster ? clusterPath(cluster.id) : null}
-          toast={oppToast(one("done"), one("why"), { cap, who, member: email })}
+          toast={oppToast(one("done"), one("why"), { cap, who, member: email, ...linkCheckWords(client, repo.now()) })}
           readOnly={canWrite ? null : reason}
           canWrite={canWrite}
           cap={{ active, cap, atCap: active >= cap, line: `You're working ${cap} pages at once. Mark one won, declined or not for us to pursue another.` }}
@@ -158,8 +160,9 @@ export default async function ClientOpportunity({ params, searchParams }: { para
           prompt={prompt}
           swapOpen={swapOpen}
           history={historyLines(opp.history)}
+          firstCited={firstCitedLines(opp, prompts)}
           ask={(() => {
-            const label = askLabel({ placed: placedTier(tier), mode: upgrade.mode });
+            const label = askLabel({ placed: placedTier(tier), mode: upgrade.mode, ended });
             return label ? { label } : null;
           })()}
           upgrade={upgradeSlot}

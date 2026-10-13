@@ -39,7 +39,8 @@ test("the snippet is at most 200 characters around the first mention, and no bod
   assert.ok(f.snippet && f.snippet.length <= 200, `snippet ${f.snippet?.length}`);
   assert.ok(f.snippet!.includes("Tallyroo"));
   const row = readRow("client-1", f);
-  assert.deepEqual(Object.keys(row).sort(), ["brands_found", "client_domain_id", "client_snippet", "h1", "headings", "http_status", "link_anchor", "link_rel", "links_to_client", "names_client", "read_at", "read_id", "status", "title", "updated_on", "url", "url_key", "via"].sort());
+  // 13 Oct 2026, review of DIY P7: attempted_at joins the row (null when a read replaces it), so the night waits from a failed try.
+  assert.deepEqual(Object.keys(row).sort(), ["attempted_at", "brands_found", "client_domain_id", "client_snippet", "h1", "headings", "http_status", "link_anchor", "link_rel", "links_to_client", "names_client", "read_at", "read_id", "status", "title", "updated_on", "url", "url_key", "via"].sort());
   assert.ok(!JSON.stringify(row).includes("More words follow here. More words follow here. More words follow here."), "the body is not in the row");
   assert.equal(snippetAround("No mention at all.", SUBJECT), null);
 });

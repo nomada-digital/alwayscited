@@ -8,7 +8,7 @@ import { addDays, brandsRead, citedPage, type Day } from "../../tracking/figures
 import { bare, domainKey, domainTypeByRule, isEngineProperty, pageKey, pageTypeByRule } from "./classify-rules.ts";
 import { type OrderKey, orderKey } from "./order.ts";
 import { lensFor, routeFor } from "./routes.ts";
-import { type DomainType, EMPTY_EVIDENCE, type KindRow, LIST_TYPES, type Lens, type OppEvidence, type PageFacts, type PageType, type Route } from "./types.ts";
+import { type DomainType, EMPTY_EVIDENCE, type KindRow, LIST_TYPES, type Lens, type OppEvidence, type PageFacts, type PageType, type Route, fitsRow } from "./types.ts";
 
 /**
  * The AI-cited opportunity engine's derivation (13 Oct 2026, DIY P7; spec 10
@@ -53,6 +53,10 @@ import { type DomainType, EMPTY_EVIDENCE, type KindRow, LIST_TYPES, type Lens, t
  * 7. **Cluster**: the cluster whose prompts produced the most citing
  *    answers; ties to the higher keyword volume.
  * 8. **Evidence**: types.ts OppEvidence, our counts only.
+ *
+ * A page whose address or key is longer than a row holds (types.ts URL_MAX)
+ * is skipped and counted (`tooLong`, in the night's note), never written cut
+ * short (13 Oct 2026, review of DIY P7).
  */
 
 export const WINDOW_DAYS = 28;
@@ -118,6 +122,8 @@ export type DeriveResult = {
   unclassified: Unclassified[];
   /** Competitor brands this window, by key, with the spelling most named. */
   competitors: Map<string, { name: string; answers: number }>;
+  /** Pages skipped because their address or key is longer than a row holds. */
+  tooLong: number;
 };
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -352,10 +358,17 @@ export function derive(input: DeriveInput): DeriveResult {
   const aiCited = new Set<string>();
 
   // Steps 1-3, 5, 7, 8: the pages the engines cite.
+  const long = new Set<string>();
+  const fits = (url: string, key: string) => {
+    if (fitsRow(url, key)) return true;
+    long.add(key);
+    return false;
+  };
   for (const [key, g] of pages) {
     if (isExcludedHost(g.host) || input.placedKeys.has(key)) continue;
     const days14 = [...g.days].filter((d) => d >= from14).length;
     if (days14 < QUALIFY_MIN_DAYS) continue;
+    if (!fits(g.url, key)) continue;
     // Typed before the competitor rule, so an unclassified rival-looking domain is sent to be classified and can come back.
     noteRule(g.host, g.url, key, input.reads.get(key)?.title ?? null);
     askModel(g.host, g.url, key);
@@ -396,6 +409,7 @@ export function derive(input: DeriveInput): DeriveResult {
   for (const [key, r] of ranked) {
     if (aiCited.has(key) || isOwnHost(r.host, input.domain)) continue;
     if (isExcludedHost(r.host) || input.placedKeys.has(key)) continue;
+    if (!fits(r.url, key)) continue;
     const read = input.reads.get(key) ?? null;
     noteRule(r.host, r.url, key, read?.title ?? null);
     askModel(r.host, r.url, key);
@@ -460,11 +474,44 @@ export function derive(input: DeriveInput): DeriveResult {
     }
     if (ofType.some(([, m]) => m.cited || (m.rank !== null && m.rank <= 5))) continue;
     const [key, m] = ofType[0]!;
+    if (!fits(m.url, key)) continue;
     const evidence: OppEvidence = { ...base, rank: m.rank };
     rows.push({ lens: "own", url: m.url, urlKey: key, domain: bare(input.domain), clusterId: c.id, route: "refresh_own", pageType: type, domainType: null, title: null, evidence, orderKey: orderKey(evidence, type, null) });
   }
 
-  return { rows, ruleKinds: [...ruleKinds.values()], unclassified: [...unclassified.values()], competitors };
+  return { rows, ruleKinds: [...ruleKinds.values()], unclassified: [...unclassified.values()], competitors, tooLong: long.size };
+}
+
+/** What the cited pages in the window say about naming the client: the Opportunities empty state's facts. */
+export type CitedSummary = {
+  /** Pages on other sites cited in the 28 days (the engines' own properties aside), whoever's they are. */
+  pages: number;
+  /** Of those, the pages whose latest read could see them and found the client named. */
+  readNamingYou: number;
+  /** The client's own pages cited. */
+  own: number;
+};
+
+/**
+ * Whether every page the engines cite names the client, as far as we know it
+ * (13 Oct 2026, review of DIY P7). Only a read decides that a page names the
+ * client: an answer that names the client says nothing about the page it
+ * cites, and a page never read is not known to. Every other site's page
+ * counts - a competitor's, an institution's, one where Nomada has placed
+ * another client - since "every page names you" is false while any of them
+ * does not; none of them is named or counted on the page. Pure.
+ */
+export function citedSummary(input: Pick<DeriveInput, "answers" | "questions" | "today" | "domain" | "engines">, reads: ReadonlyMap<string, PageFacts>): CitedSummary {
+  const { pages, own } = aggregateCitations(input);
+  let n = 0;
+  let naming = 0;
+  for (const [key, g] of pages) {
+    if (isEngineProperty(bare(g.host))) continue;
+    n++;
+    const r = reads.get(key);
+    if (r?.status === "ok" && r.namesClient === true) naming++;
+  }
+  return { pages: n, readNamingYou: naming, own: own.size };
 }
 
 /**

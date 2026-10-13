@@ -7,6 +7,7 @@ import { domainTypeByRule, pageTypeByRule } from "./classify-rules.ts";
 import { CLASSIFIED_LABEL } from "../core/evidence.ts";
 import { compareOrder, orderKey } from "./order.ts";
 import { pursuingLine } from "./verify.ts";
+import type { CitedSummary } from "./derive.ts";
 
 /**
  * What the Opportunities pages are handed (13 Oct 2026, DIY P7; spec 10
@@ -72,23 +73,32 @@ export function pathOf(url: string): string {
 /**
  * "Publisher · Best-of list", or "not classified yet" for a blank; an `own`
  * row is on the client's own site. A type the rules did not settle was
- * written by a model, and says so (spec 10 section 2.6: "classified
- * automatically").
+ * written by a model, and the half it wrote says so (spec 10 section 2.6:
+ * "classified automatically"), as Cited pages labels each column: "Publisher
+ * (classified automatically) · Best-of list". A blank half is never labelled:
+ * nothing wrote it (13 Oct 2026, review of DIY P7).
  */
 export function typesLine(o: Pick<Opportunity, "domainType" | "pageType"> & { lens?: Opportunity["lens"]; url?: string; domain?: string; title?: string | null }): string {
-  const d = o.lens === "own" ? "Your site" : o.domainType ? DOMAIN_TYPE_LABEL[o.domainType] : null;
-  const p = o.pageType ? PAGE_TYPE_LABEL[o.pageType] : null;
+  const auto = o.lens === "own" ? { domain: false, page: false } : modelHalves(o);
+  const mark = (label: string, byModel: boolean) => (byModel ? `${label} (${CLASSIFIED_LABEL})` : label);
+  const d = o.lens === "own" ? "Your site" : o.domainType ? mark(DOMAIN_TYPE_LABEL[o.domainType], auto.domain) : null;
+  const p = o.pageType ? mark(PAGE_TYPE_LABEL[o.pageType], auto.page) : null;
   if (!d && !p) return NOT_CLASSIFIED;
-  const line = [d ?? NOT_CLASSIFIED, p ?? NOT_CLASSIFIED].join(" · ");
-  return o.lens !== "own" && byModel(o) ? `${line} · ${CLASSIFIED_LABEL}` : line;
+  return [d ?? NOT_CLASSIFIED, p ?? NOT_CLASSIFIED].join(" · ");
 }
 
-/** Whether a row's domain or page type came from the classify call rather than the rules. */
-export function byModel(o: Pick<Opportunity, "domainType" | "pageType"> & { url?: string; domain?: string; title?: string | null }): boolean {
-  if (!o.url || !o.domain) return false;
+/** Which of a row's types came from the classify call rather than the rules: a type set and not the rule's. */
+export function modelHalves(o: Pick<Opportunity, "domainType" | "pageType"> & { url?: string; domain?: string; title?: string | null }): { domain: boolean; page: boolean } {
+  if (!o.url || !o.domain) return { domain: false, page: false };
   const ruleD = domainTypeByRule(o.domain);
   const ruleP = pageTypeByRule(o.url, o.title ?? null, ruleD ?? o.domainType);
-  return (o.domainType !== null && o.domainType !== ruleD) || (o.pageType !== null && o.pageType !== ruleP);
+  return { domain: o.domainType !== null && o.domainType !== ruleD, page: o.pageType !== null && o.pageType !== ruleP };
+}
+
+/** Whether either of a row's types came from the classify call. */
+export function byModel(o: Parameters<typeof modelHalves>[0]): boolean {
+  const h = modelHalves(o);
+  return h.domain || h.page;
 }
 
 const typeWords = (t: PageType | null | undefined, n: number) => {
@@ -102,7 +112,8 @@ export function whyLine(o: Opportunity): string {
   const e = o.evidence;
   if (o.lens === "own") {
     const kw = e.keyword ? `'${e.keyword}'` : "this cluster";
-    if (o.route === "publish_own") return `The answers and Google's top 10 for ${kw} show ${plural(e.own_seen ?? 0, typeWords(e.own_type, 1), typeWords(e.own_type, 2))}; you have none.`;
+    // Our data only (spec 10 section 6.10): derive looks at the client's pages that rank, are cited, or are key pages, typed by their address.
+    if (o.route === "publish_own") return `The answers and Google's top 10 for ${kw} show ${plural(e.own_seen ?? 0, typeWords(e.own_type, 1), typeWords(e.own_type, 2))}; none of yours ranks or is cited for it.`;
     return `Your ${typeWords(e.own_type, 1)} for ${kw} isn't cited for its prompts and isn't in Google's top 5${e.rank ? ` (it is #${e.rank})` : ""}.`;
   }
   if (o.lens === "lists") return e.rank && e.keyword ? `Ranks #${e.rank} on Google for '${e.keyword}'.` : "In Google's top 10 for one of your keywords.";
@@ -184,6 +195,49 @@ export function headerLine(c: { total: number; lists: number; threads: number },
   return parts.join(" ");
 }
 
+/** The cited tab's empty states' words (spec 10 section 4.7, States). */
+export const EMPTY_NO_CITATIONS = "Opportunities come from the pages the engines cite for your prompts. No page on another site has been cited yet; they fill in overnight once one is.";
+export const EMPTY_ALL_NAME_YOU = "Every page the engines cite for these prompts names you. The next gains are on Google: see Your pages.";
+export const EMPTY_NONE_NEW = "Nothing new to list right now. A page is listed once the engines cite it on 2 of the last 14 days and it leaves you out.";
+
+/**
+ * The cited tab's empty state, said only as far as we know it (13 Oct 2026,
+ * review of DIY P7: "Every page ... names you" showed whenever any one read
+ * named the client, including after the member had set every page aside).
+ *
+ * - No page on another site cited in the window: "no citations yet".
+ * - Every one of them read, and every read found the client named: "every
+ *   page names you". A page never read is not known to name the client, and
+ *   an answer naming the client says nothing about the page it cites.
+ * - Otherwise nothing new qualifies, and the line says where the rest went:
+ *   to Pursuing, or to the other tabs. It names no page and no count, so a
+ *   page left out (another client's placement, a competitor's) is not hinted at.
+ *
+ * `cited` is null when the summary could not be read: the plain line, never
+ * a claim. Pure.
+ */
+export function citedEmpty(cited: CitedSummary | null, rows: readonly Opportunity[]): string {
+  if (cited && cited.pages === 0) return EMPTY_NO_CITATIONS;
+  if (cited && cited.readNamingYou === cited.pages) return EMPTY_ALL_NAME_YOU;
+  const worked = rows.some((o) => AI_CITED_LENSES.includes(o.lens) && o.status !== "new");
+  return `${EMPTY_NONE_NEW} ${worked ? "Pages you're working on are under Pursuing; pages you marked not for us stay out of this list." : "Best-of lists on Google and your own pages are in the other tabs."}`;
+}
+
+/**
+ * U3's facts on one opportunity (spec 10 section 2.7: the page names at least
+ * two competitors and not you), from the page as we read it and nothing else
+ * (13 Oct 2026, review of DIY P7: the answers' brands were used for an unread
+ * page, so "Shown because this page names X and Y, not you" was a claim about
+ * a page nobody had read). Only a read that could see the page, found the
+ * client not named and found two or more of the competitors fills it; any
+ * other page gives none, so U3 does not fire. Pure.
+ */
+export function u3LeavesOut(o: Pick<Opportunity, "route" | "status" | "evidence">, facts: PageFacts | null, p: { dark: boolean; clusterOpen: number; routes: readonly Route[] }): { names: string[]; answers: number; days: number; status: string; clusterOpen: number } | undefined {
+  if (p.dark || !p.routes.includes(o.route) || o.status === "won") return undefined;
+  if (!facts || facts.status !== "ok" || facts.namesClient !== false || facts.brandsFound.length < 2) return undefined;
+  return { names: facts.brandsFound, answers: o.evidence.answers, days: 28, status: o.status, clusterOpen: p.clusterOpen };
+}
+
 /** The tab counts. */
 export function tabCounts(rows: readonly Opportunity[]): Record<TabLens, number> {
   const n = (l: TabLens) => listed(rows, l).length;
@@ -221,6 +275,21 @@ export function firstCitedLine(o: Opportunity, prompts: ReadonlyMap<string, stri
   const text = prompts.get(at.prompt);
   const more = firsts.length > 1 ? ` Then ${and(firsts.slice(1).map(([e]) => engineName(e)))}.` : "";
   return `First cited by ${engineName(engine)}${text ? ` for '${text}'` : ""} on ${formatDay(at.day)}.${more}`;
+}
+
+/**
+ * The History block's first-cited readout (spec 10 section 4.7: "first-cited
+ * by engine"): one line per engine, the earliest first - "First cited by
+ * Perplexity for 'best invoicing apps' on 9 Nov." - or, pursued and not cited
+ * since, the one line saying so. Empty for a page never pursued.
+ */
+export function firstCitedLines(o: Pick<Opportunity, "firstCited" | "pursuedOn">, prompts: ReadonlyMap<string, string>): string[] {
+  const firsts = Object.entries(o.firstCited ?? {}).sort((a, b) => a[1].day.localeCompare(b[1].day) || a[0].localeCompare(b[0]));
+  if (!firsts.length) return o.pursuedOn ? [`Not cited since you started on ${formatDay(o.pursuedOn)}.`] : [];
+  return firsts.map(([engine, at]) => {
+    const text = prompts.get(at.prompt);
+    return `First cited by ${engineName(engine)}${text ? ` for '${text}'` : ""} on ${formatDay(at.day)}.`;
+  });
 }
 
 export function pursuingRow(o: Opportunity, ctx: ViewCtx & { prompts: ReadonlyMap<string, string>; promptHref: (id: string) => string | null; domain: string; addedBy: (promptId: string) => string | null }): PursuingRow {

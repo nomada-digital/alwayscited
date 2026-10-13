@@ -16,19 +16,25 @@ export default function CopyButton({ text, label = "Copy", usage }: { text: stri
   const live = useSyncExternalStore(noop, () => true, () => false);
   const [done, setDone] = useState<"copied" | "failed" | null>(null);
   if (!live) return null;
+  // The result is also said in a status region, so a screen reader hears it (13 Oct 2026, review of DIY P7).
   return (
-    <button
-      type="button"
-      data-usage={usage}
-      onClick={() => {
-        navigator.clipboard
-          .writeText(text)
-          .then(() => setDone("copied"))
-          .catch(() => setDone("failed"));
-      }}
-      style={BUTTON}
-    >
-      {done === "copied" ? "Copied" : done === "failed" ? "Select the text to copy it" : label}
-    </button>
+    <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: "8px" }}>
+      <button
+        type="button"
+        data-usage={usage}
+        onClick={() => {
+          navigator.clipboard
+            .writeText(text)
+            .then(() => setDone("copied"))
+            .catch(() => setDone("failed"));
+        }}
+        style={BUTTON}
+      >
+        {done === "copied" ? "Copied" : done === "failed" ? "Select the text to copy it" : label}
+      </button>
+      <span role="status" className="sr-only">
+        {done === "copied" ? "Copied." : done === "failed" ? "Not copied. Select the text to copy it." : ""}
+      </span>
+    </span>
   );
 }

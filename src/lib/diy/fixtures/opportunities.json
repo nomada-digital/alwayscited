@@ -1539,6 +1539,27 @@
   "state": {},
   "reads": [
    {
+    "url_key": "ledgerline.com/pricing",
+    "url": "https://ledgerline.com/pricing",
+    "read_at": "2026-09-27T03:40:00Z",
+    "via": "own",
+    "status": "ok",
+    "http_status": 200,
+    "title": "Ledgerline pricing",
+    "h1": "Plans and pricing",
+    "updated_on": "2026-09-01",
+    "headings": [
+     "Plans",
+     "Switching from Tallyroo"
+    ],
+    "names_client": true,
+    "client_snippet": "Switching from Tallyroo? Bring your invoices across in one step.",
+    "brands_found": [],
+    "links_to_client": null,
+    "link_rel": null,
+    "link_anchor": null
+   },
+   {
     "url_key": "ownerledger.co/guides/switching-accounting-software",
     "url": "https://ownerledger.co/guides/switching-accounting-software",
     "read_at": "2026-09-27T03:40:00Z",

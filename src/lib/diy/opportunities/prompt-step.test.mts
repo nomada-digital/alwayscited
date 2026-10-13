@@ -115,6 +115,8 @@ test("no prompt for a link lens, a page with no cluster, or a title that makes n
   const w = world(FOUR);
   assert.equal((await runPromptStep(w.port, { ...step, opp: { ...OPP, lens: "link_domain" } })).kind, "none");
   assert.equal((await runPromptStep(w.port, { ...step, opp: { ...OPP, clusterId: null } })).kind, "none");
+  // 13 Oct 2026, review of DIY P7: a logged page is never given a cluster, so it never promises one ("no cluster yet").
+  assert.deepEqual(await runPromptStep(w.port, { ...step, opp: { ...OPP, lens: "logged", clusterId: null } }), { kind: "none", reason: "a page you logged has no cluster" });
   assert.equal((await runPromptStep(w.port, { ...step, facts: { title: "Home", h1: null } })).kind, "none");
 });
 

@@ -29,8 +29,16 @@ export const LINE_G1 = google(
   "G1",
 );
 
-/** "What to point it at": the anchor (section 4.7). */
-export const LINE_ANCHOR = google("opp-anchor", "Anchor: your brand name or the page's title. Never a keyword-rich anchor on an article you supply.", "G1");
+/**
+ * "What to point it at": the anchor (section 4.7), in two lines, each with
+ * its own grade (13 Oct 2026, review of DIY P7): which anchor to ask for is
+ * common practice; that a keyword-rich anchor in an article you supply is
+ * link spam is what Google's spam policies document (G1). One line graded
+ * G1 put "Google documents this" on the practice half too.
+ */
+export const LINE_ANCHOR_PICK = practice("opp-anchor", "Anchor: your brand name or the page's title.");
+export const LINE_ANCHOR_NEVER = google("opp-anchor-never", "Never a keyword-rich anchor on an article you supply.", "G1");
+export const LINE_ANCHOR: readonly AdviceLine[] = [LINE_ANCHOR_PICK, LINE_ANCHOR_NEVER];
 
 /** "Who to write to": the method only (section 4.7). */
 export const LINE_WHO = practice("opp-who", "Start with the byline's author page, then the site's contact page or its team page. We never supply names or addresses.");
@@ -142,7 +150,7 @@ export const PLAYBOOKS: Partial<Record<Route, Playbook>> = {
 export const ADVICE: readonly AdviceLine[] = [
   ...Object.values(PLAYBOOKS).flatMap((p) => (p ? [...p.steps, ...(p.send ? [p.send] : []), ...(p.pointTo ? [p.pointTo] : []), ...(p.line ? [p.line] : [])] : [])),
   LINE_G1,
-  LINE_ANCHOR,
+  ...LINE_ANCHOR,
   LINE_WHO,
   LINE_TARGET,
 ];

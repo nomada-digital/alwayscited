@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { APP_LIMITS } from "@/config/contact";
+import { allowanceMonth, room } from "@/lib/diy/core/allowances";
+import type { RefusalCode } from "@/lib/diy/core/caps";
+import type { DiyClient } from "@/lib/diy/core/client";
+import { readDiyFixture } from "@/lib/diy/core/fixture";
 import { runOnDemand } from "@/lib/diy/core/runondemand";
+import { type CoreFixture, countLedger, countUsage } from "@/lib/diy/core/usage-meter";
 import { isFixtureCtx } from "@/lib/diy/core/ctx";
 import { diyFixtureWrites } from "@/lib/diy/core/fixture";
 import type { ReadCtx } from "@/lib/diy/core/jobs";
-import { factsOf, readKinds, readPageReads } from "@/lib/diy/opportunities/data";
+import { countLoggedSince, factsOf, loggedSince, readKinds, readPageReads } from "@/lib/diy/opportunities/data";
+import { PAGE_LENSES } from "@/lib/diy/opportunities/place";
 import { domainKey, pageKey } from "@/lib/diy/opportunities/classify-rules";
 import { readPlacedKeys } from "@/lib/diy/opportunities/derive";
 import { liveIO } from "@/lib/diy/opportunities/io";
@@ -27,6 +33,7 @@ import {
   isOppDo,
   newRow,
   planMoveFor,
+  readWhy,
   syncPlanItem,
   withEntry,
 } from "@/lib/diy/opportunities/status";
@@ -153,9 +160,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       if (!world.enabled) return back("refused", "dark");
       if (post.do === "verify") {
         if (!opp || !(opp.status === "pursuing" || opp.status === "pitched" || opp.status === "won") || opp.lens === "link_domain" || opp.lens === "own") return back("refused", "move");
-        return (await verifyNow(opp)) ? back("verified") : back("refused", "spend");
+        const v = await verifyNow(opp);
+        return v.ok ? back("verified") : back("refused", v.why);
       }
-      return await logSite();
+      return await logSite(world.rows);
     }
 
     if (id && !opp) return back("refused", "gone");
@@ -171,7 +179,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         const step = await runPromptStep(port, { opp: opp!, facts: world.reads.get(opp!.urlKey) ?? null, keyword: keywordFor(opp!), market: client.market, today, by: email });
         return back("pursued", null, { id: opp!.id, swap: step.kind === "full" });
       }
-      if (post.do === "won" && stale(opp!.verified, today)) await verifyNow({ ...opp!, status: "won" });
+      if (post.do === "won" && stale(opp!.verified, today)) await verifyAfterWon(opp!);
       return back(decision.done);
     }
 
@@ -198,7 +206,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const move = planMoveFor(decision.to);
     if (move && post.do !== "note") await syncPlanItem(db, client.id, opp!, move, { today, now, by: email });
     if (post.do !== "note") await usage("opportunity_status");
-    if (post.do === "won" && stale(opp!.verified, today)) await verifyNow({ ...opp!, status: "won" });
+    if (post.do === "won" && stale(opp!.verified, today)) await verifyAfterWon(opp!);
     return back(decision.done);
   } catch (err) {
     console.warn(`[diy] opportunity ${post.do}: ${msg(err)}`);
@@ -210,13 +218,35 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     return o.evidence.keyword;
   }
 
-  /** "Verify now", inline: our own fetch, then the paid fallback through runOnDemand. True when a check was recorded. */
-  async function verifyNow(o: Opportunity): Promise<boolean> {
+  /**
+   * Won checks the page now (section 4.7) - after the status, its Plan move
+   * and its usage event are written, so a check that fails is logged and the
+   * member still hears that the page is marked won (13 Oct 2026, review of
+   * DIY P7: a throw here answered "That didn't save").
+   */
+  async function verifyAfterWon(o: Opportunity): Promise<void> {
+    try {
+      const v = await verifyNow({ ...o, status: "won" });
+      if (!v.ok) console.log(`[diy] opportunity won: the check was not made: ${v.why}`);
+    } catch (err) {
+      console.warn(`[diy] opportunity won: the check failed: ${msg(err)}`);
+    }
+  }
+
+  /**
+   * "Verify now", inline: our own fetch, then the paid fallback through
+   * runOnDemand. Ok when a check was recorded and nothing it needed was
+   * refused; else the refusal's code, whose words are section 5.6's - a
+   * fallback refused at a cap is not "Checked just now".
+   */
+  async function verifyNow(o: Opportunity): Promise<{ ok: true } | { ok: false; why: OppWhy }> {
     const entry = await fixtureState();
     const mode = (await repo.upgradeContext(client!.id, email!, today)).mode;
     const diy = await diyClientFor(client!, repo, mode);
-    if (!diy) return false;
+    if (!diy) return { ok: false, why: "spend" };
     const db = entry ? null : supabaseAdmin();
+    /** The paid fallback's refusal, when it was refused. */
+    let refused: RefusalCode | null = null;
     const answer = await runOnDemand({ db, client: diy, member: email!, action: "verify" }, async (rctx: ReadCtx) => {
       if (isFixtureCtx(rctx)) {
         const facts = factsOf({ ...(entry?.canned?.verify ?? {}), url: o.url, url_key: o.urlKey, read_at: now }) ?? blockedFacts({ url: o.url, urlKey: o.urlKey, at: now, why: "network" });
@@ -233,6 +263,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         get: io.get,
         fallback: async (url) => {
           const got = await io.parse(rctx, url);
+          if (got.kind === "refused") refused = got.refusal.code;
           return got.kind === "read" ? { kind: "read", value: got.value } : got.kind === "refused" ? { kind: "refused" } : { kind: "failed", reason: got.reason };
         },
         today,
@@ -245,13 +276,27 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     });
     if (!answer.ok) {
       console.log(`[diy] verify now refused: ${answer.code}`);
-      return false;
+      return { ok: false, why: readWhy(answer.code) };
     }
-    return answer.deferred ? true : answer.value;
+    if (!answer.deferred && !answer.value) return { ok: false, why: "readonly" };
+    const code = refused as RefusalCode | null;
+    if (code) {
+      console.log(`[diy] verify now: the paid read was refused: ${code}`);
+      return { ok: false, why: readWhy(code) };
+    }
+    return { ok: true };
   }
 
-  /** "Log a site you found": checked, read, typed, routed, kept under the logged lens, and its page opened. */
-  async function logSite() {
+  /**
+   * "Log a site you found": checked, read, typed, routed, kept under the
+   * logged lens, and its page opened. A page this client already has, in any
+   * lens, opens that row instead of making a second (13 Oct 2026, review of
+   * DIY P7). Each log uses one "check a link" (spec 10 section 4.7 row 6):
+   * this month's logged pages count against the link_checks allowance beside
+   * the link checks and verifications, and a log past it is refused with the
+   * used-up line.
+   */
+  async function logSite(rows: readonly Opportunity[]) {
     const entry = await fixtureState();
     const db = entry ? null : supabaseAdmin();
     let placed: ReadonlySet<string>;
@@ -263,9 +308,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     }
     const checked = checkLogUrl(form?.get("url"), { domain: client!.domain, placedKeys: placed });
     if (!checked.ok) return back("refused", checked.why);
+    const had = heldRow(rows, checked.key);
+    if (had) return back("already", null, { id: had.id });
     const mode = (await repo.upgradeContext(client!.id, email!, today)).mode;
     const diy = await diyClientFor(client!, repo, mode);
     if (!diy) return back("refused", "failed");
+    try {
+      const used = await logAllowanceUsed(db, diy, rows, repo.now());
+      if (room("link_checks", used, diy).out) return back("refused", "allowance");
+    } catch (err) {
+      // An unreadable count is never read as room.
+      console.warn(`[diy] opportunity log allowance: ${msg(err)}`);
+      return back("refused", "spend");
+    }
+    /** The paid fallback's refusal, when it was refused: the page is logged, and read overnight. */
+    let refused: RefusalCode | null = null;
     const answer = await runOnDemand({ db, client: diy, member: email!, action: "log" }, async (rctx: ReadCtx): Promise<PageFacts> => {
       if (isFixtureCtx(rctx)) {
         return factsOf({ ...(entry?.canned?.log ?? {}), url: checked.url, url_key: checked.key, read_at: now }) ?? blockedFacts({ url: checked.url, urlKey: checked.key, at: now, why: "network" });
@@ -278,11 +335,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       if (own.ok) return factsFromHtml({ url: checked.url, urlKey: checked.key, at: now, today, read: { status: own.status, html: own.html, contentType: own.headers["content-type"] ?? null }, subject: subj, competitors: [] });
       if (own.why !== "robots") return blockedFacts({ url: checked.url, urlKey: checked.key, at: now, why: own.why });
       const got = await io.parse(rctx, checked.url);
+      if (got.kind === "refused") refused = got.refusal.code;
       if (got.kind !== "read") return blockedFacts({ url: checked.url, urlKey: checked.key, at: now, why: "robots" });
       return factsFromParsed({ url: checked.url, urlKey: checked.key, at: now, today, parsed: got.value, subject: subj, competitors: [] });
     });
-    if (!answer.ok || answer.deferred) return back("refused", "spend");
+    if (!answer.ok) return back("refused", readWhy(answer.code));
+    if (answer.deferred) return back("refused", "spend");
     const facts = answer.value;
+    const code = refused as RefusalCode | null;
+    const unread = code ? readWhy(code) : null;
     const kinds = entry ? new Map((entry.kinds ?? []).map((k) => [k.key, { domain_type: k.domain_type ?? null, page_type: k.page_type ?? null, set_by: k.set_by ?? "model" }] as const)) : await readKinds(db!, [domainKey(checked.host), pageKey(checked.key)]);
     const routed = loggedRoute({ ...checked, facts, kinds: kinds as never });
     if (!routed) return back("refused", "cannot_log");
@@ -291,19 +352,39 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       if (!diyFixtureWrites()) return back("refused", "readonly");
       const row = newRow(client!.id, input);
       if (!row) return back("refused", "url");
-      const had = (await loadOppWorld(repo, client!)).rows.find((o) => o.lens === "logged" && o.urlKey === checked.key);
-      if (had) return back("logged", null, { id: had.id });
+      const again = heldRow((await loadOppWorld(repo, client!)).rows, checked.key);
+      if (again) return back("already", null, { id: again.id });
       const fid = `opp-log-${Date.now().toString(36)}`;
       addFixtureLogged(entry, { ...row, id: fid, history: [{ at: now, kind: "status", status: "new", by: email! }] });
-      return back("logged", null, { id: fid });
+      return back("logged", unread, { id: fid });
     }
     const made = await ensureOpportunity(db!, client!.id, input);
     if (!made) return back("refused", "url");
-    const had = (await readPageReads(db!, client!.id)).get(checked.key) ?? null;
-    await writePageRead(db!, client!.id, facts, had);
+    const prior = (await readPageReads(db!, client!.id)).get(checked.key) ?? null;
+    await writePageRead(db!, client!.id, facts, prior);
     await usage("opportunity_log");
-    return back("logged", null, { id: made.id });
+    return back("logged", unread, { id: made.id });
   }
+}
+
+/** This client's row of a page in any page lens (never P10's link lenses), or null. */
+function heldRow(rows: readonly Opportunity[], key: string): Opportunity | null {
+  return rows.find((o) => o.urlKey === key && PAGE_LENSES.has(o.lens)) ?? null;
+}
+
+/**
+ * This month's link checks, as a log counts them: the link checks and
+ * verifications the ledger holds (usage-meter.ts) plus the pages logged since
+ * the client's allowance month began. Throws when a count cannot be read.
+ */
+async function logAllowanceUsed(db: ReturnType<typeof supabaseAdmin> | null, client: DiyClient, rows: readonly Opportunity[], now: number): Promise<number> {
+  const since = allowanceMonth(client.market, now).start;
+  if (!db) {
+    const fx = readDiyFixture<CoreFixture>("core");
+    return countLedger(fx.reads, "link_checks") + loggedSince(rows, since);
+  }
+  const [checks, logged] = await Promise.all([countUsage(db, client, "link_checks", now), countLoggedSince(db, client.id, since)]);
+  return checks + logged;
 }
 
 /** A won page's last check is more than a week old, or it has none: Won checks it now (section 4.7). */

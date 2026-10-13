@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { askLabel, historyLines, movesFor, statusLine } from "./detail.ts";
 import { brief, criteria, pitchOutline, targetPage, unreadableLine, whatItIs } from "./brief.ts";
 import { checkLogUrl, loggedRoute } from "./logsite.ts";
-import { LIST_ROW_KEYS, PURSUING_ROW_KEYS, freshLines, headerLine, listRow, namesLine, pursuingRow, whyFacts } from "./payload.ts";
+import { EMPTY_ALL_NAME_YOU, EMPTY_NO_CITATIONS, EMPTY_NONE_NEW, LIST_ROW_KEYS, PURSUING_ROW_KEYS, citedEmpty, firstCitedLines, freshLines, headerLine, listRow, namesLine, pursuingRow, u3LeavesOut, whyFacts, whyLine } from "./payload.ts";
+import { U3_ROUTES } from "./routes.ts";
 import { opportunityOf } from "./status.ts";
 import type { PageFacts } from "./types.ts";
 
@@ -124,6 +125,47 @@ test("the detail page's moves, status line, history and ask", () => {
   assert.equal(askLabel({ placed: false, mode: "agency" }), "Ask your agency about this page");
   assert.equal(askLabel({ placed: false, mode: "nomada" }), null);
   assert.equal(askLabel({ placed: true, mode: "off" }), null);
+  // 13 Oct 2026, review of DIY P7: an ended client has no ask or upgrade surface (spec 10 section 2.2).
+  assert.equal(askLabel({ placed: true, mode: "nomada", ended: true }), null);
+  assert.equal(askLabel({ placed: false, mode: "agency", ended: true }), null);
+});
+
+test("U3 only from the page as read: two or more competitors on it and not you (review of DIY P7, 13 Oct 2026)", () => {
+  const p = { dark: false, clusterOpen: 3, routes: U3_ROUTES };
+  const fired = u3LeavesOut(opp(), facts(), p);
+  assert.deepEqual(fired?.names, ["Brightly", "Ledgerly"], "the brands found on the page, never the answers' competitors");
+  assert.equal(fired?.answers, 12);
+  assert.equal(u3LeavesOut(opp(), null, p), undefined, "unread: the answers' brands say nothing about the page");
+  assert.equal(u3LeavesOut(opp({ route: "send_correction" }), facts({ namesClient: true, brandsFound: ["Brightly", "Ledgerly"] }), p), undefined, "a page that names you");
+  assert.equal(u3LeavesOut(opp(), facts({ via: "content_parsing", namesClient: null }), p), undefined, "a fallback read that could not tell");
+  assert.equal(u3LeavesOut(opp(), facts({ brandsFound: ["Brightly"] }), p), undefined, "one competitor is not two");
+  assert.equal(u3LeavesOut(opp(), facts({ status: "error", http: 403 }), p), undefined, "a page we could not read");
+  assert.equal(u3LeavesOut(opp(), facts(), { ...p, dark: true }), undefined);
+  assert.equal(u3LeavesOut(opp({ status: "won" }), facts(), p), undefined);
+  assert.equal(u3LeavesOut(opp({ route: "answer_thread" }), facts(), p), undefined, "not a U3 route");
+});
+
+test("the cited tab's empty state says only what the reads show (review of DIY P7, 13 Oct 2026)", () => {
+  assert.equal(citedEmpty({ pages: 0, readNamingYou: 0, own: 0 }, []), EMPTY_NO_CITATIONS);
+  assert.equal(citedEmpty({ pages: 4, readNamingYou: 4, own: 1 }, []), EMPTY_ALL_NAME_YOU, "every cited page read, and every read names you");
+  // One read naming you, three pages never read or not naming you: not "every page names you".
+  const none = citedEmpty({ pages: 4, readNamingYou: 1, own: 0 }, []);
+  assert.ok(none.startsWith(EMPTY_NONE_NEW));
+  assert.match(none, /in the other tabs\.$/);
+  // Every page set aside or pursued: never "names you"; the line says where they went.
+  const worked = citedEmpty({ pages: 4, readNamingYou: 1, own: 0 }, [opp({ status: "dismissed" }), opp({ id: "o2", status: "pursuing" })]);
+  assert.match(worked, /under Pursuing; pages you marked not for us stay out of this list\.$/);
+  assert.ok(!worked.includes("names you"));
+  assert.ok(citedEmpty(null, []).startsWith(EMPTY_NONE_NEW), "a summary that could not be read is never a claim");
+});
+
+test("History's first cited, per engine; the publish_own why line says only what we know", () => {
+  const prompts = new Map([["q1", "best invoicing apps"]]);
+  assert.deepEqual(firstCitedLines(opp({ first_cited: { perplexity: { day: "2026-11-09", prompt: "q1" }, chatgpt: { day: "2026-11-11", prompt: "q2" } }, pursued_on: "2026-11-01" }), prompts), ["First cited by Perplexity for 'best invoicing apps' on 9 Nov.", "First cited by ChatGPT on 11 Nov."]);
+  assert.deepEqual(firstCitedLines(opp({ pursued_on: "2026-11-01" }), prompts), ["Not cited since you started on 1 Nov."]);
+  assert.deepEqual(firstCitedLines(opp(), prompts), []);
+  const own = opp({ lens: "own", route: "publish_own", evidence: { to: TODAY, keyword: "invoicing software", own_type: "best_of", own_seen: 5 } });
+  assert.equal(whyLine(own), "The answers and Google's top 10 for 'invoicing software' show 5 best-of lists; none of yours ranks or is cited for it.");
 });
 
 test("Log a site: a public http(s) address; one set of words for every refusal, placements included", () => {
@@ -137,6 +179,8 @@ test("Log a site: a public http(s) address; one set of words for every refusal, 
   assert.deepEqual(checkLogUrl("https://placed.example/best-tools", p), { ok: false, why: "cannot_log" }, "the same words as any other refusal");
   assert.deepEqual(checkLogUrl("https://wikipedia.org/wiki/Invoice", p), { ok: false, why: "cannot_log" });
   assert.deepEqual(checkLogUrl("https://bing.com/search", p), { ok: false, why: "cannot_log" });
+  // Typed within 500 characters, but longer once the parser encodes it: refused, never kept cut short.
+  assert.deepEqual(checkLogUrl(`https://consult.example/${"あ".repeat(100)}`, p), { ok: false, why: "url" });
   const ok = checkLogUrl("https://consult.example/best-tools", p);
   assert.ok(ok.ok);
   assert.equal(loggedRoute({ ...(ok as { url: string; key: string; host: string }), facts: null, kinds: new Map() })?.route, "ask_added");
@@ -149,12 +193,17 @@ test("the opportunity ask takes no free text: the route reads the kind, the ids 
   assert.deepEqual(fields, ["cta", "items"], "only the ids and the cta come from the form");
   assert.match(body, /from\("opportunities"\)\.select\("id, url, url_key, title, route, evidence"\)\.eq\("client_domain_id", client\.id\)/);
   assert.match(body, /placed\.has\(r\.url_key\)/, "a page where another client was placed is never asked about");
+  assert.match(body, /if \(client\.status === "ended"\) return back\("refused", "ended"\);/, "an ended client cannot ask (spec 10 section 2.2)");
 });
 
 test("a type the rules did not settle was written by a model, and says so", async () => {
   const { typesLine, byModel } = await import("./payload.ts");
   const base = { url: "https://lists.example/best-invoicing-apps", domain: "lists.example", title: null };
-  assert.equal(typesLine({ ...base, domainType: "publisher", pageType: "best_of" }), "Publisher · Best-of list · classified automatically", "the domain type is the model's");
+  // 13 Oct 2026, review of DIY P7: the label sits on the half the model wrote, never on a blank ("Publisher · not
+  // classified yet · classified automatically" read as if the blank were the model's).
+  assert.equal(typesLine({ ...base, domainType: "publisher", pageType: "best_of" }), "Publisher (classified automatically) · Best-of list", "the domain type is the model's");
+  assert.equal(typesLine({ ...base, url: "https://lists.example/roundup", domainType: "publisher", pageType: null }), "Publisher (classified automatically) · not classified yet");
+  assert.equal(typesLine({ ...base, url: "https://g2.com/roundup", domain: "g2.com", domainType: "review_platform", pageType: "best_of" }), "Review site · Best-of list (classified automatically)", "the page type is the model's");
   assert.equal(typesLine({ ...base, url: "https://g2.com/categories/x", domain: "g2.com", domainType: "review_platform", pageType: "category" }), "Review site · Category page", "both by rule");
   assert.equal(byModel({ ...base, url: "https://lists.example/roundup", domainType: null, pageType: "best_of" }), true);
   assert.equal(typesLine({ domainType: null, pageType: null }), "not classified yet");

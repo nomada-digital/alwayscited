@@ -2,6 +2,7 @@ import { formatDay, type Day } from "../../tracking/figures.ts";
 import { PROMPTS_PER_CLUSTER } from "../../tracking/limits.ts";
 import type { SwapCandidate } from "../prompts/swap.ts";
 
+import { noClusterReason } from "./prompt-step.ts";
 import type { OppDo } from "./status.ts";
 import { DISMISS_LABEL, type HistoryEntry, type OppStatus, type Opportunity, STATUS_LABEL } from "./types.ts";
 
@@ -52,10 +53,11 @@ export function historyLines(h: readonly HistoryEntry[]): { at: string; text: st
  * The ask on an opportunity's page (section 2.2): "Suggest this to your
  * account lead" on a placed tier in nomada mode; "Ask your agency about this
  * page" in agency mode, on any tier; none on the tracked tier in nomada mode
- * (its upgrade prompt is U3) and none in `off` mode.
+ * (its upgrade prompt is U3), none in `off` mode, and none for an ended
+ * client, which has no ask or upgrade surface (13 Oct 2026, review of DIY P7).
  */
-export function askLabel(p: { placed: boolean; mode: "nomada" | "agency" | "off" }): string | null {
-  if (p.mode === "off") return null;
+export function askLabel(p: { placed: boolean; mode: "nomada" | "agency" | "off"; ended?: boolean }): string | null {
+  if (p.ended || p.mode === "off") return null;
   if (p.mode === "agency") return "Ask your agency about this page";
   return p.placed ? "Suggest this to your account lead" : null;
 }
@@ -109,7 +111,7 @@ export function promptState(p: {
     if (p.prompt.origin_ref !== p.opp.id) return { kind: "duplicate", text: p.prompt.text };
   }
   if (!p.offered.ok) return { kind: "none", reason: p.offered.reason };
-  if (!p.cluster) return { kind: "none", reason: "its page has no cluster yet" };
+  if (!p.cluster) return { kind: "none", reason: noClusterReason(p.opp.lens) };
   if (watching(p.opp.history)) return { kind: "watching", text: p.offered.text, room, cluster: p.cluster.name };
   if (room) return { kind: "room", text: p.offered.text, cluster: p.cluster.name };
   return { kind: "full", text: p.offered.text, cluster: p.cluster.name, candidates: p.candidates };

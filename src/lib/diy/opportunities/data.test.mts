@@ -8,9 +8,10 @@ import { expandFixture } from "../../tracking/fixture-mode.ts";
 import { addDays } from "../../tracking/figures.ts";
 import { promptsDb } from "../prompts/fake-prompts-db.mts";
 
-import { countOpenOpportunities, fixtureEntry, fixtureWorld, missingTable, readKeyPages, readWorld, type OppFixtureState } from "./data.ts";
+import { countLoggedSince, countOpenOpportunities, factsOf, loggedSince, fixtureEntry, fixtureWorld, missingTable, readKeyPages, readPageReads, readWorld, type OppFixtureState, type Overlay } from "./data.ts";
+import { writePageRead } from "./record.ts";
 import { ENGINE_ORDER } from "./refresh.job.ts";
-import { headerCounts } from "./payload.ts";
+import { EMPTY_ALL_NAME_YOU, EMPTY_NO_CITATIONS, citedEmpty, headerCounts, listed } from "./payload.ts";
 
 /**
  * Opportunities' loader and fixture (13 Oct 2026, DIY P7; spec 10 sections
@@ -89,6 +90,61 @@ test("zero: every cited page names you, so no cited row", () => {
   assert.ok([...w.reads.values()].some((f) => f.namesClient === true));
 });
 
+test("the cited tab's empty state on each fixture state: zero names you only because every cited page was read naming you (review of DIY P7, 13 Oct 2026)", () => {
+  const zero = world("zero");
+  assert.equal(listed(zero.rows, "cited").length, 0);
+  assert.equal(zero.cited!.readNamingYou, zero.cited!.pages, "every page the tracking fixture cites has a read that names the client");
+  assert.equal(citedEmpty(zero.cited!, zero.rows), EMPTY_ALL_NAME_YOU);
+  assert.equal(citedEmpty(world("day0").cited!, world("day0").rows), EMPTY_NO_CITATIONS);
+  // The reviewer's case: every new AI-cited page on the full fixture set aside. They leave the client out, so the tab
+  // must never say every page names you.
+  const full = world("full");
+  const state: Record<string, Overlay> = { ...(fixtureEntry(file, "full").state ?? {}) };
+  for (const o of full.rows.filter((r) => r.status === "new" && ["cited", "threads", "profiles"].includes(r.lens))) state[`${o.lens}|${o.urlKey}`] = { id: o.id, status: "dismissed", dismiss_reason: "not_relevant" };
+  const setAside = fixtureWorld(fixtureEntry(file, "full"), t, "fixture", { state, logged: [] });
+  assert.equal(listed(setAside.rows, "cited").length, 0);
+  const line = citedEmpty(setAside.cited!, setAside.rows);
+  assert.notEqual(line, EMPTY_ALL_NAME_YOU);
+  assert.match(line, /under Pursuing/);
+});
+
+test("a page lens change on the fixture is matched as the night matches it: a set-aside row is never listed again", () => {
+  const full = world("full");
+  const o = full.rows.find((r) => r.lens === "cited" && r.status === "new")!;
+  // The same page set aside while it was a Google list: tonight it is cited, and it stays set aside, with no new row.
+  const state: Record<string, Overlay> = { ...(fixtureEntry(file, "full").state ?? {}), [`lists|${o.urlKey}`]: { id: "opp-set-aside", status: "dismissed", dismiss_reason: "not_relevant" } };
+  const w = fixtureWorld(fixtureEntry(file, "full"), t, "fixture", { state, logged: [] });
+  const same = w.rows.filter((r) => r.urlKey === o.urlKey);
+  assert.deepEqual(same.map((r) => [r.id, r.lens, r.status]), [["opp-set-aside", "lists", "dismissed"]]);
+  assert.ok(!listed(w.rows, null).some((r) => r.urlKey === o.urlKey));
+});
+
+test("Log a site uses one link check: this month's logged pages are counted, from the table and on the fixture", async () => {
+  const rows = world("full").rows;
+  assert.equal(loggedSince(rows, "2026-09-01T00:00:00.000Z"), 2, "the fixture's two logged pages, both this month");
+  assert.equal(loggedSince(rows, "2026-09-25T00:00:00.000Z"), 1);
+  const { db } = promptsDb({ opportunities: [{ id: "a", client_domain_id: "c1", lens: "logged", created_at: "2026-10-02T10:00:00Z" }, { id: "b", client_domain_id: "c1", lens: "logged", created_at: "2026-09-30T10:00:00Z" }, { id: "c", client_domain_id: "c1", lens: "cited", created_at: "2026-10-03T10:00:00Z" }, { id: "d", client_domain_id: "c2", lens: "logged", created_at: "2026-10-03T10:00:00Z" }] });
+  assert.equal(await countLoggedSince(db, "c1", "2026-10-01T00:00:00.000Z"), 1);
+  const src = readFileSync(join(ROOT, "src/app/api/app/[client]/opportunity/route.ts"), "utf8");
+  const log = src.slice(src.indexOf("async function logSite("));
+  assert.ok(log.indexOf('room("link_checks"') > 0 && log.indexOf('room("link_checks"') < log.indexOf("runOnDemand("), "the allowance is checked before any read");
+  assert.ok(log.indexOf("heldRow(rows, checked.key)") < log.indexOf('room("link_checks"'), "a page already held opens its row and uses nothing");
+});
+
+test("a failed read keeps the good facts and records only the try (review of DIY P7, 13 Oct 2026)", async () => {
+  const good = { client_domain_id: "c1", url_key: "lists.example/best", url: "https://lists.example/best", read_at: "2026-09-01T03:00:00Z", via: "own", status: "ok", http_status: 200, title: "Best", names_client: false, attempted_at: null };
+  const { db } = promptsDb({ page_reads: [{ ...good }] });
+  const had = factsOf(good)!;
+  const failed = { ...had, readAt: "2026-09-20T03:00:00Z", status: "error" as const, http: 503, title: null, namesClient: null };
+  assert.equal(await writePageRead(db, "c1", failed, had), false);
+  const back = await readPageReads(db, "c1");
+  const f = back.get("lists.example/best")!;
+  assert.equal(f.status, "ok");
+  assert.equal(f.title, "Best");
+  assert.equal(f.readAt, "2026-09-01T03:00:00Z");
+  assert.equal(f.attemptedAt, "2026-09-20T03:00:00Z");
+});
+
 test("the tolerant readers: key pages absent is an empty list; a failed count is null, never 0", async () => {
   assert.ok(missingTable({ code: "42P01", message: "relation \"key_pages\" does not exist" }));
   assert.ok(missingTable({ code: "PGRST205", message: "Could not find the table 'public.key_pages' in the schema cache" }));
@@ -123,10 +179,14 @@ test("readWorld: other clients' placements subtracted at read time, and a subtra
 });
 
 test("origins.opportunity.json: P7's opportunity prompt is merged after P2's, and points at a fixture opportunity", async () => {
+  // 13 Oct 2026, review of DIY P7: the row is the `capped` state's only. Under `full` it re-labelled P2's q1-5, which
+  // moved facts P2's, P4's and P5's own tests record (spec 10 section 7.0 item 1: a later package edits an earlier
+  // one's files only where its list says so). `capped` is P7's alone; `full`'s prompts are added by Pursue itself.
   const { readOriginsFiles, fixtureOriginMap } = await import("../prompts/origins.ts");
-  const rows = await readOriginsFiles(join(ROOT, "src", "lib", "diy", "fixtures"), "full");
-  const m = fixtureOriginMap(rows, fx.data.questions, []);
-  const o = m.get("q1-5");
+  const dir = join(ROOT, "src", "lib", "diy", "fixtures");
+  const o = fixtureOriginMap(await readOriginsFiles(dir, "capped"), fx.data.questions, []).get("q1-5");
   assert.equal(o?.kind, "opportunity");
-  assert.ok(world("full").rows.some((r) => r.id === o?.ref && r.promptId === "q1-5"), "the chip links to an opportunity that carries the prompt");
+  assert.ok(world("capped").rows.some((r) => r.id === o?.ref && r.promptId === "q1-5"), "the chip links to an opportunity that carries the prompt");
+  const full = fixtureOriginMap(await readOriginsFiles(dir, "full"), fx.data.questions, []);
+  assert.ok(![...full.values()].some((x) => x.kind === "opportunity"), "nothing of P7's under full: P2's chips stand as P2 recorded them");
 });

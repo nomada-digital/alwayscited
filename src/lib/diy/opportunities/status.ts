@@ -5,6 +5,7 @@ import { urlKey as keyOf } from "../../tracking/placements.ts";
 import { ASK_REFUSED } from "../../tracking/ask.ts";
 import { refuseRole } from "../../tracking/stop.ts";
 import { allowanceFor } from "../core/allowances.ts";
+import { type RefusalCode, refusalWords } from "../core/caps.ts";
 import type { Candidate } from "../plan/types.ts";
 import { getPlanItem, updatePlanItem, upsertPlanItemFor } from "../plan/write.ts";
 
@@ -64,11 +65,68 @@ export const OPP_DOS = ["pursue", "pitched", "won", "decline", "dismiss", "reope
 export type OppDo = (typeof OPP_DOS)[number];
 export const isOppDo = (v: unknown): v is OppDo => typeof v === "string" && (OPP_DOS as readonly string[]).includes(v);
 
-export type OppDone = "pursued" | "pitched" | "won" | "declined" | "dismissed" | "reopened" | "noted" | "logged" | "verified" | "asked" | "asked_agency" | "prompt_added" | "prompt_duplicate" | "prompt_undone" | "prompt_swapped" | "watching" | "refused";
-export type OppWhy = "viewer" | "ended" | "gone" | "move" | "cap" | "reason" | "note" | "failed" | "readonly" | "url" | "cannot_log" | "dark" | "spend" | "ask_refused" | "ask_capped" | "prompt" | "prompt_none" | "pending";
+export type OppDone = "pursued" | "pitched" | "won" | "declined" | "dismissed" | "reopened" | "noted" | "logged" | "already" | "verified" | "asked" | "asked_agency" | "prompt_added" | "prompt_duplicate" | "prompt_undone" | "prompt_swapped" | "watching" | "refused";
+export type OppWhy =
+  | "viewer"
+  | "ended"
+  | "gone"
+  | "move"
+  | "cap"
+  | "reason"
+  | "note"
+  | "failed"
+  | "readonly"
+  | "url"
+  | "cannot_log"
+  | "dark"
+  | "spend"
+  | "ask_refused"
+  | "ask_capped"
+  | "prompt"
+  | "prompt_none"
+  | "pending"
+  // A paid read refused (spec 10 section 5.6), each with that section's words (caps.ts refusalWords).
+  | "running"
+  | "paused"
+  | "daily"
+  | "month"
+  | "allowance"
+  | "inactive";
 
 /** Every code the routes answer with, so a page draws words only for a code it knows. */
-export const OPP_DONE: readonly OppDone[] = ["pursued", "pitched", "won", "declined", "dismissed", "reopened", "noted", "logged", "verified", "asked", "asked_agency", "prompt_added", "prompt_duplicate", "prompt_undone", "prompt_swapped", "watching", "refused"];
+export const OPP_DONE: readonly OppDone[] = ["pursued", "pitched", "won", "declined", "dismissed", "reopened", "noted", "logged", "already", "verified", "asked", "asked_agency", "prompt_added", "prompt_duplicate", "prompt_undone", "prompt_swapped", "watching", "refused"];
+
+/**
+ * A refused paid read as the toast code it is answered with (13 Oct 2026,
+ * review of DIY P7: Verify now and Log a site dropped runOnDemand's refusal,
+ * and Verify said "Checked just now" when the paid read had been refused).
+ */
+export function readWhy(code: RefusalCode): OppWhy {
+  switch (code) {
+    case "tracking_running":
+      return "running";
+    case "global_daily":
+    case "model_headroom":
+      return "paused";
+    case "door_daily":
+      return "daily";
+    case "month_budget":
+      return "month";
+    case "allowance":
+      return "allowance";
+    case "disabled":
+      return "dark";
+    case "client_inactive":
+      return "inactive";
+    case "ledger_unreadable":
+    case "deadline":
+    case "fixture":
+      return "spend";
+  }
+}
+
+/** The refusal each read code stands for, so its words are section 5.6's own. */
+const WHY_REFUSAL: Partial<Record<OppWhy, RefusalCode>> = { running: "tracking_running", paused: "global_daily", daily: "door_daily", month: "month_budget", allowance: "allowance", dark: "disabled", inactive: "client_inactive", spend: "ledger_unreadable" };
 
 export const VIEWER_REASON = "Viewers can't change this. Ask an owner or editor.";
 export const ENDED_REASON = "This account has ended, so its opportunities are read-only.";
@@ -118,9 +176,15 @@ export function decideOpp(post: OppPost, opp: Pick<Opportunity, "status" | "purs
 /**
  * The toast's fixed words for a route answer. Nothing is echoed from the URL.
  * `who` is the ask's recipient as the page may name it: "nomada digital",
- * or "your account contact" - always the latter in agency mode.
+ * or "your account contact" - always the latter in agency mode. `resets` is
+ * the day this client's allowance month turns ("1 Nov"), and `allowanceLine`
+ * the used-up line for its link checks, which Log a site and Verify now share.
  */
-export function oppToast(done: string | null, why: string | null, p: { cap: number; who?: string; member?: string } = { cap: 10 }): { tone: "good" | "bad"; text: string } | null {
+export function oppToast(done: string | null, why: string | null, p: { cap: number; who?: string; member?: string; resets?: string; allowanceLine?: string | null } = { cap: 10 }): { tone: "good" | "bad"; text: string } | null {
+  const refusal = why ? WHY_REFUSAL[why as OppWhy] : undefined;
+  const readWords = refusal ? refusalWords(refusal, { resets: p.resets ?? "the 1st", allowanceLine: p.allowanceLine }) : null;
+  // Logged, but the paid read behind it was refused: the row is kept, and the page is read overnight.
+  if (done === "logged" && readWords) return { tone: "good", text: `Logged. It wasn't read just now: ${readWords.charAt(0).toLowerCase()}${readWords.slice(1)}` };
   const ok: Record<string, string> = {
     pursued: "Pursuing. It is checked weekly from now on.",
     pitched: "Marked pitched.",
@@ -130,6 +194,7 @@ export function oppToast(done: string | null, why: string | null, p: { cap: numb
     reopened: "Reopened.",
     noted: "Note saved.",
     logged: "Logged. Its facts are below once it has been read.",
+    already: "This page is already in your opportunities. Here it is.",
     verified: "Checked just now. The result is under Verification.",
     asked: `Sent to ${p.who ?? "nomada digital"}. ${p.who && p.who !== "nomada digital" ? "They'll" : "We'll"} reply to ${p.member ?? "you"}.`,
     asked_agency: `Sent to your account contact. They'll reply to ${p.member ?? "you"}.`,
@@ -151,8 +216,14 @@ export function oppToast(done: string | null, why: string | null, p: { cap: numb
     readonly: "This preview doesn't save changes.",
     url: "That isn't a web address we can read. Paste the page's full address, starting https://.",
     cannot_log: "That page can't be logged here.",
-    dark: "This check isn't switched on yet.",
-    spend: "We couldn't start that check just now. Try again in a few minutes.",
+    dark: readWords ?? "This check isn't switched on yet.",
+    spend: readWords ?? "We couldn't start that check just now. Try again in a few minutes.",
+    running: readWords ?? "",
+    paused: readWords ?? "",
+    daily: readWords ?? "",
+    month: readWords ?? "",
+    allowance: readWords ?? "",
+    inactive: readWords ?? "",
     ask_refused: ASK_REFUSED.refused,
     ask_capped: ASK_REFUSED.capped,
     prompt: "That prompt change didn't go through. The cluster is as it was.",

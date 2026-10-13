@@ -59,7 +59,16 @@ export type StepResult =
   | { kind: "none"; reason: string }
   | { kind: "refused"; message: string };
 
-export const NO_CLUSTER = "its page has no cluster yet";
+/**
+ * Why a page with no cluster gives no prompt (13 Oct 2026, review of DIY P7:
+ * "no cluster yet" promised one). A logged page is never given a cluster - the
+ * night does not derive the logged lens - and a pursued page keeps the
+ * cluster it had, so neither says "yet".
+ */
+export function noClusterReason(lens: string): string {
+  return lens === "logged" ? "a page you logged has no cluster" : "it has no cluster";
+}
+export const NO_CLUSTER = noClusterReason("cited");
 
 /** The prompt this opportunity offers, or why none. Pure. */
 export function offeredPrompt(opp: Pick<Opportunity, "lens" | "pageType" | "title">, facts: Pick<PageFacts, "title" | "h1"> | null, keyword: string | null, market: string): { ok: true; text: string } | { ok: false; reason: string } {
@@ -68,7 +77,7 @@ export function offeredPrompt(opp: Pick<Opportunity, "lens" | "pageType" | "titl
 
 /** Run the step for a pursued opportunity. Never throws for a rule's answer; a port that fails throws. */
 export async function runPromptStep(port: PromptPort, p: { opp: Pick<Opportunity, "id" | "lens" | "pageType" | "title" | "clusterId">; facts: Pick<PageFacts, "title" | "h1"> | null; keyword: string | null; market: string; today: Day; by: string }): Promise<StepResult> {
-  if (!p.opp.clusterId) return { kind: "none", reason: NO_CLUSTER };
+  if (!p.opp.clusterId) return { kind: "none", reason: noClusterReason(p.opp.lens) };
   const offered = offeredPrompt(p.opp, p.facts, p.keyword, p.market);
   if (!offered.ok) return { kind: "none", reason: offered.reason };
   const live = await port.live(p.opp.clusterId);
@@ -109,7 +118,7 @@ export async function undoPromptStep(port: PromptPort, p: { opportunityId: strin
  * the cluster as it was.
  */
 export async function swapPromptStep(port: PromptPort, p: { opp: Pick<Opportunity, "id" | "lens" | "pageType" | "title" | "clusterId">; facts: Pick<PageFacts, "title" | "h1"> | null; keyword: string | null; market: string; stopId: string; today: Day; by: string }): Promise<StepResult> {
-  if (!p.opp.clusterId) return { kind: "none", reason: NO_CLUSTER };
+  if (!p.opp.clusterId) return { kind: "none", reason: noClusterReason(p.opp.lens) };
   const offered = offeredPrompt(p.opp, p.facts, p.keyword, p.market);
   if (!offered.ok) return { kind: "none", reason: offered.reason };
   const live = await port.live(p.opp.clusterId);
