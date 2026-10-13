@@ -283,7 +283,7 @@ function BeatTracked() {
           <span style={{ fontSize: "10.5px", fontWeight: 600, color: T.soft }}>Angle</span>
           {FREE_ENGINES.map((e) => (
             <span key={e} title={ENGINE_SPECS[e].label} style={{ display: "grid", placeItems: "center" }}>
-              <EngineLogo engine={e} size={12} />
+              <EngineLogo engine={e} size={12} inline />
               <span className="sr-only">{ENGINE_SPECS[e].label}</span>
             </span>
           ))}
@@ -460,7 +460,7 @@ function BeatMentioned() {
               border: "1px solid " + T.accent,
             }}
           >
-            <EngineLogo engine={e} size={13} />
+            <EngineLogo engine={e} size={13} inline />
             <span style={{ fontSize: "11.5px", color: T.ink }}>names {SUBJECT}</span>
           </span>
         ))}
@@ -481,7 +481,7 @@ function BeatCited() {
         <div style={{ fontSize: "12px", color: T.soft, marginTop: "2px" }}>Invoicing for freelancers</div>
         <div style={{ display: "flex", alignItems: "center", gap: "7px", marginTop: "8px", flexWrap: "wrap" }}>
           {FREE_ENGINES.slice(0, CITED_BY).map((e) => (
-            <EngineLogo key={e} engine={e} size={14} title={ENGINE_SPECS[e].label} />
+            <EngineLogo key={e} engine={e} size={14} title={ENGINE_SPECS[e].label} inline />
           ))}
           <span style={{ fontSize: "11.5px", color: T.soft }}>cited by {CITED_BY} of {FREE_ENGINE_COUNT} engines</span>
         </div>
@@ -551,7 +551,7 @@ function BeatEverywhere() {
             <span style={{ display: "flex", alignItems: "center", gap: "5px" }}>
               {FREE_ENGINES.map((e, i) => (
                 <span key={e} style={{ opacity: i < c.readBy ? 1 : 0.25, display: "flex" }}>
-                  <EngineLogo engine={e} size={14} title={ENGINE_SPECS[e].label} />
+                  <EngineLogo engine={e} size={14} title={ENGINE_SPECS[e].label} inline />
                 </span>
               ))}
             </span>

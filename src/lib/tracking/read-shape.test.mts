@@ -3,7 +3,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { clusterCards, clusterChart, clusterDetail, promptBrands, promptStrip } from "./cluster-figures.ts";
-import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, resolveComparison } from "./figures.ts";
+import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, firstReadComplete, resolveComparison, ungroupedRead } from "./figures.ts";
+import { namedEvidence } from "./evidence.ts";
+import { citedWithBrand, namedPage } from "./named-figures.ts";
 import { type Fixture, expandFixture, fixtureState, placementAllowance } from "./fixture-mode.ts";
 import type { OverviewData } from "./overview-data.ts";
 import { chartSeries, citeRows, placementsView } from "./placement-figures.ts";
@@ -11,16 +13,17 @@ import { placementFirstCited } from "../diy/prompts/placement-lines.ts";
 import { urlKey } from "./placements.ts";
 import { presets } from "./date-range.ts";
 import { PAGE } from "../supabase/page.ts";
-import { ANSWER_SELECT, DAY_SELECT, type AnswersQuery, type AnswersTable, type DayQuery, type DayTable, type ReadOpts, type StoredAnswer, answerPlan, answerRow, boundStated, clusterQuestionIds, dayPlan, monthSlice, planPrompts, rangeFloor, readAnswerDay, readAnswers, reportSpan, selectColumns, shapeAnswerDay, shapeRead, withoutBrandsOk } from "./read-shape.ts";
+import { ANSWER_SELECT, DAY_SELECT, type AnswersQuery, type AnswersTable, type DayQuery, type DayTable, type ReadOpts, type StoredAnswer, answerPlan, answerRow, boundStated, clusterQuestionIds, dayPlan, monthSlice, namedRead, planPrompts, rangeFloor, readAnswerDay, readAnswers, reportSpan, selectColumns, shapeAnswerDay, shapeRead, withoutBrandsOk } from "./read-shape.ts";
 import { monthFigures, reportMonths } from "./report-months.ts";
-import { askedOnFor, runNote } from "./run-note.ts";
+import { askedOnFor, brandGapNote, runNote } from "./run-note.ts";
 
 /**
  * The narrow reads (8 Oct 2026, audit perf-4, perf-9, perf-1). Each page on
  * a narrow read is held to draw exactly what it drew on the whole read, on
  * every fixture state with readings: Reports' monthly cards on verdicts only
- * and one month at a time, the one-cluster page on its own prompts, and
- * Placements on its cluster's prompts without brands. The census at the end
+ * and one month at a time, the one-cluster page on its own prompts,
+ * Placements on its cluster's prompts without brands, and Who is named
+ * without citations while no row is open (13 Oct 2026). The census at the end
  * names the figures those pages draw from their answers, so a new one has to
  * be checked here before it can read a column the page no longer asks for.
  */
@@ -45,6 +48,8 @@ test("the shapes select what they say, and an emptied column reads as an empty l
   assert.doesNotMatch(ANSWER_SELECT.cites, /\bbrands\b/);
   assert.match(ANSWER_SELECT.cites, /\bcitations\b/);
   assert.doesNotMatch(ANSWER_SELECT.verdicts, /\bbrands\b|\bcitations\b/);
+  assert.match(ANSWER_SELECT.brands, /\bbrands\b.*\bbrands_ok\b/);
+  assert.doesNotMatch(ANSWER_SELECT.brands, /\bcitations\b/);
   for (const cols of Object.values(ANSWER_SELECT)) assert.match(cols, /^run_date, question_id, engine, answered, named\b/);
 
   const d = base.data;
@@ -58,6 +63,8 @@ test("the shapes select what they say, and an emptied column reads as an empty l
     cites.map((a) => a.citations),
     d.answers.map((a) => a.citations),
   );
+  // 13 Oct 2026: the brands shape is the whole read less its citations.
+  assert.deepEqual(shapeRead(d, { answers: "brands" }).answers, d.answers.map((a) => ({ ...a, citations: [] })));
   const c1 = shapeRead(d, { cluster: "c1" });
   const ids = new Set(clusterQuestionIds(d.questions, "c1"));
   assert.equal(ids.size, d.questions.filter((q) => q.cluster_id === "c1").length);
@@ -80,6 +87,7 @@ test("the plan: the shape's columns, the cluster's prompts, and no read at all f
   assert.deepEqual(answerPlan({}), { select: ANSWER_SELECT.full, cluster: null });
   assert.deepEqual(answerPlan({ answers: "verdicts" }), { select: ANSWER_SELECT.verdicts, cluster: null });
   assert.deepEqual(answerPlan({ answers: "cites", cluster: "c1" }), { select: ANSWER_SELECT.cites, cluster: "c1" });
+  assert.deepEqual(answerPlan({ answers: "brands" }), { select: ANSWER_SELECT.brands, cluster: null });
   assert.equal(answerPlan({ answers: "none" }), null);
   assert.equal(answerPlan({ answers: "none", cluster: "c1" }), null);
   const d = base.data;
@@ -95,6 +103,7 @@ test("a column the select left out reads as an empty list, and a stray brand is 
   const a = base.data.answers.find((x) => x.brands.length && x.citations.length)!;
   assert.deepEqual(answerRow(selectColumns(a, ANSWER_SELECT.full)), a);
   assert.deepEqual(answerRow(selectColumns(a, ANSWER_SELECT.cites)), { ...a, brands: [] });
+  assert.deepEqual(answerRow(selectColumns(a, ANSWER_SELECT.brands)), { ...a, citations: [] });
   assert.deepEqual(answerRow(selectColumns(a, ANSWER_SELECT.verdicts)), { ...a, brands: [], citations: [] });
 });
 
@@ -148,7 +157,7 @@ test("readAnswers, loadOverview's own read, returns on PostgREST exactly what sh
     const where = (r: Range) => ({ clientId: f.client.id, from: r.from, to: r.to });
     const ranges: Range[] = [{ from: addDays(f.today, -55), to: f.today }, { from: "2026-09-01", to: "2026-09-14" }];
     const clusters = [undefined, ...f.data.clusters.slice(0, 2).map((c) => c.id), "nope"];
-    for (const answers of [undefined, "full", "cites", "verdicts", "none"] as const) {
+    for (const answers of [undefined, "full", "cites", "brands", "verdicts", "none"] as const) {
       for (const cluster of clusters) {
         for (const r of ranges) {
           const opts: ReadOpts = { answers, cluster };
@@ -163,8 +172,9 @@ test("readAnswers, loadOverview's own read, returns on PostgREST exactly what sh
     const other = await readAnswers(db.table, answerPlan({})!, null, { ...where(ranges[0]), clientId: "someone-else" });
     assert.equal(other.length, 0, "another client's id reads none of these rows");
   }
-  // 5 shapes x 2 ranges x (every cluster, up to two clusters, none): 40 on default, 30 on pilot-mixed's one cluster, 20 ungrouped.
-  assert.ok(reads >= 90, `only ${reads} reads compared`);
+  // 6 shapes x 2 ranges x (every cluster, up to two clusters, none): 48 on default, 36 on pilot-mixed's one cluster, 24 ungrouped.
+  // 90 to 108 on 13 Oct 2026, with Who is named's brands shape.
+  assert.ok(reads >= 108, `only ${reads} reads compared`);
 });
 
 test("readAnswers asks PostgREST for the plan's columns and, for one cluster, only its prompts", async () => {
@@ -216,6 +226,16 @@ test("readAnswers reads again without brands_ok when the table does not have it 
     }
   }
   assert.ok(rows > PAGE * 2, `only ${rows} rows read`);
+  // 13 Oct 2026: Who is named's brands shape names brands_ok too, and goes again without it the same way.
+  {
+    const f = fixtures.find(([s]) => s === "brands-unread")![1];
+    const r = { from: addDays(f.today, -55), to: f.today };
+    const before = strip(f.data.answers);
+    const db = postgrest(before, f.client.id, "brands_ok");
+    const got = await readAnswers(db.table, answerPlan({ answers: "brands" })!, null, { clientId: f.client.id, from: r.from, to: r.to });
+    sameRows(got, within(shapeRead({ ...f.data, answers: before as OverviewData["answers"] }, { answers: "brands" }), r).answers, "the brands shape without brands_ok");
+    assert.equal(db.calls[1]![0], "select run_date, question_id, engine, answered, named, brands (count)");
+  }
   // Once the column is there, the brands-unread state's unread answers come back unread.
   const u = fixtures.find(([s]) => s === "brands-unread")![1];
   const live = await readAnswers(postgrest(u.data.answers, u.client.id).table, answerPlan({})!, null, { clientId: u.client.id, from: addDays(u.today, -55), to: u.today });
@@ -228,6 +248,8 @@ test("readAnswers reads again without brands_ok when the table does not have it 
   await assert.rejects(readAnswers(postgrest(f.data.answers, f.client.id, "brands_ok_v2").table, odd, null, where), /brands_ok_v2 does not exist/, "a select without brands_ok is not retried");
   assert.equal(withoutBrandsOk(ANSWER_SELECT.full), "run_date, question_id, engine, answered, named, brands, citations");
   for (const cols of [ANSWER_SELECT.cites, ANSWER_SELECT.verdicts]) assert.equal(withoutBrandsOk(cols), cols, "the narrow shapes never name it");
+  // 13 Oct 2026: but the brands shape does, as the full read does, and is read again without it the same way.
+  assert.equal(withoutBrandsOk(ANSWER_SELECT.brands), "run_date, question_id, engine, answered, named, brands");
 });
 
 /**
@@ -523,6 +545,61 @@ test("Placements draws the same from its cluster's prompts, without brands, as f
 });
 
 /**
+ * Who is named's figures as Named.tsx draws them (13 Oct 2026, dashboard
+ * speed, payload), on the filters the page takes. The page reads brands
+ * without citations while no row is open (read-shape.ts namedRead).
+ */
+function named(data: OverviewData, f: Fixture, range: Range, compare: "prev" | "month" | "none", cluster: string | null, engine: string | null) {
+  const firstCheck = firstCheckDay(f.client.started_on, data.questions);
+  const before = resolveComparison(range, compare, f.client.started_on, firstCheck, firstReadComplete(data.runs, firstCheck)).range;
+  const cards = clusterCards({ clusters: data.clusters ?? [], questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today: f.today, engines });
+  const picked = cluster ? (cards.find((c) => c.id === cluster) ?? null) : null;
+  const only = picked ? new Set(picked.prompts.map((p) => p.id)) : null;
+  const you = f.client.brand;
+  const page = namedPage({ answers: data.answers, range, before, you, only, engine });
+  return {
+    cards,
+    page,
+    gap: brandGapNote(brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)),
+    partial: runNote(data, range, f.today),
+    loose: picked || !cards.length ? 0 : ungroupedRead(data.questions, data.answers, range),
+    // An open row's prompt links read verdicts and brands, so they are the same on the brands read too.
+    evidence: page.rows.slice(0, 6).map((r) => [...namedEvidence({ answers: data.answers, range, key: r.key, you, only, engine, engines })]),
+  };
+}
+
+test("Who is named draws the same without citations as from the whole read, until a row is open", () => {
+  let pages = 0;
+  let cited = 0;
+  for (const [state, f] of fixtures) {
+    const ranges: [Range, "prev" | "month" | "none"][] = [
+      [{ from: addDays(f.today, -27), to: f.today }, "prev"],
+      [{ from: "2026-08-10", to: "2026-09-20" }, "month"],
+    ];
+    // Every engine, the first four clusters, and one of each together: every cluster took the test 7 s.
+    const filters: [string | null, string | null][] = [[null, null], ...f.data.clusters.slice(0, 4).map((c): [string, null] => [c.id, null]), ...engines.map((e): [null, string] => [null, e]), [f.data.clusters[0]?.id ?? null, engines[0]!]];
+    for (const [range, compare] of ranges) {
+      const read = comparisonRange(range, compare);
+      const full = within(f.data, { from: read?.from ?? range.from, to: range.to });
+      const narrow = within(shapeRead(f.data, { answers: namedRead(null) }), { from: read?.from ?? range.from, to: range.to });
+      for (const [cluster, engine] of filters) {
+        const page = named(full, f, range, compare, cluster, engine);
+        assert.deepEqual(named(narrow, f, range, compare, cluster, engine), page, `${state} ${cluster ?? "every cluster"} ${engine ?? "every engine"} ${range.from}`);
+        pages++;
+        // An open row's cited pages are the page's one read of a citation, so an open row reads the whole answer.
+        for (const r of page.page.rows.slice(0, 3)) {
+          assert.equal(namedRead(r.key), "full");
+          if (citedWithBrand({ answers: full.answers, range, key: r.key, you: f.client.brand, domain: f.client.domain, only: null, engine }).length) cited++;
+        }
+      }
+    }
+  }
+  // 226 and 554 on 13 Oct 2026.
+  assert.ok(pages >= 226, `only ${pages} pages compared`);
+  assert.ok(cited >= 550, `only ${cited} open rows cite a page, so the full read for an open row proves nothing`);
+});
+
+/**
  * Census, 8 Oct 2026: every use of the answers on a page that reads a narrow
  * shape, each one compared above. A new use fails here until it is compared
  * too - a figure that needs a column the read leaves out would otherwise read
@@ -570,6 +647,23 @@ const USES: { what: string; path: string; use: RegExp; binds: number; lines: [pa
     ],
   },
   {
+    // 13 Oct 2026 (dashboard speed, payload): brands without citations while no row is open.
+    what: "Who is named",
+    path: "../../components/app/Named.tsx",
+    use: WHOLE,
+    binds: 1,
+    lines: [
+      ["questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today, engines", "keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today: f.today, engines })"],
+      ["namedPage({ answers: data.answers, range, before, you: brand, only, engine })", "const page = namedPage({ answers: data.answers, range, before, you, only, engine });"],
+      ["brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)", "gap: brandGapNote(brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)),"],
+      ["runNote(data, range, today)", "partial: runNote(data, range, f.today),"],
+      ["ungroupedRead(data.questions, data.answers, range)", "loose: picked || !cards.length ? 0 : ungroupedRead(data.questions, data.answers, range),"],
+      ["namedEvidence({ answers: data.answers, range, key: r.key, you: brand, only, engine, engines })", "namedEvidence({ answers: data.answers, range, key: r.key, you, only, engine, engines })"],
+      // Open rows only, which read the whole answer: compared as that rule, not as a figure.
+      ["citedWithBrand({ answers: data.answers, range, key: r.key, you: brand, domain, only, engine })", 'assert.equal(namedRead(r.key), "full");'],
+    ],
+  },
+  {
     what: "Reports",
     path: "../../app/app/[client]/reports/page.tsx",
     use: /(?<![-\w])data\b(?!\.clusters)/g,
@@ -600,6 +694,7 @@ test("census: the pages on a narrow read use their answers only where compared a
   assert.match(reports, /\{ answers: "verdicts" \}/);
   assert.match(src("./placements-screen.ts"), /\{ answers: "cites", cluster: cluster\.id, structure \}/);
   assert.match(src("../../app/app/[client]/clusters/[cluster]/page.tsx"), /\{ cluster: id \}/);
+  assert.match(src("../../app/app/[client]/named/page.tsx"), /const open = openKey\(sp\.open\);[\s\S]*\{ answers: namedRead\(open\) \}[\s\S]*open=\{open\}/);
   for (const p of ["settings", "setup"]) {
     const page = src(`../../app/app/[client]/${p}/page.tsx`);
     assert.doesNotMatch(page, /loadOverview\(/, `${p} reads answers again`);

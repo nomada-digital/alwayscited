@@ -163,7 +163,7 @@ export default function SeoAgenciesPage() {
             <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12px", color: D.muted }}>
               {/* The logo carries the engine; the word is dropped (Danny, 27 Sep, R46). */}
               <span style={{ color: T.surface, display: "flex" }}>
-                <EngineLogo engine="chatgpt" size={14} title="ChatGPT" />
+                <EngineLogo engine="chatgpt" size={14} title="ChatGPT" inline />
               </span>
               best invoicing software for freelancers
             </div>

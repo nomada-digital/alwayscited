@@ -38,7 +38,7 @@ export default function TierEngines({
       <span className="sr-only">Reads {names}.</span>
       <span aria-hidden="true" style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
         {engines.map((e) => (
-          <EngineLogo key={e} engine={e} size={size} />
+          <EngineLogo key={e} engine={e} size={size} inline />
         ))}
       </span>
     </div>

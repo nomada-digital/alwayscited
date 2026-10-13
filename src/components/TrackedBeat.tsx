@@ -69,7 +69,7 @@ function Marks({ named }: { named: number }) {
     <>
       {FREE_ENGINES.map((e, i) => (
         <span key={e} className={i < named ? undefined : "tb-off"} style={{ display: "flex" }}>
-          <EngineLogo engine={e} size={16} />
+          <EngineLogo engine={e} size={16} inline />
         </span>
       ))}
     </>

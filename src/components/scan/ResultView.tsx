@@ -167,7 +167,7 @@ function EngineMarks(p: { answers: EngineAnswer[]; size?: number }) {
               filter: state === "named" ? undefined : "grayscale(1)",
             }}
           >
-            <EngineLogo engine={a.engine} size={14} />
+            <EngineLogo engine={a.engine} size={14} inline />
           </span>
         );
       })}
@@ -484,7 +484,7 @@ function AnswerDrawer(p: {
               return (
                 <div key={a.engine} style={{ border: "1px solid " + T.line, borderRadius: "14px", padding: "14px 16px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                    <EngineLogo engine={a.engine} size={18} />
+                    <EngineLogo engine={a.engine} size={18} inline />
                     <span style={{ fontSize: "13.5px", fontWeight: 700 }}>{engineLabel(a.engine)}</span>
                     {direct ? <span style={{ fontSize: "11.5px", color: T.soft }}>asked directly</span> : null}
                     <span style={{ ...(state === "named" ? ROW_NAMED : QUIET), marginLeft: "auto", fontSize: "11.5px", padding: "3px 9px" }}>
@@ -1133,7 +1133,7 @@ export default function ResultView(p: {
                   color: T.ink,
                 }}
               >
-                <EngineLogo engine={e.engine} size={16} />
+                <EngineLogo engine={e.engine} size={16} inline />
                 <span style={{ fontSize: "12.5px", fontWeight: 600 }}>{e.label}</span>
               </div>
             ))}

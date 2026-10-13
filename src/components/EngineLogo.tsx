@@ -5,6 +5,11 @@
  * and gradient ids are prefixed per engine so two logos on one page cannot
  * collide. The ChatGPT mark is single-colour and inherits the text colour.
  *
+ * 13 Oct 2026 (dashboard speed, payload): inside the dashboard each logo is a
+ * <use> of one sprite (EngineSprite below), and every page outside it passes
+ * `inline` and draws the paths as before. engine-logo.test.mts holds each
+ * caller to the side of that line it renders on.
+ *
  * These identify the engine that gave an answer - nominative use. Never
  * recoloured, never used as decoration away from that engine's own answer.
  */
@@ -30,21 +35,58 @@ export function engineMarkSvg(engine: Engine, mono: string): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"${fill}>${MARKS[engine]}</svg>`;
 }
 
-export default function EngineLogo(p: { engine: string; size?: number; title?: string }) {
+/** The id of an engine's <symbol> in the dashboard's sprite. */
+const symbolId = (engine: Engine) => `ac-engine-${engine}`;
+
+/** A mark's gradients, which the sprite keeps outside its symbol. */
+const DEFS = /<defs>[\s\S]*?<\/defs>/g;
+
+/** Every mark once: each engine's gradients, then its paths as a <symbol>, at the per-engine ids the inline marks use. */
+const SPRITE = (Object.keys(MARKS) as Engine[]).map((e) => `${(MARKS[e].match(DEFS) ?? []).join("")}<symbol id="${symbolId(e)}" viewBox="0 0 24 24">${MARKS[e].replace(DEFS, "")}</symbol>`).join("");
+
+/**
+ * The dashboard's one copy of the marks (13 Oct 2026, dashboard speed,
+ * payload). Who is named and Cited pages draw up to 50 rows of four inline
+ * marks - a third of each page's payload on the fixture, an estimated 280 KB
+ * of 545 KB on production - and every sidebar page is now prefetched whether
+ * it is opened or not. Mounted once, in app/app/layout.tsx, which does not
+ * re-render on navigation, so a page's payload carries only its <use>
+ * references. A 0x0 box out of the flow, never display:none: a gradient
+ * defined under display:none is not painted. Measured 13 Oct 2026 - with the
+ * marks inline, every Gemini mark on a phone drew flat blue, because the first
+ * copy of its gradient ids sat in the desktop sidebar, which a phone does not
+ * display. Here they sit once, in the sprite's own defs, outside its <symbol>,
+ * under the ids the inline mark uses.
+ */
+export function EngineSprite() {
+  return <svg data-engine-sprite="" aria-hidden="true" width="0" height="0" style={{ position: "absolute", overflow: "hidden" }} dangerouslySetInnerHTML={{ __html: SPRITE }} />;
+}
+
+/**
+ * One engine's mark. A <use> of the dashboard's sprite unless `inline`, which
+ * every caller outside app/app passes, since nothing there mounts the sprite.
+ * Same box, name and colour either way: the ChatGPT mark's fill and rule are
+ * set here, on the outer <svg>, and inherited through the <use>.
+ */
+export default function EngineLogo(p: { engine: string; size?: number; title?: string; inline?: boolean }) {
   if (!isEngine(p.engine)) return null;
   const size = p.size ?? 16;
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      role={p.title ? "img" : undefined}
-      aria-label={p.title}
-      aria-hidden={p.title ? undefined : true}
-      fill={p.engine === "chatgpt" ? "currentColor" : undefined}
-      fillRule={p.engine === "chatgpt" ? "evenodd" : undefined}
-      style={{ flex: "none", display: "block" }}
-      dangerouslySetInnerHTML={{ __html: MARKS[p.engine] }}
-    />
+  const box = {
+    viewBox: "0 0 24 24",
+    width: size,
+    height: size,
+    role: p.title ? "img" : undefined,
+    "aria-label": p.title,
+    "aria-hidden": p.title ? undefined : true,
+    fill: p.engine === "chatgpt" ? "currentColor" : undefined,
+    fillRule: p.engine === "chatgpt" ? ("evenodd" as const) : undefined,
+    style: { flex: "none", display: "block" },
+  };
+  return p.inline ? (
+    <svg {...box} dangerouslySetInnerHTML={{ __html: MARKS[p.engine] }} />
+  ) : (
+    <svg {...box}>
+      <use href={`#${symbolId(p.engine)}`} />
+    </svg>
   );
 }
