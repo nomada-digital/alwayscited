@@ -4,6 +4,7 @@ import { CONTACT_EMAIL } from "@/config/contact";
 import { mailFrom } from "@/config/mail-from";
 import { headerSafe } from "@/lib/email-header";
 import { siteUrl } from "@/lib/scan/verify-email";
+import { categoryLabel, marketLabel, type WalkthroughAsk } from "@/lib/scan/walkthrough-fields";
 
 /**
  * The alert to Danny when somebody asks for a walkthrough. Internal only - it
@@ -16,10 +17,18 @@ import { siteUrl } from "@/lib/scan/verify-email";
  *
  * Returns false rather than throwing. The request is already stored, so a
  * failed alert is recoverable from `walkthrough_requests.notified_at is null`.
+ *
+ * 13 Oct 2026 (Danny): the ask carries the person's name, business category
+ * and market, all three required, and they lead the alert - the alert is
+ * where Luke and Danny read them, and the only place they are while
+ * 20261014000000_walkthrough_fields.sql is not applied (walkthrough-store.ts).
+ * The scan's own category, which is the topic it was run on rather than the
+ * one the person picked, is "Scan category" so the two are not confused.
  */
 export async function sendWalkthroughAlert(input: {
   kind: "video" | "demo";
   email: string;
+  ask: WalkthroughAsk;
   scan: { domain: string; brand: string | null; topic: string | null; token: string } | null;
   from?: string;
 }): Promise<boolean> {
@@ -34,12 +43,17 @@ export async function sendWalkthroughAlert(input: {
   const context = scan
     ? [
         `Scanned: ${scan.domain}${scan.brand ? " (" + scan.brand + ")" : ""}`,
-        `Category: ${scan.topic ?? "not confirmed"}`,
+        `Scan category: ${scan.topic ?? "not confirmed"}`,
         `Their report: ${siteUrl()}/scan/${scan.token}`,
       ]
     : [`Asked from: ${siteUrl()}${input.from ?? ""}`, "No scan yet."];
   const text = [
-    `${input.email} asked for a ${input.kind === "video" ? "Loom walkthrough" : "demo call"} of alwaystracked (${what}).`,
+    `${input.ask.name} (${input.email}) asked for a ${input.kind === "video" ? "Loom walkthrough" : "demo call"} of alwaystracked (${what}).`,
+    "",
+    `Name: ${input.ask.name}`,
+    `Email: ${input.email}`,
+    `Category: ${categoryLabel(input.ask.category)}`,
+    `Market: ${marketLabel(input.ask.market)}`,
     "",
     ...context,
     "",

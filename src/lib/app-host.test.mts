@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { APP_PREFIX, SITE_ORIGIN, appHost, appOrigin, appPath, appUrl, internalPath, isAppHost, passesThrough, siteHref, siteHrefAt, siteOrigin, stripPrefix } from "./app-host.ts";
+import { APP_PREFIX, SITE_ORIGIN, appHost, appHref, appOrigin, appPath, appUrl, internalPath, isAppHost, passesThrough, siteHref, siteHrefAt, siteOrigin, stripPrefix } from "./app-host.ts";
 
 /**
  * M1 of docs/tracked-dashboard-2026-10-05-app/04-migration-brief.md
@@ -84,6 +84,35 @@ test("an emailed link points at whichever host the dashboard is on", () => {
   assert.equal(appOrigin("https://alwayscited.com", ON), "https://app.alwayscited.com");
   // A development host is http, or the link cannot be opened at all.
   assert.equal(appUrl("/auth", "http://localhost:3100", { APP_HOST: "app.localhost:3100" }), "http://app.localhost:3100/auth");
+});
+
+/**
+ * The site header's "Log in" (Danny, 13 Oct 2026): relative on the shared
+ * host, the app host's own /login once APP_HOST is set, with no code change
+ * between the two. Never the bare "/login" on the marketing host, which is no
+ * route there.
+ */
+test("a link from the site into the dashboard is relative until the dashboard has its own host", () => {
+  assert.equal(appHref("/login", OFF), "/app/login");
+  assert.equal(appHref("/login", ON), "https://app.alwayscited.com/login");
+  assert.equal(appHref("/login", { APP_HOST: "app.localhost:3700" }), "http://app.localhost:3700/login");
+  assert.equal(appHref("", OFF), APP_PREFIX);
+  assert.equal(appHref("", ON), "https://app.alwayscited.com/");
+});
+
+test("the header is handed its Log in link by the server, never decides it in the browser", () => {
+  const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
+  assert.match(layout, /<Header loginHref=\{appHref\("\/login"\)\} \/>/, "the root layout passes appHref(\"/login\")");
+  const header = readFileSync(join(process.cwd(), "src", "components", "Header.tsx"), "utf8");
+  // The header is a client component: APP_HOST is empty there, so any helper
+  // that reads it would give the server's render one href and hydration another.
+  assert.match(header, /^"use client";/);
+  const headerCode = header.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  assert.doesNotMatch(headerCode, /from "@\/lib\/app-host"|APP_HOST/, "the header reads no host itself");
+  // `=>` allowed inside the tag: the menu's link closes the menu on click.
+  const logins = [...header.matchAll(/<a href=\{loginHref\}(?:=>|[^>])*>\s*\{LOG_IN\}\s*<\/a>/g)];
+  assert.equal(logins.length, 2, "Log in on the bar and in the phone menu");
+  assert.match(header, /const LOG_IN = "Log in";/);
 });
 
 /* ------------------------------------------------------------------ */

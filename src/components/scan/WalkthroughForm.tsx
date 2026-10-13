@@ -2,9 +2,20 @@
 
 import { useEffect, useState } from "react";
 
-import { SCAN_LIMITS } from "@/config/contact";
+import { SCAN_LIMITS, WALKTHROUGH_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
 import { track } from "@/lib/analytics";
+import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
+import {
+  readWalkthroughCategory,
+  readWalkthroughMarket,
+  readWalkthroughName,
+  WALKTHROUGH_CATEGORIES,
+  WALKTHROUGH_ERROR_FIELD,
+  WALKTHROUGH_MARKETS,
+  WALKTHROUGH_REFUSAL,
+  type WalkthroughField,
+} from "@/lib/scan/walkthrough-fields";
 import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
 import { isWorkEmail, WORK_EMAIL_REFUSAL } from "@/lib/work-email";
 
@@ -44,8 +55,34 @@ import { btn, field, label } from "./screens";
  * R54's "Book a call" link to /contact is gone from the toggle (every other
  * Book a call on the site stays). The two name who does it - "Loom with Luke",
  * "Demo with Danny" - each with a 24px round photo before its label.
+ *
+ * Name, category and market, all required (Danny, 13 Oct 2026). The options
+ * and the refusals come from lib/scan/walkthrough-fields.ts, which both routes
+ * read the post through, so the two ends cannot disagree. Each field's error
+ * sits under it and is tied to it by aria-describedby; on a refused submit the
+ * first wrong field takes focus. Without script the scan version posts as it
+ * did, and the route's outcome word names the field it refused. `market`
+ * preselects the scan's own market, which the visitor chose when they ran it;
+ * the tier pages have no such choice to go on, so nothing is preselected there.
  */
-export default function WalkthroughForm(p: { token: string; back?: string; outcome?: WalkthroughOutcome | null } | { from: string }) {
+type Errors = Partial<Record<WalkthroughField, string>>;
+
+const OUTCOME_ERRORS: Partial<Record<WalkthroughOutcome, Errors>> = {
+  bad: { email: "That email does not look right." },
+  personal: { email: WORK_EMAIL_REFUSAL },
+  name: { name: WALKTHROUGH_REFUSAL.name },
+  category: { category: WALKTHROUGH_REFUSAL.category },
+  market: { market: WALKTHROUGH_REFUSAL.market },
+};
+
+const FIELD_ORDER: WalkthroughField[] = ["name", "email", "category", "market"];
+
+/** The element a field's error sends focus to; the market's is its first radio. */
+const focusId = (f: WalkthroughField) => (f === "market" ? `wt-market-${WALKTHROUGH_MARKETS[0]}` : `wt-${f}`);
+
+const fieldError: React.CSSProperties = { fontSize: "13px", lineHeight: 1.5, color: T.badFg, margin: "6px 0 0" };
+
+export default function WalkthroughForm(p: { token: string; back?: string; outcome?: WalkthroughOutcome | null; market?: string | null } | { from: string }) {
   const token = "token" in p ? p.token : null;
   // R151 (3 Oct 2026): the scan version posts without script as well, and the
   // route's 303 brings back only `outcome`, which the page passes in.
@@ -53,17 +90,59 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   const [mounted, setMounted] = useState(token !== null);
   useEffect(() => setMounted(true), []);
   const [kind, setKind] = useState<"video" | "demo">(outcome === "demo" ? "demo" : "video");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [category, setCategory] = useState("");
+  const [market, setMarket] = useState(() => {
+    const scanMarket = "token" in p ? p.market : null;
+    return scanMarket && readWalkthroughMarket(scanMarket).ok ? scanMarket : "";
+  });
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState(outcome === "bad" ? "That email does not look right." : outcome === "personal" ? WORK_EMAIL_REFUSAL : outcome === "failed" ? "That did not go through. Please try again." : "");
+  const [errors, setErrors] = useState<Errors>((outcome && OUTCOME_ERRORS[outcome]) ?? {});
+  const [err, setErr] = useState(outcome === "failed" ? "That did not go through. Please try again." : "");
   const [done, setDone] = useState(outcome === "video" ? "Thanks. Luke will send your Loom." : outcome === "demo" ? "Thanks. Danny will be in touch." : "");
+
+  /** Every field's refusal, read the way the routes read it. */
+  function check(): Errors {
+    const out: Errors = {};
+    const n = readWalkthroughName(name);
+    if (!n.ok) out.name = n.message;
+    const address = normalizeEmail(email);
+    if (!address) out.email = "Enter your work email.";
+    else if (address.length > SCAN_LIMITS.email || !isPlausibleEmail(address)) out.email = "That email does not look right.";
+    else if (!isWorkEmail(address)) out.email = WORK_EMAIL_REFUSAL;
+    const c = readWalkthroughCategory(category);
+    if (!c.ok) out.category = c.message;
+    const m = readWalkthroughMarket(market);
+    if (!m.ok) out.market = m.message;
+    return out;
+  }
+
+  function refuse(next: Errors) {
+    setErrors(next);
+    const first = FIELD_ORDER.find((f) => next[f]);
+    if (first) document.getElementById(focusId(first))?.focus();
+  }
+
+  /** A field's error clears as soon as it is changed. */
+  function edited(f: WalkthroughField) {
+    if (!errors[f]) return;
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[f];
+      return next;
+    });
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (email.trim() && !isWorkEmail(email)) {
-      setErr(WORK_EMAIL_REFUSAL);
+    const found = check();
+    if (Object.keys(found).length) {
+      setErr("");
+      refuse(found);
       return;
     }
+    setErrors({});
     setErr("");
     setBusy(true);
     try {
@@ -75,16 +154,18 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         ? await fetch("/api/scan/" + token + "/walkthrough", {
             method: "POST",
             headers,
-            body: JSON.stringify({ email, kind }),
+            body: JSON.stringify({ name, email, category, market, kind }),
           })
         : await fetch("/api/walkthrough", {
             method: "POST",
             headers,
-            body: JSON.stringify({ email, kind, from: "from" in p ? p.from : "" }),
+            body: JSON.stringify({ name, email, category, market, kind, from: "from" in p ? p.from : "" }),
           });
       const data = await res.json();
       if (!res.ok && res.status !== 429) {
-        setErr(data.message ?? "That did not go through. Please try again.");
+        const field = typeof data.error === "string" && Object.hasOwn(WALKTHROUGH_ERROR_FIELD, data.error) ? WALKTHROUGH_ERROR_FIELD[data.error] : null;
+        if (field && data.message) refuse({ [field]: data.message });
+        else setErr(data.message ?? "That did not go through. Please try again.");
         return;
       }
       setDone(data.message ?? (kind === "video" ? "Thanks. Luke will send your Loom." : "Thanks. Danny will be in touch."));
@@ -161,6 +242,30 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
       <p aria-live="polite" style={{ margin: "14px 0 0", fontSize: "13.5px", lineHeight: 1.5, color: T.soft, minHeight: "42px" }}>
         {chosen.note}
       </p>
+      <label htmlFor="wt-name" style={{ ...label, marginTop: "14px", display: "block" }}>
+        Your name
+      </label>
+      <input
+        id="wt-name"
+        type="text"
+        name="name"
+        autoComplete="name"
+        maxLength={WALKTHROUGH_LIMITS.name}
+        required
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value);
+          edited("name");
+        }}
+        style={field}
+        aria-invalid={Boolean(errors.name)}
+        aria-describedby={errors.name ? "wt-name-error" : undefined}
+      />
+      {errors.name ? (
+        <p id="wt-name-error" style={fieldError}>
+          {errors.name}
+        </p>
+      ) : null}
       <label htmlFor="wt-email" style={{ ...label, marginTop: "14px", display: "block" }}>
         Work email
       </label>
@@ -173,11 +278,102 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         required
         placeholder="you@company.com"
         value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        onChange={(e) => {
+          setEmail(e.target.value);
+          edited("email");
+        }}
         style={field}
-        aria-invalid={Boolean(err)}
-        aria-describedby={err ? "wt-error" : undefined}
+        aria-invalid={Boolean(errors.email)}
+        aria-describedby={errors.email ? "wt-email-error" : undefined}
       />
+      {errors.email ? (
+        <p id="wt-email-error" style={fieldError}>
+          {errors.email}
+        </p>
+      ) : null}
+      <label htmlFor="wt-category" style={{ ...label, marginTop: "14px", display: "block" }}>
+        Category
+      </label>
+      <select
+        id="wt-category"
+        name="category"
+        required
+        value={category}
+        onChange={(e) => {
+          setCategory(e.target.value);
+          edited("category");
+        }}
+        style={{ ...field, color: category ? T.ink : T.soft }}
+        aria-invalid={Boolean(errors.category)}
+        aria-describedby={errors.category ? "wt-category-error" : undefined}
+      >
+        <option value="">Pick your category</option>
+        {WALKTHROUGH_CATEGORIES.map((c) => (
+          <option key={c.id} value={c.id} style={{ color: T.ink }}>
+            {c.label}
+          </option>
+        ))}
+      </select>
+      {errors.category ? (
+        <p id="wt-category-error" style={fieldError}>
+          {errors.category}
+        </p>
+      ) : null}
+      <fieldset
+        role="radiogroup"
+        aria-labelledby="wt-market-label"
+        aria-required="true"
+        aria-invalid={Boolean(errors.market)}
+        aria-describedby={errors.market ? "wt-market-error" : undefined}
+        style={{ border: 0, padding: 0, margin: "14px 0 0", minWidth: 0 }}
+      >
+        <legend id="wt-market-label" style={{ ...label, padding: 0 }}>
+          Market
+        </legend>
+        <div style={{ display: "flex", gap: "8px" }}>
+          {WALKTHROUGH_MARKETS.map((m) => (
+            <label
+              key={m}
+              htmlFor={`wt-market-${m}`}
+              style={{
+                flex: "1 1 0",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                minHeight: "48px",
+                padding: "0 16px",
+                fontSize: "1rem",
+                fontWeight: 600,
+                color: T.ink,
+                background: T.surface,
+                border: `1.5px solid ${market === m ? T.accent : T.line}`,
+                borderRadius: "12px",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="radio"
+                id={`wt-market-${m}`}
+                name="market"
+                value={m}
+                required
+                checked={market === m}
+                onChange={() => {
+                  setMarket(m);
+                  edited("market");
+                }}
+                style={{ width: "18px", height: "18px", margin: 0, accentColor: T.accent, flexShrink: 0 }}
+              />
+              {m}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {errors.market ? (
+        <p id="wt-market-error" style={fieldError}>
+          {errors.market}
+        </p>
+      ) : null}
       {err ? (
         <p id="wt-error" role="alert" style={{ fontSize: "13px", color: T.badFg, marginTop: "8px" }}>
           {err}
@@ -187,7 +383,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         {busy ? "Sending" : kind === "video" ? "Send me the walkthrough" : "Request a demo"}
       </button>
       <p style={{ fontSize: "12px", color: T.soft, marginTop: "10px", lineHeight: 1.5 }}>
-        We use it to send you the walkthrough or arrange the call, and nothing else. <a href="/legal">What we collect</a>.
+        We use these to send you the walkthrough or arrange the call, and nothing else. <a href="/legal">What we collect</a>.
       </p>
     </form>
   );

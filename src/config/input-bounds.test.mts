@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { COVERAGE_LIMITS, SCAN_LIMITS, WAITLIST_LIMITS } from "./contact.ts";
+import { COVERAGE_LIMITS, SCAN_LIMITS, WAITLIST_LIMITS, WALKTHROUGH_LIMITS } from "./contact.ts";
 
 /**
  * Every field in the tree a stranger can type into, and whether anything bounds
@@ -438,6 +438,19 @@ const EXEMPT: Record<string, Exemption> = {
     why: "The walkthrough ask's hidden kind, set by its toggle. type=hidden, nobody types in it; the walkthrough route accepts only the exact words video or demo.",
     holds: [{ file: "app/api/scan/[token]/walkthrough/route.ts", needs: 'body.kind === "demo" ? "demo" : body.kind === "video" ? "video" : null' }],
   },
+  // 13 Oct 2026 (Danny): the walkthrough ask's market is required, two
+  // radios, US and UK. Nothing is typed; the routes read it through
+  // readWalkthroughMarket, which refuses anything over WALKTHROUGH_LIMITS.market
+  // or other than exactly US or UK. Name is typed and carries a maxLength;
+  // category is a <select>, which this census does not walk (see the heading).
+  "wt-market-${m}": {
+    why: "The walkthrough ask's market, a radio: US or UK. type=radio, nothing typed; both walkthrough routes read it through readWalkthroughMarket, which refuses a value over WALKTHROUGH_LIMITS.market or other than exactly US or UK.",
+    holds: [
+      { file: "lib/scan/walkthrough-fields.ts", needs: "raw.length > WALKTHROUGH_LIMITS.market || !isMarket(raw)" },
+      { file: "app/api/scan/[token]/walkthrough/route.ts", needs: "readWalkthroughMarket(body.market)" },
+      { file: "app/api/walkthrough/route.ts", needs: "readWalkthroughMarket(body.market)" },
+    ],
+  },
   "wt-back": {
     why: "The walkthrough ask's hidden way back, set by the coverage reading page. type=hidden, nobody types in it; walkthroughBack accepts only a /scan/ or /coverage-check/ path of at most 80 token characters, else the scan's own page.",
     holds: [{ file: "lib/scan/walkthrough-outcome.ts", needs: "/^\\/(scan|coverage-check)\\/[A-Za-z0-9_-]{1,80}$/.test(raw)" }],
@@ -689,6 +702,10 @@ test("the bounds are the numbers the servers actually enforce", () => {
   assert.deepEqual(COVERAGE_LIMITS.brand, { min: 2, max: 80 });
   assert.deepEqual(COVERAGE_LIMITS.topic, { min: 2, max: 120 });
   assert.deepEqual(COVERAGE_LIMITS.segment, { min: 2, max: 80 });
+  // 13 Oct 2026: the walkthrough ask's three required fields. name is the
+  // contact form's 120; category and market are the contact form's sector and
+  // market bounds, for the same picked values. walkthrough-fields.ts reads all three.
+  assert.deepEqual(WALKTHROUGH_LIMITS, { name: 120, category: 60, market: 4 });
 });
 
 /**

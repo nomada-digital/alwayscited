@@ -17,19 +17,27 @@ export const FUNNEL_STEPS = [
   { key: "confirmed", label: "Scans confirmed", source: "scans.queued_at set" },
   { key: "completed", label: "Scans completed", source: "scans.status = complete" },
   { key: "opened", label: "Results opened", source: null },
-  { key: "walkthrough", label: "Walkthroughs requested", source: "walkthrough_requests, market from its scan" },
+  { key: "walkthrough", label: "Walkthroughs requested", source: "walkthrough_requests, market its own, else its scan's" },
   { key: "checkout", label: "Checkouts reached", source: null },
   { key: "paid", label: "Orders paid", source: "orders" },
 ] as const;
 
 /**
- * The columns the page's three reads ask for: a timestamp, a market and a
- * status, never an email, a domain or a name, so nothing personal reaches the
- * page even before the rows are reduced to numbers. The test holds them to it.
+ * The columns the page's reads ask for: a timestamp, a market and a status,
+ * never an email, a domain or a name, so nothing personal reaches the page
+ * even before the rows are reduced to numbers. The test holds them to it.
+ *
+ * 13 Oct 2026: a walkthrough ask carries its own market since Danny made it a
+ * required field, so a tier page's ask - no scan, so no market until now, and
+ * counted under neither - counts under the market it gave. Its scan's market
+ * stays the fallback for every ask from before. `walkthroughsBefore` is the
+ * read while 20261014000000_walkthrough_fields.sql is not applied, so the
+ * page counts as it did rather than failing on the missing column.
  */
 export const FUNNEL_SELECTS = {
   scans: "created_at, queued_at, status, market",
-  walkthroughs: "created_at, scans(market)",
+  walkthroughs: "created_at, market, scans(market)",
+  walkthroughsBefore: "created_at, scans(market)",
   orders: "created_at, market",
 } as const;
 
@@ -41,6 +49,17 @@ export type OrderRow = { created_at: string; market: string };
 
 /** One day's counts by step and market; `null` where the step is not logged. */
 export type FunnelDay = { day: string; counts: Record<FunnelStep, Record<Market, number> | null> };
+
+/**
+ * A walkthrough ask's market: its own where it has one, else its scan's.
+ * `scans` is how PostgREST embeds the joined row - an object, or an array of
+ * one, or null for an ask with no scan.
+ */
+export function walkthroughMarket(row: { market?: string | null; scans?: { market: string | null } | { market: string | null }[] | null }): string | null {
+  const s = row.scans;
+  const scan = Array.isArray(s) ? (s[0]?.market ?? null) : (s?.market ?? null);
+  return row.market ?? scan;
+}
 
 /** orders store `uk`/`us`, scans `UK`/`US`; anything else counts under neither market. */
 export function marketOf(v: string | null): Market | null {

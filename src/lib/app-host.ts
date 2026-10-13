@@ -109,6 +109,22 @@ export function appUrl(rest: string, origin: string, env?: { APP_HOST?: string }
   return `${origin.replace(/\/$/, "")}${appPath(rest, false)}`;
 }
 
+/**
+ * A link from the marketing site into the dashboard - the header's "Log in"
+ * (Danny, 13 Oct 2026). The mirror of siteHref: relative while the dashboard
+ * shares the site's host (`/app/login`), absolute once it has its own
+ * (`https://app.alwayscited.com/login`), because on the marketing host a bare
+ * `/login` is no route and `/app/login` would only 308 to the same place.
+ *
+ * Decided on the server. A client component cannot read APP_HOST - only
+ * NEXT_PUBLIC_ variables reach the browser bundle, the rest read as empty - so
+ * the site header would render one href on the server and another on
+ * hydration. The root layout calls this and hands the header the string.
+ */
+export function appHref(rest: string, env?: { APP_HOST?: string }): string {
+  return appHost(env) ? appUrl(rest, "", env) : appPath(rest, false);
+}
+
 /** The dashboard's own origin, for a link that leaves the request behind. */
 export function appOrigin(origin: string, env?: { APP_HOST?: string }): string {
   const host = appHost(env);

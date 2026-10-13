@@ -15,8 +15,14 @@
  * /alwaystracked -> checkout; (3) /packages -> each tier's next page, US and
  * UK; (4) /white-label and the SEO and PR agency pages; (5) the phone width
  * on /, /scan and a result; (6) a returning visitor on an emailed scan link.
+ *
+ * 13 Oct 2026 (Danny): (10) the header's Log in, at five widths, and (11) the
+ * walkthrough form's required name, category and market on a tier page. Both
+ * read-only like the rest: (11) presses Send with the fields empty, which the
+ * form refuses before any request, and asserts that none went out. Screens of
+ * both land in test-results/site/ (not committed).
  */
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
@@ -27,8 +33,28 @@ import { trackOffer } from "../../src/components/scan/track-offer.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const require = createRequire(path.join(os.homedir(), "code/.parity/package.json"));
-type Locator = { click(): Promise<void>; focus(): Promise<void>; inputValue(): Promise<string>; evaluate<R>(fn: (el: Element) => R): Promise<R>; count(): Promise<number>; first(): Locator; getAttribute(n: string): Promise<string | null>; isVisible(): Promise<boolean>; boundingBox(): Promise<{ height: number; width: number } | null>; textContent(): Promise<string | null> };
+type Locator = {
+  click(): Promise<void>;
+  focus(): Promise<void>;
+  inputValue(): Promise<string>;
+  evaluate<R>(fn: (el: Element) => R): Promise<R>;
+  count(): Promise<number>;
+  first(): Locator;
+  getAttribute(n: string): Promise<string | null>;
+  isVisible(): Promise<boolean>;
+  boundingBox(): Promise<{ height: number; width: number; x: number; y: number } | null>;
+  textContent(): Promise<string | null>;
+  fill(v: string): Promise<void>;
+  selectOption(v: string): Promise<unknown>;
+  check(): Promise<void>;
+  screenshot(o: { path: string }): Promise<unknown>;
+  scrollIntoViewIfNeeded(): Promise<void>;
+  locator(sel: string): Locator;
+};
 type Page = {
+  on(event: "request", fn: (r: { url(): string; method(): string }) => void): void;
+  screenshot(o: { path: string; fullPage?: boolean; clip?: { x: number; y: number; width: number; height: number } }): Promise<unknown>;
+  addScriptTag(o: { content: string }): Promise<unknown>;
   goto(url: string, o?: object): Promise<{ status(): number } | null>;
   url(): string;
   title(): Promise<string>;
@@ -43,6 +69,7 @@ type Browser = { newContext(o: object): Promise<Context>; close(): Promise<void>
 const { chromium } = require("playwright") as { chromium: { launch(): Promise<Browser> } };
 
 const BASE = process.env.JOURNEY_BASE ?? "https://alwayscited.com";
+const AXE = readFileSync(path.join(ROOT, "node_modules", "axe-core", "axe.min.js"), "utf8");
 const TOKENS = [...readFileSync(path.join(ROOT, "docs", "inbox.md"), "utf8").matchAll(/\/scan\/([0-9a-f]{32})\b/g)].map((m) => m[1]);
 
 let browser: Browser;
@@ -376,6 +403,143 @@ for (const width of [1280, 390]) {
         assert.equal(status, 200);
         assert.match((await page.locator("h1").first().textContent()) ?? "", /onboarding call/);
         assert.equal(await page.getByRole("link", { name: "Go to sign in" }).count(), 0);
+      } finally {
+        await ctx.close();
+      }
+    });
+  });
+}
+
+const SHOTS = path.join(ROOT, "test-results", "site");
+mkdirSync(SHOTS, { recursive: true });
+
+/**
+ * Where the dashboard's sign-in is: /app/login while it shares the site's host,
+ * the app host's /login once APP_HOST is set (app-host.ts appHref). Either is
+ * right; anything else is not.
+ */
+const LOGIN = /^(\/app\/login|https:\/\/app\.alwayscited\.com\/login|http:\/\/app\.localhost:\d+\/login)$/;
+
+// (10) Danny, 13 Oct 2026: "a login option in the nav for companies with a
+// profile that takes them to the app subdomain sign in screen". On the bar at
+// 768 and up, last before Free scan and plainer than it; in the phone menu
+// below 768, a 44px row. The bar keeps its height and the page never scrolls
+// sideways.
+for (const width of [1280, 1024, 768, 390, 320]) {
+  describe(`(10) the header's Log in at ${width}`, () => {
+    test("one plain link to the dashboard's sign-in, in the bar or the phone menu", async () => {
+      for (const route of ["/", "/alwaystracked"]) {
+        const { page, ctx, status } = await open(width, route);
+        try {
+          assert.equal(status, 200, route);
+          const name = route === "/" ? "home" : route.slice(1);
+          const bar = page.locator(".site-header").first();
+          const h = (await bar.boundingBox())?.height ?? 0;
+          // The bars measured 61-68.4px before (Header.tsx); a wrapped nav would be twice that.
+          assert.ok(h >= 60 && h <= 70, `${route}: the bar is ${h}px tall`);
+          assert.ok((await overflow(page)) <= 0, `${route}: no sideways scroll`);
+          if (width >= 768) {
+            const login = page.locator('nav[aria-label="Main navigation"] a', { hasText: /^Log in$/ }).first();
+            assert.equal(await login.isVisible(), true, `${route}: Log in on the bar`);
+            const href = (await login.getAttribute("href")) ?? "";
+            assert.match(href, LOGIN, `${route}: Log in goes to the dashboard's sign-in`);
+            const scan = page.locator('nav[aria-label="Main navigation"] a', { hasText: /^Free scan$/ }).first();
+            const [l, f] = [await login.boundingBox(), await scan.boundingBox()];
+            assert.ok(l && f && l.x + l.width <= f.x, `${route}: Log in sits before Free scan`);
+            const ground = await login.evaluate((e) => getComputedStyle(e).backgroundColor);
+            assert.match(ground, /^rgba\(0, 0, 0, 0\)$|^transparent$/, `${route}: Log in is a plain link, not a second filled button (${ground})`);
+            if (route === "/") assert.equal(await statusOf(href), 200, "the sign-in answers");
+            await page.screenshot({ path: path.join(SHOTS, `header-${name}-${width}.png`), clip: { x: 0, y: 0, width, height: Math.ceil(h) + 4 } });
+          } else {
+            assert.equal(await page.locator('nav[aria-label="Main navigation"]').first().isVisible(), false, `${route}: no desktop nav at ${width}`);
+            await page.getByRole("button", { name: "Open menu" }).first().click();
+            const login = page.locator('nav[aria-label="Mobile navigation"] a', { hasText: /^Log in$/ }).first();
+            assert.equal(await login.isVisible(), true, `${route}: Log in in the phone menu`);
+            assert.match((await login.getAttribute("href")) ?? "", LOGIN);
+            assert.ok(((await login.boundingBox())?.height ?? 0) >= 44, `${route}: Log in is a 44px row`);
+            assert.ok((await overflow(page)) <= 0, `${route}: no sideways scroll with the menu open`);
+            await page.screenshot({ path: path.join(SHOTS, `header-${name}-${width}-menu.png`) });
+          }
+        } finally {
+          await ctx.close();
+        }
+      }
+    });
+  });
+}
+
+// (11) Danny, 13 Oct 2026: name, category and market are required on the
+// "Loom with Luke" / "Demo with Danny" form. On a tier page (the version with
+// no scan): each field labelled and required, the category list the site's
+// sectors with Other, the markets US and UK, and Send with nothing filled
+// refused at each field - focus on the first - with no request made.
+for (const width of [1280, 390]) {
+  describe(`(11) the walkthrough form at ${width}`, () => {
+    test("name, work email, category and market are required, and refused at the field", async () => {
+      const { page, ctx, status } = await open(width, "/alwaystracked");
+      try {
+        assert.equal(status, 200);
+        const posted: string[] = [];
+        page.on("request", (r) => {
+          if (r.method() === "POST" && /\/api\/(scan\/[^/]+\/)?walkthrough/.test(r.url())) posted.push(r.url());
+        });
+        const form = page.locator("form#walkthrough").first();
+        await form.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(700); // the rows' reveal settles before the screen
+        for (const [id, label] of [["wt-name", "Your name"], ["wt-email", "Work email"], ["wt-category", "Category"]] as const) {
+          assert.equal((await page.locator(`label[for="${id}"]`).first().textContent())?.trim(), label, `${id} label`);
+          assert.equal(await page.locator(`#${id}`).first().evaluate((e) => (e as HTMLInputElement).required), true, `${id} required`);
+        }
+        assert.equal((await page.locator("#wt-market-label").first().textContent())?.trim(), "Market");
+        const markets = await page.evaluate(() => [...document.querySelectorAll<HTMLInputElement>('#walkthrough input[name="market"]')].map((i) => `${i.value}:${i.required}:${i.checked}`));
+        assert.deepEqual(markets, ["US:true:false", "UK:true:false"], "two required radios, nothing preselected on a tier page");
+        const options = await page.evaluate(() => [...document.querySelectorAll<HTMLOptionElement>("#wt-category option")].map((o) => o.value));
+        assert.equal(options[0], "", "a placeholder first");
+        assert.ok(options.length >= 21, `the sector list, ${options.length - 1} of them`);
+        assert.equal(options.at(-1), "other", "Other last");
+        assert.ok((await overflow(page)) <= 0, "no sideways scroll");
+        await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}.png`) });
+
+        await form.locator('button[type="submit"]').first().click();
+        await page.waitForTimeout(300);
+        assert.deepEqual(posted, [], "nothing is sent while a field is missing");
+        for (const [id, message] of [
+          ["wt-name", "Tell us your name."],
+          ["wt-email", "Enter your work email."],
+          ["wt-category", "Pick your business category."],
+        ] as const) {
+          const field = page.locator(`#${id}`).first();
+          assert.equal(await field.getAttribute("aria-invalid"), "true", `${id} invalid`);
+          assert.equal(await field.getAttribute("aria-describedby"), `${id}-error`, `${id} described by its error`);
+          assert.equal((await page.locator(`#${id}-error`).first().textContent())?.trim(), message, `${id} says why`);
+        }
+        const group = page.locator('#walkthrough [role="radiogroup"][aria-labelledby="wt-market-label"]').first();
+        assert.equal(await group.getAttribute("aria-invalid"), "true", "the market group invalid");
+        assert.equal(await group.getAttribute("aria-describedby"), "wt-market-error");
+        assert.equal((await page.locator("#wt-market-error").first().textContent())?.trim(), "Pick your market.");
+        assert.equal(await page.evaluate(() => document.activeElement?.id), "wt-name", "focus on the first wrong field");
+        assert.ok((await overflow(page)) <= 0, "no sideways scroll with the errors");
+        await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}-refused.png`) });
+
+        // Each error goes as its field is filled; nothing is sent.
+        await page.locator("#wt-name").first().fill("Jane Smith");
+        await page.locator("#wt-category").first().selectOption("technology");
+        await page.locator("#wt-market-UK").first().check();
+        assert.equal(await page.locator("#wt-name-error").count(), 0, "the name error clears");
+        assert.equal(await page.locator("#wt-category-error").count(), 0, "the category error clears");
+        assert.equal(await page.locator("#wt-market-error").count(), 0, "the market error clears");
+        assert.equal((await page.locator("#wt-email-error").first().textContent())?.trim(), "Enter your work email.", "the email error stays");
+        assert.deepEqual(posted, [], "still nothing sent");
+        await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}-filled.png`) });
+
+        // axe on the form: labels, names, ARIA and contrast, in its refused state.
+        await page.addScriptTag({ content: AXE });
+        const violations = await page.evaluate(async () => {
+          const axe = (window as unknown as { axe: { run(ctx: string, o: object): Promise<{ violations: { id: string; impact: string; nodes: unknown[] }[] }> } }).axe;
+          const r = await axe.run("#walkthrough", { resultTypes: ["violations"] });
+          return r.violations.map((v) => `${v.id} (${v.impact}, ${v.nodes.length})`);
+        });
+        assert.deepEqual(violations, [], "axe on the walkthrough form");
       } finally {
         await ctx.close();
       }

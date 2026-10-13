@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import Motion from "@/components/Motion";
 import SiteChrome from "@/components/SiteChrome";
 import { ld, siteGraph } from "@/config/schema";
+import { appHref } from "@/lib/app-host";
 
 /**
  * The brand face, self-hosted through next/font rather than the fontsource
@@ -81,13 +82,17 @@ export default function RootLayout({
         */}
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(siteGraph) }} />
         <SiteChrome>
-          {/* R151 (1 Oct 2026): keyboard users skip the header's 13 stops
-              (WCAG 2.2 2.4.1). Hidden until focused; .btn-primary's colours,
-              so the stylesheet records no new ground. */}
+          {/* R151 (1 Oct 2026): keyboard users skip the header's stops - 13
+              then, 14 since Log in (13 Oct 2026) - (WCAG 2.2 2.4.1). Hidden
+              until focused; .btn-primary's colours, so the stylesheet records
+              no new ground. */}
           <a href="#main" className="btn-primary sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:px-4 focus:py-3 focus:text-sm">
             Skip to content
           </a>
-          <Header />
+          {/* Log in (Danny, 13 Oct 2026): the dashboard's sign-in, on
+              whichever host it is on. Read here because the header is a
+              client component and APP_HOST does not reach the browser. */}
+          <Header loginHref={appHref("/login")} />
         </SiteChrome>
         <main id="main" tabIndex={-1} className="flex-1 outline-none">{children}</main>
         <SiteChrome>

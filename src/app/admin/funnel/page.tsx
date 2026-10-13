@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 
 import { T } from "@/config/tokens";
-import { FUNNEL_SELECTS, FUNNEL_STEPS, funnelDays, funnelTotals, type FunnelDay, type Market } from "@/lib/admin/funnel";
+import { FUNNEL_SELECTS, FUNNEL_STEPS, funnelDays, funnelTotals, walkthroughMarket, type FunnelDay, type Market } from "@/lib/admin/funnel";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
+import { missingColumn } from "@/lib/tracking/decide";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -28,21 +29,26 @@ export default async function FunnelAdmin() {
   // force-dynamic, and the whole job is "the last N days", so the clock read is deliberate.
   // eslint-disable-next-line react-hooks/purity
   const from = new Date(Date.now() - (DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
-  const [{ data: scans, error: sErr }, { data: walks, error: wErr }, { data: orders, error: oErr }] = await Promise.all([
+  const [{ data: scans, error: sErr }, { data: walksNow, error: wNowErr }, { data: orders, error: oErr }] = await Promise.all([
     db.from("scans").select(FUNNEL_SELECTS.scans).gte("created_at", from).limit(50_000),
     db.from("walkthrough_requests").select(FUNNEL_SELECTS.walkthroughs).gte("created_at", from).limit(50_000),
     db.from("orders").select(FUNNEL_SELECTS.orders).gte("created_at", from).limit(50_000),
   ]);
+  // Before 20261014000000_walkthrough_fields.sql an ask has no market of its
+  // own (13 Oct 2026): read it the old way, market from its scan alone.
+  const { data: walks, error: wErr } =
+    wNowErr && missingColumn(wNowErr, "market")
+      ? await db.from("walkthrough_requests").select(FUNNEL_SELECTS.walkthroughsBefore).gte("created_at", from).limit(50_000)
+      : { data: walksNow, error: wNowErr };
   // A failed read must not print as a quiet day.
   if (sErr) throw new Error(`could not read scans: ${sErr.message}`);
   if (wErr) throw new Error(`could not read walkthrough_requests: ${wErr.message}`);
   if (oErr) throw new Error(`could not read orders: ${oErr.message}`);
 
-  const walkRows = (walks ?? []).map((w) => {
-    const s = (w as { scans: { market: string | null } | { market: string | null }[] | null }).scans;
-    const market = Array.isArray(s) ? (s[0]?.market ?? null) : (s?.market ?? null);
-    return { created_at: (w as { created_at: string }).created_at, market };
-  });
+  const walkRows = (walks ?? []).map((w) => ({
+    created_at: (w as { created_at: string }).created_at,
+    market: walkthroughMarket(w as Parameters<typeof walkthroughMarket>[0]),
+  }));
   const days = funnelDays(
     {
       scans: (scans ?? []) as { created_at: string; queued_at: string | null; status: string; market: string | null }[],
