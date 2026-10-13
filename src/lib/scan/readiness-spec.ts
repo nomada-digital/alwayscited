@@ -81,6 +81,9 @@ export const NOT_REQUIRED: Record<string, string> = {
   // nothing is unready without it, and it is deliberately absent until the
   // domain is added in Vercel (D1/D2 of the host-move brief).
   APP_HOST: "optional: unset means the dashboard stays at /app on the marketing host",
+  // 13 Oct 2026: read by components/DplGuard.tsx, which the build replaces
+  // with the deployment id Vercel sets; a build without one renders nothing.
+  NEXT_DEPLOYMENT_ID: "set by the platform at build; absent means no deployment-id guard is needed",
 };
 
 /**

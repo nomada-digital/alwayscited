@@ -3,6 +3,7 @@ import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { DplGuard } from "@/components/DplGuard";
 import Motion from "@/components/Motion";
 import SiteChrome from "@/components/SiteChrome";
 import { ld, siteGraph } from "@/config/schema";
@@ -70,6 +71,11 @@ export default function RootLayout({
     // React looks. suppressHydrationWarning is scoped to this one node and
     // does not reach its children.
     <html lang="en-GB" className={htmlClass} suppressHydrationWarning>
+      <head>
+        {/* 13 Oct 2026: puts back the deployment id if anything strips it
+            before Next reads it - without it every click is a full reload. */}
+        <DplGuard />
+      </head>
       <body className="min-h-full flex flex-col">
         {/* First in the body: it has to run before the rows below it paint,
             or the page paints settled and then drops back to the from-state. */}
