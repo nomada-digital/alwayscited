@@ -195,6 +195,21 @@ const nextConfig: NextConfig = {
    */
   experimental: {
     turbopackFileSystemCacheForBuild: false,
+    /**
+     * Next 16.3.5's own defaults (server/config-shared.js 260-263), stated so
+     * a change of default cannot move the dashboard's window unseen - 13 Oct
+     * 2026, dashboard speed work; src/components/app/fresh.ts has the design.
+     * `static` is how long the sidebar's prefetch={true} pages are held, and
+     * must equal FRESH_SECONDS there (prefetch.test.mts reads both); Next
+     * floors it at 30. `dynamic` stays 0 because it is global: the marketing
+     * site and checkout are dynamic routes too. The dashboard's pages each
+     * set their own instead (unstable_dynamicStaleTime).
+     *
+     * If partialPrefetching or cacheComponents is ever turned on, re-read
+     * this: with partial prefetching on, prefetch={true} is ignored
+     * (segment-cache/scheduler.js 522-538) and the sidebar is slow again.
+     */
+    staleTimes: { dynamic: 0, static: 300 },
   },
 
   /**
