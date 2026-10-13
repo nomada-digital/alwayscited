@@ -1,0 +1,4 @@
+{
+  "_fixture": "DIY P6 (13 Oct 2026): momentum prompt origins, merged by P2's loadPromptOrigins. Empty in every state on purpose: the fixture's 50 prompts keep the origins P2 and P4's specs pin (origins.json), and a Momentum chip is earned on the writable fixture, where Track as a cluster adds a cluster whose prompts carry origin_kind momentum on their own rows (cluster/route.ts, new-cluster.ts tagMomentumFixture).",
+  "full": []
+}

@@ -25,6 +25,11 @@ import { confirmLabel, firstAsked, setupCards, setupChecks } from "@/lib/trackin
 import { draftAt, draftsFor, draftsLine } from "@/lib/tracking/setup-drafts";
 import { refuseRole } from "@/lib/tracking/stop";
 import { appPath, siteHref } from "@/lib/app-host";
+import SetupSuggestions from "@/components/app/google/SetupSuggestions";
+import { loadFootprint } from "@/lib/diy/keywords/data";
+import { trackedSet } from "@/lib/diy/keywords/momentum";
+import { footprintFacts, setupSuggestions } from "@/lib/diy/keywords/setup-suggestions";
+import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -66,6 +71,14 @@ const STEP ={ ...MICRO, display: "block", marginBottom: "8px" } as const;
  * and Save writes them through the free slot's route as the Clusters page
  * writes prompts. Nothing waits on a person: the cluster is read from the next
  * daily check. Owners and editors only; viewers and an ended client read.
+ *
+ * 13 Oct 2026, DIY P6 (spec 10 section 4.12): step 2 gains "Suggested
+ * keywords" when a Google footprint exists - up to 10 the site already ranks
+ * for, with gaining ground and the checkout keyword - each running the same
+ * Check keyword on the card that needs one. Once confirmed, the page says the
+ * site and Google reads happen overnight, only while diy_enabled is on (the
+ * confirm route queues them: enqueueOnboarding). Both read the stored
+ * footprint only; neither shows while it is switched off.
  */
 export default async function ClientSetup({
   params,
@@ -87,7 +100,14 @@ export default async function ClientSetup({
   // ON-1 review (9 Oct 2026): first checks are said from now in the client's zone, not from London's tracking day.
   const now = repo.now();
   // perf-4 (8 Oct 2026): setup draws the clusters, prompts and keywords only, so no answer is read.
-  const [structure, confirmed, typed] = await Promise.all([repo.structure(client.id), repo.setupConfirmed(client.id), repo.orderKeyword(client.id)]);
+  const [structure, confirmed, typed, footprint, aliases] = await Promise.all([
+    repo.structure(client.id),
+    repo.setupConfirmed(client.id),
+    repo.orderKeyword(client.id),
+    loadFootprint(client.id),
+    // DIY P6: the brand's aliases for the brand rule; the footprint read carries them in production.
+    fixtureMode() ? repo.settings(client.id).then((s) => s.aliases).catch(() => [] as string[]) : Promise.resolve(null),
+  ]);
   const cards = setupCards(structure);
   const ungrouped = ungroupedShown(structure.questions, today).length;
   // 9 Oct 2026 (review of 3eaa592): no live prompt, no check promised - the runner skips that client, as the Overview says.
@@ -116,6 +136,11 @@ export default async function ClientSetup({
   const refusedAt = one("drafts") === "refused" ? draftAt(one("at")) : null;
   // ON-1 review: a started client's prompts are being read, so a cluster that has some keeps no keyword it never had (rekey.ts keywordless).
   const reading = client.started_on !== null && client.started_on <= today;
+  // DIY P6: suggestions from the stored footprint, and the card that needs a keyword for "Use this keyword".
+  const subject = { brand: client.brand ?? null, domain: client.domain, aliases: aliases ?? footprint.aliases };
+  const { latest, gaining } = footprintFacts(footprint, { tracked: structure.keywords, subject, today });
+  const suggestions = setupSuggestions({ latest, gaining, tracked: trackedSet(structure.keywords, today), subject, typed });
+  const needs = canWrite ? (cards.find((c) => c.keyword === null && (!c.prompts.length || !reading))?.id ?? null) : null;
 
   return (
     <section style={{ maxWidth: "720px", margin: "0 auto", padding: "56px 24px 96px", color: T.ink }}>
@@ -262,13 +287,17 @@ export default async function ClientSetup({
         </p>
       )}
 
+      <SetupSuggestions items={suggestions} slug={slug} card={needs} canWrite={canWrite} addHref={(kw) => appPath(`/${encodeURIComponent(slug)}/clusters?${new URLSearchParams({ add: "1", kw, src: "gaining" })}`)} />
+
       <span id="confirm" style={{ ...STEP, scrollMarginTop: "24px" }}>
         Step 3 of 3
       </span>
       <h2 style={{ fontSize: "22px", fontWeight: 700, margin: "0 0 12px" }}>Review and confirm</h2>
       {confirmed ? (
         <p style={{ margin: "0 0 40px", fontSize: "15px", lineHeight: 1.7, color: T.soft }}>
-          Setup is confirmed. <a href={appPath(`/${encodeURIComponent(slug)}`)} style={{ color: T.accent, fontWeight: 600 }}>Go to your dashboard</a>
+          {/* DIY P6 (spec 10 section 4.12): the confirm queued the onboarding reads; they are said only while they will run. */}
+          {`Setup is confirmed. ${checks.line}${footprint.enabled ? " Your site and Google reads happen overnight." : ""} `}
+          <a href={appPath(`/${encodeURIComponent(slug)}`)} style={{ color: T.accent, fontWeight: 600 }}>Go to your dashboard</a>
         </p>
       ) : canWrite ? (
         <form method="post" action={`/api/app/${encodeURIComponent(slug)}/setup`} style={{ marginBottom: "40px" }}>

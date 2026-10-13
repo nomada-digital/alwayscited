@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { keywordForm } from "../scan/dataforseo-request.ts";
 
 import { refuseDrafts } from "./add-cluster.ts";
+import type { Fixture, FixtureQuestion } from "./fixture-mode.ts";
 import { ANGLES, PROMPTS_PER_CLUSTER, insertCluster, insertKeyword, insertPrompts, readClusterRefusal } from "./limits.ts";
 import { refuseDraftsAt } from "./prompt-text.ts";
 import { type FilledAll, fillSlots } from "./slot.ts";
@@ -22,9 +23,29 @@ import { refuseRole, stopDay } from "./stop.ts";
  */
 export type Added = { ok: true; clusterId: string } | { ok: false; message: string };
 
+/**
+ * 13 Oct 2026, DIY P6 (spec 10 sections 3.5 and 6.6): a cluster added from a
+ * gaining-ground keyword - Google's Track, or Clusters' Suggested clusters -
+ * arrives with `src=gaining`, carried through Check keyword's round trip and
+ * posted with the add. Its five prompts are then the client's own (`source`
+ * client, as every add here) with `origin_kind` momentum, so their chips say
+ * where they came from. Any other `src`, or none, sets no origin: the row is
+ * written as it always was. The signed check is unchanged.
+ */
+export const MOMENTUM_SRC = "gaining";
+export function momentumOrigin(src: unknown): "momentum" | null {
+  return src === MOMENTUM_SRC ? "momentum" : null;
+}
+
+/** The writable fixture's twin: the new cluster's prompts carry the momentum origin on their own rows, where loadPromptOrigins reads it. */
+export function tagMomentumFixture(f: Fixture, clusterId: string): Fixture {
+  const questions = f.data.questions.map((q) => (q.cluster_id === clusterId ? ({ ...q, source: "client", origin_kind: "momentum" } as FixtureQuestion) : q));
+  return { ...f, data: { ...f.data, questions } };
+}
+
 export async function addCluster(
   db: SupabaseClient,
-  p: { clientId: string; tier: string; keyword: string; volume: number; intent: string; prompts: string[]; today: string; by: string; role: string },
+  p: { clientId: string; tier: string; keyword: string; volume: number; intent: string; prompts: string[]; today: string; by: string; role: string; origin?: "momentum" | null },
 ): Promise<Added> {
   const r = refuseRole(p.role) ?? refuseDrafts(p.prompts);
   if (r) return { ok: false, message: r };
@@ -41,7 +62,7 @@ export async function addCluster(
   const c = await insertCluster(db, p.clientId, { name: keyword, tier: p.tier, started_on: day, keyword_id: k.ids[0] });
   if (!c.ok) return { ok: false, message: c.message + (await stopRow(db, "tracked_keywords", k.ids[0], p.clientId, day)) };
   const clusterId = c.ids[0];
-  const w = await insertPrompts(db, p.clientId, clusterId, p.prompts.map((text, i) => ({ text: text.trim(), source: "client", added_on: day, added_by: p.by, angle: ANGLES[i] })));
+  const w = await insertPrompts(db, p.clientId, clusterId, p.prompts.map((text, i) => ({ text: text.trim(), source: "client", added_on: day, added_by: p.by, angle: ANGLES[i], ...(p.origin ? { origin_kind: p.origin } : {}) })));
   if (!w.ok) {
     const undone = (await stopRow(db, "tracked_clusters", clusterId, p.clientId, day)) + (await stopRow(db, "tracked_keywords", k.ids[0], p.clientId, day));
     return { ok: false, message: w.message + undone };
