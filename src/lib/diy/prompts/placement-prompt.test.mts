@@ -10,7 +10,7 @@ import { test } from "node:test";
 
 import { PLACEMENT_FULL } from "../../tracking/limits.ts";
 import { promptsDb, type Row } from "./fake-prompts-db.mts";
-import { ROTATE_AFTER_DAYS, SAVED_SWITCHED_OFF, addPlacementPrompt, pickRotation, placementPromptMessage, placementPromptsOn, stopPlacementPrompt, type PlacementPromptOutcome } from "./placement-prompt.ts";
+import { ROTATE_AFTER_DAYS, SAVED_SWITCHED_OFF, SWITCHED_OFF, addPlacementPrompt, pickRotation, placementPromptMessage, placementPromptsOn, placementSaved, stopPlacementPrompt, type PlacementPromptOutcome } from "./placement-prompt.ts";
 
 const today = "2026-09-29";
 const tomorrow = "2026-09-30";
@@ -173,6 +173,31 @@ test("full at 10: the oldest placement prompt live 12 weeks and never cited is s
   assert.match(placementPromptMessage("Saved: live.", o), /To make room, “placement prompt number 1” stops from 30 Sep: its placement has been live 12 weeks or more and was never cited\.$/);
 });
 
+test("13 Oct 2026 review: an insert that fails after a rotation takes the rotation back, and the admin is told", async () => {
+  for (const [label, code, kind] of [
+    ["a database error", undefined, "failed"],
+    ["a race on the live-text index", "23505", "duplicate"],
+  ] as const) {
+    const w = fullWorld([120, 100, 50, 60, 70, 20, 10, 5, 3, 1]);
+    w.failNext("tracked_questions", code ? 'duplicate key value violates unique constraint "tracked_questions_cluster_live_text_uniq"' : "connection reset", code, "insert");
+    const o = await add(w.db, fakeFetch().fetcher);
+    assert.equal(o.kind, kind, label);
+    assert.deepEqual("rotation" in o ? o.rotation : null, { text: "placement prompt number 0", restored: true }, `${label}: the rotation is named`);
+    const pq0 = w.tables.tracked_questions!.find((q) => q.id === "pq0")!;
+    assert.deepEqual([pq0.stopped_on, pq0.stopped_by], [null, null], `${label}: the rotated prompt is live again`);
+    assert.equal(placementPrompts(w.tables).filter((q) => q.stopped_on === null).length, 10, `${label}: no measured prompt lost`);
+    assert.match(placementPromptMessage("Saved: live.", o), /“placement prompt number 0” was stopped to make room and is live again\./, label);
+  }
+});
+
+test("13 Oct 2026 review: a citation stored under another source_domain still counts as citing the page", async () => {
+  // engines.ts keeps an engine's own `domain` as source_domain when it gives one; the URL is what citesPlacement reads.
+  const cite = { id: "a1", client_domain_id: "cl", run_date: "2026-07-20", citations: [{ source_domain: "site-0-media.example", url: "https://www.site-0.example/best-apps" }] };
+  const w = fullWorld([120, 100, 50, 60, 70, 20, 10, 5, 3, 1], [cite]);
+  const o = await add(w.db, fakeFetch().fetcher);
+  assert.equal(o.kind === "added" ? o.rotated?.id : o.kind, "pq1", "pq0's page was cited, under another source_domain");
+});
+
 test("pickRotation: oldest first, live 12 weeks or more, never cited", () => {
   const prompts = [
     { id: "a", text: "a", added_on: "2026-05-01", origin_ref: "pa" },
@@ -219,4 +244,57 @@ test("every outcome has an admin line, and none names a price", () => {
     assert.ok(line.length > 0, o.kind);
     assert.doesNotMatch(line, /[$£€]\s?\d|price|cost|fee/i, o.kind);
   }
+});
+
+// ---- The admin save's message paths (13 Oct 2026 review: logPlacement and updatePlacement call placementSaved) ----
+
+const saved = (db: Parameters<typeof placementSaved>[0], fetcher: ReturnType<typeof fakeFetch>["fetcher"], p: { before: string | null; after: string; retry?: boolean; insertion?: boolean; saved?: string }) =>
+  placementSaved(db, { clientId: "cl", placementId: "p1", before: p.before, after: p.after, retry: p.retry ?? false, insertion: p.insertion ?? false, today, saved: p.saved ?? "Saved: live." }, { fetcher });
+
+test("the save: logged live, or moved to live, runs the hook; re-saved while live fetches nothing, so the switch backfills nothing in bulk", async () => {
+  const w = world({ switch: true });
+  const resave = fakeFetch();
+  assert.equal(await saved(w.db, resave.fetcher, { before: "live", after: "live" }), "Saved: live.");
+  assert.equal(resave.seen.length, 0);
+  const logged = fakeFetch();
+  assert.equal(await saved(w.db, logged.fetcher, { before: null, after: "live", saved: "Logged thesmallbizstack.com/best-accounting-apps (live)." }), "Logged thesmallbizstack.com/best-accounting-apps (live). Prompt added: “best accounting apps for small businesses”, first asked 30 Sep.");
+  assert.equal(logged.seen.length, 1);
+  const pitched = fakeFetch();
+  assert.equal(await saved(world({ switch: true, status: "pitched" }).db, pitched.fetcher, { before: null, after: "pitched", saved: "Logged x (pitched)." }), "Logged x (pitched).", "a placement not live is only logged");
+  assert.equal(pitched.seen.length, 0);
+  const moved = world({ switch: true });
+  assert.match(await saved(moved.db, fakeFetch().fetcher, { before: "scheduled", after: "live" }), /^Saved: live\. Prompt added: /);
+});
+
+test("the save: with the switch off the admin line is the spec's, word for word, and nothing is fetched", async () => {
+  const f = fakeFetch();
+  assert.equal(await saved(world({ switch: false }).db, f.fetcher, { before: "scheduled", after: "live" }), "Placement saved. Placement prompts are switched off.");
+  assert.equal(await saved(world({}).db, f.fetcher, { before: null, after: "live", saved: "Logged x (live)." }), "Placement saved. Placement prompts are switched off.");
+  assert.equal(f.seen.length, 0);
+});
+
+test("the save: a failed read is the spec's line, with the retry, and the Retry's own lines never say 'Placement saved'", async () => {
+  const w = world({ switch: true });
+  assert.equal(await saved(w.db, fakeFetch(403, "").fetcher, { before: "scheduled", after: "live" }), "Placement saved; no prompt added: couldn't read the article (HTTP 403). Retry from the placement row.");
+  assert.equal(await saved(w.db, fakeFetch(403, "").fetcher, { before: "live", after: "live", retry: true }), "No prompt added: couldn't read the article (HTTP 403). Retry from the placement row.");
+  assert.equal(await saved(w.db, fakeFetch().fetcher, { before: "live", after: "live", retry: true }), "Prompt added: “best accounting apps for small businesses”, first asked 30 Sep.");
+  assert.equal(await saved(w.db, fakeFetch().fetcher, { before: "live", after: "live", retry: true }), "It already has its prompt: “best accounting apps for small businesses”.");
+  assert.equal(await saved(world({ switch: false }).db, fakeFetch().fetcher, { before: "live", after: "live", retry: true }), SWITCHED_OFF, "a Retry from a page drawn before the switch went off");
+  assert.equal(await saved(world({ switch: true, kind: "on_site" }).db, fakeFetch().fetcher, { before: "live", after: "live", retry: true }), "No prompt added: on-site work adds no prompt.");
+  assert.equal(await saved(world({ switch: true, kind: "link_insertion" }).db, fakeFetch().fetcher, { before: "live", after: "live", retry: true }), "No prompt added: a link insertion adds one only with “Add a prompt from this article's title” ticked.");
+  assert.match(await saved(world({ switch: true, kind: "link_insertion" }).db, fakeFetch().fetcher, { before: "live", after: "live", retry: true, insertion: true }), /^Prompt added: /, "ticked");
+  assert.equal(await saved(world({ switch: true, status: "pitched" }).db, fakeFetch().fetcher, { before: "pitched", after: "pitched", retry: true }), "No prompt added: not live.");
+});
+
+test("the save: a move to removed stops the placement's prompt, or says why it could not", async () => {
+  const prompt = { id: "pq", client_domain_id: "cl", cluster_id: "c1", text: "best accounting apps for small businesses", source: "nomada", added_on: "2026-09-01", stopped_on: null, origin_kind: "placement", origin_ref: "p1", allowance: "placement" };
+  const w = world({ prompts: [prompt] });
+  const f = fakeFetch();
+  assert.equal(await saved(w.db, f.fetcher, { before: "live", after: "removed", saved: "Saved: removed." }), "Saved: removed. Its prompt “best accounting apps for small businesses” stops from 30 Sep; its history stays.");
+  assert.equal(f.seen.length, 0, "a removal fetches nothing, switch or no switch");
+  assert.equal(await saved(w.db, f.fetcher, { before: "removed", after: "removed", saved: "Saved: removed." }), "Saved: removed.", "already removed: nothing to stop");
+  const broken = world({ prompts: [{ ...prompt }] });
+  broken.failNext("tracked_questions", "connection reset");
+  assert.equal(await saved(broken.db, f.fetcher, { before: "live", after: "removed", saved: "Saved: removed." }), "Saved: removed. Its prompt was not stopped: Could not read its prompt: connection reset");
+  assert.equal(await saved(world({}).db, f.fetcher, { before: "live", after: "removed", saved: "Saved: removed." }), "Saved: removed.", "no prompt to stop");
 });

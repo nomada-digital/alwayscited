@@ -169,6 +169,9 @@ test("placed: the 'From placements' sub-list under c1's five angle slots, each c
   assert.equal(angle, 5, "the five angle slots stay five");
   assert.equal(await page.evaluate(() => document.querySelectorAll("[data-placement-prompt]").length), 3);
   assert.match(body, /best accounting software to switch to\s*First check tomorrow at/, "the retried one is first asked tomorrow");
+  // 13 Oct 2026 review: the card counts the two placement prompts already read, says so, and gives the figure without them.
+  assert.match(body, /Since \d+ [A-Z][a-z]{2}\. Includes 2 prompts added from placements/);
+  assert.match(await page.locator("[data-basis=placements]").first().innerText(), /^Includes 2 prompts added from placements\. Without them, [\d,]+ of [\d,]+ answers named you \(\d+%\)\.$/);
   for (const href of new Set(placed.map((c) => c.href))) {
     assert.equal(href, `${SLUG}/placements`);
     const r = await ctx.request.get(BASE + href!, { maxRedirects: 0 });
@@ -183,6 +186,7 @@ test("placed: one cluster keeps 'The 5 prompts' beside the keyword, lists the pl
   const body = await text(page);
   assert.match(body, /The 5 prompts behind this keyword/);
   assert.match(body, /From placements\s*These don't use your 5 prompt slots\./);
+  assert.match(await page.locator("[data-basis=placements]").innerText(), /^Includes 2 prompts added from placements\. Without them, [\d,]+ of [\d,]+ answers named you \(\d+%\)\.$/, "the summary says what it counts");
   const see = await page.locator("a:has-text('See placements')").getAttribute("href");
   assert.equal(see, `${SLUG}/placements`);
   assert.equal((await ctx.request.get(BASE + see!, { maxRedirects: 0 })).status(), 200);
@@ -211,6 +215,9 @@ test("placed: Placements draws the prompt line and the first-cited line on live 
   assert.equal(lines.p3?.prompt, "Prompt added: “best accounting software to switch to”, first asked tomorrow");
   assert.equal(lines.p4?.prompt, "Prompt added 3 Sep: “best bookkeeping tools for freelancers”");
   for (const id of ["p5", "p6"]) assert.deepEqual(lines[id], { cited: null, prompt: null }, `${id} is not live`);
+  // 13 Oct 2026 review: the named figures leave the three placement prompts out, and say so; the citations read all eight.
+  assert.equal(await page.locator("[data-basis=placements]").innerText(), "“Answers naming you” and the named spans leave out the 3 prompts added from placements. The citation counts read answers to all 8 prompts.");
+  assert.match(await page.locator("section[aria-label='Cluster summary']").innerText(), /5 prompts, five engines, since/);
   await ctx.close();
 });
 
@@ -220,6 +227,7 @@ test("the switch off (every state but the placed ones): no prompt line, and the 
   const n = await page.evaluate(() => ({ prompt: document.querySelectorAll("[data-line=prompt]").length, cited: document.querySelectorAll("[data-line=first-cited]").length }));
   assert.equal(n.prompt, 0);
   assert.equal(n.cited, 4, "four live placements");
+  assert.equal(await page.locator("[data-basis=placements]").count(), 0, "no placement prompt, no basis line");
   await ctx.close();
 });
 
@@ -229,7 +237,11 @@ test("placed-agency: no 'nomada' in the page text of Clusters, one cluster, Plac
     const { ctx, page, status } = await open(route);
     assert.equal(status, 200, route);
     assert.doesNotMatch(await text(page), /nomada/i, route);
-    if (route.includes("clusters?open=c1")) assert.ok((await chips(page)).some((c) => c.text === "Origin: Your account contact"), "the nomada chip reads Your account contact");
+    if (route.includes("clusters?open=c1")) assert.ok((await chips(page)).some((c) => c.text === "Origin: Your account contact" && c.kind === "contact"), "the nomada chip reads Your account contact");
+    // 13 Oct 2026 review: P2's own markup too - its attributes, in the HTML and in the RSC payload - names no Nomada.
+    const mine = await page.evaluate(() => [...document.querySelectorAll("[data-origin], [data-placement-prompt], [data-line], [data-basis]")].map((e) => e.outerHTML).join("\n"));
+    assert.doesNotMatch(mine, /nomada/i, `${route}: P2's markup`);
+    assert.doesNotMatch(await page.content(), /data-origin[^a-z]{1,6}nomada/i, `${route}: the HTML and the RSC payload`);
     await ctx.close();
   }
 });

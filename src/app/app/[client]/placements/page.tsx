@@ -51,7 +51,9 @@ export default async function ClientPlacements({
   const today = repo.today();
   const sp = await searchParams;
   // 13 Oct 2026, DIY P2: the origins say which prompt each placement added; the switch says whether a client sees that line.
-  const [screen, upgrade, origins, promptLines] = await Promise.all([placementsScreen(repo, client, sp, today), repo.upgradeContext(client.id, email, today), loadPromptOrigins(client.id), loadPlacementPromptsOn()]);
+  // 13 Oct 2026 review: the screen leaves the placement prompts out of its named figures, so it takes the same origins.
+  const reading = loadPromptOrigins(client.id);
+  const [screen, upgrade, origins, promptLines] = await Promise.all([placementsScreen(repo, client, sp, today, reading), repo.upgradeContext(client.id, email, today), reading, loadPlacementPromptsOn()]);
   if (!screen) notFound();
   const { range } = screen;
   const keep: Record<string, string> = screen.stated ? { from: range.from, to: range.to } : {};
@@ -72,6 +74,7 @@ export default async function ClientPlacements({
           cluster={screen.cluster}
           keyword={screen.keyword}
           prompts={screen.prompts}
+          placementPrompts={screen.placementPrompts}
           view={screen.view}
           series={screen.series}
           kind={pickKind(typeof sp.type === "string" ? sp.type : null)}

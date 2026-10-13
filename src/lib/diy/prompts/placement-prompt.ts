@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { PAGE } from "../../supabase/page.ts";
 import { adminStop } from "../../tracking/admin-edit.ts";
 import { addDays, formatDay, type Day } from "../../tracking/figures.ts";
 import { fixtureMode, fixturePlacementPromptsOn } from "../../tracking/fixture-mode.ts";
@@ -62,6 +62,12 @@ export const PROMPT_KINDS = ["guest_post", "coverage"] as const;
 
 type Fetcher = Parameters<typeof readPlacement>[1];
 
+/** Why a kind adds no prompt, as the admin reads it on a Retry. */
+const SKIPPED_KIND: Record<string, string> = {
+  on_site: "on-site work adds no prompt",
+  link_insertion: "a link insertion adds one only with “Add a prompt from this article's title” ticked",
+};
+
 /** Whether placement prompts are on: the row holds jsonb true. A failed or missing read is off. */
 export async function placementPromptsOn(db: SupabaseClient): Promise<boolean> {
   const { data, error } = await db.from("app_settings").select("value").eq("key", PLACEMENT_SWITCH).maybeSingle();
@@ -87,38 +93,56 @@ export async function loadPlacementPromptsOn(env: Record<string, string | undefi
   }
 }
 
+/**
+ * A prompt stopped to make room whose replacement was then not added
+ * (13 Oct 2026 review): its stop is taken back, so the client loses no
+ * measured prompt, and the admin is told either way.
+ */
+export type RotationUndone = { text: string; restored: true } | { text: string; restored: false; stoppedOn: Day; why: string };
+
 export type PlacementPromptOutcome =
   | { kind: "off" }
   | { kind: "skipped"; why: string }
   | { kind: "exists"; promptId: string; text: string }
   | { kind: "added"; promptId: string; text: string; addedOn: Day; rotated: { id: string; text: string; stoppedOn: Day } | null }
-  | { kind: "duplicate"; text: string; of: string }
+  | { kind: "duplicate"; text: string; of: string; rotation?: RotationUndone }
   | { kind: "unread"; why: string }
   | { kind: "no_prompt"; why: string }
-  | { kind: "full" }
-  | { kind: "failed"; message: string };
+  | { kind: "full"; rotation?: RotationUndone }
+  | { kind: "failed"; message: string; rotation?: RotationUndone };
 
 type PlacementRead = { id: string; cluster_id: string; kind: string; url: string; url_key: string; status: string; live_on: Day | null };
 
-/** Whether the placement's page was ever cited in an answer to this client's prompts since it went live. Paged; the url_key is matched on read (citesPlacement's rule). */
+/**
+ * Whether the placement's page was ever cited in an answer to this client's
+ * prompts since it went live: citesPlacement's rule, the cited URL's url_key
+ * against the placement's, and nothing else.
+ *
+ * 13 Oct 2026 review: this first narrowed the answers by
+ * `citations @> [{source_domain: <the url_key's host>}]`. engines.ts stores
+ * `source_domain` from an engine's own `domain` field when it gives one, which
+ * need not be the URL's host (a subdomain, a parent domain), so a page cited
+ * under another source_domain read as never cited and its prompt could be
+ * rotated out. Now every answer of the client since the live day is read, a
+ * page at a time, and the read stops at the first citation of the page. It
+ * runs only at the allowance's cap, for a placement 12 weeks live.
+ */
 export async function everCited(db: SupabaseClient, clientId: string, p: Pick<PlacementRead, "url_key" | "live_on">): Promise<boolean | string> {
-  const domain = p.url_key.split("/")[0];
-  if (!domain) return false;
-  try {
-    const rows = await selectAll<{ citations: { url?: string | null }[] | null }>(
-      (from, to) =>
-        db
-          .from("tracking_answers")
-          .select("id, citations")
-          .eq("client_domain_id", clientId)
-          .gte("run_date", p.live_on ?? "1970-01-01")
-          .contains("citations", JSON.stringify([{ source_domain: domain }]))
-          .order("id", { ascending: true })
-          .range(from, to) as unknown as PromiseLike<{ data: { citations: { url?: string | null }[] | null }[] | null; error: { message: string } | null }>,
-    );
-    return rows.some((r) => (r.citations ?? []).some((c) => !!c.url && urlKey(c.url) === p.url_key));
-  } catch (e) {
-    return `Could not read the citations: ${e instanceof Error ? e.message : String(e)}`;
+  if (!p.url_key) return false;
+  for (let from = 0; ; ) {
+    const { data, error } = await db
+      .from("tracking_answers")
+      .select("id, citations")
+      .eq("client_domain_id", clientId)
+      .gte("run_date", p.live_on ?? "1970-01-01")
+      .order("id", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return `Could not read the citations: ${error.message}`;
+    const rows = (data ?? []) as { citations: { url?: string | null }[] | null }[];
+    if (!rows.length) return false;
+    if (rows.some((r) => (Array.isArray(r.citations) ? r.citations : []).some((c) => !!c?.url && urlKey(c.url) === p.url_key))) return true;
+    // The next offset is what came back, not PAGE: a server row ceiling under PAGE skips nothing (page.ts).
+    from += rows.length;
   }
 }
 
@@ -176,6 +200,26 @@ async function makeRoom(db: SupabaseClient, clientId: string, today: Day): Promi
   return { rotated: { ...pick, stoppedOn: addDays(today, 1) } };
 }
 
+/**
+ * Take back a rotation's stop when the prompt it made room for was not added.
+ * The stop is from tomorrow, so nothing was missed: the row is live again as
+ * if it had never been stopped. Only the stop this hook made is taken back -
+ * the same day, by nomada, still pending.
+ */
+async function undoRotation(db: SupabaseClient, clientId: string, r: { id: string; text: string; stoppedOn: Day }): Promise<RotationUndone> {
+  const { data, error } = await db
+    .from("tracked_questions")
+    .update({ stopped_on: null, stopped_by: null })
+    .eq("id", r.id)
+    .eq("client_domain_id", clientId)
+    .eq("stopped_on", r.stoppedOn)
+    .eq("stopped_by", "nomada")
+    .select("id");
+  if (error) return { text: r.text, restored: false, stoppedOn: r.stoppedOn, why: error.message };
+  if (!(data ?? []).length) return { text: r.text, restored: false, stoppedOn: r.stoppedOn, why: "its stop had already changed" };
+  return { text: r.text, restored: true };
+}
+
 /** The admin hook (see the head of this file). Never throws; the outcome says what happened, and `placementPromptMessage` says it to the admin. */
 export async function addPlacementPrompt(db: SupabaseClient, p: { clientId: string; placementId: string; insertion?: boolean; today: Day }, deps: { fetcher: Fetcher }): Promise<PlacementPromptOutcome> {
   try {
@@ -186,7 +230,7 @@ export async function addPlacementPrompt(db: SupabaseClient, p: { clientId: stri
     const pl = row as PlacementRead | null;
     if (!pl) return { kind: "skipped", why: "no such placement on this client" };
     if (pl.status !== "live" || !pl.url) return { kind: "skipped", why: "not live" };
-    if (!(PROMPT_KINDS as readonly string[]).includes(pl.kind) && !(pl.kind === "link_insertion" && p.insertion)) return { kind: "skipped", why: `a ${pl.kind.replace(/_/g, " ")} adds no prompt` };
+    if (!(PROMPT_KINDS as readonly string[]).includes(pl.kind) && !(pl.kind === "link_insertion" && p.insertion)) return { kind: "skipped", why: SKIPPED_KIND[pl.kind] ?? `a ${pl.kind.replace(/_/g, " ")} adds no prompt` };
 
     const { data: client, error: cErr } = await db.from("client_domains").select("tier, market").eq("id", p.clientId).maybeSingle();
     if (cErr) return { kind: "failed", message: `Could not read the client: ${cErr.message}` };
@@ -218,11 +262,14 @@ export async function addPlacementPrompt(db: SupabaseClient, p: { clientId: stri
     if ("failed" in room) return { kind: "failed", message: room.failed };
 
     const addedOn = addDays(p.today, 1);
+    // The rotation has to come first: the insert counts the allowance, and the rotated prompt is out of it from its stop.
+    // So an insert that then fails takes the rotation back (13 Oct 2026 review) - never a stopped prompt and no new one.
     const w = await insertPrompts(db, p.clientId, pl.cluster_id, [{ text: made.text, source: "nomada", added_on: addedOn, added_by: "nomada", origin_kind: "placement", origin_ref: pl.id }], { allowance: "placement" });
     if (!w.ok) {
-      if (w.message === PLACEMENT_FULL) return { kind: "full" };
-      if (w.message === PROMPT_TRACKED) return { kind: "duplicate", text: made.text, of: made.text };
-      return { kind: "failed", message: w.message };
+      const rotation = room.rotated ? { rotation: await undoRotation(db, p.clientId, room.rotated) } : {};
+      if (w.message === PLACEMENT_FULL) return { kind: "full", ...rotation };
+      if (w.message === PROMPT_TRACKED) return { kind: "duplicate", text: made.text, of: made.text, ...rotation };
+      return { kind: "failed", message: w.message, ...rotation };
     }
     return { kind: "added", promptId: w.ids[0]!, text: made.text, addedOn, rotated: room.rotated };
   } catch (e) {
@@ -247,26 +294,71 @@ export async function stopPlacementPrompt(db: SupabaseClient, p: { clientId: str
 /**
  * What the admin reads after a save (spec 6.7's lines, word for word where it
  * gives them). `saved` is the action's own line, kept where nothing about a
- * prompt needs saying.
+ * prompt needs saying. A Retry (`retry`) saved nothing, so its lines do not
+ * start "Placement saved", and it says why a placement it skipped adds none.
  */
-export function placementPromptMessage(saved: string, o: PlacementPromptOutcome): string {
+export function placementPromptMessage(saved: string, o: PlacementPromptOutcome, retry = false): string {
+  const none = (rest: string) => (retry ? `No prompt added: ${rest}` : `Placement saved; no prompt added: ${rest}`);
   switch (o.kind) {
     case "off":
-      return SAVED_SWITCHED_OFF;
+      return retry ? SWITCHED_OFF : SAVED_SWITCHED_OFF;
     case "skipped":
+      return retry ? none(`${o.why}.`) : saved;
     case "exists":
-      return saved;
+      return retry ? `It already has its prompt: “${o.text}”.` : saved;
     case "added":
-      return `${saved} Prompt added: “${o.text}”, first asked ${formatDay(o.addedOn)}.${o.rotated ? ` To make room, “${o.rotated.text}” stops from ${formatDay(o.rotated.stoppedOn)}: its placement has been live 12 weeks or more and was never cited.` : ""}`;
+      return `${retry ? "" : `${saved} `}Prompt added: “${o.text}”, first asked ${formatDay(o.addedOn)}.${o.rotated ? ` To make room, “${o.rotated.text}” stops from ${formatDay(o.rotated.stoppedOn)}: its placement has been live 12 weeks or more and was never cited.` : ""}`;
     case "duplicate":
-      return `Placement saved; no prompt added: “${o.text}” is already measured by “${o.of}”.`;
+      return none(`“${o.text}” is already measured by “${o.of}”.${rotationLine(o.rotation)}`);
     case "unread":
-      return `Placement saved; no prompt added: couldn't read the article (${o.why}). Retry from the placement row.`;
+      return none(`couldn't read the article (${o.why}). Retry from the placement row.`);
     case "no_prompt":
-      return `Placement saved; no prompt added: ${o.why}.`;
+      return none(`${o.why}.`);
     case "full":
-      return `Placement saved; no prompt added: ${PLACEMENT_FULL}.`;
+      return none(`${PLACEMENT_FULL}.${rotationLine(o.rotation)}`);
     case "failed":
-      return `Placement saved; no prompt added: ${o.message}. Retry from the placement row.`;
+      return none(`${o.message}.${rotationLine(o.rotation)} Retry from the placement row.`);
   }
+}
+
+/**
+ * What a placement save does about its prompt, and the admin's line for it
+ * (/admin/tracking's logPlacement and updatePlacement call this, so the
+ * message paths have a test on a fake database - 13 Oct 2026 review):
+ *
+ * - a save that leaves the placement live, from any other status or as a new
+ *   row, runs the hook; a row merely re-saved while live does not, so turning
+ *   the switch on backfills nothing in bulk;
+ * - the row's Retry runs the hook and saves nothing else: it posts no fields,
+ *   so it cannot write back values another save has since changed;
+ * - a move to removed stops the placement's prompt from tomorrow.
+ *
+ * `before` is the status before the save, null for a new row.
+ */
+export async function placementSaved(
+  db: SupabaseClient,
+  p: { clientId: string; placementId: string; before: string | null; after: string; retry: boolean; insertion: boolean; today: Day; saved: string },
+  deps: { fetcher: Fetcher },
+): Promise<string> {
+  const hook = async () => {
+    const o = await addPlacementPrompt(db, { clientId: p.clientId, placementId: p.placementId, insertion: p.insertion, today: p.today }, deps);
+    if (o.kind === "failed") console.warn(`[diy] placement prompt for ${p.placementId}: ${o.message}`);
+    return placementPromptMessage(p.saved, o, p.retry);
+  };
+  if (p.retry) return hook();
+  if (p.after === "live" && p.before !== "live") return hook();
+  if (p.after === "removed" && p.before !== null && p.before !== "removed") {
+    const stopped = await stopPlacementPrompt(db, { clientId: p.clientId, placementId: p.placementId, today: p.today });
+    if (!stopped.ok) return `${p.saved} Its prompt was not stopped: ${stopped.message}`;
+    return stopped.stopped.length ? `${p.saved} Its prompt “${stopped.stopped[0]!.text}” stops from ${formatDay(addDays(p.today, 1))}; its history stays.` : p.saved;
+  }
+  return p.saved;
+}
+
+/** What happened to a prompt stopped to make room for one that was then not added. */
+function rotationLine(r: RotationUndone | undefined): string {
+  if (!r) return "";
+  return r.restored
+    ? ` “${r.text}” was stopped to make room and is live again.`
+    : ` “${r.text}” was stopped to make room and still stops from ${formatDay(r.stoppedOn)}: taking that stop back failed (${r.why}).`;
 }

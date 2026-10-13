@@ -12,7 +12,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { promptsDb } from "./fake-prompts-db.mts";
-import { CHOSEN_KINDS, ORIGIN_KINDS, fixtureOriginMap, isChosen, isPlacementPrompt, loadPromptOrigins, originHref, originKinds, originLabel, originMap, originOf, readOriginsFiles, readPromptOrigins, type OriginRepo, type PromptOrigin } from "./origins.ts";
+import { CHOSEN_KINDS, ORIGIN_KINDS, fixtureOriginMap, isChosen, isPlacementPrompt, loadPromptOrigins, originAttr, originHref, originKinds, originLabel, originMap, originOf, readOriginsFiles, readPromptOrigins, type OriginRepo, type PromptOrigin } from "./origins.ts";
 
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 
@@ -47,6 +47,11 @@ test("the chip's words, in nomada mode and in agency mode, where Nomada is never
   assert.equal(originLabel(o("placement"), "nomada"), "Placement");
   assert.equal(originLabel(o("opportunity"), "nomada"), "Opportunity");
   assert.equal(originLabel(o("momentum"), "nomada"), "Momentum");
+  // 13 Oct 2026 review: the markup follows the words, so an agency page carries no "nomada" in its attributes either.
+  assert.equal(originAttr("nomada", "nomada"), "nomada");
+  assert.equal(originAttr("nomada", "agency"), "contact");
+  assert.equal(originAttr("nomada", "off"), "contact");
+  for (const k of ORIGIN_KINDS.filter((k) => k !== "nomada")) assert.equal(originAttr(k, "agency"), k);
   for (const kind of ORIGIN_KINDS) assert.doesNotMatch(originLabel(o(kind, "freelancefieldnotes.com"), "agency"), /nomada/i, kind);
 });
 

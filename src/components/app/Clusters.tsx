@@ -34,6 +34,7 @@ import UpgradePrompt from "./UpgradePrompt";
 import { ClearSearch } from "./ClearLinks";
 import { appPath, siteHref } from "@/lib/app-host";
 import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+import { includesLine, placementBasis, placementBasisLine } from "@/lib/diy/prompts/basis";
 
 import OriginChip from "./prompts/OriginChip";
 
@@ -873,7 +874,7 @@ function PendingEditor({
  * as an angle prompt's does - the engines' days, the rate, the change - and a
  * first reading is shown, not scored.
  */
-function FromPlacements({ prompts, origins, mode, slug, brand, pending, next, since, vs }: { prompts: ClusterCard["prompts"]; origins: ReadonlyMap<string, PromptOrigin>; mode: UpsellMode; slug: string; brand: string; pending: boolean; next: string; since: string | null; vs: string | null }) {
+function FromPlacements({ prompts, origins, mode, slug, brand, pending, next, since, vs, basis }: { prompts: ClusterCard["prompts"]; origins: ReadonlyMap<string, PromptOrigin>; mode: UpsellMode; slug: string; brand: string; pending: boolean; next: string; since: string | null; vs: string | null; basis: string | null }) {
   const id = `fp-${prompts[0]!.id}`;
   return (
     <section aria-labelledby={id} style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
@@ -883,6 +884,12 @@ function FromPlacements({ prompts, origins, mode, slug, brand, pending, next, si
         </span>
         <span style={{ fontSize: "12px", color: T.soft }}>These don&apos;t use your 5 prompt slots.</span>
       </div>
+      {/* 13 Oct 2026 review: the card's figures count these, so the like-for-like figure without them is beside them. */}
+      {basis ? (
+        <p data-basis="placements" style={{ margin: 0, fontSize: "12px", lineHeight: 1.5, color: T.soft }}>
+          {basis}
+        </p>
+      ) : null}
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
         {prompts.map((p) => (
           <li key={p.id} className="app-cl-prompt" data-placement-prompt={p.id} style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 52px 76px", alignItems: "center", gap: "12px", minHeight: `${ROW_H}px`, boxSizing: "border-box", padding: "8px 12px 8px 14px", borderRadius: "12px", background: T.surface, border: `1px solid ${T.hair}`, opacity: p.stoppedOn !== null ? 0.6 : 1 }}>
@@ -974,10 +981,12 @@ function ClusterRow({
   firstAsk: string;
 }) {
   // 13 Oct 2026, DIY P2: the card's prompts in its angle slots, and the placement prompts beside them (spec 4.10).
-  // Every figure on the card still counts them all; the slots, the list and its editor take the angle prompts only.
+  // Every figure on the card still counts them all, as the Overview's do; the slots, the list and its editor take the
+  // angle prompts only. 13 Oct 2026 review: so the card says it counts them, and gives the figure without them (basis.ts).
   const c: ClusterCard = { ...card, prompts: card.prompts.filter((p) => !isPlacementPrompt(origins, p.id)) };
   const fromPlacements = card.prompts.filter((p) => isPlacementPrompt(origins, p.id));
   const pending = card.status === "pending";
+  const placed = pending ? null : placementBasis(card.prompts, origins);
   // A stop made today shows until tomorrow's check, with Undo; the slot is already free.
   const stopped = c.stoppedOn !== null;
   // ON-1: no prompt in it at all - a signup with no scan - so nothing in it is checked yet.
@@ -995,7 +1004,7 @@ function ClusterRow({
     ? `${lead ? `${lead}. ` : ""}Stopped from ${formatDay(c.stoppedOn!)}. Its history stays in your reports`
     : pending
       ? `${lead ? `${lead}. ` : ""}Added today, first check tomorrow at ${next}${basis ? `. ${basis}` : ""}`
-      : `${lead ? `${lead}. ` : ""}Since ${formatDay(c.started_on)}`;
+      : `${lead ? `${lead}. ` : ""}Since ${formatDay(c.started_on)}${placed ? `. ${includesLine(placed.count).slice(0, -1)}` : ""}`;
   const named = namedCount(card);
   const mid = BLOCK_H / 2;
   return (
@@ -1159,7 +1168,7 @@ function ClusterRow({
               ) : null}
             </div>
           </div>
-          {fromPlacements.length ? <FromPlacements prompts={fromPlacements} origins={origins} mode={mode} slug={slug} brand={brand} pending={pending} next={next} since={since} vs={vs} /> : null}
+          {fromPlacements.length ? <FromPlacements prompts={fromPlacements} origins={origins} mode={mode} slug={slug} brand={brand} pending={pending} next={next} since={since} vs={vs} basis={placed ? placementBasisLine(placed) : null} /> : null}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "13px", color: T.soft }}>
               {c.status === "added" ? `Added ${formatDay(c.started_on)}, so there is no earlier period to compare against yet.` : pending ? `Its prompts are asked from tomorrow's check, at ${next}.` : "Dates and comparisons apply to the prompts and the keyword alike."}

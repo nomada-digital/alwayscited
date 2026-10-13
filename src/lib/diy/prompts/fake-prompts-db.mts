@@ -13,6 +13,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *   before 20261013010000.
  * - **the live-text index** (20261009040000): a second live prompt with the
  *   same text in one cluster fails with 23505.
+ * - **a failed HEAD has no body** (13 Oct 2026 review). A count asked with
+ *   `{ head: true }` that fails comes back as postgrest-js gives it over
+ *   HTTP: `{ message: "" }`, no code - its error is parsed from a body a HEAD
+ *   response does not have (postgrest-js dist/index.mjs, the non-ok branch).
+ *   The first version answered 42703 there, which the real client never
+ *   does, and so passed a fallback that never fired.
  *
  * `fail` makes the next call on a table fail with a message, once. Every call
  * is logged. Not a `.test.mts`, so the runner does not run it on its own.
@@ -25,7 +31,7 @@ type Err = { code?: string; message: string };
 
 export function promptsDb(tables: Tables, opts: { columns?: Record<string, string[]> } = {}) {
   const calls: Call[] = [];
-  const fail = new Map<string, Err>();
+  const fail = new Map<string, Err & { op?: Call["op"] }>();
   let nextId = 1;
 
   const from = (table: string) => {
@@ -34,11 +40,15 @@ export function promptsDb(tables: Tables, opts: { columns?: Record<string, strin
     const known = opts.columns?.[table];
     const unknown = (cols: string[]): string | undefined => (known ? cols.find((c) => c !== "*" && !known.includes(c)) : undefined);
     const run = (): { data: unknown; count?: number | null; error: Err | null } => {
+      const out = answer();
+      return q.head && out.error ? { data: null, count: null, error: { message: "" } } : out;
+    };
+    const answer = (): { data: unknown; count?: number | null; error: Err | null } => {
       calls.push({ table, op: q.op, head: q.head, filters: filters.map((f) => f.text) });
       const forced = fail.get(table);
-      if (forced) {
+      if (forced && (!forced.op || forced.op === q.op)) {
         fail.delete(table);
-        return { data: null, error: forced };
+        return { data: null, error: { message: forced.message, ...(forced.code ? { code: forced.code } : {}) } };
       }
       const rows = (tables[table] ??= []);
       const filterCols = filters.map((f) => f.col);
@@ -133,9 +143,9 @@ export function promptsDb(tables: Tables, opts: { columns?: Record<string, strin
     db: { from } as unknown as SupabaseClient,
     tables,
     calls,
-    /** The next call on `table` fails with `message` (and `code`). */
-    failNext(table: string, message: string, code?: string) {
-      fail.set(table, { message, code });
+    /** The next call on `table` (or the next `op` on it) fails with `message` (and `code`). */
+    failNext(table: string, message: string, code?: string, op?: Call["op"]) {
+      fail.set(table, { message, code, op });
     },
   };
 }

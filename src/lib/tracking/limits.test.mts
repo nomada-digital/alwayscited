@@ -183,18 +183,32 @@ test("grouping into a cluster counts its angle prompts only", async () => {
 });
 
 test("before the prompt_origins migration: no allowance column, so every live prompt is a slot prompt and none a placement one", async () => {
-  const { db } = promptsDb(
+  const { db, tables } = promptsDb(
     {
       client_domains: [{ id: "cl", cluster_limit: 10 }],
       tracked_questions: ANGLES.slice(0, 3).map((a) => ({ id: a, client_domain_id: "cl", cluster_id: "c1", text: a, source: "client", added_on: day, stopped_on: null })),
     },
     { columns: { tracked_questions: ["id", "client_domain_id", "cluster_id", "text", "source", "added_on", "added_by", "stopped_on", "stopped_by", "angle"] } },
   );
-  assert.equal(await livePromptCount(db, "cluster_id", "c1", "slots"), 3);
-  assert.equal(await livePromptCount(db, "client_domain_id", "cl", "placement"), 0);
-  assert.equal((await insertPrompts(db, "cl", "c1", [{ text: "A plain new prompt", source: "client", added_on: day, added_by: "x" }])).ok, true, "a writer setting no origin still inserts");
+  // 13 Oct 2026 review: the fake now fails a HEAD count as postgrest-js does over HTTP - { message: "" }, no code - so
+  // this is the fallback a real deploy before 20261013010000 takes, not one only a 42703 in the fake could reach.
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.equal(await livePromptCount(db, "cluster_id", "c1", "slots"), 3);
+    assert.match(String(await livePromptCount(db, "client_domain_id", "cl", "placement")), /^Could not count the placement prompts: /, "an error, never 0: 0 would let placement prompts past their allowance");
+    const room = await readPromptRoom(db, "cl", "c1");
+    assert.ok(typeof room !== "string", String(room));
+    assert.deepEqual(room.limits, { clientLive: 3, clusterLive: 3, clusterLimit: 10 });
+    assert.equal((await insertPrompts(db, "cl", "c1", [{ text: "A plain new prompt", source: "client", added_on: day, added_by: "x" }])).ok, true, "a writer setting no origin still inserts");
+    tables.tracked_questions!.push({ id: "loose", client_domain_id: "cl", cluster_id: null, text: "a loose prompt", source: "client", added_on: day, stopped_on: null, angle: null });
+    assert.deepEqual(await groupPrompts(db, "cl", "c1", ["loose"]), { ok: true, ids: ["loose"] }, "grouping counts the cluster's prompts too");
+  } finally {
+    console.warn = warn;
+  }
   const p = await insertPrompts(db, "cl", "c1", [placementRow("best accounting apps for small businesses")], { allowance: "placement" });
   assert.equal(p.ok, false, "a placement prompt cannot be written before its columns exist");
+  assert.deepEqual(await livePromptCount(promptsDb({ tracked_questions: [] }).db, "cluster_id", "c1", "slots"), 0, "after the migration nothing changes");
   assert.equal(missingColumn({ code: "42703", message: "column tracked_questions.allowance does not exist" }), true);
   assert.equal(missingColumn({ code: "PGRST204", message: "Could not find the 'origin_kind' column of 'tracked_questions' in the schema cache" }), true);
   assert.equal(missingColumn({ code: "57014", message: "canceling statement due to statement timeout" }), false);

@@ -17,8 +17,14 @@ import type { PromptOrigin } from "./origins.ts";
  *   Nothing cited and live under 21 days is "Too early to read" (spec 2.6 rule
  *   9); later, "Not cited yet".
  * - **The prompt line**, only once placement_prompts_enabled is on: the prompt
- *   the placement added, or why there is none. The reasons are the ones a read
- *   can tell; the admin sees every reason, and the retry, on its own page.
+ *   the placement added, or why there is none. The reasons are only the ones
+ *   a read can be sure of - the placement's kind. Why a guest post has none (an
+ *   unread article, a duplicate, a title too short, the allowance full) is not
+ *   stored, and the client's line does not guess: it reads "No prompt added
+ *   from this article". The admin sees the real reason, and the Retry, on its
+ *   own page at the time (13 Oct 2026 review: the first version said "10
+ *   placement prompts are already asked daily" for every prompt-less placement
+ *   whenever the allowance was full, whatever the reason had been).
  *
  * Nothing here says a placement moved anything (causal-copy.test.mts): a
  * citation is a fact with a date, never an effect.
@@ -27,6 +33,8 @@ import type { PromptOrigin } from "./origins.ts";
 export const TOO_EARLY_DAYS = 21;
 export const TOO_EARLY = "Too early to read";
 export const NOT_CITED = "Not cited yet";
+/** A placement that could add a prompt and has none: the reason is the admin's to read, not one guessed here. */
+export const NO_PROMPT = "No prompt added from this article";
 
 export type Cite = { run_date: Day; engine: string; url: string };
 
@@ -86,7 +94,7 @@ export function placementPromptOf(placementId: string, origins: ReadonlyMap<stri
  * "Prompt added 4 Oct: “best invoicing apps for freelancers”", or "No prompt: <reason>".
  * Null for a placement that is not live: nothing is due from it yet.
  */
-export function promptLine(p: { kind: string; live: boolean; prompt: PromptRowLite | null; today: Day; placementPromptsLive: number; allowance: number }): string | null {
+export function promptLine(p: { kind: string; live: boolean; prompt: PromptRowLite | null; today: Day }): string | null {
   if (!p.live) return null;
   const q = p.prompt;
   if (q) {
@@ -96,6 +104,5 @@ export function promptLine(p: { kind: string; live: boolean; prompt: PromptRowLi
   }
   if (p.kind === "on_site") return "No prompt: on-site work adds none";
   if (p.kind === "link_insertion") return "No prompt: a link in an existing article adds none by default";
-  if (p.placementPromptsLive >= p.allowance) return `No prompt: ${p.allowance} placement prompts are already asked daily`;
-  return "No prompt added from this article";
+  return NO_PROMPT;
 }

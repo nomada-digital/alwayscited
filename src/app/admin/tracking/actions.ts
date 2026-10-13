@@ -15,7 +15,7 @@ import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { RERUN_BUTTON } from "@/lib/tracking/rerun";
 import { adminEdit, adminStop, isAdminKind } from "@/lib/tracking/admin-edit";
 import { placementFields } from "@/lib/tracking/placements";
-import { addPlacementPrompt, placementPromptMessage, stopPlacementPrompt } from "@/lib/diy/prompts/placement-prompt";
+import { placementSaved } from "@/lib/diy/prompts/placement-prompt";
 import { clearScope } from "@/lib/tracking/scope";
 
 /**
@@ -318,19 +318,18 @@ const placementInput = (form: FormData) => ({
 });
 
 /**
- * 13 Oct 2026, DIY P2 (spec 10 section 6.7): the placement prompt hook. Called
- * when a save leaves a placement live - logged live, moved to live, or the
- * row's Retry (prompt=1) - and never for a row merely re-saved while live, so
- * switching placement_prompts_enabled on backfills nothing in bulk: each
- * earlier placement gets its prompt through its own Retry. `insertion_prompt`
- * is the "Add a prompt from this article's title" tick a link insertion needs.
- * The hook reads the switch first; while it is off nothing is fetched.
+ * 13 Oct 2026, DIY P2 (spec 10 section 6.7): the placement prompt hook
+ * (placement-prompt.ts placementSaved, which has the rules and their test).
+ * It runs when a save leaves a placement live - logged live or moved to live -
+ * or on the row's Retry (prompt=1), never for a row merely re-saved while
+ * live, so switching placement_prompts_enabled on backfills nothing in bulk:
+ * each earlier placement gets its prompt through its own Retry. A move to
+ * removed stops its prompt. `insertion_prompt` is the "Add a prompt from this
+ * article's title" tick a link insertion needs. The hook reads the switch
+ * first; while it is off nothing is fetched.
  */
-async function placementPrompt(db: ReturnType<typeof supabaseAdmin>, form: FormData, p: { clientId: string; placementId: string; saved: string }): Promise<string> {
-  const o = await addPlacementPrompt(db, { clientId: p.clientId, placementId: p.placementId, insertion: text(form, "insertion_prompt") === "1", today: trackingDay() }, { fetcher: fetch });
-  if (o.kind === "failed") console.warn(`[diy] placement prompt for ${p.placementId}: ${o.message}`);
-  return placementPromptMessage(p.saved, o);
-}
+const placementPrompt = (db: ReturnType<typeof supabaseAdmin>, form: FormData, p: { clientId: string; placementId: string; before: string | null; after: string; retry?: boolean; saved: string }) =>
+  placementSaved(db, { ...p, retry: p.retry ?? false, insertion: text(form, "insertion_prompt") === "1", today: trackingDay() }, { fetcher: fetch });
 
 /**
  * R96 part 3 (BRIEF-2 T12): log a placement on one of the client's clusters.
@@ -354,8 +353,7 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
   if ("error" in judged) return { ok: false, message: judged.error };
   const { data: made, error } = await db.from("placements").insert({ ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" }).select("id").single();
   if (error) return { ok: false, message: `Could not log the placement: ${error.message}` };
-  const saved = `Logged ${judged.row.url_key} (${judged.row.status}).`;
-  const message = judged.row.status === "live" ? await placementPrompt(db, form, { clientId, placementId: made.id as string, saved }) : saved;
+  const message = await placementPrompt(db, form, { clientId, placementId: made.id as string, before: null, after: judged.row.status, saved: `Logged ${judged.row.url_key} (${judged.row.status}).` });
   revalidatePath(`/admin/tracking/${client.slug as string}/placements`);
   return { ok: true, message };
 }
@@ -367,7 +365,9 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
  * removed and logged again.
  *
  * DIY P2: a move to live, or the row's Retry (prompt=1), adds its prompt; a
- * move to removed stops its prompt from tomorrow, never deleting it.
+ * move to removed stops its prompt from tomorrow, never deleting it. A Retry
+ * posts no fields and saves none (13 Oct 2026 review: its hidden copies of the
+ * row's fields could write back values a later save had changed).
  */
 export async function updatePlacement(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
   const refused = await refuseUnlessAdmin();
@@ -384,6 +384,11 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
   if (rErr) return { ok: false, message: `Could not read the placement: ${rErr.message}` };
   if (!row) return { ok: false, message: "No such placement on this client." };
   const owner = row.client_domains as unknown as { tier: string; slug: string };
+  if (text(form, "prompt") === "1") {
+    const message = await placementPrompt(db, form, { clientId, placementId: id, before: row.status as string, after: row.status as string, retry: true, saved: "" });
+    revalidatePath(`/admin/tracking/${owner.slug}/placements`);
+    return { ok: true, message };
+  }
   const judged = placementFields({ ...placementInput(form), kind: row.kind as string, url: row.url as string }, owner.tier);
   if ("error" in judged) return { ok: false, message: judged.error };
   const { status, scheduled_on, live_on, anchor_text, internal_note } = judged.row;
@@ -393,14 +398,7 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
     .eq("id", id)
     .eq("client_domain_id", clientId);
   if (error) return { ok: false, message: `Could not save the placement: ${error.message}` };
-  const saved = `Saved: ${status}.`;
-  let message = saved;
-  if (status === "live" && (row.status !== "live" || text(form, "prompt") === "1")) {
-    message = await placementPrompt(db, form, { clientId, placementId: id, saved });
-  } else if (status === "removed" && row.status !== "removed") {
-    const stopped = await stopPlacementPrompt(db, { clientId, placementId: id, today: trackingDay() });
-    message = !stopped.ok ? `${saved} Its prompt was not stopped: ${stopped.message}` : stopped.stopped.length ? `${saved} Its prompt “${stopped.stopped[0]!.text}” stops from ${dayAfter(trackingDay())}; its history stays.` : saved;
-  }
+  const message = await placementPrompt(db, form, { clientId, placementId: id, before: row.status as string, after: status, saved: `Saved: ${status}.` });
   revalidatePath(`/admin/tracking/${owner.slug}/placements`);
   return { ok: true, message };
 }

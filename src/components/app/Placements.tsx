@@ -5,9 +5,9 @@ import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { type Day, type Range, formatDay } from "@/lib/tracking/figures";
 import { KIND_WORDS, PLACEMENTS_FOOTNOTE, type PlacementsView, type Span, kindFilters, pageParts, shortDay, spanText } from "@/lib/tracking/placement-figures";
 import type { PlacementKind } from "@/lib/tracking/placements";
-import { PLACEMENT_PROMPTS_PER_CLIENT } from "@/lib/tracking/limits";
-import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+import type { PromptOrigin } from "@/lib/diy/prompts/origins";
 import { type PromptRowLite, firstCitedLine, placementPromptOf, promptLine } from "@/lib/diy/prompts/placement-lines";
+import { leftOutLine } from "@/lib/diy/prompts/basis";
 
 import DatePicker from "./DatePicker";
 import PlacementsChart from "./PlacementsChart";
@@ -29,6 +29,10 @@ import PlacementsChart from "./PlacementsChart";
  * this screen reads (placement-lines.ts); and, only once
  * placement_prompts_enabled is on, the prompt the placement added or why it
  * has none. With the switch off a client sees no prompt line.
+ *
+ * 13 Oct 2026 review: the named figures leave out the prompts added from
+ * placements (placements-screen.ts says why), and a line under the strip says
+ * so whenever the cluster has any.
  */
 
 const CARD: React.CSSProperties = { background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px" };
@@ -72,6 +76,7 @@ export default function Placements({
   cluster,
   keyword,
   prompts,
+  placementPrompts = 0,
   view,
   series,
   kind,
@@ -95,6 +100,8 @@ export default function Placements({
   cluster: { id: string; name: string; started_on: Day };
   keyword: string | null;
   prompts: number;
+  /** The cluster's prompts added from placements, which the named figures leave out (placements-screen.ts). */
+  placementPrompts?: number;
   view: PlacementsView;
   series: React.ComponentProps<typeof PlacementsChart>["series"];
   /** ?type= - null is every kind. */
@@ -120,13 +127,12 @@ export default function Placements({
   const filters = kindFilters(view.rows).map((f) => ({ ...f, href: link(f.kind, sel, "#placements-chart") }));
   const since = view.whole.from ? shortDay(view.whole.from) : shortDay(range.from);
   const engineLabel = (e: string) => ENGINE_SPECS[e as Engine]?.label ?? e;
-  const placementLive = promptRows.filter((q) => isPlacementPrompt(origins, q.id) && (q.stopped_on === null || q.stopped_on > today)).length;
   /** DIY P2: a live row's first-cited line and, with the switch on, its prompt line. */
   const linesFor = (r: (typeof view.rows)[number]) =>
     r.live && r.liveOn
       ? {
           cited: firstCitedLine(firstCited[r.id] ?? [], { liveOn: r.liveOn, today, rangeFrom: range.from, label: engineLabel }),
-          prompt: promptLines ? promptLine({ kind: r.kind, live: true, prompt: placementPromptOf(r.id, origins, promptRows), today, placementPromptsLive: placementLive, allowance: PLACEMENT_PROMPTS_PER_CLIENT }) : null,
+          prompt: promptLines ? promptLine({ kind: r.kind, live: true, prompt: placementPromptOf(r.id, origins, promptRows), today }) : null,
         }
       : null;
   const cell: React.CSSProperties = { display: "grid", gridTemplateColumns: COLS, alignItems: "center", gap: "16px", padding: "12px 24px" };
@@ -186,6 +192,11 @@ export default function Placements({
         {fig("Google position", "placements-google", spanText(view.whole.google, "rank"), keyword ?? "No keyword yet")}
         {fig("Answers citing your placements", "placements-cited", String(view.whole.cited), "An engine cited the placement page itself")}
       </section>
+      {placementPrompts > 0 ? (
+        <p data-basis="placements" style={{ margin: "-12px 0 0", fontSize: "13px", lineHeight: 1.5, color: T.soft, maxWidth: "820px" }}>
+          {leftOutLine(placementPrompts, prompts + placementPrompts)}
+        </p>
+      ) : null}
 
       <PlacementsChart brand={brand} series={series} rows={rows} filters={filters} kind={kind} sel={sel} hrefFor={(id) => link(kind, id, "#placements-chart")} keyword={keyword} />
 

@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { NO_TITLE, TITLE_TOO_LONG, TITLE_TOO_SHORT, cleanPart, namesMarket, plainText, promptFromTitle, titleCore, titleOf, wordCount } from "./title-rule.ts";
+import { NO_TITLE, TITLE_ASKS_READER, TITLE_NO_TOPIC, TITLE_TOO_LONG, TITLE_TOO_SHORT, asksReader, cleanPart, namesMarket, plainText, promptFromTitle, titleCore, titleOf, wordCount } from "./title-rule.ts";
 
 const CASES: [title: string, market: string, want: string | null, note: string][] = [
   // The spec's two examples, word for word.
@@ -38,7 +38,16 @@ const CASES: [title: string, market: string, want: string | null, note: string][
   ["Best accounting apps for UK freelancers", "UK", "best accounting apps for freelancers in the UK", "the market is said once, at the end"],
   ["Best invoicing software for US contractors", "US", "best invoicing software for contractors in the US", "US in capitals"],
   ["Best invoicing apps - Contact us", "US", "best invoicing apps", "a lowercase us is the pronoun, not the market"],
-  ["The best British bookkeeping apps", "UK", "best bookkeeping apps in the UK", "British names the UK"],
+  // 13 Oct 2026 review: an adjective is not the market, and a brand keeps its words.
+  ["The best British bookkeeping apps", "UK", "best british bookkeeping apps", "British is an adjective: kept, and no qualifier"],
+  ["The 7 Best American Express Alternatives for Small Businesses | CardGuide", "US", "best american express alternatives for small businesses", "American Express is a brand"],
+  ["Best British Airways Alternatives for Business Travel - TravelDesk", "UK", "best british airways alternatives for business travel", "British Airways is a brand"],
+  ["Bank of America alternatives for small businesses", "US", "best bank of america alternatives for small businesses", "America in a brand is not the market"],
+  ["CONTACT US: Best Payroll Tools for Startups", "US", "best payroll tools for startups", "an all-capitals US is the pronoun"],
+  ["Best invoicing apps | ABOUT US", "US", "best invoicing apps", "an all-capitals ABOUT US part names no market"],
+  ["BEST CRM TOOLS IN THE US", "US", "best crm tools in the US", "an all-capitals IN THE US does name it"],
+  ["Payroll software: the 9 best for UK sole traders in 2026", "UK", "best payroll software for sole traders in the UK", "a short topic before a bare 'best for' is the topic"],
+  ["Which accounting app is best for freelancers?", "US", "which accounting app is best for freelancers", "a which ... best question already asks for a recommendation"],
   // how to, and too short.
   ["How to choose accounting software - Brightly", "US", "how to choose accounting software", "how to is kept as it is"],
   ["Best CRM", "US", null, "two words"],
@@ -63,6 +72,23 @@ test("promptFromTitle: no title, and a title past the prompt length, are refused
   assert.deepEqual(promptFromTitle("   ", "US"), { ok: false, reason: NO_TITLE });
   const long = `Best ${Array.from({ length: 80 }, (_, i) => `word${i}`).join(" ")}`;
   assert.deepEqual(promptFromTitle(long, "US"), { ok: false, reason: TITLE_TOO_LONG });
+});
+
+test("13 Oct 2026 review: a title that asks the reader, or names no topic, makes no prompt", () => {
+  for (const [title, why] of [
+    ["Is Ledgerly Worth It? An Honest Review - SmallBizStack", TITLE_ASKS_READER],
+    ["Why freelancers love Ledgerly", TITLE_ASKS_READER],
+    ["Should you switch to Ledgerly in 2026?", TITLE_ASKS_READER],
+    ["What to look for in invoicing software", TITLE_ASKS_READER],
+    ["The 9 best for freelancers - Brightly", TITLE_NO_TOPIC],
+  ] as const) {
+    assert.deepEqual(promptFromTitle(title, "UK"), { ok: false, reason: why }, title);
+  }
+  assert.equal(asksReader("how to choose an accounting app"), false, "how to is a thing people ask");
+  assert.equal(asksReader("how ledgerly saves you time"), true);
+  assert.equal(asksReader("which crm is best for startups"), false);
+  assert.equal(asksReader("which is better"), true);
+  assert.equal(titleCore("Is Ledgerly worth it? An honest review"), null, "the rest of the title is never the fallback");
 });
 
 test("promptFromTitle: the reason for too short is the spec's words exactly", () => {
@@ -102,4 +128,8 @@ test("the parts: cleaning and choosing", () => {
   assert.equal(namesMarket("Best apps in the U.K. today", "UK"), true);
   assert.equal(namesMarket("Contact us for more", "US"), false);
   assert.equal(namesMarket("Made in the USA", "US"), true);
+  assert.equal(namesMarket("The best American apps", "US"), false, "an adjective is not the market");
+  assert.equal(namesMarket("The best British apps", "UK"), false);
+  assert.equal(namesMarket("CONTACT US: best apps", "US"), false);
+  assert.equal(namesMarket("BEST APPS FOR THE US", "US"), true);
 });

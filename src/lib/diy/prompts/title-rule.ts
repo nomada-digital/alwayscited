@@ -8,20 +8,30 @@ import { PROMPT_MAX, PROMPT_MIN } from "../../tracking/prompt-text.ts";
  *
  * 1. The article's <title>, else its first <h1> (`titleOf`).
  * 2. Cut at the first of " | ", " - ", an en or em dash between spaces, " · ",
- *    ": ". The first
- *    part is kept when it still has 3 words once cleaned; otherwise the
- *    longest other part that does, never one that reads as a question to the
- *    reader ("is it worth it"), since "best is it worth it" is no prompt.
+ *    ": ", and a "? " with more after it. The first part is kept when it
+ *    still has 3 words once cleaned; otherwise the longest other part that
+ *    does, never one that reads as a question to the reader ("is it worth
+ *    it"), since "best is it worth it" is no prompt. A first part that is
+ *    itself a question to the reader ("Is Ledgerly worth it? ...") makes no
+ *    prompt at all. A short topic before ": " with a bare "best for ..."
+ *    after it ("Payroll software: the 9 best for sole traders") is the
+ *    topic: "best payroll software for sole traders".
  * 3. Drop years, bracketed text, a leading list count ("The 9", "9",
  *    "Top 10" to "top") and a leading "who/what/which are the" (or "is the").
  * 4. Lowercase and collapse spaces.
  * 5. "best ..." or "top ..." becomes "best ..."; a " vs " title is kept as it
  *    is, and so is a "how to ..." one, which is already a thing people ask
- *    (an addition to the spec's rule: "best how to choose" is no prompt);
- *    anything else gets "best " in front.
+ *    (an addition to the spec's rule: "best how to choose" is no prompt), and
+ *    a "which ... best ..." one, which already asks for a recommendation;
+ *    anything else gets "best " in front. A "best" with no topic after it
+ *    ("best for sole traders") is no prompt.
  * 6. The market qualifier, "in the UK" or "in the US", only when the title
  *    named the client's market. A market named in the words is taken out of
- *    them first, so it is said once, at the end.
+ *    them first, so it is said once, at the end. Only the market's own names
+ *    count - "in the UK", "UK", "USA", "US" in capitals - never an adjective:
+ *    "American Express" and "British Airways" are brands, kept whole. In an
+ *    all-capitals part a bare "US" is the pronoun ("CONTACT US"), so only
+ *    "IN THE US" names the market there (13 Oct 2026 review).
  * 7. Valid at PROMPT_MIN to PROMPT_MAX characters (prompt-text.ts) and 3 or
  *    more words; otherwise no prompt, with the reason.
  *
@@ -33,15 +43,26 @@ import { PROMPT_MAX, PROMPT_MIN } from "../../tracking/prompt-text.ts";
 
 export const TITLE_TOO_SHORT = "title too short to make a prompt";
 export const TITLE_TOO_LONG = "title too long to make a prompt";
+export const TITLE_ASKS_READER = "title asks the reader a question, so it makes no prompt";
+export const TITLE_NO_TOPIC = "title names no topic to make a prompt";
 export const NO_TITLE = "no title on the page";
 
 export type TitlePrompt = { ok: true; text: string } | { ok: false; reason: string };
 
 // The en dash and the em dash are written as escapes: the copy census holds the tree to hyphens.
-const SEPARATORS = / \| | - | \u2013 | \u2014 | · |: /;
+const SEPARATORS = / \| | - | \u2013 | \u2014 | · |: |\? (?=\S)/;
+/** The same cut, keeping each separator, so step 2 knows which one followed the first part. */
+const SEPARATORS_KEPT = /( \| | - | \u2013 | \u2014 | · |: |\? (?=\S))/;
 const YEAR = /\b(19|20)\d\d\b/g;
 const BRACKETS = /\([^)]*\)|\[[^\]]*\]|\{[^}]*\}/g;
+/** A subtitle that asks the reader: never the part a prompt is made from. */
 const ASKS_READER = /^(is|are|does|do|can|should|will|would|why|when|where|could|which|what|who)\b/;
+/** A first part that asks the reader something no buyer asks an engine ("is ledgerly worth it", "why freelancers love it"). */
+const READER_QUESTION = /^(is|are|does|do|did|can|could|should|will|would|has|have|why|when|where|how(?! to\b))\b/;
+/** "which accounting app is best for freelancers": already a request for a recommendation. */
+const BUYER_QUESTION = /^(which|what|who)\b.*\b(best|top|recommend\w*)\b/;
+/** "best" or "top" with no topic after it: "best for sole traders", "top in the uk". */
+const NO_TOPIC = /^(best|top)(\s+(for|in|to|of|with|under|on|among|by)\b|$)/;
 
 /** Words a prompt is counted in: runs of letters or digits. "&" and "-" are not words. */
 export const wordCount = (s: string): number => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;
@@ -71,23 +92,37 @@ export function titleOf(html: string): string | null {
 
 type Market = "UK" | "US";
 
-const MARKET_WORDS: Record<Market, RegExp[]> = {
-  // "UK" in any case. A lowercase "us" is the pronoun ("contact us"), so for the US only the capitals count.
-  UK: [/\b(?:in|for|across) the (?:uk|u\.k\.|united kingdom)(?!\w)/gi, /\b(?:uk|u\.k\.|united kingdom|great britain|britain|british)(?!\w)/gi],
-  US: [/\b(?:in|for|across) the (?:US|USA|U\.S\.A?\.?)(?!\w)/g, /\b(?:in|for|across) the united states(?!\w)/gi, /\b(?:US|USA|U\.S\.A?\.?)(?!\w)/g, /\b(?:united states|america|american)(?!\w)/gi],
-};
+/**
+ * The market's own names (13 Oct 2026 review: "American Express" lost its
+ * "American" and "British Airways" its "British"). The phrase first, so "in
+ * the UK" goes whole; then the bare name. "UK" in any case; for the US the
+ * capitals only, since a lowercase "us" is the pronoun ("contact us"), and
+ * `capsOnly` leaves a bare "US" out where every letter is a capital.
+ */
+function marketWords(market: Market, capsOnly: boolean): RegExp[] {
+  if (market === "UK") return [/\b(?:in|for|across) the (?:uk|u\.k\.|united kingdom)(?!\w)/gi, /\b(?:uk|u\.k\.|united kingdom)(?!\w)/gi];
+  return [
+    /\b(?:in|for|across) the (?:united states)(?!\w)/gi,
+    /\b(?:[Ii]n|IN|[Ff]or|FOR|[Aa]cross|ACROSS) (?:the|THE) (?:US|USA|U\.S\.A\.|U\.S\.)(?!\w)/g,
+    /\b(?:united states)(?!\w)/gi,
+    capsOnly ? /\b(?:USA|U\.S\.A\.|U\.S\.)(?!\w)/g : /\b(?:USA|U\.S\.A\.|U\.S\.|US)(?!\w)/g,
+  ];
+}
+
+/** Every letter a capital: "CONTACT US". */
+const allCaps = (s: string) => /[A-Z]/.test(s) && !/[a-z]/.test(s);
 
 const marketOf = (m: string | null | undefined): Market | null => (m === "UK" || m === "US" ? m : null);
 
-/** Whether the title names this market. */
+/** Whether the title names this market, part by part (an all-capitals "ABOUT US" part names nothing). */
 export function namesMarket(title: string, market: Market): boolean {
-  return MARKET_WORDS[market].some((r) => new RegExp(r.source, r.flags.replace("g", "")).test(title));
+  return title.split(SEPARATORS).some((part) => marketWords(market, allCaps(part)).some((r) => new RegExp(r.source, r.flags.replace("g", "")).test(part)));
 }
 
 /** Every market named in the words taken out, both markets, so a UK title for a US client says neither. */
 function dropMarkets(s: string): string {
   let out = s;
-  for (const m of ["UK", "US"] as const) for (const r of MARKET_WORDS[m]) out = out.replace(r, " ");
+  for (const m of ["UK", "US"] as const) for (const r of marketWords(m, allCaps(s))) out = out.replace(r, " ");
   return out;
 }
 
@@ -103,11 +138,22 @@ export function cleanPart(part: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
-/** Step 2: the part of the title the prompt is made from, already cleaned. */
-export function titleCore(title: string): string {
-  const parts = title.split(SEPARATORS).map(cleanPart);
+/** A first part that asks the reader: a yes-or-no or why question, or a which/what one that asks for no recommendation. */
+export function asksReader(part: string): boolean {
+  return READER_QUESTION.test(part) || (/^(which|what|who)\b/.test(part) && !BUYER_QUESTION.test(part));
+}
+
+/** Step 2: the part of the title the prompt is made from, already cleaned; null when the title asks the reader a question. */
+export function titleCore(title: string): string | null {
+  const pieces = title.split(SEPARATORS_KEPT);
+  const parts = pieces.filter((_, i) => i % 2 === 0).map(cleanPart);
+  const firstSep = pieces[1] ?? null;
   const head = parts[0] ?? "";
+  if (asksReader(head)) return null;
   if (wordCount(head) >= 3) return head;
+  // "Payroll software: the 9 best for sole traders": the head is the topic the "best" is about.
+  const next = parts[1] ?? "";
+  if (firstSep === ": " && wordCount(head) >= 1 && NO_TOPIC.test(next)) return `best ${head}${next.replace(/^(best|top)/, "")}`;
   const others = parts.slice(1).filter((p) => wordCount(p) >= 3 && !ASKS_READER.test(p));
   return others.sort((a, b) => wordCount(b) - wordCount(a) || b.length - a.length)[0] ?? head;
 }
@@ -117,9 +163,11 @@ export function promptFromTitle(title: string | null | undefined, market: string
   const raw = (title ?? "").replace(/\s+/g, " ").trim();
   if (!raw) return { ok: false, reason: NO_TITLE };
   let core = titleCore(raw);
+  if (core === null) return { ok: false, reason: TITLE_ASKS_READER };
   if (core.startsWith("top ")) core = `best ${core.slice(4)}`;
-  else if (!core.startsWith("best ") && !/ vs\.? /.test(` ${core} `) && !core.startsWith("how to ")) core = `best ${core}`;
+  else if (!core.startsWith("best ") && !/ vs\.? /.test(` ${core} `) && !core.startsWith("how to ") && !BUYER_QUESTION.test(core)) core = `best ${core}`;
   core = core.replace(/^best best /, "best ").replace(/\s+/g, " ").trim();
+  if (NO_TOPIC.test(core)) return { ok: false, reason: wordCount(core) < 3 ? TITLE_TOO_SHORT : TITLE_NO_TOPIC };
   const m = marketOf(market);
   const text = m && namesMarket(raw, m) ? `${core} in the ${m}` : core;
   if (wordCount(text) < 3 || text.length < PROMPT_MIN) return { ok: false, reason: TITLE_TOO_SHORT };

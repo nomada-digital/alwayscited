@@ -110,6 +110,16 @@ export function originLabel(o: Pick<PromptOrigin, "kind" | "domain">, mode: Upse
 }
 
 /**
+ * The chip's `data-origin` value: its kind, except that a nomada chip outside
+ * nomada mode is "contact", as its words are (13 Oct 2026 review: in
+ * placed-agency the page's own markup still said data-origin="nomada", in the
+ * HTML and the RSC payload, where spec 7.3 wants no Nomada name anywhere).
+ */
+export function originAttr(kind: OriginKind, mode: UpsellMode): string {
+  return kind === "nomada" && mode !== "nomada" ? "contact" : kind;
+}
+
+/**
  * Where a chip goes (spec 4.10): Placement to the client's placements,
  * Opportunity to its opportunity, Momentum to Google's gaining-ground block.
  * The others are not links. No W1 chip points at a page W1 has not built: no

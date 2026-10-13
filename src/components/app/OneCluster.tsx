@@ -18,6 +18,7 @@ import type { ClusterNote, Compare, OverviewData } from "@/lib/tracking/overview
 import { askedOnFor, latestAnswersNote, lostReads, runNote, todayRun } from "@/lib/tracking/run-note";
 import { answerAnchor, answerHref } from "@/lib/tracking/evidence";
 import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+import { placementBasis, placementBasisLine } from "@/lib/diy/prompts/basis";
 import type { UpsellMode } from "@/lib/tracking/ask";
 
 import AnswerFocus from "./AnswerFocus";
@@ -189,6 +190,9 @@ export default function OneCluster({
   const angle = indexed.filter(({ p }) => !isPlacementPrompt(origins, p.id));
   const placed = indexed.filter(({ p }) => isPlacementPrompt(origins, p.id));
   const mid = (angle.length * PITCH - 4) / 2;
+  // 13 Oct 2026 review (spec 6.7, "Honesty"): the summary counts every prompt, as the Overview does; when some were added
+  // from placements it says so under the figures, with the figure over the chosen prompts alone (basis.ts).
+  const placedBasis = pending ? null : placementBasis(c.prompts, origins);
 
   const fig = (label: string, figure: string, big: React.ReactNode, extra: React.ReactNode, sub: string, first = false) => (
     <div style={{ flex: "1 1 0", padding: "22px 24px", display: "flex", flexDirection: "column", gap: "8px", minWidth: 0, borderLeft: first ? undefined : `1px solid ${T.line}` }}>
@@ -311,6 +315,11 @@ export default function OneCluster({
           rel ? `Named you in ${rel.rate.num} of ${rel.rate.den} answers` : pending ? "No answers yet" : "No engine named you this period",
         )}
       </section>
+      {placedBasis ? (
+        <p data-basis="placements" style={{ margin: "-12px 0 0", fontSize: "13px", lineHeight: 1.5, color: T.soft, maxWidth: "820px" }}>
+          {placementBasisLine(placedBasis)}
+        </p>
+      ) : null}
 
       {chart ? (
         <ClusterChart

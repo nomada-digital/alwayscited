@@ -142,18 +142,30 @@ export function missingColumn(e: { code?: string; message: string } | null | und
  * Live prompts on a client or in a cluster, in one pool: the angle slots
  * (`allowance` null) or the placement allowance. Before the allowance column
  * exists every live prompt is a slot prompt and none is a placement one.
+ *
+ * 13 Oct 2026 review: the count is a HEAD request, and a failed HEAD has no
+ * body, so postgrest-js reports PostgREST's 42703 for a missing `allowance`
+ * as `{ message: "" }` with no code - `missingColumn` cannot see it. So any
+ * failure of the filtered count is answered the same way, whatever it says:
+ * - the slots pool counts every live prompt instead. Before the migration
+ *   that is the slot count exactly; after it, a failed filtered count with a
+ *   working plain one counts placement prompts as slot prompts too, which can
+ *   only refuse a prompt that would have fitted - never let one past the
+ *   limit. So a deploy that lands before 20261013010000 refuses nothing new.
+ * - the placement pool is an error, never 0: 0 would let placement prompts
+ *   past their allowance. Before the migration nothing reaches it - the
+ *   switch it waits behind is seeded by the same migration.
  */
 export async function livePromptCount(db: SupabaseClient, column: "client_domain_id" | "cluster_id", value: string, pool: "slots" | "placement"): Promise<number | string> {
   const live = () => db.from("tracked_questions").select("id", { count: "exact", head: true }).eq(column, value).is("stopped_on", null);
   const { count, error } = await (pool === "placement" ? live().eq("allowance", "placement") : live().is("allowance", null));
-  if (missingColumn(error)) {
-    if (pool === "placement") return 0;
-    const { count: all, error: allErr } = await live();
-    if (allErr) return `Could not count tracked_questions: ${allErr.message}`;
-    return all ?? 0;
-  }
-  if (error) return `Could not count tracked_questions: ${error.message}`;
-  return count ?? 0;
+  if (!error) return count ?? 0;
+  const why = error.message || "no reason given (is 20261013010000 applied?)";
+  if (pool === "placement") return `Could not count the placement prompts: ${why}`;
+  const { count: all, error: allErr } = await live();
+  if (allErr) return `Could not count tracked_questions: ${allErr.message || why}`;
+  console.warn(`[limits] the angle-slot count failed (${why}); every live prompt on ${column} ${value} counted against the slots`);
+  return all ?? 0;
 }
 
 /** The room for prompts on a client, and in a cluster when one is named. Placement prompts are not in it (DIY P2). */

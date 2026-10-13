@@ -144,7 +144,7 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
 
       {list.length === 0 ? <p style={{ color: T.soft }}>No placements logged.</p> : null}
       {list.map(({ r, check }) => (
-        <PlacementRow key={r.id as string} client={id} row={r} cluster={nameOf(r.cluster_id)} check={check} prompt={placementPrompts.find((q) => q.origin_ref === r.id && q.stopped_on === null) ?? placementPrompts.find((q) => q.origin_ref === r.id) ?? null} />
+        <PlacementRow key={r.id as string} client={id} row={r} cluster={nameOf(r.cluster_id)} check={check} prompt={placementPrompts.find((q) => q.origin_ref === r.id && q.stopped_on === null) ?? placementPrompts.find((q) => q.origin_ref === r.id) ?? null} promptsOn={promptsOn} />
       ))}
     </div>
   );
@@ -180,8 +180,14 @@ function InsertionTick() {
   );
 }
 
-/** The row's prompt line: the prompt its placement added, or none yet with the Retry. */
-function PromptLine({ client, row, prompt }: { client: string; row: Row; prompt: PlacementPrompt | null }) {
+/**
+ * The row's prompt line: the prompt its placement added, or none yet with the
+ * Retry. 13 Oct 2026 review: no Retry where it can do nothing - on-site work,
+ * which never adds a prompt, and every row while the switch is off - and the
+ * Retry posts only which row it is (updatePlacement saves no field on it), so
+ * it cannot write back a value another save has changed since this page drew.
+ */
+function PromptLine({ client, row, prompt, promptsOn }: { client: string; row: Row; prompt: PlacementPrompt | null; promptsOn: boolean }) {
   if (row.status !== "live") return null;
   if (prompt) {
     return (
@@ -190,23 +196,20 @@ function PromptLine({ client, row, prompt }: { client: string; row: Row; prompt:
       </div>
     );
   }
+  // The page's own line says the switch is off; a row has nothing to add to it.
+  if (row.kind === "on_site" || !promptsOn) return null;
   return (
     <ActionForm action={updatePlacement} submit="Retry prompt">
       <span style={{ fontSize: "12.5px", color: T.soft }}>No prompt from this placement.</span>
       <input type="hidden" name="client" value={client} maxLength={PLACEMENT_LIMITS.id} />
       <input type="hidden" name="id" value={row.id as string} maxLength={PLACEMENT_LIMITS.id} />
-      <input type="hidden" name="status" value="live" maxLength={PLACEMENT_LIMITS.id} />
-      <input type="hidden" name="scheduled_on" value={(row.scheduled_on as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.date} />
-      <input type="hidden" name="live_on" value={(row.live_on as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.date} />
-      <input type="hidden" name="anchor_text" value={(row.anchor_text as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.anchor} />
-      <input type="hidden" name="internal_note" value={(row.internal_note as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.note} />
       <input type="hidden" name="prompt" value="1" maxLength={PLACEMENT_LIMITS.id} />
       {row.kind === "link_insertion" ? <InsertionTick /> : null}
     </ActionForm>
   );
 }
 
-function PlacementRow({ client, row, cluster, check, prompt }: { client: string; row: Row; cluster: string; check: { flagged: boolean; text: string }; prompt: PlacementPrompt | null }) {
+function PlacementRow({ client, row, cluster, check, prompt, promptsOn }: { client: string; row: Row; cluster: string; check: { flagged: boolean; text: string }; prompt: PlacementPrompt | null; promptsOn: boolean }) {
   return (
     <div style={{ borderTop: `1px solid ${T.hair}`, borderLeft: check.flagged ? `3px solid ${T.badFg}` : "3px solid transparent", padding: "8px 0 8px 10px" }}>
       <div>
@@ -226,7 +229,7 @@ function PlacementRow({ client, row, cluster, check, prompt }: { client: string;
         <input name="internal_note" defaultValue={(row.internal_note as string | null) ?? ""} maxLength={PLACEMENT_LIMITS.note} placeholder="Internal note" style={{ ...input, width: "220px" }} aria-label={`Note for ${row.url_key as string}`} />
         {row.kind === "link_insertion" ? <InsertionTick /> : null}
       </ActionForm>
-      <PromptLine client={client} row={row} prompt={prompt} />
+      <PromptLine client={client} row={row} prompt={prompt} promptsOn={promptsOn} />
     </div>
   );
 }

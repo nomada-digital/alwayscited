@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { originMap } from "./origins.ts";
-import { NOT_CITED, TOO_EARLY, firstCitedBy, firstCitedLine, placementPromptOf, promptLine } from "./placement-lines.ts";
+import { NOT_CITED, NO_PROMPT, TOO_EARLY, firstCitedBy, firstCitedLine, placementPromptOf, promptLine } from "./placement-lines.ts";
 
 const ENGINES = ["google_aio", "chatgpt", "gemini", "perplexity", "claude"];
 const LABEL: Record<string, string> = { google_aio: "Google AI Overview", chatgpt: "ChatGPT", gemini: "Gemini", perplexity: "Perplexity", claude: "Claude" };
@@ -65,15 +65,17 @@ test("the placement's own prompt: a live one before a stopped one", () => {
 });
 
 test("the prompt line: added, first asked tomorrow, stopped, and each reason for none", () => {
-  const base = { kind: "guest_post", live: true, today: "2026-10-04", placementPromptsLive: 3, allowance: 10 };
+  const base = { kind: "guest_post", live: true, today: "2026-10-04" };
   assert.equal(promptLine({ ...base, prompt: { id: "x", text: "best invoicing apps for freelancers", added_on: "2026-10-04", stopped_on: null } }), "Prompt added 4 Oct: “best invoicing apps for freelancers”");
   assert.equal(promptLine({ ...base, prompt: { id: "x", text: "best invoicing apps for freelancers", added_on: "2026-10-05", stopped_on: null } }), "Prompt added: “best invoicing apps for freelancers”, first asked tomorrow");
   assert.equal(promptLine({ ...base, prompt: { id: "x", text: "t prompt here", added_on: "2026-08-01", stopped_on: "2026-10-02" } }), "Prompt “t prompt here” stopped from 2 Oct");
   assert.equal(promptLine({ ...base, prompt: { id: "x", text: "t prompt here", added_on: "2026-08-01", stopped_on: "2026-10-05" } }), "Prompt added 1 Aug: “t prompt here”", "a stop still pending is asked today");
   assert.equal(promptLine({ ...base, kind: "on_site", prompt: null }), "No prompt: on-site work adds none");
   assert.equal(promptLine({ ...base, kind: "link_insertion", prompt: null }), "No prompt: a link in an existing article adds none by default");
-  assert.equal(promptLine({ ...base, placementPromptsLive: 10, prompt: null }), "No prompt: 10 placement prompts are already asked daily");
+  // 13 Oct 2026 review: why a guest post has none is not stored, so the line does not guess (the allowance being full now
+  // says nothing of why this one has none).
   assert.equal(promptLine({ ...base, prompt: null }), "No prompt added from this article");
+  assert.equal(NO_PROMPT, "No prompt added from this article");
   assert.equal(promptLine({ ...base, live: false, prompt: null }), null, "nothing is due from a placement not live");
   for (const kind of ["guest_post", "on_site", "link_insertion", "coverage"]) {
     assert.doesNotMatch(promptLine({ ...base, kind, prompt: null }) ?? "", /nomada|caused|drove|thanks to|because of|delivered|resulted in/i, kind);
