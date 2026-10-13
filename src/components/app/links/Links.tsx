@@ -202,7 +202,7 @@ function Profile(p: LinksProps & { page: LinksPage }) {
               {p.page.compare.line}
             </p>
             <div className="lk-scroll" role="region" aria-label="You and the sites you compete with" tabIndex={0}>
-              <table className="lk-table">
+              <table className="lk-table lk-cmp">
                 <thead>
                   <tr style={{ color: T.soft, fontSize: "12px" }}>
                     <th scope="col">Site</th>
@@ -223,7 +223,7 @@ function Profile(p: LinksProps & { page: LinksPage }) {
                 <tbody>
                   {p.page.compare.rows.map((r) => (
                     <tr key={r.domain} style={{ borderTop: `1px solid ${T.line}`, fontWeight: r.you ? 650 : 400 }}>
-                      <th scope="row" style={{ fontWeight: "inherit" }} className="lk-url">
+                      <th scope="row" style={{ fontWeight: "inherit" }} className="lk-url lk-site">
                         {r.you ? `${r.domain} (you)` : r.domain}
                       </th>
                       <td className="num">{n(r.rank)}</td>

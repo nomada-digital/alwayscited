@@ -8,7 +8,9 @@
  *   with nothing to scroll sideways at 320px; a long address wraps in its box.
  * - The figures strip wraps.
  * - The compare table and the 13-week table keep their columns and scroll
- *   inside their own box on a phone, never the page.
+ *   inside their own box on a phone, never the page. The compare table holds
+ *   560px and its site column 160px (13 Oct 2026, wave 3 integration: at 390
+ *   the table shrank to the card, and a site's name wrapped a letter a line).
  */
 const CSS = `
 .lk-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.6fr) minmax(150px, auto); gap: 8px 20px; align-items: start; }
@@ -21,6 +23,8 @@ const CSS = `
 .lk-table { border-collapse: collapse; width: 100%; font-size: 14px; }
 .lk-table th, .lk-table td { text-align: left; padding: 8px 10px; vertical-align: top; }
 .lk-table td.num, .lk-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lk-cmp { min-width: 560px; }
+.lk-cmp th.lk-site { min-width: 160px; }
 .lk-bar { display: inline-block; height: 10px; border-radius: 3px; vertical-align: middle; }
 .lk-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 @media (max-width: 860px) { .lk-two { grid-template-columns: minmax(0, 1fr); } }

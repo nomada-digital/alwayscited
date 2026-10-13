@@ -4,7 +4,8 @@
  *
  *   npm run build && node --test e2e/app/diy-results.spec.mts
  *
- * One `next start` per fixture state, each on its own port (3631-3634), so
+ * One `next start` per fixture state, each on its own port (3631-3633, or
+ * E2E_PORT and the next two), so
  * the states run side by side; VERCEL_ENV=development is set, never left to a
  * pulled .env.local. Playwright from ~/code/.parity, axe from the repo's own
  * axe-core, as the other e2e/app specs.
@@ -57,7 +58,10 @@ type Context = { newPage(): Promise<Page>; close(): Promise<void> };
 type Browser = { newContext(o: object): Promise<Context>; close(): Promise<void> };
 const { chromium } = require("playwright") as { chromium: { launch(): Promise<Browser> } };
 
-const STATES = { default: 3631, new: 3632, partial: 3633 } as const;
+// E2E_PORT, when set, moves the three onto it and the next two (13 Oct 2026, wave 3 integration: a run told to use
+// only its own ports could not move this spec, whose ports were fixed).
+const PORT0 = Number(process.env.E2E_PORT ?? 3631);
+const STATES = { default: PORT0, new: PORT0 + 1, partial: PORT0 + 2 } as const;
 type State = keyof typeof STATES;
 const servers: ChildProcess[] = [];
 // localhost, not 127.0.0.1: the routes' 303s are built for the request's host (app-redirect.ts dashUrl), which says localhost.
