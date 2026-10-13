@@ -20,6 +20,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 export const dynamic = "force-dynamic";
+// Drawn again from the router's memory for 300 s after a visit (13 Oct 2026, src/components/app/fresh.ts).
+// A literal, because Next reads it at build; prefetch.test.mts holds it equal to FRESH_SECONDS.
+export const unstable_dynamicStaleTime = 300;
 
 /** Private - noindex here as well as in the layout, the header rule and robots.txt. */
 export const metadata: Metadata = {

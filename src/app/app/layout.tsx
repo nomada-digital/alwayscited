@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { FreshGuard } from "@/components/app/FreshGuard";
 import { UsageBeacon } from "@/components/app/UsageBeacon";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
@@ -23,6 +24,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <span data-app-tree hidden />
       {children}
       <UsageBeacon />
+      {/* Caps the age of a page drawn from the router's memory (13 Oct 2026, fresh.ts). */}
+      <FreshGuard />
     </>
   );
 }

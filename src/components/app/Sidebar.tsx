@@ -221,6 +221,10 @@ export default function Sidebar({
   // a soft navigation with the pending bar, not a full reload. The client
   // switcher stays a plain <a>: a different client is a fresh page.
   // DS38 (2 Oct 2026, R173 pass 4): a stated range rides along, so Clusters after a 7-day Overview is still 7 days.
+  // Speed (13 Oct 2026, fresh.ts): the nav, the tabs and More's sheet - and only they - are prefetch={true}, so
+  // each page is rendered whole as its link comes into view and the click makes no request. Hidden links (the
+  // other shell's, a closed sheet) are never in view and cost nothing. "+ Add" and every in-page link keep Next's
+  // default, which on these pages is a route-tree read with no render; prefetch.test.mts holds the three.
   const hrefOf = (item: string) => {
     const href = navHref(item, client.slug);
     return href && href + keep;
@@ -375,6 +379,7 @@ export default function Sidebar({
                   <Link
                     key={item}
                     href={href}
+                    prefetch={true}
                     aria-current={on ? "page" : undefined}
                     style={{ ...row, background: on ? T.wash : "transparent", color: on ? T.accent : T.ink, fontWeight: on ? 600 : 500 }}
                   >
@@ -460,7 +465,7 @@ export default function Sidebar({
             );
           }
           return (
-            <Link key={item} href={href} aria-current={on ? "page" : undefined} className="app-tab" style={{ ...tab, color: on ? T.accent : T.soft }}>
+            <Link key={item} href={href} prefetch={true} aria-current={on ? "page" : undefined} className="app-tab" style={{ ...tab, color: on ? T.accent : T.soft }}>
               <NavIcon item={item} size={20} />
               {/* 13 Oct 2026, DIY P5: "AI" on the tab for AI visibility (TAB_LABEL); the same item, current on its page. */}
               <span className="app-tab-label">{TAB_LABEL[item] ?? item}</span>
@@ -509,7 +514,7 @@ export default function Sidebar({
                   {g.items.map((item) => {
                     const on = item === current;
                     return (
-                      <Link key={item} href={hrefOf(item)!} aria-current={on ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "0 10px", borderRadius: "8px", fontSize: "14px", fontWeight: on ? 600 : 500, color: on ? T.accent : T.ink, background: on ? T.wash : "transparent", textDecoration: "none" }}>
+                      <Link key={item} href={hrefOf(item)!} prefetch={true} aria-current={on ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "0 10px", borderRadius: "8px", fontSize: "14px", fontWeight: on ? 600 : 500, color: on ? T.accent : T.ink, background: on ? T.wash : "transparent", textDecoration: "none" }}>
                         <span style={{ display: "flex", color: on ? T.accent : T.soft }}>
                           <NavIcon item={item} size={18} />
                         </span>
