@@ -125,8 +125,10 @@ test("every route that spends money refuses GET, except the email link", () => {
   // name: the scan's five (start, confirm, questions, email-report, walkthrough), the coverage check's three, the
   // tier pages' walkthrough, app/login, the dashboard's ask, check, member and setup, the tracking pair (cron/track,
   // track/run), the DIY night three (diy/run and the two night crons), and wave 2's opportunity and pages doors.
+  // Raised 13 Oct 2026 (DIY P10, wave 3): 22 - and Links' door, app/[client]/links (Check a link's paid fallback
+  // through runOnDemand; reveal and Pursue read stored rows only). POST only, as every one of them.
   assert.ok(
-    paid.length >= 21,
+    paid.length >= 22,
     `only ${paid.length} paid routes detected - the spend walk in spenders.mts has gone blind: ` +
       paid.map((r) => r.name).join(", "),
   );

@@ -106,6 +106,13 @@ ICONS.Opportunities = (
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
   </>
 );
+// 13 Oct 2026, DIY P10: Links (spec 10 section 3.1, "after W3") - two chain links.
+ICONS.Links = (
+  <>
+    <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" />
+    <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />
+  </>
+);
 ICONS["Your pages"] = (
   <>
     <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />

@@ -162,15 +162,17 @@ test("1280: the nav in its groups, Overview alone, Actions the word for the Plan
     [
       [null, ["Overview"]],
       ["Results", ["AI visibility", "Google", "Who is named", "Cited pages"]],
-      ["Do", ["Actions", "Opportunities", "Your pages"]],
+      ["Do", ["Actions", "Opportunities", "Links", "Your pages"]],
       ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
     // 13 Oct 2026, DIY P9 (spec 10 section 3.1, after W2): Google in Results, Opportunities and Your pages in Do.
+    // 13 Oct 2026, DIY P10 (spec 10 section 3.1, after W3): Links in Do, between Opportunities and Your pages.
     "the default fixture is on alwaystracked, so Do has no Placements (placed tiers')",
   );
   assert.match(nav[1]!.hrefs[1]!, /\/tallyroo\/google$/, "Google opens /google");
   assert.match(nav[2]!.hrefs[1]!, /\/tallyroo\/opportunities$/, "Opportunities opens /opportunities");
-  assert.match(nav[2]!.hrefs[2]!, /\/tallyroo\/pages$/, "Your pages opens /pages");
+  assert.match(nav[2]!.hrefs[2]!, /\/tallyroo\/links$/, "Links opens /links");
+  assert.match(nav[2]!.hrefs[3]!, /\/tallyroo\/pages$/, "Your pages opens /pages");
   assert.match(nav[2]!.hrefs[0]!, /\/tallyroo\/plan$/, "Actions opens /plan");
   // Group labels are MICRO and sentence case, never upper case, and never links.
   const labels = await page.evaluate(() => [...document.querySelectorAll('aside.app-side nav[aria-label="Dashboard"] > div > span')].map((s) => ({ t: s.textContent, tt: getComputedStyle(s).textTransform, fs: getComputedStyle(s).fontSize, a: !!s.closest("a") })));
@@ -217,7 +219,7 @@ test("390: More's sheet has the groups as headed lists, marks the current page, 
     [
       ["Add", ["Add a keyword", "Add a prompt", "Add a task", "Add a page to check", "Log a site I found"]],
       ["Results", ["Who is named", "Cited pages"]],
-      ["Do", ["Opportunities", "Your pages"]],
+      ["Do", ["Opportunities", "Links", "Your pages"]],
       ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
   );

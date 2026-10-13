@@ -82,6 +82,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   // 13 Oct 2026, DIY P7: Opportunities and one opportunity (spec 10 section 4.7).
   "/app/[client]/opportunities": "the pages the engines cite that leave one client out, and how to approach them; private, same membership 404",
   "/app/[client]/opportunities/[id]": "one opportunity's brief and status; private, same membership 404, and a 404 for an opportunity not the client's",
+  // 13 Oct 2026, DIY P10 (spec 10 section 4.8).
+  "/app/[client]/links": "one client's link profile, its link gap, link targets and mentions, and Check a link; private, same membership 404",
   // 13 Oct 2026, DIY P8: Your pages and one key page.
   "/app/[client]/pages": "one client's key pages, their crawler access and the schema examples; private, same membership 404",
   "/app/[client]/pages/[page]": "one key page's schema, fit, basics and history; private, same membership 404, and a 404 for a page not the client's live key page",

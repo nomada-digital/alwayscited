@@ -325,7 +325,9 @@ test("Settings: this month's research - counts, never dollars - and only Pursuin
   assert.match(block, /Link checks\s+\d+ of 30/);
   assert.match(block, /Pursuing\s+\d+ of 10/);
   assert.match(block, /Resets \d{1,2} \w{3}\./);
-  assert.doesNotMatch(block, /[$£€]|Link targets/, "no money, and no link targets until Links is built (wave 3)");
+  // 13 Oct 2026, DIY P10: Links is built (wave 3), so its link targets join the block (spec 10 section 4.13).
+  assert.match(block, /Link targets\s+\d+ of 5/);
+  assert.doesNotMatch(block, /[$£€]/, "no money");
   assert.deepEqual(await axe(page), []);
   await ctx.close();
   as("default", { diy: "dark" });

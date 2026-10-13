@@ -48,8 +48,8 @@ export default async function ClientSettings({ params, searchParams }: { params:
   // perf-4 (8 Oct 2026): Settings draws the clusters and prompts only, so no answer is read.
   const [structure, upgrade, settings] = await Promise.all([repo.structure(client.id), repo.upgradeContext(client.id, email, today), repo.settings(client.id)]);
   // 13 Oct 2026, DIY P9 (spec 10 section 4.13): this month's research, counts only. Each count is read on its own
-  // (loadDiyUsage); a whole failure says so in its section and the rest of Settings draws. Link targets are wave 3's
-  // (P10's Links), so their row is left out until that page exists.
+  // (loadDiyUsage); a whole failure says so in its section and the rest of Settings draws. 13 Oct 2026, DIY P10:
+  // Links is built (wave 3), so the link targets row is drawn too ("Link targets: 5 of 5", section 4.13).
   const research: DiyUsage | { failed: true } = await (async () => {
     try {
       const diy = diyClient(
@@ -57,8 +57,7 @@ export default async function ClientSettings({ params, searchParams }: { params:
         { setupConfirmedAt: null, upsellMode: upgrade.mode },
         repo.now(),
       );
-      const usage = await loadDiyUsage(fixtureMode() ? null : supabaseAdmin(), diy, repo.now());
-      return { ...usage, rows: usage.rows.filter((r) => r.key !== "link_targets") };
+      return await loadDiyUsage(fixtureMode() ? null : supabaseAdmin(), diy, repo.now());
     } catch (err) {
       console.warn(`[diy] settings research: ${err instanceof Error ? err.message : String(err)}`);
       return { failed: true as const };

@@ -25,7 +25,11 @@ test("JOB_HANDLERS passes refuseHandlers, so the dispatcher queues it", () => {
  * itself (pursuing and pitched weekly, won monthly), and free: it reads with
  * our own fetch only, so a page it cannot read waits for the next due day.
  */
-test("wave 2 runs eight jobs: their kinds, paid or free, cadence, priority and onboarding", () => {
+/**
+ * 13 Oct 2026, DIY P10: the fact moved - wave 3's two Backlinks jobs join, both paid: backlinks_weekly (weekly,
+ * and onboarding, as the summary is part of the first night's reads, spec 10 section 5.5) and backlinks_monthly.
+ */
+test("wave 3 runs ten jobs: their kinds, paid or free, cadence, priority and onboarding", () => {
   assert.deepEqual(
     JOB_HANDLERS.map((h) => ({ kind: h.kind, paid: h.paid, cadence: h.cadence, priority: h.priority, onboarding: h.onboarding })),
     [
@@ -37,6 +41,8 @@ test("wave 2 runs eight jobs: their kinds, paid or free, cadence, priority and o
       { kind: "watch", paid: false, cadence: "daily", priority: 5, onboarding: false },
       { kind: "key_pages_weekly", paid: false, cadence: "weekly", priority: 3, onboarding: true },
       { kind: "key_pages_monthly", paid: true, cadence: "monthly", priority: 6, onboarding: true },
+      { kind: "backlinks_weekly", paid: true, cadence: "weekly", priority: 7, onboarding: true },
+      { kind: "backlinks_monthly", paid: true, cadence: "monthly", priority: 8, onboarding: false },
     ],
   );
   for (const h of JOB_HANDLERS) assert.equal(typeof h.run, "function", `${h.kind} has no run`);
@@ -48,18 +54,22 @@ test("wave 2 runs eight jobs: their kinds, paid or free, cadence, priority and o
  * confirmed client while diy_enabled is on (dispatch.ts), and each read goes
  * through P1's doors and the ledger (spend-gates.test.mts).
  */
-test("the paid kinds are exactly wave 2's four: footprint, page_reads, classify, key_pages_monthly", () => {
+/** 13 Oct 2026, DIY P10: the fact moved - wave 3's two Backlinks kinds are paid, through P1's doors and the ledger. */
+test("the paid kinds are wave 2's four and wave 3's two", () => {
   assert.deepEqual(
     JOB_HANDLERS.filter((h) => h.paid).map((h) => h.kind),
-    ["footprint", "page_reads", "classify", "key_pages_monthly"],
+    ["footprint", "page_reads", "classify", "key_pages_monthly", "backlinks_weekly", "backlinks_monthly"],
   );
 });
 
-/** 13 Oct 2026, DIY P9 (spec 10 section 6.1): tracking + keywords + opportunities + pages, in that order. */
-test("the Plan's candidates come from the four wave 2 sources, in the spec's order", () => {
+/**
+ * 13 Oct 2026, DIY P9 (spec 10 section 6.1): tracking + keywords + opportunities + pages, in that order.
+ * 13 Oct 2026, DIY P10: the fact moved - links (Reclaim) joins last.
+ */
+test("the Plan's candidates come from the four wave 2 sources and wave 3's links, in the spec's order", () => {
   assert.deepEqual(
     CANDIDATE_SOURCES.map((s) => s.name),
-    ["tracking", "keywords", "opportunities", "pages"],
+    ["tracking", "keywords", "opportunities", "pages", "links"],
   );
   for (const s of CANDIDATE_SOURCES) assert.equal(typeof s.gather, "function", `${s.name} has no gather`);
   assert.equal(new Set(CANDIDATE_SOURCES.map((s) => s.name)).size, CANDIDATE_SOURCES.length, "a candidate source is registered twice");

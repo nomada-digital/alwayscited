@@ -1,0 +1,495 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint (the example in its v3 documentation, read 13 Oct 2026); every host, title, anchor and text is made up (Tallyroo and every brand here are illustrative, other hosts are .example), and the counts are illustrative. Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20230825",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "6.1727 sec.",
+  "cost": 0.02015,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "09291837-1535-0268-0000-0020bcf36b3e",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "6.1208 sec.",
+      "cost": 0.02015,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "backlinks",
+        "domain_intersection",
+        "live"
+      ],
+      "data": {
+        "api": "backlinks",
+        "function": "domain_intersection",
+        "targets": {
+          "1": "ledgerline.com",
+          "2": "brightbook.example",
+          "3": "countwise.example"
+        },
+        "exclude_targets": [
+          "tallyroo.com"
+        ],
+        "intersection_mode": "partial",
+        "backlinks_filters": [
+          [
+            "dofollow",
+            "=",
+            true
+          ],
+          "and",
+          [
+            "backlink_spam_score",
+            "<",
+            30
+          ]
+        ],
+        "filters": [
+          "intersections_count",
+          ">=",
+          2
+        ],
+        "order_by": [
+          "intersections_count,desc"
+        ],
+        "limit": 100
+      },
+      "result": [
+        {
+          "targets": {
+            "1": "ledgerline.com",
+            "2": "brightbook.example",
+            "3": "countwise.example"
+          },
+          "total_count": 4,
+          "items_count": 4,
+          "items": [
+            {
+              "domain_intersection": {
+                "1": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "thesmallbizstack.com",
+                  "rank": 310,
+                  "backlinks": 12,
+                  "first_seen": "2024-05-11 08:01:00 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "blogs": 9,
+                    "cms": 9
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "2": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "thesmallbizstack.com",
+                  "rank": 290,
+                  "backlinks": 12,
+                  "first_seen": "2024-05-11 08:01:00 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "blogs": 9,
+                    "cms": 9
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "3": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "thesmallbizstack.com",
+                  "rank": 275,
+                  "backlinks": 12,
+                  "first_seen": "2024-05-11 08:01:00 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "blogs": 9,
+                    "cms": 9
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                }
+              },
+              "summary": {
+                "intersections_count": 3
+              }
+            },
+            {
+              "domain_intersection": {
+                "1": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "freelancefieldnotes.com",
+                  "rank": 240,
+                  "backlinks": 12,
+                  "first_seen": "2025-02-19 13:30:12 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "unknown": 12
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "3": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "freelancefieldnotes.com",
+                  "rank": 228,
+                  "backlinks": 12,
+                  "first_seen": "2025-02-19 13:30:12 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "unknown": 12
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                }
+              },
+              "summary": {
+                "intersections_count": 2
+              }
+            },
+            {
+              "domain_intersection": {
+                "1": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "accountingforum.example",
+                  "rank": 190,
+                  "backlinks": 12,
+                  "first_seen": "2025-08-02 21:44:09 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "message-boards": 7
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "2": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "accountingforum.example",
+                  "rank": 205,
+                  "backlinks": 12,
+                  "first_seen": "2025-08-02 21:44:09 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "message-boards": 7
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "3": null
+              },
+              "summary": {
+                "intersections_count": 2
+              }
+            },
+            {
+              "domain_intersection": {
+                "2": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "softwarecritic.com",
+                  "rank": 330,
+                  "backlinks": 12,
+                  "first_seen": "2023-11-30 10:10:10 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "news": 4,
+                    "cms": 4
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                },
+                "3": {
+                  "type": "backlinks_domain_intersection",
+                  "target": "softwarecritic.com",
+                  "rank": 301,
+                  "backlinks": 12,
+                  "first_seen": "2023-11-30 10:10:10 +00:00",
+                  "lost_date": null,
+                  "backlinks_spam_score": 3,
+                  "broken_backlinks": 0,
+                  "broken_pages": 0,
+                  "referring_domains": 1,
+                  "referring_domains_nofollow": 0,
+                  "referring_main_domains": 1,
+                  "referring_main_domains_nofollow": 0,
+                  "referring_ips": 1,
+                  "referring_subnets": 1,
+                  "referring_pages": 9,
+                  "referring_links_tld": {
+                    "com": 69688
+                  },
+                  "referring_links_types": {
+                    "anchor": 69668,
+                    "image": 20
+                  },
+                  "referring_links_attributes": {
+                    "noopener": 69607,
+                    "nofollow": 24,
+                    "noreferrer": 20,
+                    "sponsored": 6,
+                    "ugc": 6,
+                    "external": 5
+                  },
+                  "referring_links_platform_types": {
+                    "news": 4,
+                    "cms": 4
+                  },
+                  "referring_links_semantic_locations": {
+                    "": 69236,
+                    "article": 432,
+                    "figure": 20
+                  },
+                  "referring_links_countries": null,
+                  "referring_pages_nofollow": 1
+                }
+              },
+              "summary": {
+                "intersections_count": 2
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -28,6 +28,18 @@ export const DIY_ENDPOINTS = [
   "content_parsing",
   "diy_classify",
   "diy_example",
+  // 13 Oct 2026, DIY P10 (spec 10 sections 5.1 and 5.2): wave 3's Backlinks and Content Analysis reads, named as
+  // dataforseo-request.ts DIY_LINK_PATHS keys them.
+  "backlinks_summary",
+  "backlinks_links",
+  "backlinks_series",
+  "backlinks_bulk_ranks",
+  "backlinks_bulk_domains",
+  "backlinks_bulk_new_lost",
+  "backlinks_domain_gap",
+  "backlinks_page_gap",
+  "backlinks_competitors",
+  "content_search",
 ] as const;
 export type DiyEndpoint = (typeof DIY_ENDPOINTS)[number];
 
@@ -35,7 +47,7 @@ export type DiyEndpoint = (typeof DIY_ENDPOINTS)[number];
 export const DOORS = ["labs", "backlinks", "onpage", "content", "model"] as const;
 export type Door = (typeof DOORS)[number];
 
-/** Which door each launch endpoint goes through. Backlinks and content are W3's (P10). */
+/** Which door each endpoint goes through. Backlinks and content are W3's (P10), as dataforseo-request.ts DIY_LINK_DOOR records them. */
 export const DOOR_OF: Record<DiyEndpoint, Door> = {
   ranked_keywords: "labs",
   relevant_pages: "labs",
@@ -44,6 +56,16 @@ export const DOOR_OF: Record<DiyEndpoint, Door> = {
   content_parsing: "onpage",
   diy_classify: "model",
   diy_example: "model",
+  backlinks_summary: "backlinks",
+  backlinks_links: "backlinks",
+  backlinks_series: "backlinks",
+  backlinks_bulk_ranks: "backlinks",
+  backlinks_bulk_domains: "backlinks",
+  backlinks_bulk_new_lost: "backlinks",
+  backlinks_domain_gap: "backlinks",
+  backlinks_page_gap: "backlinks",
+  backlinks_competitors: "backlinks",
+  content_search: "content",
 };
 
 /**
@@ -81,6 +103,20 @@ export function dfsEstimate(endpoint: DiyEndpoint, rows: number): number {
       return DFS_PRICES.instantPagesJs;
     case "content_parsing":
       return DFS_PRICES.contentParsing;
+    // 13 Oct 2026, DIY P10: a Backlinks or Content Analysis read bills its request and every row up to its limit
+    // (section 5.1: $0.024 + $0.000036 a row); a summary reserves one row ([VERIFY] on its first task.cost).
+    case "backlinks_summary":
+    case "backlinks_links":
+    case "backlinks_series":
+    case "backlinks_bulk_ranks":
+    case "backlinks_bulk_domains":
+    case "backlinks_bulk_new_lost":
+    case "backlinks_domain_gap":
+    case "backlinks_page_gap":
+    case "backlinks_competitors":
+      return round5(DFS_PRICES.backlinks.request + Math.max(0, rows) * DFS_PRICES.backlinks.row);
+    case "content_search":
+      return round5(DFS_PRICES.content.request + Math.max(0, rows) * DFS_PRICES.content.row);
     case "diy_classify":
     case "diy_example":
       throw new Error(`${endpoint} is a model call: use modelEstimate`);

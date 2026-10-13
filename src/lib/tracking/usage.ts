@@ -53,6 +53,12 @@ export const USAGE_EVENTS = [
   "example_request",
   "fix_copy",
   "example_copy",
+  // 13 Oct 2026, DIY P10 (spec 10 section 7.11): wave 3's, on Links. "Show the next 5" link targets revealed
+  // (link_reveal), Check a link (link_check), and a gap domain, revealed page or mention pursued (link_pursue). Names
+  // only: never a domain, a URL or an anchor.
+  "link_reveal",
+  "link_check",
+  "link_pursue",
 ] as const;
 
 export type UsageEvent = (typeof USAGE_EVENTS)[number];
