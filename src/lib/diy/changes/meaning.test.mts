@@ -30,14 +30,17 @@ const h = (over: Partial<HeadlineInput> = {}): HeadlineInput => ({
 test("headline: the spec's three variants", () => {
   assert.deepEqual(headline(h({ firstReading: "2026-10-14", named: rate(31, 200), lfl: null, compareKind: null, keywords: { onPage1: 3, of: 10, before: null, cluster: true } })), {
     variant: "first",
+    count: "31 of 200 AI answers",
     text: "First reading on 14 Oct: named in 31 of 200 AI answers to your 50 prompts (16%). 3 of 10 cluster keywords on Google's page 1. Change figures start from the next check.",
   });
   assert.deepEqual(headline(h()), {
     variant: "compared",
+    count: "412 of 5,600 AI answers",
     text: "Named in 412 of 5,600 AI answers to your 50 prompts in the last 28 days (7%), up from 5% in the 28 days before, same prompts. 4 of 10 cluster keywords are on Google's page 1, was 3.",
   });
   assert.deepEqual(headline(h({ lfl: null, compareKind: null })), {
     variant: "plain",
+    count: "412 of 5,600 AI answers",
     text: "Named in 412 of 5,600 AI answers to your 50 prompts in the last 28 days (7%). 4 of 10 cluster keywords are on Google's page 1, was 3.",
   });
 });
@@ -68,6 +71,12 @@ test("headline: period and comparison words, keywords with no 'was' on different
   assert.equal(beforeWords("first", L28), "on your first reading");
   assert.equal(beforeWords("start", L28), "in your first week");
   assert.equal(beforeWords("prev", { from: "2026-10-08", to: TODAY }), "in the 7 days before");
+  // Review of P4 (13 Oct 2026): a one-day range read "in the 1 days before".
+  assert.equal(beforeWords("prev", { from: TODAY, to: TODAY }), "on the day before");
+  assert.equal(
+    headline(h({ range: { from: TODAY, to: TODAY }, named: rate(49, 180), prompts: 45, lfl: { now: rate(49, 180), before: rate(50, 180), basis: "clusters", count: 9 }, keywords: null })).text,
+    "Named in 49 of 180 AI answers to your 45 prompts today (27%), down from 28% on the day before, same clusters.",
+  );
   assert.match(headline(h({ keywords: { onPage1: 1, of: 10, before: null, cluster: false } })).text, /same prompts\. 1 of 10 keywords is on Google's page 1\.$/);
   assert.match(headline(h({ keywords: { onPage1: 0, of: 0, before: null, cluster: true } })).text, /same prompts\.$/);
   assert.match(headline(h({ keywords: null })).text, /same prompts\.$/);
@@ -156,6 +165,9 @@ test("on the fixture: per-cluster changes are like for like, and only over perio
     assert.deepEqual([c.now, c.before], [count(range), count(compare)], c.label);
   }
   assert.deepEqual(clusterChanges({ clusters, prompts: d.questions, answers: d.answers, range, compare: { from: compare.from, to: addDays(compare.to, -21) }, lfl }), []);
+  // Review of P4 (13 Oct 2026): nor when one period has check days the other lacks - counts, not a change.
+  const stopped = d.answers.filter((a) => a.run_date <= addDays(range.to, -10));
+  assert.deepEqual(clusterChanges({ clusters, prompts: d.questions, answers: stopped, range, compare, lfl }), []);
   // The engines bullet counts what engineRates counts on the fixture.
   const rates = engineRates(d.answers, range, ["google_aio", "chatgpt", "gemini", "perplexity"]);
   const b = whatItMeans({ first: false, engines: rates, keywords: [], cluster: true, clusters: changes });

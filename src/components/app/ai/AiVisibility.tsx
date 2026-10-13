@@ -96,6 +96,8 @@ export type AiProps = {
   marks?: ChartMark[];
   /** P2's OriginChip in the origin column, once P5 wires it; the plain label until then. */
   originCell?: (row: PromptRow) => React.ReactNode;
+  /** U1's Hide or Ask, back on this page (review of P4, 13 Oct 2026): the page's fixed words, and whether it went through. */
+  notice?: { text: string; done: boolean } | null;
 };
 
 export default function AiVisibility(p: AiProps) {
@@ -105,7 +107,8 @@ export default function AiVisibility(p: AiProps) {
   const cmp = resolveComparison(range, p.compareMode, p.startedOn, firstCheck, firstReadComplete(data.runs, firstCheck));
   const before = cmp.range;
   const cards = clusterCards({ clusters: data.clusters ?? [], questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today, engines });
-  const clusters = cards.map((c) => ({ id: c.id, label: c.keyword ?? c.name }));
+  // Each card's own prompt list: a row's ?prompt= is its place there (review of P4, 13 Oct 2026).
+  const clusters = cards.map((c) => ({ id: c.id, label: c.keyword ?? c.name, prompts: c.prompts.map((q) => q.id) }));
   // A cluster whose first check is still to come has nothing to filter to.
   const read = cards.filter((c) => c.status !== "pending").map((c) => ({ id: c.id, label: c.keyword ?? c.name }));
   const loadedFrom = comparisonRange(range, p.compareMode)?.from ?? range.from;
@@ -153,6 +156,12 @@ export default function AiVisibility(p: AiProps) {
   // The table: the set filters, the missing lens and the search; sorted; a page of 100.
   const listed = filterRows(all, { ...set, missing: p.missing, q: p.q });
   const missingCount = filterRows(all, { ...set, missing: true, q: p.q }).length;
+  // The "Prompts you are named in" figure's link opens the missing lens on the figure's own scope - every engine and
+  // no search - and says the count that lens will show (review of P4, 13 Oct 2026: "5 never name you" opened a lens of 6
+  // with ?eng=chatgpt). Those that name others are a subset of those never naming you, so the two counts can differ.
+  const allEngineRows = p.engine ? promptRows({ prompts: data.questions, clusters, answers: data.answers, range, loadedFrom, engines, origins, brand, domain: p.domain }) : all;
+  const missingAll = filterRows(allEngineRows, { ...set, missing: true, q: "" }).length;
+  const neverNamed = promptsNamed.den - promptsNamed.num;
   const sorted = sortRows(listed, p.sort, p.dir);
   const shown = pageOf(sorted, p.page);
   const sortLink: SortLink = (s) => {
@@ -161,7 +170,13 @@ export default function AiVisibility(p: AiProps) {
     return { href: href({ sort: s === "cluster" ? null : s, dir: s === "cluster" && dir === "asc" ? null : dir, page: null }), dir: on ? p.dir : null };
   };
   const rowHref = (r: PromptRow) => (r.clusterId && r.index !== null ? `${clustersPath}/${encodeURIComponent(r.clusterId)}?${new URLSearchParams({ ...base, prompt: String(r.index) })}` : null);
-  const originCell = p.originCell ?? ((r: PromptRow) => <span style={{ display: "inline-flex", fontSize: "12px", fontWeight: 600, color: T.ink, background: T.chip, borderRadius: "999px", padding: "3px 9px", whiteSpace: "nowrap" }}>{originLabel(r.origin, p.mode)}</span>);
+  // No recorded origin, no chip (review of P4, 13 Oct 2026): it read "Setup", which a cluster added later is not.
+  const originCell =
+    p.originCell ??
+    ((r: PromptRow) => {
+      const words = originLabel(r.origin, p.mode);
+      return words ? <span style={{ display: "inline-flex", fontSize: "12px", fontWeight: 600, color: T.ink, background: T.chip, borderRadius: "999px", padding: "3px 9px", whiteSpace: "nowrap" }}>{words}</span> : null;
+    });
 
   // The chart: the set's prompts, the picked engine and like-for-like in the URL; prompts added in the range as markers.
   const toChart = (days: ReturnType<typeof dailySeries>): ChartDay[] => days.map((d) => ({ label: formatDay(d.day), all: d.all, by: d.by }));
@@ -171,8 +186,10 @@ export default function AiVisibility(p: AiProps) {
   const added = data.questions.filter((q) => q.added_on > range.from && q.added_on <= range.to && (!only || only.has(q.id)));
   const promptMarks: ChartMark[] = [...new Set(added.map((q) => q.added_on))].map((d) => {
     const these = added.filter((q) => q.added_on === d);
-    const kinds = [...new Set(these.map((q) => originLabel(all.find((r) => r.id === q.id)?.origin ?? null, p.mode)))];
-    return { date: d, kind: "prompt", label: these.length === 1 ? `'${these[0]!.text}' (${kinds[0]})` : `${these.length} prompts (${kinds.join(", ")})` };
+    // Only recorded origins are said; with none recorded the marker names no origin.
+    const kinds = [...new Set(these.map((q) => originLabel(all.find((r) => r.id === q.id)?.origin ?? null, p.mode)).filter((k): k is string => k !== null))];
+    const from = kinds.length ? ` (${kinds.join(", ")})` : "";
+    return { date: d, kind: "prompt", label: these.length === 1 ? `'${these[0]!.text}'${from}` : `${these.length} prompts${from}` };
   });
 
   // The never-named prompt (U1), on its own facts; never on an empty or partial page.
@@ -219,6 +236,24 @@ export default function AiVisibility(p: AiProps) {
         </DatePicker>
       </header>
 
+      {p.notice ? (
+        p.notice.done ? (
+          // As the Clusters page draws it (CTAs.dc.html "After Ask about these"): a dark pill with the good pair's tick.
+          <p role="status" data-ai-notice="done" style={{ margin: 0, display: "flex", alignItems: "center", gap: "12px", padding: "12px 16px", borderRadius: "14px", background: T.ink, color: T.surface, fontSize: "14px", lineHeight: 1.4, alignSelf: "flex-start", maxWidth: "100%", boxSizing: "border-box" }}>
+            <span aria-hidden="true" style={{ flexShrink: 0, width: "22px", height: "22px", borderRadius: "50%", background: T.goodBg, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.goodFg} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12l5 5 9-10" />
+              </svg>
+            </span>
+            {p.notice.text}
+          </p>
+        ) : (
+          <p role="status" data-ai-notice="refused" style={{ margin: 0, padding: "12px 16px", borderRadius: "12px", background: T.wash, border: `1px solid ${T.washLine}`, fontSize: "14px", color: T.ink }}>
+            {p.notice.text}
+          </p>
+        )
+      ) : null}
+
       {!all.length ? (
         <section aria-label="No prompts yet" style={{ ...CARD, padding: "28px", display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start" }}>
           <h2 style={H2}>{pending ? "Your prompts start tomorrow" : "No prompts in this range"}</h2>
@@ -243,9 +278,9 @@ export default function AiVisibility(p: AiProps) {
                 id: "ai-prompts",
                 label: "Prompts you are named in",
                 value: <Fig def={basis(promptsNamed, "prompts answered")} style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "-0.03em" }}>{`${promptsNamed.num} of ${promptsNamed.den}`}</Fig>,
-                foot: `${promptsNamed.den - promptsNamed.num} never name you`,
-                to: `${href({ missing: "1", page: null })}#ai-prompts-h`,
-                more: "See them",
+                foot: `${neverNamed} never name you${missingAll && missingAll < neverNamed ? `; answers to ${missingAll} of them name other brands` : ""}`,
+                to: missingAll ? `${href({ missing: "1", eng: null, q: null, page: null })}#ai-prompts-h` : null,
+                more: missingAll === neverNamed ? "See them" : `See the ${missingAll} naming others`,
               },
               {
                 id: "ai-engine",
@@ -441,7 +476,8 @@ export default function AiVisibility(p: AiProps) {
                 ) : null}
               </nav>
             ) : null}
-            {upgrade && cta ? <UpgradePrompt copy={upgrade} cta={cta} slug={p.slug} items={facts.neverNamed?.ids ?? []} keep={base} /> : null}
+            {/* Review of P4 (13 Oct 2026): surface "ai" brings Hide and Ask back here, to this view, with their toast. */}
+            {upgrade && cta ? <UpgradePrompt copy={upgrade} cta={cta} slug={p.slug} items={facts.neverNamed?.ids ?? []} keep={{ ...state, ...(p.page > 1 ? { page: String(p.page) } : {}) }} surface="ai" /> : null}
           </section>
 
           {cards.some((c) => c.status !== "pending") ? (

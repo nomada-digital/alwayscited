@@ -26,6 +26,7 @@ const ans = (d: number, q: string, engine: string, named: boolean, over: Partial
 
 const base = (answers: DiffAnswer[], over: Partial<DiffInput> = {}): DiffInput => ({
   today: TODAY,
+  firstCheck: null,
   answers,
   serp: [],
   runs: [12, 13, 14].map((d) => ({ run_date: day(d), status: "complete", error: null })),
@@ -61,6 +62,17 @@ test("fewer than 3 days of checks: changes start later", () => {
   // A day outside the window is not a day of checks.
   assert.deepEqual(diffChecks(base(steady([7, 13, 14]))), { state: "early", days: 2 });
   assert.deepEqual(ok(base(steady())).lines, []);
+  // Checks that began inside the window: fewer than three ever, so changes start later.
+  assert.deepEqual(diffChecks(base(steady([13, 14]), { firstCheck: day(13) })), { state: "early", days: 2 });
+  assert.deepEqual(diffChecks(base(steady([13, 14]), { firstCheck: day(8) })), { state: "early", days: 2 });
+});
+
+test("fewer than 3 days of checks in the week, on a client checked before it: a quiet week, not 'changes start' (review of P4, 13 Oct 2026)", () => {
+  // An ended client, paused checks or a week of failed runs: months of readings, few or none this week.
+  assert.deepEqual(diffChecks(base(steady([13, 14]), { firstCheck: day(1) })), { state: "quiet", days: 2 });
+  assert.deepEqual(diffChecks(base([], { firstCheck: "2026-08-01" })), { state: "quiet", days: 0 });
+  // Three days in the window reads as before, whenever the checks began.
+  assert.equal(diffChecks(base(steady(), { firstCheck: "2026-08-01" })).state, "ok");
 });
 
 test("the held rule: d0 and d1 agree and differ from d2, per prompt-engine pair", () => {
@@ -219,7 +231,21 @@ test("order, grouping above 3, and the cap of 8 with a count", () => {
       "Perplexity started naming you for 'best accounting app for sole traders'.",
     ],
   );
-  assert.deepEqual(r.lines[0]!.link, { to: "engine", engine: "chatgpt" });
+  // Review of P4 (13 Oct 2026): a grouped line has no one answer, so it links none and carries its prompts, each opening its own.
+  assert.equal(r.lines[0]!.link, null);
+  assert.deepEqual(
+    r.lines[0]!.items,
+    [
+      ["q1", "best invoicing app for freelancers"],
+      ["q2", "best accounting app for sole traders"],
+      ["q3", "invoicing software for small agencies"],
+      ["q4", "best payroll for sole traders"],
+      ["q5", "cheap bookkeeping app"],
+    ].map(([q, t]) => ({ text: `'${t}'`, link: { to: "answer", question: q, day: day(14), engine: "chatgpt" } })),
+  );
+  // An ungrouped line keeps its one answer and has no items.
+  assert.deepEqual(r.lines[1]!.link, { to: "answer", question: "q1", day: day(14), engine: "gemini" });
+  assert.equal(r.lines[1]!.items, undefined);
   assert.equal(r.more, 0);
   // Every kind is in the recorded order.
   const kinds = r.lines.map((l) => CHANGE_ORDER.indexOf(l.kind));

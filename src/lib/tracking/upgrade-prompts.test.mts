@@ -286,3 +286,14 @@ test("trigger jsonb: the surface, and id-shaped facts on the recorded keys only"
   assert.equal(readSurface("ai"), "ai");
   assert.equal(readSurface("admin"), null);
 });
+
+test("trigger jsonb is written: the hide and ask routes record the surface the prompt carried (review of P4, 13 Oct 2026)", async () => {
+  // The helper existed and nothing called it, so a hide or ask on /ai could not be told from one on Clusters.
+  const { readFileSync } = await import("node:fs");
+  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
+  assert.match(read("app/api/app/[client]/hide/route.ts"), /recordHidden\(supabaseAdmin\(\), \{[^}]*trigger: upgradeTrigger\(surface\) \}\)/);
+  assert.match(read("app/api/app/[client]/ask/route.ts"), /trigger: upgradeTrigger\(surface \?\? "clusters", \{ items: String\(items\.length\) \}\)/);
+  // And the prompt carries it: the component puts `surface` in both actions' query, and /ai says "ai".
+  assert.match(read("components/app/UpgradePrompt.tsx"), /new URLSearchParams\(\{ \.\.\.keep, surface \}\)/);
+  assert.match(read("components/app/ai/AiVisibility.tsx"), /<UpgradePrompt [^\n]*surface="ai" \/>/);
+});

@@ -1,6 +1,7 @@
 import { brandKey, subjectKeys } from "../../scan/brand-name.ts";
 import { type AnswerRow, type Day, type Range, type Rate, brandsRead, rate } from "../../tracking/figures.ts";
 import { ANGLES, type Angle } from "../../tracking/limits.ts";
+import { isEngine } from "../../scan/engines.ts";
 
 /**
  * The AI visibility page's prompt table (13 Oct 2026, DIY P4; spec 10
@@ -37,9 +38,20 @@ export const originOfRow = (origins: ReadonlyMap<string, string>, id: string): P
 
 export const isChosen = (o: PromptOrigin | null) => o === null || CHOSEN.includes(o);
 
-/** The chip's words (section 6.7). Agency mode never names nomada. */
-export function originLabel(o: PromptOrigin | null, mode: "nomada" | "agency" | "off"): string {
+/**
+ * The chip's words (section 6.7). Agency mode never names nomada. A prompt
+ * with no recorded origin - every prompt until P5 wires the origins in, and
+ * legacy rows after - has no chip (null): review of P4, 13 Oct 2026, it read
+ * "Setup", which a cluster the client added later is not.
+ */
+export function originLabel(o: PromptOrigin, mode: "nomada" | "agency" | "off"): string;
+export function originLabel(o: PromptOrigin | null, mode: "nomada" | "agency" | "off"): string | null;
+export function originLabel(o: PromptOrigin | null, mode: "nomada" | "agency" | "off"): string | null {
   switch (o) {
+    case null:
+      return null;
+    case "setup":
+      return "Setup";
     case "client":
       return "You";
     case "nomada":
@@ -50,8 +62,6 @@ export function originLabel(o: PromptOrigin | null, mode: "nomada" | "agency" | 
       return "Opportunity";
     case "momentum":
       return "Momentum";
-    default:
-      return "Setup";
   }
 }
 
@@ -70,6 +80,39 @@ export const pickSort = (raw: string | null): Sort => ((SORTS as readonly string
 export const pickDir = (raw: string | null): "asc" | "desc" => (raw === "desc" ? "desc" : "asc");
 /** `?page=`: a whole number 1 to MAX_PAGE, else 1. */
 export const pickPage = (raw: string | null): number => (/^\d{1,2}$/.test(raw ?? "") ? Math.min(MAX_PAGE, Math.max(1, Number(raw))) : 1);
+
+/**
+ * The /ai view a write route 303s back to (review of P4, 13 Oct 2026): U1's
+ * Hide and Ask on this page landed on Clusters, against section 3.6 ("303
+ * back to the allow-listed page"). The hide and ask routes read these keys
+ * from the action's query when its `surface` is `ai`, each through the same
+ * bound the page applies, and drop the rest - stop.ts readKept, for /ai. The
+ * cluster and engine are only shaped here; the page matches them against the
+ * client's clusters and the tier's engines, as on any visit.
+ */
+export const AI_KEPT = ["from", "to", "compare", "cluster", "angle", "origin", "eng", "lfl", "missing", "q", "sort", "dir", "page"] as const;
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const ID = /^[0-9A-Za-z_-]{1,64}$/;
+
+export function readAiKept(get: (k: string) => string | null, search: number): Record<string, string> {
+  const back: Record<string, string> = {};
+  for (const k of AI_KEPT) {
+    const v = get(k);
+    if (v === null || v === "") continue;
+    if ((k === "from" || k === "to") && !DAY.test(v)) continue;
+    if (k === "compare" && v !== "none" && v !== "month") continue;
+    if (k === "cluster" && !ID.test(v)) continue;
+    if (k === "angle" && pickAngle(v) === null) continue;
+    if (k === "origin" && pickOrigin(v) === null) continue;
+    if (k === "eng" && !isEngine(v)) continue;
+    if ((k === "lfl" || k === "missing") && v !== "1") continue;
+    if (k === "sort" && pickSort(v) !== v) continue;
+    if (k === "dir" && v !== "asc" && v !== "desc") continue;
+    if (k === "page" && String(pickPage(v)) !== v) continue;
+    back[k] = k === "q" ? v.slice(0, search) : v;
+  }
+  return back;
+}
 
 /** A check's engines: those that answered, and of them those naming the client. */
 export type AtCheck = { day: Day; named: number; of: number };
@@ -101,7 +144,14 @@ export type PromptRow = {
 
 export type RowsInput = {
   prompts: readonly { id: string; text: string; cluster_id: string | null; angle: Angle | null; added_on: Day; stopped_on: Day | null }[];
-  clusters: readonly { id: string; label: string }[];
+  /**
+   * The clusters in their order. `prompts` is the cluster card's own prompt
+   * list (cluster-figures.ts clusterCards), whose place is the one-cluster
+   * page's `?prompt=`; review of P4 (13 Oct 2026): recomputed here with a
+   * different filter, a prompt added tomorrow shifted a row onto the wrong
+   * prompt's answers on a range ending today.
+   */
+  clusters: readonly { id: string; label: string; prompts?: readonly string[] }[];
   /** Every answer read, the comparison's included: a prompt's first reading may be before the range. */
   answers: readonly AnswerRow[];
   range: Range;
@@ -158,7 +208,7 @@ export function promptRows(input: RowsInput): PromptRow[] {
     const others = answered.some((a) => brandsRead(a) && a.brands.some((b) => { const k = brandKey(b); return !!k && !you.has(k); }));
     const aioRow = engines.has(AIO) && latest ? inRange.find((a) => a.engine === AIO && a.run_date === latest.day) : undefined;
     const cluster = input.clusters.find((c) => c.id === q.cluster_id) ?? null;
-    const index = cluster ? input.prompts.filter((p) => p.cluster_id === cluster.id && (p.stopped_on === null || p.stopped_on > range.from) && p.added_on <= range.to).findIndex((p) => p.id === q.id) : -1;
+    const index = !cluster ? -1 : cluster.prompts ? cluster.prompts.indexOf(q.id) : input.prompts.filter((p) => p.cluster_id === cluster.id && (p.stopped_on === null || p.stopped_on > range.from) && p.added_on <= range.to).findIndex((p) => p.id === q.id);
     return {
       id: q.id,
       text: q.text,

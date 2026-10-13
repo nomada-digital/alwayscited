@@ -8,6 +8,8 @@ import { trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
 import { readKept } from "@/lib/tracking/stop";
+import { readSurface, upgradeTrigger } from "@/lib/tracking/upgrade-prompts";
+import { readAiKept } from "@/lib/diy/ai/prompt-table";
 import { recordUsage } from "@/lib/tracking/usage-record";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 import { appPath } from "@/lib/app-host";
@@ -27,6 +29,12 @@ export const dynamic = "force-dynamic";
  * in the action's query and come back too, the toast's keys winning (DS16,
  * 2 Oct 2026); Settings' return is unchanged. The recipient word is `via`, not
  * `to`, which is the range's end and was overwritten by it (DS29, 2 Oct 2026).
+ *
+ * 13 Oct 2026, DIY P4 (review of P4; spec 10 sections 2.7 and 3.6): an
+ * upgrade prompt's ask carries its `surface` in the action's query. `ai`
+ * returns to AI visibility with its own view (prompt-table.ts readAiKept);
+ * anything else to Clusters, as before. The surface goes into the row's
+ * `trigger` beside the item count.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -35,14 +43,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   // Settings' "Ask us to change these" returns to Settings; every other ask to Clusters.
   const about = readAskAbout(form?.get("about"));
   const cta = about ? null : readUpgradeCta(form?.get("cta"));
-  const kept = readKept((k) => new URL(req.url).searchParams.get(k), APP_LIMITS.search);
+  const sp = new URL(req.url).searchParams;
+  const surface = cta ? (readSurface(sp.get("surface")) ?? "clusters") : null;
+  const onAi = surface === "ai";
+  const kept = onAi ? readAiKept((k) => sp.get(k), APP_LIMITS.search) : readKept((k) => sp.get(k), APP_LIMITS.search);
   // DS41 (2 Oct 2026, R173 pass 4): Settings' asks post its stated range; only from, to and compare go back there.
   const view = about ? Object.fromEntries(Object.entries(kept).filter(([k]) => k === "from" || k === "to" || k === "compare")) : kept;
   const done = (r: "sent" | "refused" | "capped", extra: Record<string, string> = {}) =>
     NextResponse.redirect(
       dashUrl(
         req,
-        about ? appPath(`/${slug}/settings?${new URLSearchParams({ ...view, ask: r, ...extra })}`) : appPath(`/${slug}/clusters?${new URLSearchParams({ ...view, ...(cta === "mentioned" ? { filter: "never" } : {}), ask: r, ...extra })}`),
+        about
+          ? appPath(`/${slug}/settings?${new URLSearchParams({ ...view, ask: r, ...extra })}`)
+          : onAi
+            ? appPath(`/${slug}/ai?${new URLSearchParams({ ...view, ask: r, ...extra })}`)
+            : appPath(`/${slug}/clusters?${new URLSearchParams({ ...view, ...(cta === "mentioned" ? { filter: "never" } : {}), ask: r, ...extra })}`),
       ),
       303,
     );
@@ -106,7 +121,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   const mail = cta ? upgradeAskMail({ brand, domain: client.domain, member: email, cta, items, mode }) : askMail({ brand, domain: client.domain, member: email, keyword: keyword as string, mode });
   if (!(await sendAsk({ agencyContact: recipient.to, replyTo: email, ...mail }))) return done("refused");
   const recorded = cta
-    ? await recordAsk(db, { clientId: client.id, email, cta, trigger: { items: String(items.length) } })
+    ? await recordAsk(db, { clientId: client.id, email, cta, trigger: upgradeTrigger(surface ?? "clusters", { items: String(items.length) }) })
     : await recordAsk(db, { clientId: client.id, email, cta: "cluster", trigger: { keyword: keyword as string } });
   if (!recorded) console.warn("[app] ask sent but not recorded");
   if (cta) await recordUsage(db, { clientId: client.id, email, event: "cta_ask", path: null, props: { cta }, today });

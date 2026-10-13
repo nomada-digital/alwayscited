@@ -6,7 +6,6 @@ import { CLOSE_WASH, D } from "@/components/home/dark";
 import { T } from "@/config/tokens";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import {
-  keywordsIn,
   type Day,
   type Range,
   type Rate,
@@ -24,12 +23,10 @@ import {
   keywordRows,
   movers,
   namedRate,
-  overview,
   pointsDelta,
   sparkPoints,
-  ungroupedRead,
 } from "@/lib/tracking/figures";
-import { type ClusterCard, clusterCards, clusterChart, clusterSummary, keyFigureChanges, pendingBasis } from "@/lib/tracking/cluster-figures";
+import { type ClusterCard, clusterChart, keyFigureChanges, pendingBasis } from "@/lib/tracking/cluster-figures";
 import { NO_PROMPT_NO_CHECK, checkTime, clockIn } from "@/lib/tracking/check-time";
 import { rangeLabel } from "@/lib/tracking/date-range";
 import { whoIsNamedCard } from "@/lib/tracking/named-figures";
@@ -37,9 +34,9 @@ import type { Compare, OverviewData } from "@/lib/tracking/overview-data";
 import { type PlacementRow, chartMarkers } from "@/lib/tracking/placement-figures";
 import { MISSING_READS, brandGapNote, failedTodayNote, lostReads, runNote, sovGapNote, todayRun } from "@/lib/tracking/run-note";
 import { answerHref, answersByPromptDay, dayAnswerIn } from "@/lib/tracking/evidence";
-import { type ChangeLink, type Diff, diffChecks } from "@/lib/diy/changes/diff";
-import { type Bullet, clusterChanges, headline, whatItMeans } from "@/lib/diy/changes/meaning";
-import { engineRates } from "@/lib/diy/ai/engine-rates";
+import type { ChangeLink } from "@/lib/diy/changes/diff";
+import type { Bullet } from "@/lib/diy/changes/meaning";
+import { type Recent, overviewBasis, overviewStory } from "@/lib/diy/changes/story";
 import { addedFromWork } from "@/lib/diy/ai/prompt-table";
 
 import type { ChartMark } from "./chart-board";
@@ -176,7 +173,7 @@ export default function Overview({
    * when that read failed (the section says so; the rest of the page draws).
    * None draws no section (/app/parity).
    */
-  recent?: { ok: true; data: Pick<OverviewData, "answers" | "serp" | "runs"> } | { ok: false };
+  recent?: Recent;
   /** 13 Oct 2026, DIY P4: the slots P5 fills in wave 1 - P3's This week (section 4.1 row 6) and work log (row 10). */
   thisWeek?: React.ReactNode;
   workLog?: React.ReactNode;
@@ -214,7 +211,10 @@ export default function Overview({
   // 9 Oct 2026 (audit copy-2, ia-9): every check time here is the client's zone's, labelled, from the
   // cron's hour on the day meant (check-time.ts). A bare London time was an hour wrong from 25 Oct.
   const next = checkTime(addDays(today, 1), market);
-  const o = overview({ range, compare: compareMode, startedOn, engines, questions: data.questions, answers: data.answers, serp: data.serp, keywordCount: keywordsIn(data.keywords, range), keywords: data.keywords, runs: data.runs });
+  // Review of P4 (13 Oct 2026): the figures and the cluster reading come from overviewBasis, the one wiring
+  // fixture-states.test.mts runs on every fixture state; what each step is for is said there.
+  const basis = overviewBasis({ data, range, compare: compareMode, startedOn, engines, today });
+  const { o, clusterInput, cards, cs, loose, byCluster, lflIds } = basis;
   // 8 Oct 2026 (audit data-10): a young client's comparison is its first week, and the charts draw no dashed
   // "same day last period" line for it - a week laid over the range's first seven days would read as a period it is not.
   // ON-3 (9 Oct 2026): nor against a first reading - one day is not a period to lay over the range.
@@ -223,14 +223,7 @@ export default function Overview({
   const vs = o.compare ? comparisonLabel(o.compare, o.compareKind) : null;
   // BRIEF-3 T4b part 3 (30 Sep 2026): the headline, heat map and four figures
   // read by cluster (boards-3/Main.dc.html). A client with no cluster rows yet
-  // keeps the flat T4 reading rather than print 0 of 0. `?.` because
-  // /app/parity reads docs/parity/T4/fixture.json, generated before clusters.
-  // R138: cluster rows with no prompt in any of them are still the ungrouped state.
-  const clusterInput = data.clusters?.length && data.questions.some((q) => q.cluster_id)
-    ? { clusters: data.clusters, questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: o.compare, today, engines }
-    : null;
-  const cards = clusterInput ? clusterCards(clusterInput) : null;
-  const cs = cards ? clusterSummary(cards) : null;
+  // keeps the flat T4 reading rather than print 0 of 0 (story.ts overviewBasis).
   // T4b part 5b: the picked card (?cluster=) sets the chart; the first card by default, as the board opens on c1.
   const picked = cards ? (cards.find((c) => c.id === selected) ?? cards[0]!) : null;
   const drawn = clusterInput && picked ? clusterChart(clusterInput, picked.id) : null;
@@ -387,8 +380,6 @@ export default function Overview({
   // ---- 1. headline ----
   // DS1 / R177 (2 Oct 2026): clusters and ungrouped prompts with readings side by side. The headline and the
   // first figures then count every prompt, as Who is named does, and say so; by cluster only when all are grouped.
-  const loose = cs ? ungroupedRead(data.questions, data.answers, range) : 0;
-  const byCluster = cs && !loose ? cs : null;
   const looseWords = `${loose} ungrouped prompt${loose === 1 ? "" : "s"}`;
   // A pending cluster has no answers yet, so it is not named in the count ("5 ungrouped prompts", not "0 clusters and ...").
   const across = !cs ? "" : loose && !cs.clusters ? looseWords : `${cs.clusters} cluster${cs.clusters === 1 ? "" : "s"}${loose ? ` and ${looseWords}` : ""}`;
@@ -419,8 +410,7 @@ export default function Overview({
   // 13 Oct 2026, DIY P4: the desktop sub-line and its like-for-like sentence are the headline paragraph now
   // (lib/diy/changes/meaning.ts headline, below); the phone's short line keeps its own words.
   const inBefore = o.compareKind === "start" ? " in your first week" : o.compareKind === "first" ? " on your first reading" : "";
-  // The prompts tracked from the comparison's first day to the range's last: like-for-like when not by cluster.
-  const lflIds = o.compare ? new Set(data.questions.filter((q) => q.added_on <= o.compare!.from && (q.stopped_on === null || q.stopped_on > range.to)).map((q) => q.id)) : null;
+  // lflIds (story.ts overviewBasis): the prompts tracked from the comparison's first day to the range's last.
   // Audit ia-3 (8 Oct 2026): the brand named in most of the headline's own answers, on the headline's basis.
   // Review of audit ia-3 (8 Oct 2026): the card below and this line read the headline's own answers - by
   // cluster, the prompts of the clusters with readings - and the card's change the headline's like-for-like ones.
@@ -432,41 +422,8 @@ export default function Overview({
   const leaderLine = !leader || !leader.answers ? "" : leader.you ? " No other brand was named in more of them." : ` ${leader.name} was named in ${pct(leader.reach)} of ${leaderOf}.`;
 
   // ---- 13 Oct 2026, DIY P4 (spec 10 section 4.1 rows 3 to 6) ----
-  // The headline paragraph: one rule over the figures above, in its first-reading, compared or plain variant.
-  const readDays = new Set(data.answers.filter((a) => a.answered).map((a) => a.run_date));
-  const firstReading = readDays.size === 1 && !o.compare ? [...readDays][0]! : null;
-  const said = headline({
-    named: fig.now,
-    prompts: byCluster ? byCluster.prompts : questionsAnswered,
-    range,
-    today,
-    firstReading,
-    lfl: byCluster
-      ? byCluster.lflBefore
-        ? { now: byCluster.lfl, before: byCluster.lflBefore, basis: "clusters", count: byCluster.clustersLfl }
-        : null
-      : o.lfl
-        ? { now: o.lfl.now, before: o.lfl.before, basis: "prompts", count: o.lfl.questions }
-        : null,
-    compareKind: o.compareKind,
-    keywords: cs
-      ? { onPage1: cs.page1.num, of: cs.page1.den, before: cs.page1Before !== null && cs.clustersLfl === cs.clusters ? cs.page1Before : null, cluster: true }
-      : { onPage1: o.keywords.num, of: o.keywords.den, before: o.change?.keywords && o.change.keywords.of === o.keywords.den ? o.change.keywords.before : null, cluster: false },
-  });
-  // "What it means": the headline's own answers, by engine; each keyword's latest reading; each live cluster like for like.
-  const latestKw = keywordRows(data.serp, range);
-  const bullets = whatItMeans({
-    first: firstReading !== null,
-    engines: engineRates(data.answers, range, engines, byCluster ? byCluster.ids : null),
-    keywords: cards
-      ? cards.filter((c) => c.status !== "pending" && c.keywordId && c.keyword).map((c) => ({ id: c.keywordId!, keyword: c.keyword!, position: c.position, read: c.positionRead }))
-      : data.keywords.filter((k) => k.stopped_on === null && k.added_on <= range.to).map((k) => ({ id: k.id, keyword: k.keyword, position: latestKw.get(k.id)?.position ?? null, read: latestKw.has(k.id) })),
-    cluster: !!cards,
-    clusters:
-      o.compare && cards && lflIds
-        ? clusterChanges({ clusters: cards.filter((c) => c.status === "live").map((c) => ({ id: c.id, label: c.keyword ?? c.name })), prompts: data.questions, answers: data.answers, range, compare: o.compare, lfl: lflIds })
-        : null,
-  });
+  // The headline paragraph, "What it means" and "Since last check": story.ts overviewStory, over the basis above.
+  const { said, bullets, diff } = overviewStory(basis, { data, range, today, engines, brand, domain, startedOn, recent });
   const bulletHref = (b: Bullet): string | null =>
     !b.link || !clientPath
       ? null
@@ -475,32 +432,15 @@ export default function Overview({
         : b.link.to === "cluster" && detailHref
           ? detailHref(b.link.cluster)
           : null; // a keyword is plain text until the Google page exists (wave 2)
-  // "Since last check" over the last week of checks, whatever the range (section 6.8).
+  // The headline's answer count opens /ai on the same range: every prompt behind it, each row opening its answers (DB-2).
+  const countHref = clientPath ? `${clientPath}/ai?${new URLSearchParams(rangeQuery)}` : null;
   const promptAt = new Map((cards ?? []).flatMap((c) => c.prompts.map((p, i) => [p.id, { cluster: c.id, index: i }] as const)));
-  const diff: Diff | { error: true } | null = !recent
-    ? null
-    : !recent.ok
-      ? { error: true }
-      : diffChecks({
-          today,
-          answers: recent.data.answers,
-          serp: recent.data.serp,
-          runs: recent.data.runs,
-          prompts: data.questions.map((q) => ({ id: q.id, text: q.text })),
-          keywords: cards
-            ? cards.filter((c) => c.keywordId && c.keyword).map((c) => ({ id: c.keywordId!, keyword: c.keyword! }))
-            : data.keywords.filter((k) => k.stopped_on === null).map((k) => ({ id: k.id, keyword: k.keyword })),
-          brand,
-          domain,
-          engines,
-        });
   const changeHref = (l: ChangeLink): string | null => {
     if (!clientPath) return null;
     if (l.to === "answer") {
       const at = promptAt.get(l.question);
       return at && clustersPath ? answerHref(`${clustersPath}/${encodeURIComponent(at.cluster)}`, { ...rangeQuery, prompt: String(at.index) }, { day: l.day, engine: l.engine }) : null;
     }
-    if (l.to === "engine") return `${clientPath}/ai?${new URLSearchParams({ ...rangeQuery, eng: l.engine })}`;
     if (l.to === "cited") return `${clientPath}/cited?${new URLSearchParams({ ...rangeQuery, kind: "yours" })}`;
     if (l.to === "named") return `${clientPath}/named?${new URLSearchParams({ ...rangeQuery, open: l.key })}`;
     if (l.to === "href") return l.href;
@@ -783,7 +723,22 @@ export default function Overview({
             </h2>
           ) : null}
           <p className={cs ? "app-hide-sm" : undefined} style={{ margin: 0, fontSize: cs ? "15px" : "16px", lineHeight: 1.55, color: D.cardHead, maxWidth: "500px" }}>
-            <span data-headline={said.variant}>{said.text}</span>
+            <span data-headline={said.variant}>
+              {(() => {
+                // The answer count opens /ai on this range (DB-2); the rest of the paragraph is the rule's words.
+                const at = countHref ? said.text.indexOf(said.count) : -1;
+                if (at < 0) return said.text;
+                return (
+                  <>
+                    {said.text.slice(0, at)}
+                    <Link href={countHref!} data-headline-count="" style={{ color: T.surface, fontWeight: 600, textDecorationColor: D.quiet, textUnderlineOffset: "3px" }}>
+                      {said.count}
+                    </Link>
+                    {said.text.slice(at + said.count.length)}
+                  </>
+                );
+              })()}
+            </span>
             {leaderLine}
             {o.compareHidden ? ` ${o.compareHidden}` : ""}
           </p>

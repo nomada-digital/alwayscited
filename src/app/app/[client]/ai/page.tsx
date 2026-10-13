@@ -8,7 +8,10 @@ import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
 import { pickAngle, pickDir, pickOrigin, pickPage, pickSort } from "@/lib/diy/ai/prompt-table";
+import { ASK_ITEMS_MAX, askRefusal, askToast } from "@/lib/tracking/ask";
 import { clusterSearch } from "@/lib/tracking/cluster-figures";
+import { formatDay } from "@/lib/tracking/figures";
+import { HIDE_DAYS, hiddenUntil } from "@/lib/tracking/upgrade-prompts";
 import { CLUSTER_BASE } from "@/lib/tracking/limits";
 import { rangeFrom, rangeQuery } from "@/lib/tracking/overview-data";
 import { placedTier } from "@/lib/tracking/placement-figures";
@@ -41,6 +44,10 @@ export const runtime = "nodejs";
  * client's clusters, `?eng=` one of its tier's engines, `?angle=`,
  * `?origin=`, `?sort=` and `?dir=` from fixed lists, `?page=` 1-50, `?q=` cut
  * to APP_LIMITS.search, `?lfl=1` and `?missing=1` flags.
+ *
+ * Review of P4 (13 Oct 2026; section 3.6): U1's Hide and Ask return here, so
+ * the page reads their toast keys as Clusters does - `hid`, `ask`, `via`, `n`
+ * and `of`, each a fixed code drawn as fixed words, nothing echoed.
  */
 export default async function ClientAi({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const repo = trackingRepo();
@@ -59,6 +66,14 @@ export default async function ClientAi({ params, searchParams }: { params: Promi
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const cluster = (data.clusters ?? []).some((c) => c.id === one("cluster")) ? one("cluster") : null;
   const engine = engines.find((e) => e === one("eng")) ?? null;
+  // U1's way back (hide and ask routes, `surface=ai`): the same codes and words as the Clusters page's toast.
+  const ask = one("ask");
+  const n = Number(one("n"));
+  const of = one("of");
+  const attached = Number.isInteger(n) && n > 0 && n <= ASK_ITEMS_MAX && (of === "prompts" || of === "keywords") ? `${n} ${n === 1 ? of.slice(0, -1) : of}` : undefined;
+  const hid = one("hid") === "1" && !ask;
+  const unhid = one("hid") === "0" && !ask;
+  const asked = ask === "sent" ? askToast(one("via") === "agency" ? "your account contact" : "nomada digital", email, attached) : askRefusal(ask) ?? (hid ? `Hidden for ${HIDE_DAYS} days, until ${formatDay(hiddenUntil(today))}. Only you stop seeing it.` : unhid ? "That did not hide. Try again." : null);
 
   return (
     <div className="app-shell" style={{ display: "flex", flexWrap: "wrap", minHeight: "100vh", color: T.ink }}>
@@ -87,6 +102,7 @@ export default async function ClientAi({ params, searchParams }: { params: Promi
           page={pickPage(one("page"))}
           mode={upgrade.mode}
           hidden={upgrade.hidden}
+          notice={asked ? { text: asked, done: ask === "sent" || hid } : null}
         />
       </div>
     </div>

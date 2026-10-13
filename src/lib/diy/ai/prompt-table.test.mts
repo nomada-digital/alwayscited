@@ -21,6 +21,7 @@ import {
   pickPage,
   pickSort,
   promptRows,
+  readAiKept,
   sortRows,
 } from "./prompt-table.ts";
 
@@ -85,6 +86,19 @@ test("n of m engines at the latest check, an engine that did not answer left out
   assert.deepEqual(rows.map((x) => x.id), ["q1", "q2", "q3", "q4"]);
   assert.equal(rowOf(rows, "q4").clusterId, null);
   assert.equal(rowOf(rows, "q4").index, null);
+});
+
+test("a row's ?prompt= is its place on the cluster card, a prompt starting tomorrow included (review of P4, 13 Oct 2026)", () => {
+  // On a range ending today the card lists tomorrow's prompt too (cluster-figures.ts clusterCards, `current`); here it sorts first.
+  const cards = [
+    { id: "c1", label: "invoicing software", prompts: ["q1", "q2"] },
+    { id: "c2", label: "payroll for sole traders", prompts: ["q5", "q3"] },
+  ];
+  const rows = promptRows(input([a(14, "q3", "chatgpt", true)], { clusters: cards }));
+  assert.equal(rowOf(rows, "q3").index, 1, "the card's place, not the place among prompts already asked");
+  assert.equal(rowOf(rows, "q2").index, 1);
+  // With no card list, the old reading stands (the range's prompts in order).
+  assert.equal(rowOf(promptRows(input([a(14, "q3", "chatgpt", true)])), "q3").index, 0);
 });
 
 test("an engine picked with ?eng= is the only one counted", () => {
@@ -174,7 +188,8 @@ test("the pickers are whitelists and clamps", () => {
 test("origin chips' words, and agency mode never names nomada", () => {
   assert.deepEqual(
     (["setup", "client", "nomada", "placement", "opportunity", "momentum", null] as const).map((o) => originLabel(o, "nomada")),
-    ["Setup", "You", "nomada digital", "Placement", "Opportunity", "Momentum", "Setup"],
+    // Review of P4 (13 Oct 2026): no recorded origin is no chip, never "Setup".
+    ["Setup", "You", "nomada digital", "Placement", "Opportunity", "Momentum", null],
   );
   assert.equal(originLabel("nomada", "agency"), "Your account contact");
 });
@@ -214,4 +229,13 @@ test("on the fixture: the table's counts are figures.ts's, per prompt and over t
     const q = questionsNamed(d.answers, range);
     assert.equal(rows.filter((r) => r.answers.num > 0).length, q.num, state);
   }
+});
+
+test("the /ai view a hide or ask returns to: each key through its page's bound, the rest dropped (review of P4, 13 Oct 2026)", () => {
+  const q = (o: Record<string, string>) => (k: string) => o[k] ?? null;
+  const good = { from: "2026-09-02", to: "2026-09-29", compare: "month", cluster: "c1", angle: "category", origin: "chosen", eng: "chatgpt", lfl: "1", missing: "1", q: "invoicing", sort: "named", dir: "desc", page: "2" };
+  assert.deepEqual(readAiKept(q(good), 120), good);
+  const bad = { from: "2 Sep", to: "<script>", compare: "prev", cluster: "c1;drop", angle: "price", origin: "everyone", eng: "bing", lfl: "yes", missing: "0", sort: "random", dir: "up", page: "99", filter: "never", hid: "1", ask: "sent", next: "https://evil.example" };
+  assert.deepEqual(readAiKept(q(bad), 120), {});
+  assert.equal(readAiKept(q({ q: "x".repeat(300) }), 120).q!.length, 120);
 });

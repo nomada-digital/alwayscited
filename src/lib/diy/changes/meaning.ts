@@ -34,7 +34,12 @@ export type HeadlineInput = {
   keywords: { onPage1: number; of: number; before: number | null; cluster: boolean } | null;
 };
 
-export type Headline = { variant: "first" | "compared" | "plain"; text: string };
+/**
+ * `count` is the words inside `text` that say the answers counted ("412 of
+ * 5,600 AI answers"), which the page links to the answers behind them (spec
+ * 4.1 row 3, DB-2; review of P4, 13 Oct 2026).
+ */
+export type Headline = { variant: "first" | "compared" | "plain"; text: string; count: string };
 
 /** "in the last 28 days", or "from 2 Sep to 29 Sep" for a range that ends before today. */
 export function periodWords(range: Range, today: Day): string {
@@ -43,12 +48,18 @@ export function periodWords(range: Range, today: Day): string {
   return range.from === range.to ? `on ${formatDay(range.from)}` : `from ${formatDay(range.from)} to ${formatDay(range.to)}`;
 }
 
-/** What the comparison is, after "up from 5%": "in the 28 days before", "in the month before", "in your first week", "on your first reading". */
+/**
+ * What the comparison is, after "up from 5%": "in the 28 days before", "on
+ * the day before" (a one-day range read "in the 1 days before", review of P4,
+ * 13 Oct 2026), "in the month before", "in your first week", "on your first
+ * reading".
+ */
 export function beforeWords(kind: ComparisonKind | null, range: Range): string {
   if (kind === "start") return "in your first week";
   if (kind === "first") return "on your first reading";
   if (kind === "month") return "in the month before";
-  return `in the ${daysIn(range).length} days before`;
+  const len = daysIn(range).length;
+  return len === 1 ? "on the day before" : `in the ${len} days before`;
 }
 
 /** "up from", "down from" or "the same as", by the sign of the change in rounded points. */
@@ -68,17 +79,18 @@ function keywordSentence(k: HeadlineInput["keywords"], first: boolean): string {
 
 /** The headline paragraph, in its three variants: the first reading, a period with its comparison, and one with none. */
 export function headline(h: HeadlineInput): Headline {
-  const answers = `${n(h.named.num)} of ${n(h.named.den)} AI answers to your ${plural(h.prompts, "prompt", "prompts")}`;
+  const count = `${n(h.named.num)} of ${n(h.named.den)} AI answers`;
+  const answers = `${count} to your ${plural(h.prompts, "prompt", "prompts")}`;
   if (h.firstReading) {
-    return { variant: "first", text: `First reading on ${formatDay(h.firstReading)}: named in ${answers} (${pct(h.named)}).${keywordSentence(h.keywords, true)} Change figures start from the next check.` };
+    return { variant: "first", count, text: `First reading on ${formatDay(h.firstReading)}: named in ${answers} (${pct(h.named)}).${keywordSentence(h.keywords, true)} Change figures start from the next check.` };
   }
   const lead = `Named in ${answers} ${periodWords(h.range, h.today)} (${pct(h.named)})`;
-  if (!h.lfl || !h.lfl.before.den || h.lfl.now.pct === null || h.lfl.before.pct === null) return { variant: "plain", text: `${lead}.${keywordSentence(h.keywords, false)}` };
+  if (!h.lfl || !h.lfl.before.den || h.lfl.now.pct === null || h.lfl.before.pct === null) return { variant: "plain", count, text: `${lead}.${keywordSentence(h.keywords, false)}` };
   const was = `${direction(h.lfl.now, h.lfl.before)} ${pct(h.lfl.before)} ${beforeWords(h.compareKind, h.range)}`;
   const throughout = h.compareKind === "start" ? "since your first week" : h.compareKind === "first" ? "since your first reading" : "all period";
   // The paragraph's rate and the like-for-like one are the same when nothing was added: one clause. Otherwise both, each named.
   const change = h.lfl.now.pct === h.named.pct ? `${lead}, ${was}, same ${h.lfl.basis}.` : `${lead}. On the ${plural(h.lfl.count, h.lfl.basis.slice(0, -1), h.lfl.basis)} tracked ${throughout} it is ${pct(h.lfl.now)}, ${was}.`;
-  return { variant: "compared", text: `${change}${keywordSentence(h.keywords, false)}` };
+  return { variant: "compared", count, text: `${change}${keywordSentence(h.keywords, false)}` };
 }
 
 export type MeaningLink = { to: "engine"; engine: string } | { to: "keyword"; keyword: string } | { to: "cluster"; cluster: string };
@@ -157,10 +169,10 @@ export function whatItMeans(m: MeaningInput): Bullet[] {
  * comparison, on the prompts tracked all of both periods (`lfl`, the
  * like-for-like prompt ids the Overview already holds) - so a prompt added
  * since is in neither count. A cluster with none of those prompts is left out.
- * Counts compare only over periods of the same length: against a first week
- * or a first reading, or a calendar month a day longer, "named in 140
- * answers, was 7" would be the periods' lengths, not a change, so there is no
- * bullet.
+ * Counts compare only over periods of the same length and the same number of
+ * check days: against a first week or a first reading, a calendar month a day
+ * longer, or a period with checks missing, "named in 140 answers, was 7"
+ * would be the periods' lengths, not a change, so there is no bullet.
  */
 export function clusterChanges(p: {
   clusters: readonly { id: string; label: string }[];
@@ -171,6 +183,10 @@ export function clusterChanges(p: {
   lfl: ReadonlySet<string>;
 }): ClusterChange[] {
   if (daysIn(p.compare).length !== daysIn(p.range).length) return [];
+  // Nor over periods with a different number of check days (review of P4, 13 Oct 2026): an ended client whose
+  // checks stopped ten days ago read "named in 122 answers, was 209", the days it was not checked, not a change.
+  const checkDays = (r: Range) => new Set(p.answers.filter((a) => a.answered && p.lfl.has(a.question_id) && a.run_date >= r.from && a.run_date <= r.to).map((a) => a.run_date)).size;
+  if (checkDays(p.range) !== checkDays(p.compare)) return [];
   return p.clusters.flatMap((c) => {
     const ids = new Set(p.prompts.filter((q) => q.cluster_id === c.id && p.lfl.has(q.id)).map((q) => q.id));
     if (!ids.size) return [];

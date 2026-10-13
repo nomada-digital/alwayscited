@@ -138,9 +138,15 @@ test("census: CHECK_HOUR_UTC is the hour vercel.json runs the track cron at", ()
  * the API routes' toasts and the checkout pages, the lifecycle and order mail,
  * and the tracking and config modules that word their copy.
  */
-const ROOTS = ["src/components/app", "src/app/app", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config"];
-/** Files walked on 9 Oct 2026: 151. A walk that stops matching reports a clean tree. */
-const FLOOR = 140;
+const ROOTS = ["src/components/app", "src/app/app", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config", "src/lib/diy/changes", "src/lib/diy/ai"];
+/**
+ * Files walked on 9 Oct 2026: 151. A walk that stops matching reports a clean tree.
+ * 13 Oct 2026, DIY P4 (review of P4): src/lib/diy/changes and src/lib/diy/ai added - the Overview's change lines
+ * and the AI page's rows are written there, dated by formatDay and never by a clock. 182 files walked that day;
+ * the floor rises from 140 to 165, and each root must walk at least one file. The rest of src/lib/diy is other
+ * packages' (spec 10 section 7.0); the shell widens the roots when they merge.
+ */
+const FLOOR = 165;
 
 /** A clock time, "06:00", "6:10", "6am", "6 a.m.". Not one inside an ISO timestamp ("T05:00:00Z"). */
 const CLOCK = /(?<![\w:.])(?:[01]?\d|2[0-3]):[0-5]\d(?![\w:])|\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)? ?[ap]\.?m\.?(?![a-z])/i;
@@ -178,6 +184,7 @@ const files = () => ROOTS.flatMap((r) => walk(join(ROOT, r))).map((f) => ({ file
 
 test("census: no check time is typed into copy - every one is check-time.ts's, for the client's zone and the day", () => {
   const all = files();
+  for (const r of ROOTS) assert.ok(all.some(({ file }) => file.startsWith(`${r}/`)), `${r} walked no file`);
   assert.ok(all.length >= FLOOR, `walked ${all.length} files, floor ${FLOOR}`);
   const found = all.flatMap(({ file, src }) => clockHits(src).map((l) => `${file} :: ${l}`));
   assert.deepEqual(found.filter((h) => !(h in ALLOWED)), [], "a hard-coded clock time: say it with checkTime (a day's check) or clockIn (a moment) from check-time.ts");

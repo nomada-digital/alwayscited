@@ -14,10 +14,17 @@ import { test } from "node:test";
  * the one recorded identifier below.
  */
 
-const ROOTS = ["src/components/app", "src/app/app"];
+/**
+ * 13 Oct 2026, DIY P4 (review of P4): the Overview's and AI page's copy is
+ * written in src/lib/diy/changes and src/lib/diy/ai, which this walk did not
+ * see. Both added; each root must walk at least one file, and the floor rises
+ * from 9 to 55 (62 files walked that day). The rest of src/lib/diy is other
+ * packages' (spec 10 section 7.0); the shell widens the roots when they merge.
+ */
+const ROOTS = ["src/components/app", "src/app/app", "src/lib/diy/changes", "src/lib/diy/ai"];
 // data-figure="questions" is the figure's id, read by e2e/app specs, never shown.
 const IDENTIFIERS = [/figure: "questions"/];
-const FLOOR = 9;
+const FLOOR = 55;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -38,6 +45,7 @@ export function copyHits(src: string): string[] {
 }
 
 test("census: /app copy says prompts, never questions", () => {
+  for (const r of ROOTS) assert.ok(walk(join(process.cwd(), r)).length > 0, `${r} walked no file`);
   const files = ROOTS.flatMap((r) => walk(join(process.cwd(), r)));
   assert.ok(files.length >= FLOOR, `walked ${files.length} files, floor ${FLOOR}`);
   const found = files.flatMap((f) => copyHits(readFileSync(f, "utf8")).map((l) => `${f}: ${l}`));

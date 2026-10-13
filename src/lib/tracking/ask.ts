@@ -177,9 +177,12 @@ export async function recordAsk(db: SupabaseClient, p: { clientId: string; email
 /**
  * "Hide for 30 days": one `hidden` row for this member and cta. upgrade-context
  * reads it back through hiddenCtas for HIDE_DAYS; nothing else is changed.
+ * `trigger` (13 Oct 2026, DIY P4; spec 10 section 2.7 "Recording") is where it
+ * was hidden, upgrade-prompts.ts upgradeTrigger's ids only; none writes `{}`
+ * as before.
  */
-export async function recordHidden(db: SupabaseClient, p: { clientId: string; email: string; cta: AskCta }): Promise<boolean> {
-  const { error } = await db.from("cta_events").insert({ client_domain_id: p.clientId, member_email: p.email, cta: p.cta, action: "hidden", trigger: {} });
+export async function recordHidden(db: SupabaseClient, p: { clientId: string; email: string; cta: AskCta; trigger?: Record<string, string> }): Promise<boolean> {
+  const { error } = await db.from("cta_events").insert({ client_domain_id: p.clientId, member_email: p.email, cta: p.cta, action: "hidden", trigger: p.trigger ?? {} });
   return !error;
 }
 

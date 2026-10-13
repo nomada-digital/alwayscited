@@ -38,19 +38,24 @@ export const CHANGE_ORDER: readonly ChangeKind[] = ["check", "lost", "left_page1
 
 /**
  * Where a line's evidence is. The page turns each into a link: an answer on
- * the one-cluster page, an engine on /ai, a keyword (plain text until the
- * Google page exists), the client's own cited pages, a brand on Who is named,
- * or a link the caller already built (watched pages, from W2).
+ * the one-cluster page, a keyword (plain text until the Google page exists),
+ * the client's own cited pages, a brand on Who is named, or a link the caller
+ * already built (watched pages, from W2).
  */
 export type ChangeLink =
   | { to: "answer"; question: string; day: Day; engine: string }
-  | { to: "engine"; engine: string }
   | { to: "keyword"; keyword: string }
   | { to: "cited" }
   | { to: "named"; key: string }
   | { to: "href"; href: string };
 
-export type ChangeLine = { kind: ChangeKind; text: string; link: ChangeLink | null };
+/**
+ * One line. A line grouped per engine ("ChatGPT stopped naming you for 8
+ * prompts") has no single answer behind it, so it carries `items`: each
+ * prompt with its own answer link (review of P4, 13 Oct 2026: a grouped line
+ * that linked to /ai?eng= could not show which prompts changed).
+ */
+export type ChangeLine = { kind: ChangeKind; text: string; link: ChangeLink | null; items?: { text: string; link: ChangeLink }[] };
 
 /** A pursued page or a placement the client watches (W2): its first citation, when one is known. */
 export type Watched = { urlKey: string; label: string; href: string | null; firstCited: { day: Day; engine: string } | null };
@@ -59,6 +64,13 @@ export type DiffAnswer = AnswerRow & { citations?: { source_domain: string; url:
 
 export type DiffInput = {
   today: Day;
+  /**
+   * The client's first check day (figures.ts firstCheckDay), or null with
+   * none. Fewer than three days of checks in the window is "early" only when
+   * the checks began inside it; before that it is a quiet week, never "changes
+   * start from your second check" (review of P4, 13 Oct 2026).
+   */
+  firstCheck: Day | null;
   /** Answers with their brands and citations; anything outside the window is ignored. */
   answers: readonly DiffAnswer[];
   serp: readonly SerpRow[];
@@ -74,7 +86,7 @@ export type DiffInput = {
   watched?: readonly Watched[];
 };
 
-export type Diff = { state: "early"; days: number } | { state: "ok"; days: number; lines: ChangeLine[]; more: number };
+export type Diff = { state: "early"; days: number } | { state: "quiet"; days: number } | { state: "ok"; days: number; lines: ChangeLine[]; more: number };
 
 const label = (e: string) => (isEngine(e) ? ENGINE_SPECS[e].label : e);
 const and = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : (xs[0] ?? ""));
@@ -145,8 +157,9 @@ function promptLines(input: DiffInput, inWindow: readonly DiffAnswer[]): { lost:
     if (list) list.push(a);
     else byPair.set(k, [a]);
   }
-  const lost: (ChangeLine & { engine: string })[] = [];
-  const won: (ChangeLine & { engine: string })[] = [];
+  type Line = ChangeLine & { engine: string; prompt: string; link: ChangeLink };
+  const lost: Line[] = [];
+  const won: Line[] = [];
   for (const engine of input.engines) {
     for (const p of input.prompts) {
       const [d0, d1, d2] = readingsOf(byPair.get(`${p.id} ${engine}`) ?? []);
@@ -156,20 +169,21 @@ function promptLines(input: DiffInput, inWindow: readonly DiffAnswer[]): { lost:
       if (d2.row.named) {
         const rival = newHere(d0.row, d2.row, you);
         const tail = rival ? ` ${rival} is named there now; it wasn't on ${formatDay(d2.day)}.` : "";
-        lost.push({ kind: "lost", text: `${label(engine)} stopped naming you for '${p.text}'.${tail}`, link, engine });
+        lost.push({ kind: "lost", text: `${label(engine)} stopped naming you for '${p.text}'.${tail}`, link, engine, prompt: p.text });
       } else {
-        won.push({ kind: "won", text: `${label(engine)} started naming you for '${p.text}'.`, link, engine });
+        won.push({ kind: "won", text: `${label(engine)} started naming you for '${p.text}'.`, link, engine, prompt: p.text });
       }
     }
   }
-  const group = (lines: (ChangeLine & { engine: string })[], kind: "lost" | "won"): ChangeLine[] => {
+  // A grouped line names no one answer; its prompts come with it, each opening the answer that shows its change.
+  const group = (lines: Line[], kind: "lost" | "won"): ChangeLine[] => {
     if (lines.length <= GROUP_ABOVE) return lines.map((l) => ({ kind: l.kind, text: l.text, link: l.link }));
-    return input.engines.flatMap((engine) => {
+    return input.engines.flatMap((engine): ChangeLine[] => {
       const mine = lines.filter((l) => l.engine === engine);
       if (!mine.length) return [];
       if (mine.length === 1) return [{ kind, text: mine[0]!.text, link: mine[0]!.link }];
       const verb = kind === "lost" ? "stopped naming you" : "started naming you";
-      return [{ kind, text: `${label(engine)} ${verb} for ${mine.length} prompts.`, link: { to: "engine", engine } as ChangeLink }];
+      return [{ kind, text: `${label(engine)} ${verb} for ${mine.length} prompts.`, link: null, items: mine.map((l) => ({ text: `'${l.prompt}'`, link: l.link })) }];
     });
   };
   return { lost: group(lost, "lost"), won: group(won, "won") };
@@ -274,14 +288,16 @@ function watchedLines(input: DiffInput, from: Day): ChangeLine[] {
 
 /**
  * The change list over the last RECENT_DAYS days. With fewer than three days
- * of checks in them there is nothing held to report, and the section says
- * changes start later ("early").
+ * of checks in them there is nothing held to report: "early" when the
+ * client's checks began inside the window (fewer than three ever, section
+ * 6.8), "quiet" when they began before it - an ended client, paused checks or
+ * a week of failed runs, which can have months of readings behind them.
  */
 export function diffChecks(input: DiffInput): Diff {
   const { from } = recentRange(input.today);
   const inWindow = input.answers.filter((a) => a.run_date >= from && a.run_date <= input.today);
   const days = checkDays(inWindow);
-  if (days.length < 3) return { state: "early", days: days.length };
+  if (days.length < 3) return { state: input.firstCheck !== null && input.firstCheck < from ? "quiet" : "early", days: days.length };
   const check = checkLine(input, from);
   const { lost, won } = promptLines(input, inWindow);
   const { left, entered } = keywordLines(input, from);

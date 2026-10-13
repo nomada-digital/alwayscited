@@ -16,8 +16,10 @@ export function measuredText(prompts: number, engines: readonly Engine[]): strin
   const asked = engines.filter((e) => ENGINE_SPECS[e].kind === "model").map((e) => ENGINE_SPECS[e].label);
   const parts: string[] = [];
   if (read.length) parts.push(`${and(read)} ${read.length === 1 ? "is" : "are"} read through ${read.length === 1 ? "its" : "their"} consumer interface`);
-  // The spec's "a slightly different question" is not used: /app says prompts, never questions (prompts-copy.test.mts).
-  if (asked.length) parts.push(`${and(asked)} ${asked.length === 1 ? "is" : "are"} asked through ${asked.length === 1 ? "its" : "their"} API`);
+  // The spec's "a slightly different question" (engines.ts's own header) in /app's words, which say prompts, never
+  // questions (prompts-copy.test.mts). Review of P4 (13 Oct 2026): it was dropped, and with it the caveat that an API
+  // answer is not the one a person sees; help.ts says the same of these engines ("not read from its app").
+  if (asked.length) parts.push(`${and(asked)} ${asked.length === 1 ? "is" : "are"} asked through ${asked.length === 1 ? "its" : "their"} API, not read from ${asked.length === 1 ? "its app" : "their apps"}, so ${asked.length === 1 ? "its answers" : "their answers"} can differ from what a person sees there`);
   return `${prompts} ${prompts === 1 ? "prompt" : "prompts"} on ${WORDS[engines.length] ?? engines.length} engines, checked daily. ${parts.join("; ")}${parts.length ? ". " : ""}No modelled figures: every figure here is counted from answers we read.`;
 }
 
