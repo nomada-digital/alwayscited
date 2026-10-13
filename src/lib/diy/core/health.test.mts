@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { fakeDiyDb, settingsRows } from "./fake-diy.mts";
-import { diyHealthLine, diyHealthLineFor, readDiyHealth } from "./health.ts";
+import { diyAttention, diyHealthLine, diyHealthLineFor, readDiyHealth } from "./health.ts";
 import { DIY_SETTING_KEYS, parseDiySettings } from "./settings.ts";
 
 /**
@@ -30,15 +30,32 @@ test("read from the ledger and the jobs: a cap refusal tonight is a pause, open 
       { id: "d", client_domain_id: "c2", door: "labs", trigger: "scheduled", status: "ok", estimate: 0.132, cost: 5, created_at: "2026-10-13T03:31:00.000Z" },
     ],
     diy_jobs: [
-      { id: "j1", done_at: null, due_on: "2026-10-14" },
-      { id: "j2", done_at: null, due_on: "2026-10-13" },
-      { id: "j3", done_at: "2026-10-14T03:32:00Z", due_on: "2026-10-14" },
-      { id: "j4", done_at: null, due_on: "2026-10-15" },
+      { id: "j1", done_at: null, due_on: "2026-10-14", attempts: 0 },
+      { id: "j2", done_at: null, due_on: "2026-10-13", attempts: 2 },
+      { id: "j3", done_at: "2026-10-14T03:32:00Z", due_on: "2026-10-14", attempts: 1 },
+      { id: "j4", done_at: null, due_on: "2026-10-15", attempts: 0 },
+      // Three attempts and never closed: no worker can take it, so it is not carried.
+      { id: "j5", done_at: null, due_on: "2026-10-12", attempts: 3 },
     ],
   });
   fake.clock.now = NOW;
   const h = await readDiyHealth(fake.db, NOW);
   assert.deepEqual(h, { day: "2026-10-14", enabled: true, dfs: 0.1, dfsCap: 10, model: 0.09, modelCap: 5, pausedAtCap: true, carried: 2 });
+});
+
+test("the line asks for the mail only when a cap paused the night, jobs are carried, or it cannot be read", async () => {
+  const quiet = fakeDiyDb({ app_settings: settingsRows(), diy_reads: [], diy_jobs: [{ id: "j1", done_at: "2026-10-14T03:32:00Z", due_on: "2026-10-14", attempts: 1 }] });
+  assert.equal(await diyAttention(quiet.db, NOW), null, "a clean night needs no mail of its own");
+  const carried = fakeDiyDb({ app_settings: settingsRows(), diy_reads: [], diy_jobs: [{ id: "j1", done_at: null, due_on: "2026-10-14", attempts: 1 }] });
+  assert.match((await diyAttention(carried.db, NOW)) ?? "", /jobs carried to tonight: 1$/);
+  const paused = fakeDiyDb({
+    app_settings: settingsRows(),
+    diy_reads: [{ id: "c", client_domain_id: "c2", door: "labs", trigger: "scheduled", status: "refused", code: "global_daily", estimate: 0.132, cost: null, created_at: today }],
+    diy_jobs: [],
+  });
+  assert.match((await diyAttention(paused.db, NOW)) ?? "", /paused at cap: yes/);
+  const broken = fakeDiyDb({ app_settings: settingsRows() }, { failRpc: true });
+  assert.match((await diyAttention(broken.db, NOW)) ?? "", /^DIY reads: could not be read/);
 });
 
 test("a line that cannot be read says so, and never stops the mail", async () => {

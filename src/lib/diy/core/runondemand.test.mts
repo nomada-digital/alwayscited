@@ -5,7 +5,7 @@ import { isFixtureCtx } from "./ctx.ts";
 import { fakeDiyDb, settingsRows, testClient } from "./fake-diy.mts";
 import type { ReadCtx } from "./jobs.ts";
 import { paidRead } from "./ledger.ts";
-import { ACTION_ALLOWANCE, runOnDemand } from "./runondemand.ts";
+import { ACTION_ALLOWANCE, FREE_FIRST, runOnDemand } from "./runondemand.ts";
 
 /**
  * A member's paid button (13 Oct 2026, DIY P1; spec 10 sections 3.6 and
@@ -100,6 +100,53 @@ test("deferred: answered at once, run in after(), and a failure inside is logged
   await assert.rejects(() => runOnDemand({ ...base(fake.db), defer: true }, async () => 1), /after\(\)/);
 });
 
+const fallback = (c: ReadCtx) =>
+  paidRead(c, { door: "onpage", endpoint: "content_parsing", estimate: 0.00015, params: { url: "https://roundup.example/best" } }, async () => ({ value: "parsed", cost: 0.00015, rows: 1, partial: false }));
+
+test("13 Oct 2026: a free-first action still runs while dark, mid-run or at a cap; only its paid fallback is refused, and nothing is written", async () => {
+  assert.deepEqual(FREE_FIRST, { page_check: false, example: false, verify: true, link_check: true, log: true });
+  const cases: [string, ReturnType<typeof world>, string][] = [
+    ["dark", world({ settings: { diy_enabled: false } }), "disabled"],
+    ["a tracking run", world({ runs: [{ id: "r1", status: "running", started_at: new Date(NOW - 60_000).toISOString() }] }), "tracking_running"],
+    ["the month budget", world({ reads: [{ id: "m", client_domain_id: "c-tallyroo", door: "onpage", trigger: "on_demand", action: "log", status: "ok", estimate: 3, cost: 3, created_at: "2026-10-02T09:00:00.000Z" }] }), "month_budget"],
+    ["unreadable runs", world({ failRuns: true }), "ledger_unreadable"],
+  ];
+  for (const [what, fake, code] of cases) {
+    const before = (fake.tables.diy_reads ?? []).length;
+    let ownFetch = 0;
+    const out = await runOnDemand({ ...base(fake.db), action: "link_check" }, async (c) => {
+      ownFetch += 1; // the free own fetch would be here; the page did not link, so try the fallback
+      return fallback(c);
+    });
+    assert.equal(ownFetch, 1, `${what}: the free check ran`);
+    assert.ok(out.ok && !out.deferred, what);
+    assert.equal(out.ok && !out.deferred && out.value.kind === "refused" && out.value.refusal.code, code, `${what}: the fallback is refused with ${code}`);
+    assert.equal((fake.tables.diy_reads ?? []).length, before, `${what}: no ledger row`);
+  }
+  const page = await runOnDemand(base(world({ settings: { diy_enabled: false } }).db), async () => "never");
+  assert.equal(!page.ok && page.code, "disabled", "a page check's first step is paid: refused while dark");
+});
+
+test("13 Oct 2026: with room, a free-first action's fallback is reserved and read as usual", async () => {
+  const fake = world();
+  const out = await runOnDemand({ ...base(fake.db), action: "verify" }, fallback);
+  assert.equal(out.ok && !out.deferred && out.value.kind, "read");
+  assert.deepEqual(fake.tables.diy_reads!.map((r) => [r.action, r.status]), [["verify", "ok"]]);
+});
+
+test("13 Oct 2026: a paused or ended client is refused every action before anything is read", async () => {
+  for (const status of ["paused", "ended"] as const) {
+    for (const action of ["page_check", "link_check"] as const) {
+      const fake = world();
+      let ran = 0;
+      const out = await runOnDemand({ ...base(fake.db), client: testClient({ status }), action }, async () => ran++);
+      assert.deepEqual(out, { ok: false, code: "client_inactive", words: "Checks are off while this account isn't active." });
+      assert.equal(ran, 0);
+      assert.equal(fake.rpcCalls.length, 0);
+    }
+  }
+});
+
 test("each action draws on its own allowance; a logged site has none of its own", () => {
   assert.deepEqual(ACTION_ALLOWANCE, { page_check: "page_checks", example: "examples", verify: "link_checks", link_check: "link_checks", log: null });
 });
@@ -112,6 +159,9 @@ test("on the fixture the state decides, and fn gets a ctx whose doors refuse", a
     process.env.DIY_FIXTURE_STATE = "dark";
     const dark = await runOnDemand({ ...base(null), db: null }, async () => 1);
     assert.equal(!dark.ok && dark.code, "disabled");
+    // 13 Oct 2026: Check a link works dark on the fixture too; its fallback says why it was skipped.
+    const darkCheck = await runOnDemand({ ...base(null), db: null, action: "link_check" }, fallback);
+    assert.equal(darkCheck.ok && !darkCheck.deferred && darkCheck.value.kind === "refused" && darkCheck.value.refusal.code, "disabled");
     process.env.DIY_FIXTURE_STATE = "capped";
     const capped = await runOnDemand({ ...base(null), db: null }, async () => 1);
     assert.equal(!capped.ok && capped.code, "allowance");

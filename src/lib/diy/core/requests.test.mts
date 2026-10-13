@@ -68,6 +68,44 @@ test("the samples are the documented shapes and carry the fields the parsers mus
   }
 });
 
+/**
+ * 13 Oct 2026, review of DIY P1: two samples had been written to match their
+ * parsers rather than the documentation, so their tests proved nothing. Each
+ * sample now carries the paths DataForSEO's v3 documentation gives (read 13 Oct 2026),
+ * and these pins hold the samples to those paths, apart from any parser.
+ */
+test("instant_pages' sample keeps content inside meta, as the documentation does", () => {
+  const raw = JSON.parse(readFileSync(new URL("./samples/instant_pages.json", import.meta.url), "utf8"));
+  const item = raw.tasks[0].result[0].items[0];
+  assert.equal(typeof item.meta.content.plain_text_word_count, "number", "items[].meta.content.plain_text_word_count");
+  assert.equal(item.content, undefined, "no content beside meta");
+  assert.equal(typeof item.checks.no_title, "boolean", "items[].checks");
+});
+
+test("content_parsing's sample: tables of header, body and footer rows of row_cells; elements of text, url and urls", () => {
+  const raw = JSON.parse(readFileSync(new URL("./samples/content_parsing.json", import.meta.url), "utf8"));
+  const content = raw.tasks[0].result[0].items[0].page_content;
+  const topics = [content.header, content.footer, ...content.main_topic, ...content.secondary_topic];
+  let tables = 0;
+  for (const t of topics) {
+    for (const el of [...(t.primary_content ?? []), ...(t.secondary_content ?? [])]) {
+      assert.deepEqual(Object.keys(el).filter((k) => !["text", "url", "urls"].includes(k)), [], "an element is text, url and urls");
+    }
+    for (const table of t.table_content ?? []) {
+      tables += 1;
+      assert.deepEqual(Object.keys(table).sort(), ["body", "footer", "header"]);
+      for (const part of [table.header, table.body, table.footer]) {
+        for (const row of part ?? []) {
+          assert.deepEqual(Object.keys(row), ["row_cells"]);
+          for (const cell of row.row_cells) assert.deepEqual(Object.keys(cell).sort(), ["is_header", "text", "urls"]);
+        }
+      }
+    }
+  }
+  assert.ok(tables >= 1, "the sample carries a table, so the table walk is tested");
+  assert.ok(Array.isArray(content.main_topic), "main_topic is an array");
+});
+
 // ───────────────────────────── the builders ─────────────────────────────
 
 test("ranked_keywords: the client's domain in its market, top 100 by etv, organic only, 1000 rows by default and never more", () => {
@@ -209,6 +247,11 @@ test("content_parsing keeps headings, links with anchors, dates near 'updated' o
   ]);
   assert.deepEqual(got.dates, ["3 October 2026", "12 May 2026"]);
   assert.ok(got.links.some((l) => l.url === "https://tallyroo.com/payroll" && l.anchor === "Tallyroo"));
+  assert.ok(
+    got.links.some((l) => l.url === "https://tallyroo.com/pricing" && l.anchor === "Tallyroo pricing"),
+    "a client link inside a comparison table's body cell is found (13 Oct 2026)",
+  );
+  assert.ok(got.links.some((l) => l.url === "https://ledgerline.com/" && l.anchor === "Ledgerline"));
   assert.ok(got.wordCount > 20);
   assert.equal("markdown" in got, false, "markdown only when asked");
   const keys = keysDeep(got);

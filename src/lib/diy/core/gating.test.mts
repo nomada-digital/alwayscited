@@ -138,6 +138,40 @@ export function visibleText(html: string): string {
     .replace(/\s+/g, " ");
 }
 
+/**
+ * Each element carrying `data-plan-kind`, with everything inside it, found by
+ * a balanced walk of its own tag name: a card holding a child of its own tag
+ * (a `<div>` card with a `<div>` title) is read to its own close, not cut at
+ * the child's (13 Oct 2026, review of DIY P1: a lazy match stopped at the
+ * first `</div>`, and a price after it was never checked). A card never
+ * closed runs to the end of the page.
+ */
+export function planCards(html: string): { kind: string; inner: string }[] {
+  const out: { kind: string; inner: string }[] = [];
+  for (const open of html.matchAll(/<([a-zA-Z][\w-]*)\b[^>]*\bdata-plan-kind="([a-z_]+)"[^>]*>/g)) {
+    const tag = open[1]!.toLowerCase();
+    const start = open.index! + open[0].length;
+    if (open[0].endsWith("/>")) {
+      out.push({ kind: open[2]!, inner: "" });
+      continue;
+    }
+    const tags = new RegExp(`<(/?)${tag}\\b[^>]*>`, "gi");
+    tags.lastIndex = start;
+    let depth = 1;
+    let end = html.length;
+    for (let m = tags.exec(html); m; m = tags.exec(html)) {
+      if (m[1] === "/") depth -= 1;
+      else if (!m[0].endsWith("/>")) depth += 1;
+      if (depth === 0) {
+        end = m.index;
+        break;
+      }
+    }
+    out.push({ kind: open[2]!, inner: html.slice(start, end) });
+  }
+  return out;
+}
+
 /** What is wrong with one saved page, one line each. */
 export function renderedProblems(route: string, html: string): string[] {
   const text = visibleText(html);
@@ -151,8 +185,8 @@ export function renderedProblems(route: string, html: string): string[] {
   if (tool) out.push(`names a competitor tool: ${tool[0]}`);
   if (PRICE_ROUTES.includes(route)) for (const w of pricedNearLinks(text)) out.push(`a price beside a link or placement: "${w}"`);
   if (route === "plan") {
-    for (const m of html.matchAll(/<(\w+)[^>]*data-plan-kind="([a-z_]+)"[^>]*>([\s\S]*?)<\/\1>/g)) {
-      if (PRICE_PLAN_KINDS.includes(m[2]!)) for (const w of pricedNearLinks(visibleText(m[3]!))) out.push(`a price on a ${m[2]} card: "${w}"`);
+    for (const card of planCards(html)) {
+      if (PRICE_PLAN_KINDS.includes(card.kind)) for (const w of pricedNearLinks(visibleText(card.inner))) out.push(`a price on a ${card.kind} card: "${w}"`);
     }
   }
   if (BANNED_KEY.test(html)) out.push("carries a sponsored, attributes or spam key");
@@ -177,6 +211,13 @@ test("the detectors fire on what they are for, written here", () => {
   assert.deepEqual(renderedProblems("pages", page("<p>Product with Offer (price, currency) next to your internal links</p>")), [], "/pages may show the client's own prices");
   assert.match(renderedProblems("plan", page('<article data-plan-kind="earn_link"><p>Budget $300 for this link.</p></article>')).join(), /earn_link card/);
   assert.deepEqual(renderedProblems("plan", page('<article data-plan-kind="add_schema"><p>Product price markup, then link it.</p></article>')), []);
+  // 13 Oct 2026: a card holding a child of its own tag is read to its own close.
+  assert.match(renderedProblems("plan", page('<div data-plan-kind="earn_link"><div>Earn a link</div><p>Budget $300 for this link.</p></div>')).join(), /earn_link card/);
+  assert.match(renderedProblems("plan", page('<div data-plan-kind="earn_link"><div><div>Earn</div></div><div><p>Budget $300 for this link.</p></div></div><div>after</div>')).join(), /earn_link card/);
+  assert.deepEqual(
+    planCards('<li data-plan-kind="earn_link"><ul><li>a</li></ul>b</li><li data-plan-kind="add_schema">c</li>').map((c) => [c.kind, c.inner]),
+    [["earn_link", "<ul><li>a</li></ul>b"], ["add_schema", "c"]],
+  );
   assert.match(renderedProblems("ai", '<pre>{"sponsored": 3}</pre>').join(), /sponsored/);
   assert.ok(BANNED_KEY.test('const row = { spam_score: 4 }'));
   assert.ok(!BANNED_KEY.test("const label = 'spam is used as a filter only';"));
@@ -214,9 +255,34 @@ test("no payload built under src/lib/diy puts a price beside a link or placement
   assert.deepEqual(bad, []);
 });
 
-test("only the worker and runOnDemand mint a ReadCtx", () => {
-  const minters = SOURCE_FILES.filter((f) => /\.(tsx?)$/.test(f) && /(?<![\w.])mintReadCtx\(/.test(code(readFileSync(join(ROOT, f), "utf8"))) && !/export function mintReadCtx/.test(readFileSync(join(ROOT, f), "utf8")));
-  assert.deepEqual(minters, ["src/lib/diy/core/runondemand.ts", "src/lib/diy/core/worker.ts"]);
+/**
+ * Every source file under `src` (.ts, .tsx and .mts, tests aside), for the
+ * ReadCtx census below. 13 Oct 2026, review of DIY P1: the census walked the
+ * DIY directories only, so an on-demand route under `src/app/api` - where P7,
+ * P8 and P10 put theirs - could mint a ctx and skip runOnDemand's tracking-run
+ * and allowance checks with the census green. Floor: 416 such files on 13 Oct
+ * 2026 (DIY P1); a walk that stops matching reports a clean tree.
+ */
+const ALL_SOURCE_FLOOR = 400;
+const ALL_SOURCE = walk("src").filter((f) => /\.(tsx?|mts)$/.test(f) && !f.endsWith(".test.mts"));
+
+test("only the worker and runOnDemand mint a ReadCtx, anywhere in src", () => {
+  assert.ok(ALL_SOURCE.length >= ALL_SOURCE_FLOOR, `walked ${ALL_SOURCE.length} source files, floor ${ALL_SOURCE_FLOOR}`);
+  assert.ok(ALL_SOURCE.includes("src/app/api/diy/run/route.ts"), "src/app/api is walked");
+  const minters: string[] = [];
+  const importers: Record<string, string[]> = { mintReadCtx: [], ctxRuntime: [] };
+  for (const f of ALL_SOURCE) {
+    const src = code(readFileSync(join(ROOT, f), "utf8"));
+    if (/(?<![\w.])mintReadCtx\(/.test(src.replace(/export function mintReadCtx\(/, ""))) minters.push(f);
+    for (const name of Object.keys(importers)) {
+      if (new RegExp(`import\\s*(type\\s*)?\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(src)) importers[name]!.push(f);
+    }
+  }
+  // The test helper mints over a fake runtime for the unit tests; nothing it builds ships.
+  assert.deepEqual(minters.sort(), ["src/lib/diy/core/fake-diy.mts", "src/lib/diy/core/runondemand.ts", "src/lib/diy/core/worker.ts"]);
+  assert.deepEqual(importers.mintReadCtx!.sort(), ["src/lib/diy/core/fake-diy.mts", "src/lib/diy/core/runondemand.ts", "src/lib/diy/core/worker.ts"]);
+  // The runtime behind a ctx (its database, its pools) is the ledger's and the model door's to read, and nobody else's.
+  assert.deepEqual(importers.ctxRuntime!.sort(), ["src/lib/diy/core/ledger.ts", "src/lib/diy/core/model.ts"]);
 });
 
 // ------------------------------------------------------------ the rendered pages

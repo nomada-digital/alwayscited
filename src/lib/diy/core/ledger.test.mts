@@ -4,8 +4,8 @@ import { test } from "node:test";
 import { mintReadCtx, pool } from "./ctx.ts";
 import { fakeDiyDb, settingsRows, testClient, testCtx } from "./fake-diy.mts";
 import type { ReadCtx } from "./jobs.ts";
-import { type ModelAnswer, paidModelCall, paidRead, paramsHash, parseDiySpend, utcDayStart } from "./ledger.ts";
-import { modelCost } from "./prices.ts";
+import { type ModelAnswer, paidModelCall, paidRead, paramsHash, parseDiySpend, utcDayStart, vendorAnswered } from "./ledger.ts";
+import { MODEL_PRICES, modelCost, pricesFor } from "./prices.ts";
 
 /**
  * The DIY ledger on the fake database (13 Oct 2026, DIY P1; spec 10 section
@@ -151,7 +151,7 @@ test("a worker never has more reads in flight than its pool", async () => {
   let most = 0;
   const ctx = mintReadCtx(
     { client: testClient(), trigger: "scheduled", action: null, deadlineMs: w.clock.now + 270_000 },
-    { db: w.db, now: () => w.clock.now, sleep: async () => {}, reads: shared, models: pool(1), fixture: false },
+    { db: w.db, now: () => w.clock.now, sleep: async () => {}, reads: shared, models: pool(1), ledger: pool(1), fixture: false },
   );
   await Promise.all(
     Array.from({ length: 10 }, () =>
@@ -165,6 +165,90 @@ test("a worker never has more reads in flight than its pool", async () => {
     ),
   );
   assert.equal(most, 4);
+});
+
+test("13 Oct 2026: reads fired at once are decided one by one - twelve against a door limit of 3 send exactly 3", async () => {
+  const w = world();
+  const ctx = testCtx(w.db, w.clock);
+  let sent = 0;
+  const outs = await Promise.all(
+    Array.from({ length: 12 }, () =>
+      paidRead(ctx, SPEC, async () => {
+        sent += 1;
+        await new Promise((r) => setTimeout(r, 1));
+        return { value: 1, cost: 0.02, rows: 50, partial: false };
+      }),
+    ),
+  );
+  assert.equal(sent, 3, "the scheduled labs door allows 3 a day");
+  assert.equal(outs.filter((o) => o.kind === "read").length, 3);
+  assert.deepEqual([...new Set(outs.filter((o) => o.kind === "refused").map((o) => o.kind === "refused" && o.refusal.code))], ["door_daily"]);
+  assert.equal(w.tables.diy_reads!.filter((r) => r.status !== "refused").length, 3, "3 reservations, settled");
+});
+
+test("13 Oct 2026: model chunks fanned out at once are reserved one at a time, so the client's model budget holds", async () => {
+  const w = world({ settings: { diy_client_month_model_usd: 1 } });
+  const ctx = testCtx(w.db, w.clock);
+  let called = 0;
+  // Each call's request goes out and its usage is lost with a throw, so its
+  // $0.36 estimate stands: the next decision must see it.
+  const outs = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      paidModelCall(ctx, { ...MODEL_SPEC, estimate: 0.36 }, HEADROOM, async (billed) => {
+        called += 1;
+        billed.calls += 1;
+        throw new Error("Request timed out.");
+      }),
+    ),
+  );
+  assert.equal(called, 2, "two of $0.36 fit a $1 budget; the third would reach $1.08");
+  assert.equal(outs.filter((o) => o.kind === "refused" && o.refusal.code === "month_budget").length, 2);
+});
+
+test("13 Oct 2026: a read that never heard back from DataForSEO keeps its estimate as its cost; one it did keeps what it billed", async () => {
+  const timedOut = world();
+  const out = await paidRead(testCtx(timedOut.db, timedOut.clock), SPEC, async () => {
+    throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+  });
+  assert.equal(out.kind === "failed" && out.cost, null);
+  assert.equal(timedOut.tables.diy_reads![0]!.cost, null, "diy_spend counts coalesce(cost, estimate): the estimate");
+  assert.equal(timedOut.tables.diy_reads![0]!.code, "timeout");
+  const network = world();
+  await paidRead(testCtx(network.db, network.clock), SPEC, async () => {
+    throw new TypeError("fetch failed");
+  });
+  assert.equal(network.tables.diy_reads![0]!.cost, null);
+  const http = world();
+  await paidRead(testCtx(http.db, http.clock), SPEC, async () => {
+    throw Object.assign(new Error("DataForSEO 401: unauthorised"), { status: 401 });
+  });
+  assert.equal(http.tables.diy_reads![0]!.cost, 0, "an HTTP refusal is an answer: nothing ran");
+  assert.equal(vendorAnswered({ taskStatus: 40501 }), true);
+  assert.equal(vendorAnswered(new Error("socket hang up")), false);
+});
+
+test("13 Oct 2026: a client that is not active spends nothing, and the ledger is not read", async () => {
+  const w = world();
+  for (const status of ["paused", "ended"] as const) {
+    const out = await paidRead(testCtx(w.db, w.clock, { client: testClient({ status }) }), SPEC, ok(0.1));
+    assert.equal(out.kind === "refused" && out.refusal.code, "client_inactive");
+  }
+  assert.equal(w.rpcCalls.length, 0);
+  assert.equal((w.tables.diy_reads ?? []).length, 0);
+});
+
+test("13 Oct 2026: a ctx minted with a preflight refusal refuses its paid read at once, with that code, writing nothing", async () => {
+  const w = world();
+  const ctx = mintReadCtx(
+    { client: testClient(), trigger: "on_demand", action: "link_check", deadlineMs: w.clock.now + 25_000 },
+    { db: w.db, now: () => w.clock.now, sleep: async () => {}, reads: pool(4), models: pool(1), ledger: pool(1), fixture: false, preRefusal: { code: "disabled", reason: "diy_enabled is off" } },
+  );
+  let sent = 0;
+  const out = await paidRead(ctx, { ...SPEC, door: "onpage", endpoint: "content_parsing", estimate: 0.00015 }, async () => (sent++, { value: 1, cost: 0, rows: 1, partial: false }));
+  assert.equal(out.kind === "refused" && out.refusal.code, "disabled");
+  assert.equal(sent, 0);
+  assert.equal(w.rpcCalls.length, 0);
+  assert.equal((w.tables.diy_reads ?? []).length, 0);
 });
 
 // ------------------------------------------------------------ the model door
@@ -195,6 +279,34 @@ test("a model call settles from its usage and debits model_call_debits with bill
     w.tables.model_call_debits!.map((d) => [d.calls, d.reason, d.domain]),
     [[2, "diy_classify", "tallyroo.com"]],
   );
+});
+
+test("13 Oct 2026: a call the refusal fallback answered is priced at the answering model's rates, every attempt counted", () => {
+  const u = { input_tokens: 10_000, output_tokens: 2_000 };
+  assert.equal(modelCost(u), 0.08, "no model named: the DIY model, $4 and $20 a million");
+  assert.equal(modelCost(u, "claude-opus-5-5"), 0.08);
+  assert.equal(modelCost(u, "claude-opus-5"), 0.1, "Claude Opus 5: $5 and $25");
+  assert.equal(modelCost(u, "claude-opus-4-8"), 0.1);
+  assert.equal(modelCost(u, "claude-some-new-model"), 0.1, "a model not listed is priced at the dearest");
+  assert.deepEqual(pricesFor("claude-opus-5-5"), MODEL_PRICES["claude-opus-5-5"], "the longer id wins over its prefix");
+  const fellBack = {
+    input_tokens: 10_000,
+    output_tokens: 2_000,
+    iterations: [
+      { type: "message", model: "claude-opus-5-5", input_tokens: 10_000, output_tokens: 500 },
+      { type: "fallback_message", model: "claude-opus-5", input_tokens: 10_000, output_tokens: 2_000 },
+    ],
+  };
+  assert.equal(modelCost(fellBack, "claude-opus-5"), 0.15, "the declined attempt ($0.05) and the fallback that served it ($0.10)");
+});
+
+test("13 Oct 2026: the ledger settles a fallback-served call from the response's own model", async () => {
+  const w = world();
+  await paidModelCall(testCtx(w.db, w.clock), MODEL_SPEC, HEADROOM, async (billed) => {
+    billed.calls += 1;
+    return answer({ parsed_output: { items: [] }, model: "claude-opus-5", usage: { input_tokens: 7200, output_tokens: 3000 } });
+  });
+  assert.equal(w.tables.diy_reads![0]!.cost, 0.111, "7.2k in at $5/M plus 3k out at $25/M");
 });
 
 test("a max_tokens stop is a failure, and nothing is read from its body", async () => {

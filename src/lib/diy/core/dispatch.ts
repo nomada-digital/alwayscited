@@ -7,8 +7,9 @@ import { signRun } from "../../tracking/decide.ts";
 import { addDays } from "../../tracking/figures.ts";
 
 import { type DiyClient, loadDiyClients } from "./client.ts";
-import { type JobSpec, type LastJob, WORKERS_PER_PASS, claimable, diyDay, dueJobs, refuseHandlers } from "./jobs.ts";
+import { type JobSpec, type LastJob, MAX_ATTEMPTS, WORKERS_PER_PASS, claimable, diyDay, dueJobs, refuseHandlers, unclaimedOrStale } from "./jobs.ts";
 import { readDiySettings } from "./settings.ts";
+import { expireAbandoned } from "./worker.ts";
 
 /**
  * The DIY night dispatch, `dispatchDiyWork` (13 Oct 2026, DIY P1; spec 10
@@ -30,9 +31,10 @@ import { readDiySettings } from "./settings.ts";
  * 2. once a UTC day, makes the two free vendor reads (Labs' refresh date, the
  *    Backlinks filter names) through `freeRead`, each in its own try, whatever
  *    `diy_enabled` says, and stores them in `diy_vendor_status`;
- * 3. for every active client, asks jobs.ts which kinds are due and upserts
- *    one `diy_jobs` row each on (client, kind, due day) - paid kinds only for
- *    a confirmed client while DIY is on;
+ * 3. closes the rows whose third attempt never closed (worker.ts
+ *    `expireAbandoned`), then, for every active client, asks jobs.ts which
+ *    kinds are due and upserts one `diy_jobs` row each on (client, kind, due
+ *    day) - paid kinds only for a confirmed client while DIY is on;
  * 4. posts `WORKERS_PER_PASS` workers to `/api/diy/run`, signed with an HMAC
  *    of the body keyed on CRON_SECRET (as the tracking dispatch signs its
  *    runs), only while claimable due jobs remain. The 03:30 pass's workers
@@ -81,6 +83,8 @@ export type DispatchSummary = {
   enabled: boolean;
   vendor: Partial<Record<DiyFreeKind, "read" | "had" | "failed">>;
   clients: number;
+  /** Rows closed because their third attempt never closed. */
+  expired: number;
   queued: number;
   pending: number;
   posted: number;
@@ -92,6 +96,38 @@ const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
 /** The signed body of one worker post. */
 export function workerBody(p: { pass: 1 | 2; worker: number; day: string }): string {
   return JSON.stringify({ pass: p.pass, worker: p.worker, day: p.day });
+}
+
+/**
+ * The UTC minutes of the day a worker post is taken in: from 03:25, five
+ * minutes before the 03:30 pass, to 04:20, which leaves the 03:45 pass room
+ * to fire late. A worker posted at 04:20 has finished by 04:25 (270 s), well
+ * clear of the 05:00 tracking burst.
+ */
+export const NIGHT_WINDOW_UTC = { from: 3 * 60 + 25, to: 4 * 60 + 20 } as const;
+
+export function inNightWindow(now: number): boolean {
+  const d = new Date(now);
+  const minute = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return minute >= NIGHT_WINDOW_UTC.from && minute < NIGHT_WINDOW_UTC.to;
+}
+
+/**
+ * Why the worker route refuses a signed body, or null to take it (13 Oct
+ * 2026, review of DIY P1). The signature proves the dispatcher wrote it, not
+ * when: a captured post replayed later would start an extra worker, past the
+ * two a pass and the eight reads in flight, perhaps inside the 05:00 burst.
+ * So the body's day must be today's UTC day and the post must arrive inside
+ * NIGHT_WINDOW_UTC; a replay is then at worst one more worker tonight, which
+ * the claim's compare-and-swap keeps from running any job twice.
+ */
+export function workerPostProblem(body: unknown, now: number): string | null {
+  const b = (body && typeof body === "object" ? body : {}) as { pass?: unknown; worker?: unknown; day?: unknown };
+  if (typeof b.worker !== "number" || !Number.isInteger(b.worker) || b.worker < 1 || b.worker > 9) return "bad worker";
+  if (b.pass !== 1 && b.pass !== 2) return "bad pass";
+  if (b.day !== diyDay(now)) return "not tonight's post";
+  if (!inNightWindow(now)) return "outside the night window";
+  return null;
 }
 
 /** Post one worker. Answers whether the worker route took it (202). */
@@ -136,7 +172,7 @@ async function vendorReads(db: SupabaseClient, free: FreeReader, day: string, ou
   }
 }
 
-type LastRow = { client_domain_id: string; kind: string; due_on: string; created_at: string };
+type LastRow = { client_domain_id: string; kind: string; due_on: string; created_at: string; done_at?: string | null };
 
 /** Each client's newest row of each kind, from one paged read of the last LOOKBACK_DAYS. */
 export function newestByClient(rows: readonly LastRow[]): Map<string, Map<string, LastJob>> {
@@ -144,7 +180,23 @@ export function newestByClient(rows: readonly LastRow[]): Map<string, Map<string
   for (const r of rows) {
     const kinds = out.get(r.client_domain_id) ?? new Map<string, LastJob>();
     const had = kinds.get(r.kind);
-    if (!had || r.due_on > had.due_on || (r.due_on === had.due_on && r.created_at > had.created_at)) kinds.set(r.kind, { due_on: r.due_on, created_at: r.created_at });
+    if (!had || r.due_on > had.due_on || (r.due_on === had.due_on && r.created_at > had.created_at)) {
+      kinds.set(r.kind, { due_on: r.due_on, created_at: r.created_at, done_at: r.done_at ?? null });
+    }
+    out.set(r.client_domain_id, kinds);
+  }
+  return out;
+}
+
+type OnboardRow = { client_domain_id: string; kind: string; created_at: string };
+
+/** Each client's newest onboarding row of each kind (`onboardedAt`), whatever its age. */
+export function onboardedByClient(rows: readonly OnboardRow[]): Map<string, Map<string, string>> {
+  const out = new Map<string, Map<string, string>>();
+  for (const r of rows) {
+    const kinds = out.get(r.client_domain_id) ?? new Map<string, string>();
+    const had = kinds.get(r.kind);
+    if (!had || r.created_at > had) kinds.set(r.kind, r.created_at);
     out.set(r.client_domain_id, kinds);
   }
   return out;
@@ -163,10 +215,18 @@ async function upsertJobs(db: SupabaseClient, rows: readonly Queued[]): Promise<
 
 type PendingRow = { id: string; due_on: string; claimed_at: string | null; done_at: string | null; attempts: number };
 
-/** How many due jobs a worker could claim now. Throws when they cannot be read. */
+/** How many due jobs a worker could claim now: the worker's own claim condition, in SQL. Throws when they cannot be read. */
 export async function pendingJobs(db: SupabaseClient, today: string, now: number): Promise<number> {
   const rows = await selectAll<PendingRow>((from, to) =>
-    db.from("diy_jobs").select("id, due_on, claimed_at, done_at, attempts").is("done_at", null).lte("due_on", today).order("id", { ascending: true }).range(from, to),
+    db
+      .from("diy_jobs")
+      .select("id, due_on, claimed_at, done_at, attempts")
+      .is("done_at", null)
+      .lte("due_on", today)
+      .lt("attempts", MAX_ATTEMPTS)
+      .or(unclaimedOrStale(now))
+      .order("id", { ascending: true })
+      .range(from, to),
   );
   return rows.filter((r) => claimable(r, today, now)).length;
 }
@@ -175,7 +235,7 @@ export async function pendingJobs(db: SupabaseClient, today: string, now: number
 export async function dispatchDiyWork(deps: DispatchDeps): Promise<DispatchSummary> {
   const now = deps.now ?? Date.now;
   const day = diyDay(now());
-  const out: DispatchSummary = { pass: deps.pass, day, enabled: false, vendor: {}, clients: 0, queued: 0, pending: 0, posted: 0, errors: [] };
+  const out: DispatchSummary = { pass: deps.pass, day, enabled: false, vendor: {}, clients: 0, expired: 0, queued: 0, pending: 0, posted: 0, errors: [] };
 
   // 1. Settings. A failed read is off: free kinds still queue, nothing paid does.
   try {
@@ -191,7 +251,15 @@ export async function dispatchDiyWork(deps: DispatchDeps): Promise<DispatchSumma
     out.errors.push(`vendor reads: ${msg(err)}`);
   }
 
-  // 3. Queue what is due.
+  // 3. Close the rows whose third attempt never closed, so they neither count
+  // as carried nor hold their kind's next slot back.
+  try {
+    out.expired = await expireAbandoned(deps.db, now());
+  } catch (err) {
+    out.errors.push(msg(err));
+  }
+
+  // Then queue what is due.
   const wiring = refuseHandlers(deps.handlers);
   if (wiring.length) {
     out.errors.push(`JOB_HANDLERS is wired wrong, nothing queued: ${wiring.join("; ")}`);
@@ -201,12 +269,29 @@ export async function dispatchDiyWork(deps: DispatchDeps): Promise<DispatchSumma
       out.clients = clients.length;
       const since = addDays(day, -LOOKBACK_DAYS);
       const rows = await selectAll<LastRow>((from, to) =>
-        deps.db.from("diy_jobs").select("client_domain_id, kind, due_on, created_at").gte("due_on", since).order("id", { ascending: true }).range(from, to),
+        deps.db.from("diy_jobs").select("client_domain_id, kind, due_on, created_at, done_at").gte("due_on", since).order("id", { ascending: true }).range(from, to),
       );
       const last = newestByClient(rows);
+      // Onboarding rows are read with no lookback: one per client, kind and
+      // confirm, so few, and an `event` kind's would otherwise age out of the
+      // window and be queued as onboarding again.
+      const onboardKinds = deps.handlers.filter((h) => h.onboarding).map((h) => h.kind);
+      const onboarded = onboardKinds.length
+        ? onboardedByClient(
+            await selectAll<OnboardRow>((from, to) =>
+              deps.db
+                .from("diy_jobs")
+                .select("client_domain_id, kind, created_at")
+                .in("kind", onboardKinds)
+                .eq("payload->>onboarding", "true")
+                .order("id", { ascending: true })
+                .range(from, to),
+            ),
+          )
+        : new Map<string, Map<string, string>>();
       const queued: Queued[] = [];
       for (const client of clients) {
-        for (const due of dueJobs(deps.handlers, client, { enabled: out.enabled, today: day, last: last.get(client.id) ?? new Map() })) {
+        for (const due of dueJobs(deps.handlers, client, { enabled: out.enabled, today: day, last: last.get(client.id) ?? new Map(), onboarded: onboarded.get(client.id) ?? new Map() })) {
           queued.push({ client_domain_id: client.id, kind: due.kind, due_on: due.due_on, priority: due.priority, payload: { onboarding: due.onboarding } });
         }
       }

@@ -1,5 +1,5 @@
 {
-  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "_sample": "Rebuilt 13 Oct 2026 (review of DIY P1) from the response example and field list in DataForSEO's v3 documentation for this endpoint, read that day: every key sits at the path the documentation gives it. Every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose. Note: `content` (with plain_text_word_count) is inside `meta`, not beside it.",
   "version": "0.1.20261001",
   "status_code": 20000,
   "status_message": "Ok.",
@@ -21,14 +21,16 @@
         "instant_pages"
       ],
       "data": {
-        "api": "on_page"
+        "api": "on_page",
+        "function": "instant_pages",
+        "url": "https://tallyroo.com/payroll",
+        "custom_js": null
       },
       "result": [
         {
           "crawl_progress": "finished",
           "crawl_status": null,
           "crawl_gateway_address": "127.0.0.1",
-          "total_items_count": 1,
           "items_count": 1,
           "items": [
             {
@@ -69,6 +71,19 @@
                 "render_blocking_stylesheets_count": 1,
                 "cumulative_layout_shift": 0.01,
                 "meta_title": null,
+                "content": {
+                  "plain_text_size": 8000,
+                  "plain_text_rate": 0.1,
+                  "plain_text_word_count": 1240,
+                  "automated_readability_index": 9.1,
+                  "coleman_liau_readability_index": 10.2,
+                  "dale_chall_readability_index": 7.4,
+                  "flesch_kincaid_readability_index": 55.1,
+                  "smog_readability_index": 11.0,
+                  "description_to_content_consistency": 0.8,
+                  "title_to_content_consistency": 0.9,
+                  "meta_keywords_to_content_consistency": null
+                },
                 "deprecated_tags": null,
                 "duplicate_meta_tags": null,
                 "spell": null,
@@ -78,23 +93,22 @@
               },
               "page_timing": {
                 "time_to_interactive": 900,
-                "dom_complete": 1200
+                "dom_complete": 1200,
+                "largest_contentful_paint": 1100,
+                "first_input_delay": 12,
+                "connection_time": 40,
+                "time_to_secure_connection": 60,
+                "request_sent_time": 2,
+                "waiting_time": 180,
+                "download_time": 30,
+                "duration_time": 1250,
+                "fetch_start": 0,
+                "fetch_end": 1250
               },
               "onpage_score": 91.4,
               "total_dom_size": 120000,
-              "content": {
-                "plain_text_size": 8000,
-                "plain_text_rate": 0.1,
-                "plain_text_word_count": 1240,
-                "automated_readability_index": 9.1,
-                "coleman_liau_readability_index": 10.2,
-                "dale_chall_readability_index": 7.4,
-                "flesch_kincaid_readability_index": 55.1,
-                "smog_readability_index": 11.0,
-                "description_to_content_consistency": 0.8,
-                "title_to_content_consistency": 0.9,
-                "meta_keywords_to_content_consistency": null
-              },
+              "custom_js_response": null,
+              "custom_js_client_exception": null,
               "resource_errors": null,
               "broken_resources": false,
               "broken_links": false,
@@ -163,9 +177,11 @@
               "media_type": "text/html",
               "server": "made-up",
               "is_resource": false,
-              "url_length": 28,
-              "relative_url_length": 8,
-              "last_modified": null
+              "last_modified": {
+                "header": null,
+                "sitemap": null,
+                "meta_tag": null
+              }
             }
           ]
         }

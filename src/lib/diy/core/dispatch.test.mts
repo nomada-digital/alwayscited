@@ -3,9 +3,20 @@ import { test } from "node:test";
 
 import { verifyRun } from "../../tracking/decide.ts";
 
-import { DIY_RUN_URL, DIY_SIGNATURE_HEADER, type FreeAnswer, dispatchDiyWork, enqueueOnboarding, newestByClient } from "./dispatch.ts";
+import {
+  DIY_RUN_URL,
+  DIY_SIGNATURE_HEADER,
+  type FreeAnswer,
+  NIGHT_WINDOW_UTC,
+  dispatchDiyWork,
+  enqueueOnboarding,
+  inNightWindow,
+  newestByClient,
+  workerBody,
+  workerPostProblem,
+} from "./dispatch.ts";
 import { fakeDiyDb, settingsRows, testClient } from "./fake-diy.mts";
-import type { JobSpec } from "./jobs.ts";
+import { type JobSpec, MAX_ATTEMPTS, STALE_CLAIM_MS } from "./jobs.ts";
 
 /**
  * The DIY night dispatch on the fake database (13 Oct 2026, DIY P1; spec 10
@@ -142,7 +153,7 @@ test("each client's newest row of each kind is the one due-ness is read from", (
     { client_domain_id: "a", kind: "k", due_on: "2026-10-08", created_at: "2026-10-08T03:45:00Z" },
     { client_domain_id: "b", kind: "k", due_on: "2026-09-01", created_at: "2026-09-01T03:30:00Z" },
   ]);
-  assert.deepEqual(last.get("a")!.get("k"), { due_on: "2026-10-08", created_at: "2026-10-08T03:45:00Z" });
+  assert.deepEqual(last.get("a")!.get("k"), { due_on: "2026-10-08", created_at: "2026-10-08T03:45:00Z", done_at: null });
   assert.equal(last.get("b")!.get("k")!.due_on, "2026-09-01");
 });
 
@@ -153,4 +164,52 @@ test("setup confirmed queues the onboarding runs for tonight: free ones always, 
   const on = world({ enabled: true });
   await enqueueOnboarding(on.fake.db, "c-new", { handlers: [FREE_KIND, PAID_KIND, FREE_ONBOARD], now: NOW });
   assert.deepEqual(on.fake.tables.diy_jobs!.map((r) => r.kind).sort(), ["footprint", "key_pages_weekly"]);
+});
+
+test("13 Oct 2026: a signed worker post is taken only on its own night - today's UTC day, 03:25 to 04:20 UTC", () => {
+  const body = () => JSON.parse(workerBody({ pass: 1, worker: 1, day: "2026-10-14" })) as Record<string, unknown>;
+  const at = (hhmm: string, day = "2026-10-14") => Date.parse(`${day}T${hhmm}:00Z`);
+  assert.equal(workerPostProblem(body(), at("03:30")), null);
+  assert.equal(workerPostProblem({ ...body(), pass: 2 }, at("04:19")), null);
+  assert.equal(workerPostProblem(body(), at("04:20")), "outside the night window");
+  assert.equal(workerPostProblem(body(), at("03:24")), "outside the night window");
+  assert.equal(workerPostProblem(body(), at("05:05")), "outside the night window", "never in the tracking burst");
+  assert.equal(workerPostProblem(body(), at("03:30", "2026-10-15")), "not tonight's post", "a replay the next night");
+  assert.equal(workerPostProblem({ ...body(), worker: 0 }, at("03:30")), "bad worker");
+  assert.equal(workerPostProblem({ ...body(), pass: 3 }, at("03:30")), "bad pass");
+  assert.equal(workerPostProblem(null, at("03:30")), "bad worker");
+  assert.deepEqual(NIGHT_WINDOW_UTC, { from: 205, to: 260 });
+  assert.ok(inNightWindow(NOW), "the dispatcher's own posts fall inside it");
+});
+
+test("13 Oct 2026: a pass closes rows whose third attempt never closed, then queues the kind's next slot", async () => {
+  const stale = new Date(NOW - STALE_CLAIM_MS - 60_000).toISOString();
+  const dead = { id: "dead", client_domain_id: "c-tallyroo", kind: "plan_refresh", due_on: "2026-10-13", priority: 1, payload: null, claimed_at: stale, done_at: null, attempts: MAX_ATTEMPTS, outcome: null, note: null, created_at: "2026-10-13T03:30:00Z" };
+  const w = world({ jobs: [dead] });
+  const out = await run(w, 1, [FREE_KIND]);
+  assert.equal(out.expired, 1);
+  const rows = w.fake.tables.diy_jobs!;
+  assert.ok(rows.find((r) => r.id === "dead")!.done_at, "closed");
+  assert.deepEqual(rows.filter((r) => r.id !== "dead").map((r) => [r.kind, r.due_on]), [["plan_refresh", "2026-10-14"]], "and tonight's row queued");
+  assert.equal(out.pending, 1);
+});
+
+test("13 Oct 2026: a daily row carried from last night is tonight's row; no second one is queued", async () => {
+  const carried = { id: "c1", client_domain_id: "c-tallyroo", kind: "plan_refresh", due_on: "2026-10-13", priority: 1, payload: { onboarding: false }, claimed_at: null, done_at: null, attempts: 0, outcome: null, note: null, created_at: "2026-10-13T03:30:00Z" };
+  const w = world({ jobs: [carried] });
+  const out = await run(w, 1, [FREE_KIND]);
+  assert.equal(out.queued, 0);
+  assert.equal(w.fake.tables.diy_jobs!.length, 1);
+  assert.equal(out.pending, 1, "the carried row is what tonight's workers take");
+});
+
+test("13 Oct 2026: an event kind onboarded long ago is not onboarded again when its row ages out of the lookback", async () => {
+  const EVENT_ONBOARD: JobSpec = { kind: "setup_scan", paid: false, cadence: "event", priority: 2, onboarding: true };
+  const old = { id: "o1", client_domain_id: "c-tallyroo", kind: "setup_scan", due_on: "2026-06-10", priority: 2, payload: { onboarding: true }, claimed_at: "2026-06-10T03:31:00Z", done_at: "2026-06-10T03:32:00Z", attempts: 1, outcome: "ok", note: null, created_at: "2026-06-10T03:30:00Z" };
+  const w = world({ jobs: [old] });
+  const client = testClient({ setupConfirmedAt: "2026-06-09T12:00:00Z" });
+  const out = await run(w, 1, [EVENT_ONBOARD], [client]);
+  assert.equal(out.queued, 0, "June's onboarding row counts, though it is outside the 62 days read for the calendar");
+  const fresh = world();
+  assert.equal((await run(fresh, 1, [EVENT_ONBOARD], [client])).queued, 1, "never onboarded: onboarded tonight");
 });

@@ -8,6 +8,22 @@
 -- refuses a read whose ledger cannot be read; dispatch.ts queues nothing paid
 -- while diy_enabled is missing or false).
 --
+-- Two departures from the spec's SQL (section 5.8), both made before this
+-- file was ever applied (13 Oct 2026, review of DIY P1):
+-- * Each foreign key to client_domains says what a delete does, as every
+--   other child of client_domains here does (tracking_dashboard.sql and
+--   placements_and_ux.sql cascade; scans and orders set null). With no action
+--   given it would be NO ACTION, and deleting a client - or an account, which
+--   cascades to its clients - would fail once DIY rows existed; changing that
+--   after this is applied needs a DROP CONSTRAINT, which is never done here.
+--   diy_jobs cascades: a deleted client's queue goes with it. diy_reads sets
+--   null: the ledger row stays, so the global daily sums still count what was
+--   spent that day, and it holds no client text.
+-- * diy_spend reads each sum from its own index (the global day sums over
+--   diy_reads_created, the client's counts and month sums over
+--   diy_reads_client_created) instead of one CTE over every client's month,
+--   which Postgres would have materialised on every reservation.
+--
 -- diy_reads: the ledger. One row per paid read, written as `reserved` with
 -- the request's maximum cost before the read goes out, then settled to ok,
 -- partial or failed with what the vendor billed (a failed task keeps its
@@ -15,7 +31,7 @@
 -- client text: the endpoint, a hash of the request, counts and dollars.
 create table if not exists diy_reads (
   id uuid primary key default gen_random_uuid(),
-  client_domain_id uuid references client_domains(id),
+  client_domain_id uuid references client_domains(id) on delete set null,
   door text not null check (door in ('labs','backlinks','onpage','content','model')),
   endpoint text not null,
   trigger text not null check (trigger in ('scheduled','on_demand','onboarding')),
@@ -40,7 +56,7 @@ alter table diy_reads enable row level security;
 -- note); a failure is never swallowed into an empty note.
 create table if not exists diy_jobs (
   id uuid primary key default gen_random_uuid(),
-  client_domain_id uuid not null references client_domains(id),
+  client_domain_id uuid not null references client_domains(id) on delete cascade,
   kind text not null,
   due_on date not null,
   priority smallint not null default 5,
@@ -69,24 +85,35 @@ alter table diy_vendor_status enable row level security;
 
 -- Every sum a reservation checks, in one round trip (section 5.6 item 4).
 -- Read-only: it selects and sums, and writes nothing. Refused rows count 0.
+-- Each sum reads only its own window: the global day sums every client's rows
+-- since p_day_start (diy_reads_created); the door counts and month sums read
+-- this client's rows only (diy_reads_client_created).
 create or replace function diy_spend(p_client uuid, p_day_start timestamptz, p_month_start timestamptz)
 returns table (global_dfs_today numeric, global_model_today numeric, door_counts jsonb, month_sums jsonb)
 language sql stable set search_path = public as $$
-  with live as (
-    select client_domain_id, door, trigger, created_at, coalesce(cost, estimate) as amount
-    from diy_reads
-    where status in ('reserved','ok','partial','failed') and created_at >= least(p_day_start, p_month_start)
-  )
   select
-    coalesce(sum(amount) filter (where door <> 'model' and created_at >= p_day_start), 0),
-    coalesce(sum(amount) filter (where door = 'model' and created_at >= p_day_start), 0),
+    g.dfs,
+    g.model,
     coalesce((select jsonb_object_agg(k, n) from (
-      select trigger || ':' || door as k, count(*) as n from live
-      where client_domain_id = p_client and created_at >= p_day_start group by 1) d), '{}'::jsonb),
+      select trigger || ':' || door as k, count(*) as n
+      from diy_reads
+      where client_domain_id = p_client and created_at >= p_day_start
+        and status in ('reserved','ok','partial','failed')
+      group by 1) d), '{}'::jsonb),
     coalesce((select jsonb_object_agg(k, a) from (
       select case when door = 'model' then 'model' when trigger = 'on_demand' then 'on_demand' else 'scheduled' end as k,
-             sum(amount) as a from live where client_domain_id = p_client and created_at >= p_month_start group by 1) m), '{}'::jsonb)
-  from live;
+             sum(coalesce(cost, estimate)) as a
+      from diy_reads
+      where client_domain_id = p_client and created_at >= p_month_start
+        and status in ('reserved','ok','partial','failed')
+      group by 1) m), '{}'::jsonb)
+  from (
+    select
+      coalesce(sum(coalesce(cost, estimate)) filter (where door <> 'model'), 0) as dfs,
+      coalesce(sum(coalesce(cost, estimate)) filter (where door = 'model'), 0) as model
+    from diy_reads
+    where created_at >= p_day_start and status in ('reserved','ok','partial','failed')
+  ) g;
 $$;
 -- The rule the rest of this directory keeps (20260919161000): PUBLIC's
 -- default execute revoked, the service role granted by name.

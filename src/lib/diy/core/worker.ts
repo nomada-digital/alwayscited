@@ -4,7 +4,19 @@ import { addDays } from "../../tracking/figures.ts";
 
 import { type DiyClient, loadDiyClient } from "./client.ts";
 import { pool, realSleep, mintReadCtx } from "./ctx.ts";
-import { type JobHandler, type JobOutcome, type JobResult, MAX_ATTEMPTS, WORKER_BUDGET_MS, WORKER_POOL, byClaimOrder, claimable, diyDay } from "./jobs.ts";
+import {
+  type JobHandler,
+  type JobOutcome,
+  type JobResult,
+  MAX_ATTEMPTS,
+  STALE_CLAIM_MS,
+  WORKER_BUDGET_MS,
+  WORKER_POOL,
+  byClaimOrder,
+  claimable,
+  diyDay,
+  unclaimedOrStale,
+} from "./jobs.ts";
 
 /**
  * The DIY night worker, `runDiyWorker` (13 Oct 2026, DIY P1; spec 10 section
@@ -17,10 +29,15 @@ import { type JobHandler, type JobOutcome, type JobResult, MAX_ATTEMPTS, WORKER_
  *    row exactly as it was read (its `attempts`, and its `claimed_at` null or
  *    the stale value seen), not done, so two workers can never both take one,
  *    and a claim older than 15 minutes (a worker the platform killed) is taken
- *    again;
+ *    again. The candidates are read claimable in SQL - under three attempts,
+ *    never claimed or claimed before the stale line - before the limit, so
+ *    rows that cannot be taken never fill the window and hide ones that can
+ *    (13 Oct 2026, review of DIY P1: 100 rows stuck at three attempts sorted
+ *    first for good and the worker answered "empty" over claimable jobs);
  * 2. run its handler, handing a paid kind a fresh ReadCtx that shares this
  *    worker's pool of 4 DataForSEO reads in flight (2 workers x 4 = at most 8
- *    at once) and its one model call at a time;
+ *    at once), its one model call at a time, and its ledger lock, so every
+ *    reservation the worker makes is decided after the one before it;
  * 3. close the row itself: `ok` and `skipped` done; `deferred` (a daily cap)
  *    done and queued again for tomorrow; `failed` with its message as the
  *    note - never swallowed - retried by a later pass until its third
@@ -76,7 +93,16 @@ const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 /** Claims one due job, or answers null when there is none to take. Throws when the table cannot be read. */
 export async function claimNextJob(db: SupabaseClient, today: string, now: number): Promise<JobRow | null> {
-  const { data, error } = await db.from("diy_jobs").select(COLUMNS).is("done_at", null).lte("due_on", today).order("due_on", { ascending: true }).limit(CANDIDATES);
+  const { data, error } = await db
+    .from("diy_jobs")
+    .select(COLUMNS)
+    .is("done_at", null)
+    .lte("due_on", today)
+    .lt("attempts", MAX_ATTEMPTS)
+    .or(unclaimedOrStale(now))
+    .order("due_on", { ascending: true })
+    .order("priority", { ascending: true })
+    .limit(CANDIDATES);
   if (error) throw new Error(`could not read the due DIY jobs: ${error.message}`);
   const rows = ((data ?? []) as JobRow[]).filter((r) => claimable(r, today, now)).sort(byClaimOrder);
   const at = new Date(now).toISOString();
@@ -119,6 +145,54 @@ export async function closeJob(db: SupabaseClient, job: JobRow, result: JobResul
   }
 }
 
+/** How many abandoned rows one pass closes at most; the rest wait for the next pass. */
+const EXPIRE_BATCH = 200;
+
+/**
+ * Closes the rows whose third attempt never closed: claimed three times, the
+ * last claim stale, and no `done_at` - the platform stopped the worker on its
+ * third attempt, or `closeJob`'s update failed. Nothing can claim them again
+ * (three attempts is the most), so without this they would sit open for
+ * good: counted as carried in the run-health line, and holding the kind's
+ * next slot back (jobs.ts dueFor queues nothing while the newest row waits).
+ * Each is closed as failed with a note that says so, keeping the note it had,
+ * by a compare-and-swap on the row as read, so a row a worker closes at the
+ * same moment is left as that worker wrote it. Answers how many it closed.
+ * Throws when the rows cannot be read; a single row that fails to close is
+ * logged and left for the next pass (13 Oct 2026, review of DIY P1).
+ */
+export async function expireAbandoned(db: SupabaseClient, now: number): Promise<number> {
+  const stale = new Date(now - STALE_CLAIM_MS).toISOString();
+  const { data, error } = await db
+    .from("diy_jobs")
+    .select("id, kind, attempts, claimed_at, note")
+    .is("done_at", null)
+    .gte("attempts", MAX_ATTEMPTS)
+    .lt("claimed_at", stale)
+    .order("claimed_at", { ascending: true })
+    .limit(EXPIRE_BATCH);
+  if (error) throw new Error(`could not read the abandoned DIY jobs: ${error.message}`);
+  let closed = 0;
+  for (const row of (data ?? []) as { id: string; kind: string; attempts: number; claimed_at: string; note: string | null }[]) {
+    const note = `abandoned: attempt ${row.attempts} never closed (the worker was stopped, or its close failed)${row.note ? `; last note: ${row.note}` : ""}`.slice(0, NOTE_MAX);
+    try {
+      const { data: took, error: upErr } = await db
+        .from("diy_jobs")
+        .update({ done_at: new Date(now).toISOString(), outcome: "failed", note })
+        .eq("id", row.id)
+        .is("done_at", null)
+        .eq("attempts", row.attempts)
+        .eq("claimed_at", row.claimed_at)
+        .select("id");
+      if (upErr) throw new Error(upErr.message);
+      if (Array.isArray(took) && took.length === 1) closed += 1;
+    } catch (err) {
+      console.warn(`[diy] could not close abandoned job ${row.id} (${row.kind}): ${msg(err)}`);
+    }
+  }
+  return closed;
+}
+
 /** One worker's night: claim, run, close, until the budget is nearly spent or nothing is left. */
 export async function runDiyWorker(deps: WorkerDeps): Promise<WorkerSummary> {
   const now = deps.now ?? Date.now;
@@ -129,6 +203,9 @@ export async function runDiyWorker(deps: WorkerDeps): Promise<WorkerSummary> {
   const clients = new Map<string, DiyClient | null>();
   const reads = pool(WORKER_POOL);
   const models = pool(1);
+  // One reservation decided at a time across this worker's ctxs, so each
+  // decision sees the reservation before it (ledger.ts reserve).
+  const ledger = pool(1);
   const sleep = deps.sleep ?? realSleep;
   const loadClient = deps.loadClient ?? loadDiyClient;
   const summary: WorkerSummary = { claimed: 0, outcomes: { ok: 0, skipped: 0, deferred: 0, failed: 0 }, stopped: "budget", errors: [] };
@@ -170,7 +247,7 @@ export async function runDiyWorker(deps: WorkerDeps): Promise<WorkerSummary> {
     if (client.status !== "active") return { outcome: "skipped", note: `the client is ${client.status}` };
     const onboarding = job.payload?.onboarding === true;
     const read = handler.paid
-      ? mintReadCtx({ client, trigger: onboarding ? "onboarding" : "scheduled", action: null, deadlineMs: deadline }, { db: deps.db, now, sleep, reads, models, fixture: false })
+      ? mintReadCtx({ client, trigger: onboarding ? "onboarding" : "scheduled", action: null, deadlineMs: deadline }, { db: deps.db, now, sleep, reads, models, ledger, fixture: false })
       : undefined;
     try {
       const out = await handler.run({ db: deps.db, client, today, deadlineMs: deadline, onboarding, read });

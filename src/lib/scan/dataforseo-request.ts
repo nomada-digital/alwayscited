@@ -406,7 +406,15 @@ export function keywordIntents(task: Task): Map<string, Intent | null> {
  * is never read, and nothing here reads a sponsored or spam field. The
  * shapes are DataForSEO's documented responses, read from docs.dataforseo.com
  * on 13 Oct 2026; the saved samples in `src/lib/diy/core/samples/` carry them
- * with made-up values, and `diy-request.test.mts` runs every parser on them.
+ * with made-up values, and `src/lib/diy/core/requests.test.mts` runs every
+ * parser on them and pins the documented paths in the samples themselves.
+ *
+ * 13 Oct 2026, review of DIY P1: two parsers read paths the documentation
+ * does not have, and their samples had been written to match. `instant_pages`
+ * keeps `content` inside `meta` (`items[].meta.content.plain_text_word_count`),
+ * and each `content_parsing` `table_content` entry is a table of `header`,
+ * `body` and `footer` rows, each row's `row_cells` holding `text`, `urls`
+ * and `is_header`. Both parsers and both samples now follow the docs.
  */
 
 /** The two free paths, both cost 0 (04 section 2). `freeRead` in doors.ts accepts these and refuses every other path. */
@@ -660,7 +668,7 @@ export function parseInstantPage(task: Task): { taskId: string | null; page: Ins
       description: text(meta.description, 500),
       h1: arr(obj(meta.htags).h1).map((h) => text(h, 200)).filter((h): h is string => h !== null).slice(0, 10),
       canonical: text(meta.canonical, 500),
-      wordCount: numOrNull(obj(item.content).plain_text_word_count),
+      wordCount: numOrNull(obj(meta.content).plain_text_word_count),
       checks: Object.fromEntries(INSTANT_CHECKS.map((k) => [k, boolOrNull(checks[k])])) as InstantPage["checks"],
     },
   };
@@ -749,10 +757,20 @@ export function parseContentParsing(task: Task, opts: { markdown?: boolean } = {
       for (const l of arr(el.urls).map(obj)) addLink(l.url, l.anchor_text);
     }
   };
+  // A table: its header, body and footer rows, each row's cells read like
+  // content elements (text, and urls with their anchors). A client link in a
+  // "best of" comparison table is a common place for one.
+  const readTables = (list: unknown) => {
+    for (const table of arr(list).map(obj)) {
+      for (const part of [table.header, table.body, table.footer]) {
+        for (const row of [part].flat().map(obj)) readElements(row.row_cells);
+      }
+    }
+  };
   for (const b of blocks) {
     readElements(b.primary_content);
     readElements(b.secondary_content);
-    for (const row of arr(b.table_content)) for (const cell of arr(row)) readElements([cell]);
+    readTables(b.table_content);
   }
 
   let title: string | null = null;

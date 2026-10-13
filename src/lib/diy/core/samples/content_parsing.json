@@ -1,5 +1,5 @@
 {
-  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "_sample": "Rebuilt 13 Oct 2026 (review of DIY P1) from the response example and field list in DataForSEO's v3 documentation for this endpoint, read that day: every key sits at the path the documentation gives it. Every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose. Note: each table_content entry is a table of header, body and footer rows, each row holding row_cells of {text, urls, is_header}; content elements carry text, url and urls only.",
   "version": "0.1.20261001",
   "status_code": 20000,
   "status_message": "Ok.",
@@ -22,16 +22,15 @@
         "live"
       ],
       "data": {
-        "api": "on_page"
+        "api": "on_page",
+        "function": "content_parsing",
+        "url": "https://roundup.example/best-payroll",
+        "markdown_view": false
       },
       "result": [
         {
           "crawl_progress": "finished",
-          "crawl_status": {
-            "max_crawl_pages": 1,
-            "pages_in_queue": 0,
-            "pages_crawled": 1
-          },
+          "crawl_status": null,
           "items_count": 1,
           "items": [
             {
@@ -42,7 +41,6 @@
                 "header": {
                   "primary_content": [
                     {
-                      "type": "content_item",
                       "text": "Home",
                       "url": "https://roundup.example/",
                       "urls": [
@@ -59,13 +57,11 @@
                 "footer": {
                   "primary_content": [
                     {
-                      "type": "content_item",
                       "text": "Contact the editor",
                       "url": null,
                       "urls": null
                     },
                     {
-                      "type": "content_item",
                       "text": "Write for the site",
                       "url": "https://roundup.example/contribute",
                       "urls": [
@@ -88,13 +84,11 @@
                     "level": 1,
                     "primary_content": [
                       {
-                        "type": "content_item",
                         "text": "Last updated 3 October 2026 by the editors.",
                         "url": null,
                         "urls": null
                       },
                       {
-                        "type": "content_item",
                         "text": "We compared seven tools, including Ledgerline and Tallyroo.",
                         "url": null,
                         "urls": [
@@ -120,7 +114,6 @@
                     "level": 2,
                     "primary_content": [
                       {
-                        "type": "content_item",
                         "text": "Published 12 May 2026. Each tool was used for a month.",
                         "url": null,
                         "urls": null
@@ -128,34 +121,65 @@
                     ],
                     "secondary_content": null,
                     "table_content": [
-                      [
-                        {
-                          "type": "content_item",
-                          "text": "Tool",
-                          "url": null,
-                          "urls": null
-                        },
-                        {
-                          "type": "content_item",
-                          "text": "Starting price",
-                          "url": null,
-                          "urls": null
-                        }
-                      ],
-                      [
-                        {
-                          "type": "content_item",
-                          "text": "Ledgerline",
-                          "url": null,
-                          "urls": null
-                        },
-                        {
-                          "type": "content_item",
-                          "text": "12 a month",
-                          "url": null,
-                          "urls": null
-                        }
-                      ]
+                      {
+                        "header": [
+                          {
+                            "row_cells": [
+                              {
+                                "text": "Tool",
+                                "urls": null,
+                                "is_header": true
+                              },
+                              {
+                                "text": "Starting price",
+                                "urls": null,
+                                "is_header": true
+                              }
+                            ]
+                          }
+                        ],
+                        "body": [
+                          {
+                            "row_cells": [
+                              {
+                                "text": "Ledgerline",
+                                "urls": [
+                                  {
+                                    "url": "https://ledgerline.com/",
+                                    "anchor_text": "Ledgerline"
+                                  }
+                                ],
+                                "is_header": false
+                              },
+                              {
+                                "text": "12 a month",
+                                "urls": null,
+                                "is_header": false
+                              }
+                            ]
+                          },
+                          {
+                            "row_cells": [
+                              {
+                                "text": "Tallyroo",
+                                "urls": [
+                                  {
+                                    "url": "https://tallyroo.com/pricing",
+                                    "anchor_text": "Tallyroo pricing"
+                                  }
+                                ],
+                                "is_header": false
+                              },
+                              {
+                                "text": "9 a month",
+                                "urls": null,
+                                "is_header": false
+                              }
+                            ]
+                          }
+                        ],
+                        "footer": null
+                      }
                     ]
                   },
                   {
@@ -166,7 +190,6 @@
                     "level": 3,
                     "primary_content": [
                       {
-                        "type": "content_item",
                         "text": "A made-up rival with a made-up feature list.",
                         "url": null,
                         "urls": null
@@ -185,7 +208,6 @@
                     "level": 2,
                     "primary_content": [
                       {
-                        "type": "content_item",
                         "text": "More round-ups",
                         "url": "https://roundup.example/more",
                         "urls": null
@@ -197,7 +219,7 @@
                 ],
                 "ratings": [
                   {
-                    "name": "Ledgerline",
+                    "name": null,
                     "rating_value": 4.1,
                     "max_rating_value": 5,
                     "rating_count": 12,
@@ -220,7 +242,6 @@
                     "author": "Reader",
                     "primary_content": [
                       {
-                        "type": "content_item",
                         "text": "Thanks.",
                         "url": null,
                         "urls": null

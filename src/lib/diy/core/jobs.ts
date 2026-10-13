@@ -154,8 +154,13 @@ export function slotOn(cadence: Cadence, anchor: Day | null, today: Day): Day | 
   return slot < ms(anchor) ? null : iso(slot);
 }
 
-/** The newest `diy_jobs` row of one kind for one client, whatever its state, as the dispatcher reads it. */
-export type LastJob = { due_on: Day; created_at: string };
+/**
+ * The newest `diy_jobs` row of one kind for one client, whatever its state, as
+ * the dispatcher reads it. `done_at` null is a row still waiting: carried from
+ * a night that ran out of time, or retrying. Undefined reads as done, the
+ * rule before 13 Oct 2026's review, for a caller that does not read it.
+ */
+export type LastJob = { due_on: Day; created_at: string; done_at?: string | null };
 
 /** One row the dispatcher should upsert. `onboarding` rides in the row's payload, so the worker can tell the run apart. */
 export type Due = { kind: string; due_on: Day; priority: number; onboarding: boolean };
@@ -167,6 +172,15 @@ export type DueInput = {
   today: Day;
   /** The newest row of this kind for this client, or null when it was never queued. */
   last: LastJob | null;
+  /**
+   * When this kind's newest onboarding row for this client was queued
+   * (`payload.onboarding` true), read with no lookback window, or null when
+   * none ever was. Undefined falls back to `last.created_at`, the rule before
+   * 13 Oct 2026's review: the dispatcher reads its rows over 62 days only, so
+   * an `event` kind's onboarding row aged out of that window and the kind was
+   * queued as onboarding again.
+   */
+  onboardedAt?: string | null;
 };
 
 /**
@@ -175,14 +189,19 @@ export type DueInput = {
  * 1. A paid kind is queued only when DIY is on and the client's setup is
  *    confirmed. Free kinds are queued for every active client.
  * 2. Onboarding: a kind with `onboarding` is due today when setup is
- *    confirmed and nothing of the kind has been queued since the confirm.
- *    That is the first dispatch after confirm, and, for a client confirmed
- *    before DIY was switched on, the first dispatch after it was.
+ *    confirmed and no onboarding row of the kind has been queued since the
+ *    confirm (`onboardedAt`). That is the first dispatch after confirm, and,
+ *    for a client confirmed before DIY was switched on, the first dispatch
+ *    after it was.
  * 3. Otherwise by the calendar: due on its latest slot (`slotOn`) when the
- *    newest row of the kind is older than that slot. A row still waiting -
- *    carried from a night that ran out of time, or retrying - is the slot's
- *    row already, so nothing new is queued until the next slot; a row that
- *    used its three attempts stops there until then too.
+ *    newest row of the kind is older than that slot and done. A row still
+ *    waiting - carried from a night that ran out of time, or retrying - is the
+ *    slot's row already, so nothing new is queued while it waits, whatever
+ *    the cadence: a full night window does not grow its backlog by a row per
+ *    daily kind per client per night (13 Oct 2026, review of DIY P1). A row
+ *    that used its three attempts is closed (by the worker, or by the
+ *    dispatcher's `expireAbandoned` when its third attempt never closed), so
+ *    it stops there until the next slot.
  *
  * Ended and paused clients have nothing due (the dispatcher reads active ones only; `dueJobs` checks again).
  */
@@ -192,12 +211,13 @@ export function dueFor(spec: JobSpec, client: Pick<DiyClient, "startedOn" | "set
   const at = (due_on: Day, onboarding: boolean): Due => ({ kind: spec.kind, due_on, priority: spec.priority, onboarding });
   if (spec.onboarding && confirmed) {
     const since = Date.parse(client.setupConfirmedAt!);
-    const queuedSince = p.last !== null && Date.parse(p.last.created_at) >= since;
+    const onboarded = p.onboardedAt !== undefined ? p.onboardedAt : (p.last?.created_at ?? null);
+    const queuedSince = onboarded !== null && Date.parse(onboarded) >= since;
     if (!queuedSince) return at(p.today, true);
   }
   const slot = slotOn(spec.cadence, client.startedOn, p.today);
   if (slot === null) return null;
-  if (p.last !== null && p.last.due_on >= slot) return null;
+  if (p.last !== null && (p.last.due_on >= slot || p.last.done_at === null)) return null;
   return at(slot, false);
 }
 
@@ -205,10 +225,21 @@ export function dueFor(spec: JobSpec, client: Pick<DiyClient, "startedOn" | "set
  * Every kind due for one client today, oldest slot first, then by priority.
  * `last` maps a kind to its newest row. Kinds must be unique (`refuseHandlers`).
  */
-export function dueJobs(specs: readonly JobSpec[], client: Pick<DiyClient, "status" | "startedOn" | "setupConfirmedAt">, p: { enabled: boolean; today: Day; last: ReadonlyMap<string, LastJob> }): Due[] {
+export function dueJobs(
+  specs: readonly JobSpec[],
+  client: Pick<DiyClient, "status" | "startedOn" | "setupConfirmedAt">,
+  p: { enabled: boolean; today: Day; last: ReadonlyMap<string, LastJob>; onboarded?: ReadonlyMap<string, string> },
+): Due[] {
   if (client.status !== "active") return [];
   return specs
-    .map((s) => dueFor(s, client, { enabled: p.enabled, today: p.today, last: p.last.get(s.kind) ?? null }))
+    .map((s) =>
+      dueFor(s, client, {
+        enabled: p.enabled,
+        today: p.today,
+        last: p.last.get(s.kind) ?? null,
+        ...(p.onboarded ? { onboardedAt: p.onboarded.get(s.kind) ?? null } : {}),
+      }),
+    )
     .filter((d): d is Due => d !== null)
     .sort(byClaimOrder);
 }
@@ -232,6 +263,18 @@ export type ClaimRow = { due_on: Day; claimed_at: string | null; done_at: string
 export function claimable(row: ClaimRow, today: Day, now: number): boolean {
   if (row.done_at !== null || row.due_on > today || row.attempts >= MAX_ATTEMPTS) return false;
   return row.claimed_at === null || now - Date.parse(row.claimed_at) > STALE_CLAIM_MS;
+}
+
+/**
+ * `claimable`'s claim condition as a PostgREST filter, for the worker's claim
+ * and the dispatcher's count: never claimed, or claimed before the stale
+ * line. Quoted, so the timestamp's colons and dots are read as a value
+ * (checkout/payment.ts newerThanRecorded). With `.lt("attempts",
+ * MAX_ATTEMPTS)` beside it, the rows a worker can take are chosen in SQL,
+ * before any limit (13 Oct 2026, review of DIY P1).
+ */
+export function unclaimedOrStale(now: number): string {
+  return `claimed_at.is.null,claimed_at.lt."${new Date(now - STALE_CLAIM_MS).toISOString()}"`;
 }
 
 /**

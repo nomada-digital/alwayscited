@@ -7,7 +7,7 @@ import type { DiyClient } from "./client.ts";
 import { ctxRuntime } from "./ctx.ts";
 import { fakeDiyDb, testClient } from "./fake-diy.mts";
 import { type JobContext, type JobHandler, MAX_ATTEMPTS, STALE_CLAIM_MS } from "./jobs.ts";
-import { claimNextJob, runDiyWorker } from "./worker.ts";
+import { claimNextJob, expireAbandoned, runDiyWorker } from "./worker.ts";
 
 /**
  * The DIY night worker on the fake database (13 Oct 2026, DIY P1; spec 10
@@ -137,8 +137,9 @@ test("a job deferred by a daily cap is closed and queued again for tomorrow, car
   const fake = fakeDiyDb({ diy_jobs: [job({ id: "j1", kind: "footprint", payload: { onboarding: true } })] });
   await runDiyWorker({ db: fake.db, handlers: [handler({ kind: "footprint", paid: true }, async () => ({ outcome: "deferred", note: "global_daily" }))], now: () => NOW, loadClient: clients() });
   const rows = fake.tables.diy_jobs!;
-  assert.equal(rows[0]!.outcome, "deferred");
-  assert.ok(rows[0]!.done_at);
+  const j1 = rows.find((r) => r.id === "j1")!;
+  assert.equal(j1.outcome, "deferred");
+  assert.ok(j1.done_at);
   const tomorrow = rows.find((r) => r.due_on === "2026-10-15");
   assert.ok(tomorrow, "queued for tomorrow");
   assert.deepEqual(tomorrow!.payload, { onboarding: true });
@@ -161,6 +162,37 @@ test("an unknown kind, a gone client and an ended client each close their row wi
   assert.equal(by.b!.outcome, "skipped");
   assert.equal(by.c!.outcome, "skipped");
   assert.match(String(by.c!.note), /ended/);
+});
+
+test("13 Oct 2026: rows no worker can take never hide one it can - the candidates are chosen claimable in SQL", async () => {
+  const stale = new Date(NOW - STALE_CLAIM_MS - 60_000).toISOString();
+  const fresh = new Date(NOW - 60_000).toISOString();
+  const stuck = Array.from({ length: 100 }, (_, i) => job({ id: `dead-${i}`, due_on: "2026-10-01", attempts: MAX_ATTEMPTS, claimed_at: stale }));
+  const failing = Array.from({ length: 100 }, (_, i) => job({ id: `retry-${i}`, due_on: "2026-10-02", attempts: 1, claimed_at: fresh, outcome: "failed" }));
+  const fake = fakeDiyDb({ diy_jobs: [...stuck, ...failing, job({ id: "live" })] });
+  const out = await runDiyWorker({ db: fake.db, handlers: [handler({ kind: "plan_refresh" })], now: () => NOW, loadClient: clients() });
+  assert.equal(out.claimed, 1, "the one claimable job behind 200 that are not");
+  assert.equal(fake.tables.diy_jobs!.find((r) => r.id === "live")!.outcome, "ok");
+});
+
+test("13 Oct 2026: a row whose third attempt never closed is closed as abandoned, keeping its last note; nothing else is touched", async () => {
+  const stale = new Date(NOW - STALE_CLAIM_MS - 60_000).toISOString();
+  const fake = fakeDiyDb({
+    diy_jobs: [
+      job({ id: "dead", attempts: MAX_ATTEMPTS, claimed_at: stale, outcome: "failed", note: "timeout" }),
+      job({ id: "running", attempts: MAX_ATTEMPTS, claimed_at: new Date(NOW - 60_000).toISOString() }),
+      job({ id: "retrying", attempts: 1, claimed_at: stale }),
+      job({ id: "closed", attempts: MAX_ATTEMPTS, claimed_at: stale, done_at: "2026-10-13T03:40:00Z", outcome: "failed" }),
+    ],
+  });
+  assert.equal(await expireAbandoned(fake.db, NOW), 1);
+  const by = Object.fromEntries(fake.tables.diy_jobs!.map((r) => [r.id, r]));
+  assert.equal(by.dead!.done_at, new Date(NOW).toISOString());
+  assert.equal(by.dead!.outcome, "failed");
+  assert.match(String(by.dead!.note), /^abandoned: attempt 3 never closed .*; last note: timeout$/);
+  assert.equal(by.running!.done_at, null, "its third attempt may still be running");
+  assert.equal(by.retrying!.done_at, null, "a later pass takes it again");
+  assert.equal(by.closed!.done_at, "2026-10-13T03:40:00Z");
 });
 
 test("the worker stops claiming when its budget is nearly spent", async () => {

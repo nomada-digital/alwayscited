@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { formatDay } from "../../tracking/figures.ts";
 
-import { diyDay } from "./jobs.ts";
+import { MAX_ATTEMPTS, diyDay } from "./jobs.ts";
 import { readDiySpend, utcDayStart } from "./ledger.ts";
 import { readDiySettings } from "./settings.ts";
 
@@ -17,6 +17,16 @@ import { readDiySettings } from "./settings.ts";
  * UTC and the caps are per UTC day, and the summary goes after the 05:00
  * tracking runs close. The sums come from `diy_spend`, the same function the
  * reservations check, so the line and the caps cannot disagree.
+ *
+ * "Carried" is what a worker can still take: not done, due, and under three
+ * attempts. A row at three attempts is closed (worker.ts `expireAbandoned`)
+ * and never carried (13 Oct 2026, review of DIY P1).
+ *
+ * The mail goes on a day every client's tracking run was complete too, when
+ * this line has something to say (`diyAttention`): carries two nights
+ * running are the sign the night window is full (section 5.6), and a pause
+ * at a cap is Danny's to see whatever tracking did (run-health.ts
+ * reportRunHealth).
  */
 
 /** No client: `diy_spend` then answers only the global sums. */
@@ -57,7 +67,12 @@ export async function readDiyHealth(db: SupabaseClient, now: number): Promise<Di
     .gte("created_at", start)
     .limit(1);
   if (pausedErr) throw new Error(`could not read the DIY refusals: ${pausedErr.message}`);
-  const { count, error } = await db.from("diy_jobs").select("id", { count: "exact", head: true }).is("done_at", null).lte("due_on", day);
+  const { count, error } = await db
+    .from("diy_jobs")
+    .select("id", { count: "exact", head: true })
+    .is("done_at", null)
+    .lte("due_on", day)
+    .lt("attempts", MAX_ATTEMPTS);
   if (error) throw new Error(`could not count the DIY jobs still due: ${error.message}`);
   return {
     day,
@@ -79,6 +94,21 @@ export async function readDiyHealth(db: SupabaseClient, now: number): Promise<Di
 export async function diyHealthLineFor(db: SupabaseClient | (() => SupabaseClient), now: number = Date.now()): Promise<string> {
   try {
     return diyHealthLine(await readDiyHealth(typeof db === "function" ? db() : db, now));
+  } catch (err) {
+    return `DIY reads: could not be read (${(err instanceof Error ? err.message : String(err)).slice(0, 200)})`;
+  }
+}
+
+/**
+ * The line when it needs a look - a cap paused the night, jobs are carried to
+ * tonight, or the facts could not be read - else null. Never throws. The
+ * run-health report sends its daily mail for this on a day every tracking
+ * run was complete (health-io.ts wires it).
+ */
+export async function diyAttention(db: SupabaseClient | (() => SupabaseClient), now: number = Date.now()): Promise<string | null> {
+  try {
+    const h = await readDiyHealth(typeof db === "function" ? db() : db, now);
+    return h.pausedAtCap || h.carried > 0 ? diyHealthLine(h) : null;
   } catch (err) {
     return `DIY reads: could not be read (${(err instanceof Error ? err.message : String(err)).slice(0, 200)})`;
   }

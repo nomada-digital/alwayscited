@@ -8,7 +8,7 @@ import { allowanceMonth } from "./allowances.ts";
 import { type CapCode, type DiySpend, type Refusal, CAP_CODES, decideReservation } from "./caps.ts";
 import { ctxRuntime } from "./ctx.ts";
 import type { ReadCtx } from "./jobs.ts";
-import { type Door, type ModelUsage, modelCost, round5 } from "./prices.ts";
+import { DIY_MODEL_PRICES, type Door, type ModelUsage, modelCost, round5 } from "./prices.ts";
 import { readDiySettings } from "./settings.ts";
 
 /**
@@ -27,13 +27,22 @@ import { readDiySettings } from "./settings.ts";
  *    maximum - and refuse if that write fails;
  * 4. read;
  * 5. settle at what the vendor billed. A task DataForSEO failed keeps its
- *    billed cost (`billedCost`); a model call that threw after its request
- *    went out keeps its reservation's estimate, because its usage was lost
- *    with the throw and the estimate is the most it could have cost.
+ *    billed cost (`billedCost`). A read that failed with no answer from
+ *    DataForSEO - a timeout, an abort, a network error - keeps its
+ *    reservation's estimate, because a live task can still run and bill after
+ *    we stop listening; so does a model call that threw after its request
+ *    went out, because its usage was lost with the throw. The estimate is the
+ *    most either could have cost.
  *
- * Reservation is not atomic: concurrent reserves can overshoot a cap by the
- * estimates in flight, at most about $2 (section 5.6 item 9). Accepted; an
- * atomic `for update` function can come later, additively.
+ * Steps 1-3 run inside the read's pool slot and under the runtime's ledger
+ * lock (ctx.ts `ledger`, a pool of one): a handler that fires many reads at
+ * once has each decided in turn, each seeing the reservation before it, so
+ * one worker never overshoots a cap (13 Oct 2026, review of DIY P1: twelve
+ * reads fired together against a door limit of 3 all passed on one
+ * snapshot). Across the two workers, and across two members pressing at once,
+ * reservation is still not atomic: they can overshoot a cap by the estimates
+ * deciding at the same moment, well inside the $2 section 5.6 item 9
+ * accepts. An atomic `for update` function can come later, additively.
  *
  * Loadable by node --test: relative imports, the database on the ctx.
  */
@@ -188,10 +197,23 @@ async function reserve(
 ): Promise<{ id: string } | { refusal: Refusal }> {
   const rt = ctxRuntime(ctx);
   if (!rt) throw new Error("a ReadCtx must be minted by the DIY worker or runOnDemand");
+  // runOnDemand's preflight refused a free-first action's paid fallback: no ledger read, no row.
+  if (rt.preRefusal) return { refusal: rt.preRefusal };
   if (rt.fixture) return { refusal: { code: "fixture", reason: "the fixture makes no paid read" } };
-  const now = rt.now();
-  if (ctx.deadlineMs - now < MIN_READ_MS) return { refusal: { code: "deadline", reason: `under ${MIN_READ_MS / 1000}s left before the caller's deadline` } };
+  // Defence in depth beside the worker's skip and the routes' role checks: a paused or ended client spends nothing.
+  if (ctx.client.status !== "active") return { refusal: { code: "client_inactive", reason: `the client is ${ctx.client.status}` } };
+  if (ctx.deadlineMs - rt.now() < MIN_READ_MS) return { refusal: { code: "deadline", reason: `under ${MIN_READ_MS / 1000}s left before the caller's deadline` } };
+  return rt.ledger.run(() => decideAndWrite(ctx, spec, extra, rt));
+}
 
+/** Steps 1-3 proper, under the runtime's ledger lock. */
+async function decideAndWrite(
+  ctx: ReadCtx,
+  spec: ReadSpec,
+  extra: { modelCalls?: { last24h: number; perDay: number } | null },
+  rt: NonNullable<ReturnType<typeof ctxRuntime>>,
+): Promise<{ id: string } | { refusal: Refusal }> {
+  const now = rt.now();
   let refusal: Refusal | null;
   try {
     const settings = await readDiySettings(rt.db);
@@ -230,12 +252,15 @@ async function reserve(
  */
 export async function paidRead<T>(ctx: ReadCtx, spec: ReadSpec, send: (budgetMs: number) => Promise<VendorAnswer<T>>): Promise<ReadResult<T>> {
   if (spec.door === "model") throw new Error("a model call goes through paidModelCall");
-  const got = await reserve(ctx, spec, {});
-  if ("refusal" in got) return { kind: "refused", refusal: got.refusal };
-  const rt = ctxRuntime(ctx)!;
-  const readId = got.id;
+  const rt = ctxRuntime(ctx);
+  if (!rt) throw new Error("a ReadCtx must be minted by the DIY worker or runOnDemand");
 
-  return rt.reads.run(async () => {
+  // The pool slot first, then the reservation inside it: a reservation is
+  // made only when its read can go out now, and decided under the ledger lock.
+  return rt.reads.run(async (): Promise<ReadResult<T>> => {
+    const got = await reserve(ctx, spec, {});
+    if ("refusal" in got) return { kind: "refused", refusal: got.refusal };
+    const readId = got.id;
     let billed = 0;
     for (let attempt = 0; ; attempt++) {
       const remaining = ctx.deadlineMs - rt.now();
@@ -252,7 +277,9 @@ export async function paidRead<T>(ctx: ReadCtx, spec: ReadSpec, send: (budgetMs:
           continue;
         }
         const reason = readFailureReason(err);
-        const cost = round5(billed);
+        // No answer from DataForSEO (a timeout, an abort, the network): the
+        // task may still run and bill, so the estimate stands as its cost.
+        const cost = vendorAnswered(err) ? round5(billed) : null;
         await settleRead(rt.db, readId, { status: "failed", cost, code: reason }, rt.now());
         console.warn(`[diy] ${spec.endpoint} for ${ctx.client.domain} failed: ${reason}`);
         return { kind: "failed", reason, cost, readId } as const;
@@ -261,8 +288,23 @@ export async function paidRead<T>(ctx: ReadCtx, spec: ReadSpec, send: (budgetMs:
   });
 }
 
-/** What a structured model call answers, as much of it as the ledger reads. */
-export type ModelAnswer<T> = { stop_reason: string | null; usage: ModelUsage | null; parsed_output: T | null };
+/**
+ * Whether a failed read heard back from DataForSEO: an HTTP status, a task
+ * status, or a billed cost on the error. Anything else - a timeout, an abort,
+ * a socket closed - is a read whose bill we never saw.
+ */
+export function vendorAnswered(err: unknown): boolean {
+  const e = (err ?? {}) as { status?: unknown; taskStatus?: unknown; cost?: unknown };
+  return typeof e.status === "number" || typeof e.taskStatus === "number" || (typeof e.cost === "number" && Number.isFinite(e.cost));
+}
+
+/**
+ * What a structured model call answers, as much of it as the ledger reads.
+ * `model` is the model that produced the message: with the refusal fallback
+ * on, a declined call is answered by another model at its own rates, and
+ * `usage.iterations` itemises each attempt (prices.ts modelCost).
+ */
+export type ModelAnswer<T> = { stop_reason: string | null; usage: ModelUsage | null; parsed_output: T | null; model?: string | null };
 
 export type ModelSpec = ReadSpec & {
   /** `model_call_debits.reason`: "diy_classify" or "diy_example" (the column has no check constraint). */
@@ -286,12 +328,15 @@ export async function paidModelCall<T>(
   call: (billed: { calls: number }) => Promise<ModelAnswer<T>>,
 ): Promise<ReadResult<T>> {
   if (spec.door !== "model") throw new Error("paidModelCall is the model door");
-  const got = await reserve(ctx, spec, { modelCalls });
-  if ("refusal" in got) return { kind: "refused", refusal: got.refusal };
-  const rt = ctxRuntime(ctx)!;
-  const readId = got.id;
+  const rt = ctxRuntime(ctx);
+  if (!rt) throw new Error("a ReadCtx must be minted by the DIY worker or runOnDemand");
 
-  return rt.models.run(async () => {
+  // The one-at-a-time slot first, then the reservation inside it, as paidRead
+  // does: chunks fanned out at once are reserved one by one, each seeing the last.
+  return rt.models.run(async (): Promise<ReadResult<T>> => {
+    const got = await reserve(ctx, spec, { modelCalls });
+    if ("refusal" in got) return { kind: "refused", refusal: got.refusal };
+    const readId = got.id;
     const billed = { calls: 0 };
     let res: ModelAnswer<T>;
     try {
@@ -307,7 +352,8 @@ export async function paidModelCall<T>(
       return { kind: "failed", reason, cost, readId } as const;
     }
     await debit(rt.db, ctx, spec, billed.calls);
-    const cost = modelCost(res.usage);
+    const cost = modelCost(res.usage, res.model);
+    if (res.model && res.model !== DIY_MODEL_PRICES.model) console.log(`[diy] ${spec.endpoint} for ${ctx.client.domain} was answered by ${res.model} (refusal fallback); priced at its rates`);
     const tokens = { tokensIn: res.usage?.input_tokens ?? null, tokensOut: res.usage?.output_tokens ?? null };
     const stop = res.stop_reason;
     const failure = stop === "refusal" ? "refusal" : stop === "max_tokens" ? "max_tokens" : res.parsed_output == null ? "no structured output" : null;

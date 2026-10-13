@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { Refusal } from "./caps.ts";
 import type { DiyClient } from "./client.ts";
 import type { OnDemandAction, ReadCtx, ReadTrigger } from "./jobs.ts";
 
@@ -9,9 +10,10 @@ import type { OnDemandAction, ReadCtx, ReadTrigger } from "./jobs.ts";
  *
  * `ReadCtx` (jobs.ts) is branded, so it cannot be written as an object
  * literal. It is minted here, and `gating.test.mts` holds the callers of
- * `mintReadCtx` to the two the spec names: the worker (scheduled and
- * onboarding jobs) and `runOnDemand` (a member's button). A ctx minted any
- * other way - a cast - carries no runtime, and every paid door refuses it.
+ * `mintReadCtx` across all of `src` to the two the spec names: the worker
+ * (scheduled and onboarding jobs) and `runOnDemand` (a member's button). A ctx
+ * minted any other way - a cast - carries no runtime, and every paid door
+ * refuses it.
  *
  * The runtime is what the doors need and a feature package must not choose:
  * the database the ledger is written to, the clock, the worker's pool of
@@ -55,8 +57,26 @@ export type ReadRuntime = {
   reads: Pool;
   /** Model calls run one at a time, outside the DataForSEO pool (section 5.7). */
   models: Pool;
+  /**
+   * A pool of one around each reservation's read-decide-write, shared by
+   * every ctx one worker (or one on-demand action) mints, so each decision
+   * sees the reservation written before it. Without it, reads fired at once
+   * all decided on one snapshot and all passed: twelve concurrent reads
+   * against a door limit of 3 sent twelve (13 Oct 2026, review of DIY P1).
+   * Two workers still decide apart, which is the overshoot section 5.6 item 9
+   * accepts.
+   */
+  ledger: Pool;
   /** The fixture never reaches a vendor: every paid door refuses a fixture ctx with `fixture`. */
   fixture: boolean;
+  /**
+   * Set by `runOnDemand` for an action whose first step is free (a link
+   * check, a verify): the caps preflight refused, so the free own fetch still
+   * runs and only its paid fallback is refused, with this code, before any
+   * ledger read or row (spec 10 section 4.8: "its content_parsing fallback
+   * is skipped while dark").
+   */
+  preRefusal?: Refusal | null;
 };
 
 const RUNTIMES = new WeakMap<object, ReadRuntime>();

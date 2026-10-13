@@ -1,6 +1,7 @@
 import "server-only";
 
 import { SITE_URL } from "@/config/schema";
+import { diyAttention } from "@/lib/diy/core/health";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { trackingDay } from "@/lib/tracking/decide";
 import { addDays } from "@/lib/tracking/figures";
@@ -13,10 +14,11 @@ import { type HealthIo, type ReportOutcome, reportRunHealth } from "@/lib/tracki
  * against a fake (run-health.test.mts), and this is the one place the real
  * ones are handed in - the service-role client, Resend through
  * sendRunHealth, and the canonical origin, never a request's host (the
- * lesson of 30 Sep, dispatch.ts).
+ * lesson of 30 Sep, dispatch.ts) - and, since 13 Oct 2026 (DIY P1), the DIY
+ * night's attention line, so a clean tracking day still mails a DIY problem.
  */
 export function runHealthIo(): HealthIo {
-  return { send: sendRunHealth, adminUrl: `${SITE_URL}/admin/tracking` };
+  return { send: sendRunHealth, adminUrl: `${SITE_URL}/admin/tracking`, diyAttention: (now) => diyAttention(supabaseAdmin, now) };
 }
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err)).slice(0, 300);

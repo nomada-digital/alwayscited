@@ -293,13 +293,20 @@ const SENDERS: Record<
    * sent by the next reading. So a day's summary is no longer lost to a
    * function stopped mid-send, and a function stopped after the send and
    * before the mark can send it a second time. The bound below moved with it.
+   *
+   * 13 Oct 2026, DIY P1 (spec 10 section 5.6; review of the P1 build): the
+   * summary carries one DIY line, and a day every run was complete sends it
+   * too when the DIY night needs a look (paused at a cap, jobs carried, or
+   * unreadable), asked for today only. Same claim, same one message a day,
+   * same destination; the bound below says so.
    */
   "src/lib/tracking/health-mail.ts": {
     reach: "the tracking runner or the daily cron, once a day",
     bound:
       "Mails only our own contact destination. One message per tracking day: reportRunHealth " +
       "reads the day's run_health_mail claim and writes it before the send (unique per day with " +
-      "20261009000000), and sends nothing while a run is in flight or when every run is complete. A claim " +
+      "20261009000000), and sends nothing while a run is in flight or when every run is complete, unless the " +
+      "DIY night needs a look that day (13 Oct 2026, DIY P1). A claim " +
       "left unsent for ten minutes by a function stopped before its send is released and sent once more. " +
       "Its callers are a claimed tracking run and the cron behind CRON_SECRET; the health JSON does not send.",
     evidence: /if \(!claimAbandoned\(prior\.props, p\.now\)\) return "taken";[\s\S]*?\.eq\("props->>sent", "false"\)[\s\S]*?\.insert\(\{[^}]*event: RUN_HEALTH_EVENT[\s\S]*?await io\.send\(/,

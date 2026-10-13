@@ -10,7 +10,7 @@ import type { OnDemandAction, ReadCtx, ReadTrigger } from "./jobs.ts";
  * The tracking fake database (fake-db.mts) with what the DIY core also calls:
  * `rpc("diy_spend")` answered from the `diy_reads` rows it holds, the way the
  * migration's function sums them; an upsert on a unique key; a count; `.gt`,
- * `.neq` and `.not`. Test support, not a test - the runner does not run it,
+ * `.neq`, `.not` and `.or`. Test support, not a test - the runner does not run it,
  * and the source walks read `.ts` and `.tsx` only (13 Oct 2026, DIY P1).
  */
 
@@ -73,6 +73,27 @@ export function fakeDiyDb(tables: Tables, opts: Opts = {}) {
     // so a select or update narrowed by one is narrowed here instead.
     b.gt = (c: unknown, v: unknown) => (extra.push((r) => r[c as string] != null && String(r[c as string]) > String(v)), b);
     b.neq = (c: unknown, v: unknown) => (extra.push((r) => r[c as string] !== v), b);
+    // PostgREST's `or`: comma-separated `column.op.value` terms, a value
+    // quoted when it holds a dot or a colon. is, eq, lt, lte, gt, gte only.
+    b.or = (expr: unknown) => {
+      const terms = String(expr)
+        .split(/,(?=\w+\.(?:is|eq|lt|lte|gt|gte)\.)/)
+        .map((t) => {
+          const m = /^(\w+)\.(is|eq|lt|lte|gt|gte)\.(.*)$/.exec(t.trim());
+          if (!m) throw new Error(`fakeDiyDb: .or(${String(expr)}) is not supported`);
+          const [, col, op, raw] = m as unknown as [string, string, string, string];
+          const v = raw.replace(/^"(.*)"$/, "$1");
+          return (r: Row): boolean => {
+            const x = r[col] ?? null;
+            if (op === "is") return v === "null" ? x === null : String(x) === v;
+            if (x === null) return false;
+            const a = String(x);
+            return op === "eq" ? a === v : op === "lt" ? a < v : op === "lte" ? a <= v : op === "gt" ? a > v : a >= v;
+          };
+        });
+      extra.push((r) => terms.some((f) => f(r)));
+      return b;
+    };
     b.not = (c: unknown, op: unknown, v: unknown) => {
       if (op === "is") extra.push((r) => (r[c as string] ?? null) !== v);
       else if (op === "in") extra.push((r) => !String(v).replace(/[()]/g, "").split(",").includes(String(r[c as string])));
@@ -91,7 +112,9 @@ export function fakeDiyDb(tables: Tables, opts: Opts = {}) {
             if (!upsertOpts.ignoreDuplicates) Object.assign(hit, r);
             continue;
           }
-          rows.push({ id: `job-${nextId++}`, created_at: new Date(clock.now).toISOString(), ...r });
+          // The migration's column defaults for a new diy_jobs row.
+          const defaults = table === "diy_jobs" ? { attempts: 0, claimed_at: null, done_at: null, outcome: null, note: null } : {};
+          rows.push({ id: `job-${nextId++}`, created_at: new Date(clock.now).toISOString(), ...defaults, ...r });
         }
         return Promise.resolve(resolve({ data: null, error: null }));
       }
@@ -160,6 +183,7 @@ export function testCtx(db: SupabaseClient, clock: { now: number }, over: { clie
     },
     reads: pool(4),
     models: pool(1),
+    ledger: pool(1),
     fixture: over.fixture === true,
   };
   return mintReadCtx(

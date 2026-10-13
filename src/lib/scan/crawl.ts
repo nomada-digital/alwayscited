@@ -490,12 +490,20 @@ export async function readSite(domain: string): Promise<string> {
  * even the first, and it answers whatever status and type the page has
  * (a robots.txt is text/plain, a 404 is an answer), with its headers.
  * `fetch.test.mts` holds the two loops to the same guard.
+ *
+ * `allowHop` (13 Oct 2026, review of DIY P1) is asked before each redirect is
+ * followed, with the URL it points at: fetch.ts checks that URL's robots.txt
+ * for a third-party read, so a page that redirects to a host or path that
+ * disallows us is not read. A hop it refuses answers `refused`.
  */
 export type GuardedRead =
   | { ok: true; status: number; html: string; headers: Record<string, string>; url: string }
-  | { ok: false; why: "network" | "private" | "timeout" };
+  | { ok: false; why: "network" | "private" | "timeout" | "refused" };
 
-export async function guardedRead(url: string, opts: { capBytes: number; ua: string; timeoutMs: number }): Promise<GuardedRead> {
+export async function guardedRead(
+  url: string,
+  opts: { capBytes: number; ua: string; timeoutMs: number; allowHop?: (next: string) => Promise<boolean> },
+): Promise<GuardedRead> {
   const signal = AbortSignal.timeout(opts.timeoutMs);
   let current = url;
   try {
@@ -527,6 +535,7 @@ export async function guardedRead(url: string, opts: { capBytes: number; ua: str
         } catch {
           return { ok: false, why: "network" };
         }
+        if (opts.allowHop && !(await opts.allowHop(current))) return { ok: false, why: "refused" };
         continue;
       }
 

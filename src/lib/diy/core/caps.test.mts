@@ -125,7 +125,8 @@ test("the words a member sees: counts and dates, never dollars, never an offer",
   assert.equal(refusalWords("door_daily", p), "That's today's limit for this check. More tomorrow.");
   assert.equal(refusalWords("month_budget", p), "This month's research is used. It resets on 1 Nov.");
   assert.equal(refusalWords("allowance", p), p.allowanceLine);
-  for (const code of ["tracking_running", "global_daily", "model_headroom", "door_daily", "month_budget", "allowance", "disabled", "ledger_unreadable", "deadline", "fixture"] as const) {
+  assert.equal(refusalWords("client_inactive", p), "Checks are off while this account isn't active.");
+  for (const code of ["tracking_running", "global_daily", "model_headroom", "door_daily", "month_budget", "allowance", "disabled", "ledger_unreadable", "deadline", "fixture", "client_inactive"] as const) {
     const words = refusalWords(code, p);
     assert.doesNotMatch(words, /[$£€]\s?\d|buy|upgrade|more (rows|checks)/i, `${code}: ${words}`);
   }
@@ -137,5 +138,6 @@ test("a job defers on a daily cap, skips on a month budget or the switch, and fa
   assert.equal(jobOutcomeFor("door_daily"), "deferred");
   assert.equal(jobOutcomeFor("month_budget"), "skipped");
   assert.equal(jobOutcomeFor("disabled"), "skipped");
+  assert.equal(jobOutcomeFor("client_inactive"), "skipped");
   assert.equal(jobOutcomeFor("ledger_unreadable"), "failed");
 });

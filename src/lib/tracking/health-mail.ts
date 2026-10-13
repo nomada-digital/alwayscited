@@ -13,7 +13,9 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
  * reportRunHealth through health-io.ts, from a claimed tracking run as it
  * closes and from the CRON_SECRET-gated daily cron, after a
  * dashboard_events claim that makes it one message per tracking day, and
- * only when a client's run is not complete.
+ * only when a client's run is not complete - or, since 13 Oct 2026 (DIY P1),
+ * when every run was complete and the DIY night needs a look (paused at a
+ * cap, jobs carried, or unreadable; health-io.ts diyAttention).
  *
  * Returns false rather than throwing; the caller releases its claim.
  */

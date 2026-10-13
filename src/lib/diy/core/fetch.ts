@@ -13,17 +13,23 @@ import { LINK_CHECK_UA } from "../../tracking/placements.ts";
  * robots.txt answering 4xx is no robots.txt, which allows everything. The
  * client's own pages are read without the check: the client asked us to.
  *
+ * Robots is checked for every URL a third-party read lands on, not only the
+ * first: each redirect hop's own robots.txt is read (once per origin) before
+ * the hop is followed, so a page that redirects to a host or path that
+ * disallows us is not read (13 Oct 2026, review of DIY P1).
+ *
  * The network is handed in (`get`), as `readPlacement` takes its fetcher:
  * the live one is `guardedRead` in `src/lib/scan/crawl.ts`, which checks every
- * hostname and every redirect hop and caps the bytes. That keeps this file
- * loadable by node --test, where fetch.test.mts runs it.
+ * hostname and every redirect hop and caps the bytes, and asks `allowHop`
+ * before following each redirect. That keeps this file loadable by node
+ * --test, where fetch.test.mts runs it.
  */
 
 /** What `guardedRead` answers. Structural, so this file does not import the server-only crawler. */
 export type Guarded =
   | { ok: true; status: number; html: string; headers: Record<string, string>; url: string }
-  | { ok: false; why: "network" | "private" | "timeout" };
-export type GuardedGet = (url: string, opts: { capBytes: number; ua: string; timeoutMs: number }) => Promise<Guarded>;
+  | { ok: false; why: "network" | "private" | "timeout" | "refused" };
+export type GuardedGet = (url: string, opts: { capBytes: number; ua: string; timeoutMs: number; allowHop?: (next: string) => Promise<boolean> }) => Promise<Guarded>;
 
 /** A robots.txt is read up to this; RFC 9309 asks a parser to read at least 500 KiB. */
 export const ROBOTS_CAP_BYTES = 512 * 1024;
@@ -104,18 +110,23 @@ export function robotsVerdict(txt: string, path: string, ua: string): RobotsVerd
  * rules decide. 4xx: no robots.txt, allowed. 5xx, a network failure or a
  * private address: not allowed - "could not read" is never read as "yes".
  */
-export async function robotsAllows(url: string, ua: string, get: GuardedGet): Promise<boolean> {
+export async function robotsAllows(url: string, ua: string, get: GuardedGet, cache?: Map<string, string | null>): Promise<boolean> {
   let u: URL;
   try {
     u = new URL(url);
   } catch {
     return false;
   }
-  const got = await get(`${u.origin}/robots.txt`, { capBytes: ROBOTS_CAP_BYTES, ua, timeoutMs: FETCH_TIMEOUT_MS });
-  if (!got.ok) return false;
-  if (got.status >= 400 && got.status < 500) return true;
-  if (got.status < 200 || got.status >= 300) return false;
-  return robotsVerdict(got.html, u.pathname + u.search, ua).allowed;
+  // One robots.txt per origin per read: null is "not allowed at all" (5xx,
+  // the network, a private address), "" is no robots.txt (4xx).
+  let txt = cache?.get(u.origin);
+  if (txt === undefined) {
+    const got = await get(`${u.origin}/robots.txt`, { capBytes: ROBOTS_CAP_BYTES, ua, timeoutMs: FETCH_TIMEOUT_MS });
+    txt = !got.ok ? null : got.status >= 400 && got.status < 500 ? "" : got.status < 200 || got.status >= 300 ? null : got.html;
+    cache?.set(u.origin, txt);
+  }
+  if (txt === null) return false;
+  return robotsVerdict(txt, u.pathname + u.search, ua).allowed;
 }
 
 export type PageRead =
@@ -139,8 +150,15 @@ export async function readGuardedPage(
     return { ok: false, why: "bad_url" };
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return { ok: false, why: "bad_url" };
-  if (opts.thirdParty && !(await robotsAllows(parsed.toString(), ua, opts.get))) return { ok: false, why: "robots" };
-  const got = await opts.get(parsed.toString(), { capBytes: opts.capBytes ?? PAGE_CAP_BYTES, ua, timeoutMs: opts.timeoutMs ?? FETCH_TIMEOUT_MS });
-  if (!got.ok) return { ok: false, why: got.why };
+  const robots = new Map<string, string | null>();
+  if (opts.thirdParty && !(await robotsAllows(parsed.toString(), ua, opts.get, robots))) return { ok: false, why: "robots" };
+  const got = await opts.get(parsed.toString(), {
+    capBytes: opts.capBytes ?? PAGE_CAP_BYTES,
+    ua,
+    timeoutMs: opts.timeoutMs ?? FETCH_TIMEOUT_MS,
+    // Every hop of a third-party read is a URL we read: its robots.txt decides too.
+    ...(opts.thirdParty ? { allowHop: (next: string) => robotsAllows(next, ua, opts.get, robots) } : {}),
+  });
+  if (!got.ok) return { ok: false, why: got.why === "refused" ? "robots" : got.why };
   return { ok: true, status: got.status, finalUrl: got.url, headers: got.headers, html: got.html };
 }

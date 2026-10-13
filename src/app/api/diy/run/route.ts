@@ -1,6 +1,6 @@
 import { NextResponse, after } from "next/server";
 
-import { DIY_SIGNATURE_HEADER } from "@/lib/diy/core/dispatch";
+import { DIY_SIGNATURE_HEADER, workerPostProblem } from "@/lib/diy/core/dispatch";
 import { runDiyWorker } from "@/lib/diy/core/worker";
 import { JOB_HANDLERS } from "@/lib/diy/wiring";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -15,7 +15,10 @@ export const maxDuration = 300;
  * Posted by the DIY dispatcher - two a pass, from the 03:30 and 03:45 UTC
  * crons - with an HMAC-SHA256 of the body keyed on CRON_SECRET, verified
  * against the raw text before it is parsed, as `/api/track/run` verifies a
- * tracking run. Nothing else can start one.
+ * tracking run. Nothing else can start one. A signed body is taken only on
+ * its own night: its day must be today's UTC day and it must arrive inside
+ * the 03:25-04:20 UTC window (dispatch.ts workerPostProblem), so a captured
+ * post replayed later starts nothing (13 Oct 2026, review of DIY P1).
  *
  * Answered at once and run after the response, under this route's 300 s:
  * the worker budgets 270 s, claims each job by compare-and-swap, and closes
@@ -32,15 +35,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let worker: unknown;
+  let parsed: unknown;
   try {
-    worker = (JSON.parse(body) as { worker?: unknown }).worker;
+    parsed = JSON.parse(body);
   } catch {
     return NextResponse.json({ error: "bad body" }, { status: 400 });
   }
-  if (typeof worker !== "number" || !Number.isInteger(worker) || worker < 1 || worker > 9) {
-    return NextResponse.json({ error: "bad worker" }, { status: 400 });
-  }
+  const problem = workerPostProblem(parsed, Date.now());
+  if (problem) return NextResponse.json({ error: problem }, { status: 400 });
+  const worker = (parsed as { worker: number }).worker;
 
   after(async () => {
     try {

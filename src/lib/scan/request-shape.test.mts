@@ -586,10 +586,12 @@ test("the two free paths cost 0: GETs with no body, outside the ledger, and free
     assert.match(body, /await get\(DIY_FREE_PATHS\./, `${name} is a GET of a free path`);
     assert.doesNotMatch(body, /post\(|taskCost/, `${name} posts nothing and bills nothing`);
   }
-  for (const name of ["labs_status", "backlinks_available_filters"]) {
-    const sample = JSON.parse(readFileSync(join(ROOT, `src/lib/diy/core/samples/${name}.json`), "utf8"));
-    assert.equal(sample.tasks[0].cost, 0, `${name}: DataForSEO bills it at 0`);
-  }
+  // 13 Oct 2026, DIY P1 review: the cost-0 fact is the account's price table
+  // (04 section 2, read 12 Oct 2026), recorded in prices.ts - not a sample
+  // response's cost field, which says only what the sample's writer typed.
+  const prices = readFileSync(join(ROOT, "src/lib/diy/core/prices.ts"), "utf8");
+  assert.match(prices, /export const DIY_FREE_COST = \{ labs_status: 0, backlinks_filters: 0 \} as const;/, "both free paths recorded at cost 0");
+  assert.match(prices, /DIY_FREE_COST_SOURCE = "research note 04 \([^)]*04-dataforseo\.md\) section 2, the account's price table read 12 Oct 2026"/, "and where that was read, with the date");
   const free = readFileSync(join(ROOT, "src/lib/diy/core/doors.ts"), "utf8");
   assert.match(free, /export async function freeRead\(path: DiyFreePath\): Promise<FreeAnswer> \{\n\s+if \(!isDiyFreePath\(path\)\) throw/);
   assert.doesNotMatch(free.slice(free.indexOf("export async function freeRead")), /paidRead|diyRead/, "the free door writes no ledger row");

@@ -18,6 +18,7 @@ import {
   dueJobs,
   refuseHandlers,
   slotOn,
+  unclaimedOrStale,
   weekdayOf,
 } from "./jobs.ts";
 
@@ -141,6 +142,28 @@ test("onboarding: a free kind that ran before setup still onboards once setup is
     "nor does one queued earlier on the day of the confirm: the next night onboards",
   );
   assert.equal(dueFor(ob, confirmed, { enabled: false, today: "2026-10-13", last: last("2026-10-12", "2026-10-12T10:00:05Z") }), null, "enqueueOnboarding at the confirm counts");
+});
+
+test("13 Oct 2026: a row still waiting holds its kind back - a daily kind's carried row is tonight's row, not one more", () => {
+  const daily = spec();
+  const waiting: LastJob = { due_on: "2026-10-13", created_at: "2026-10-13T03:30:00Z", done_at: null };
+  assert.equal(dueFor(daily, client(), { enabled: true, today: "2026-10-14", last: waiting }), null, "carried from a full night: no second row tonight");
+  assert.equal(dueFor(daily, client(), { enabled: true, today: "2026-10-14", last: { ...waiting, done_at: "2026-10-13T03:40:00Z" } })?.due_on, "2026-10-14", "done: tonight's row");
+  const weekly = spec({ cadence: "weekly" });
+  assert.equal(dueFor(weekly, client(), { enabled: true, today: "2026-10-14", last: { due_on: "2026-10-07", created_at: "2026-10-07T03:30:00Z", done_at: null } }), null, "the same for every cadence");
+});
+
+test("13 Oct 2026: onboarding is read from the newest onboarding row, whatever its age, so an event kind is not onboarded twice", () => {
+  const ob = spec({ cadence: "event", onboarding: true });
+  const p = { enabled: true, today: "2026-12-14", last: null };
+  assert.deepEqual(dueFor(ob, client(), { ...p, onboardedAt: null }), { kind: "kind_a", due_on: "2026-12-14", priority: 5, onboarding: true }, "never onboarded");
+  assert.equal(dueFor(ob, client(), { ...p, onboardedAt: "2026-06-10T03:30:00Z" }), null, "onboarded in June, its row long out of the 62-day window");
+  assert.equal(dueFor(ob, client(), { ...p, onboardedAt: "2026-06-01T03:30:00Z" })?.onboarding, true, "a row from before the confirm does not count");
+  assert.equal(dueFor(ob, client(), { ...p, last: last("2026-10-12") }), null, "no onboardedAt: the newest row stands in, as before");
+});
+
+test("13 Oct 2026: the claim condition in SQL is claimable's - unclaimed, or claimed before the stale line, quoted", () => {
+  assert.equal(unclaimedOrStale(Date.parse("2026-10-14T03:31:00Z")), 'claimed_at.is.null,claimed_at.lt."2026-10-14T03:16:00.000Z"');
 });
 
 test("only active clients have anything due, and rows come oldest slot first, then by priority", () => {

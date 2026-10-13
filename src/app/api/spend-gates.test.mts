@@ -322,7 +322,8 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
    */
   "diy/run": {
     why:
-      "Runs one DIY night worker. Only a body signed with CRON_SECRET (HMAC-SHA256, x-diy-signature) is accepted. " +
+      "Runs one DIY night worker. Only a body signed with CRON_SECRET (HMAC-SHA256, x-diy-signature) is accepted, " +
+      "and since 13 Oct 2026 (DIY P1 review) only on its own night: its day today's UTC day, posted 03:25-04:20 UTC. " +
       "Every paid read inside is reserved in diy_reads first and refused while diy_enabled is off, past the global " +
       "daily caps, past the client's per-door daily count or past its month budget.",
     evidence: /if \(!verifyRun\(body, req\.headers\.get\(DIY_SIGNATURE_HEADER\), secret\)\)/,

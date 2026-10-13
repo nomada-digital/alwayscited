@@ -84,6 +84,37 @@ test("allowed, the page is read with our UA, and its status, final URL and heade
   assert.ok(seen.every((s) => s.endsWith(UA)));
 });
 
+test("13 Oct 2026: a third-party page that redirects to a host disallowing us is not read; each origin's robots.txt is read once", async () => {
+  const asked: string[] = [];
+  const robots: Record<string, string> = {
+    "https://roundup.example/robots.txt": "User-agent: *\nDisallow: /admin",
+    "https://elsewhere.example/robots.txt": "User-agent: alwayscited-linkcheck\nDisallow: /",
+    "https://moved.example/robots.txt": "User-agent: *\nDisallow: /private",
+  };
+  // A stand-in for guardedRead: each redirect is offered to allowHop before it is followed.
+  const hops: Record<string, string> = { "https://roundup.example/best": "https://elsewhere.example/best", "https://roundup.example/old": "https://moved.example/new" };
+  const get: GuardedGet = async (url, opts) => {
+    asked.push(url);
+    if (url.endsWith("/robots.txt")) return robots[url] !== undefined ? page(url, 200, robots[url]) : page(url, 404, "");
+    let current = url;
+    while (hops[current]) {
+      current = hops[current]!;
+      if (opts.allowHop && !(await opts.allowHop(current))) return { ok: false, why: "refused" };
+    }
+    return page(current);
+  };
+  assert.deepEqual(await readGuardedPage("https://roundup.example/best", { get, thirdParty: true }), { ok: false, why: "robots" }, "the hop's own robots.txt disallows us");
+  assert.ok(asked.includes("https://elsewhere.example/robots.txt"));
+  asked.length = 0;
+  const moved = await readGuardedPage("https://roundup.example/old", { get, thirdParty: true });
+  assert.equal(moved.ok && moved.finalUrl, "https://moved.example/new", "a hop its robots.txt allows is followed");
+  assert.deepEqual(asked, ["https://roundup.example/robots.txt", "https://roundup.example/old", "https://moved.example/robots.txt"], "once per origin");
+  // The client's own page is read without asking: no allowHop is handed down.
+  let handed: unknown = "unset";
+  await readGuardedPage("https://tallyroo.com/", { get: async (url, opts) => ((handed = opts.allowHop), page(url)), thirdParty: false });
+  assert.equal(handed, undefined);
+});
+
 test("robots.txt answering 4xx allows; 5xx, a network failure or a private address does not", async () => {
   const url = "https://roundup.example/best";
   const with4xx = fakeGet({});
@@ -114,6 +145,7 @@ test("crawl.ts guardedRead keeps getText's guard: every host checked, redirects 
   assert.doesNotMatch(body, /trusted/, "no host is trusted");
   assert.match(body, /redirect: "manual"/);
   assert.match(body, /if \(hop >= MAX_REDIRECTS\)/);
+  assert.match(body, /if \(opts\.allowHop && !\(await opts\.allowHop\(current\)\)\) return \{ ok: false, why: "refused" \};\s*continue;/, "every redirect is offered to allowHop before it is followed (13 Oct 2026)");
   assert.match(body, /bodyUpTo\(res\.body, opts\.capBytes\)/);
   assert.match(body, /target\.protocol !== "https:" && target\.protocol !== "http:"/);
 });

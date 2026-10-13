@@ -69,10 +69,12 @@ export type CapCode = (typeof CAP_CODES)[number];
 
 /**
  * Every reason a paid read is refused, caps and the rest: a tracking run in
- * progress, a ledger that could not be read, a job with no time left, and the
- * fixture (which never reaches a vendor).
+ * progress, a ledger that could not be read, a job with no time left, the
+ * fixture (which never reaches a vendor), and a client that is not active
+ * (13 Oct 2026, review of DIY P1: a paused client's members could still
+ * press a paid button).
  */
-export type RefusalCode = CapCode | "tracking_running" | "ledger_unreadable" | "deadline" | "fixture";
+export type RefusalCode = CapCode | "tracking_running" | "ledger_unreadable" | "deadline" | "fixture" | "client_inactive";
 
 /** A refusal: its code, and an internal reason for the log and `diy_reads.code`. Never shown to a member as is. */
 export type Refusal = { code: RefusalCode; reason: string };
@@ -179,6 +181,8 @@ export function refusalWords(code: RefusalCode, p: { resets: string; allowanceLi
       return "We couldn't start that check just now. Try again in a few minutes.";
     case "fixture":
       return "This is the fixture: no read was made.";
+    case "client_inactive":
+      return "Checks are off while this account isn't active.";
   }
 }
 
@@ -189,6 +193,6 @@ export function refusalWords(code: RefusalCode, p: { resets: string; allowanceLi
  */
 export function jobOutcomeFor(code: RefusalCode): "deferred" | "skipped" | "failed" {
   if (code === "global_daily" || code === "model_headroom" || code === "door_daily") return "deferred";
-  if (code === "month_budget" || code === "disabled") return "skipped";
+  if (code === "month_budget" || code === "disabled" || code === "client_inactive") return "skipped";
   return "failed";
 }
