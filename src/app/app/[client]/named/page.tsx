@@ -11,6 +11,7 @@ import { clusterSearch } from "@/lib/tracking/cluster-figures";
 import { CLUSTER_BASE } from "@/lib/tracking/limits";
 import { openKey } from "@/lib/tracking/named-figures";
 import { rangeFrom, rangeQuery } from "@/lib/tracking/overview-data";
+import { namedRead } from "@/lib/tracking/read-shape";
 import { placedTier } from "@/lib/tracking/placement-figures";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { appPath } from "@/lib/app-host";
@@ -44,7 +45,9 @@ export default async function ClientNamed({ params, searchParams }: { params: Pr
   const today = repo.today();
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
-  const [data, upgrade] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today)]);
+  // 13 Oct 2026 (dashboard speed): no citations until a row is open (read-shape.ts namedRead).
+  const open = openKey(sp.open);
+  const [data, upgrade] = await Promise.all([repo.loadOverview(client.id, range, compare, { answers: namedRead(open) }), repo.upgradeContext(client.id, email, today)]);
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const cluster = (data.clusters ?? []).some((c) => c.id === one("cluster")) ? one("cluster") : null;
   const engine = engines.find((e) => e === one("engine")) ?? null;
@@ -66,7 +69,7 @@ export default async function ClientNamed({ params, searchParams }: { params: Pr
           cluster={cluster}
           engine={engine}
           all={one("all") === "1"}
-          open={openKey(sp.open)}
+          open={open}
           q={clusterSearch(one("q"))}
         />
       </div>

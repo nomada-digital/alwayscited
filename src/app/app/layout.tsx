@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { UsageBeacon } from "@/components/app/UsageBeacon";
+import { EngineSprite } from "@/components/EngineLogo";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 /**
@@ -21,6 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <>
       {/* Hides the marketing chrome on the dashboard's own host (SiteChrome, globals.css). */}
       <span data-app-tree hidden />
+      <EngineSprite />
       {children}
       <UsageBeacon />
     </>

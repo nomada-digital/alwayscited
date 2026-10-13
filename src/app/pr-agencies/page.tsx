@@ -167,7 +167,7 @@ export default function PrAgenciesPage() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
                     {/* The logo carries the engine; the word is dropped (Danny, 27 Sep, R46). */}
                     <span style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: T.soft }}>
-                      <EngineLogo engine={a.engine} size={14} title={ENGINE_SPECS[a.engine].label} />
+                      <EngineLogo engine={a.engine} size={14} title={ENGINE_SPECS[a.engine].label} inline />
                       {a.kind}
                     </span>
                     <span style={{ fontSize: "11px", fontWeight: 600, color: T.accentHover, background: T.wash, borderRadius: "999px", padding: "2px 9px", whiteSpace: "nowrap" }}>

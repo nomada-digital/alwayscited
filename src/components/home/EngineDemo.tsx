@@ -98,7 +98,7 @@ export default function EngineDemo() {
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12.5px", fontWeight: 600, color: D.cardHead }}>
-              <EngineLogo engine={engine} size={18} />
+              <EngineLogo engine={engine} size={18} inline />
               {ENGINE_SPECS[engine].label}
             </div>
             <div aria-hidden="true" style={{ height: "6px", background: D.bar, borderRadius: "3px", marginTop: "14px", width: "92%" }} />

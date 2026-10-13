@@ -25,10 +25,13 @@ import type { OverviewData } from "./overview-data.ts";
  * - Placements reads the picked cluster's prompts with their citations, no
  *   brands (`"cites"`, `cluster`); the one-cluster page reads its own
  *   prompts, every column (`cluster`). Both are held equal to the full read.
- * - Overview, Who is named, Cited pages and Clusters read everything. The
- *   audit had Clusters as using neither jsonb column; it does - the
- *   never-named upgrade prompt names the hosts cited for those prompts
- *   (upgrade-facts.ts neverNamedFacts) - so it is left whole.
+ * - Overview, Cited pages and Clusters read everything. The audit had
+ *   Clusters as using neither jsonb column; it does - the never-named upgrade
+ *   prompt names the hosts cited for those prompts (upgrade-facts.ts
+ *   neverNamedFacts) - so it is left whole.
+ * - Who is named reads brands without citations (`"brands"`) until a row is
+ *   open (13 Oct 2026, dashboard speed, payload): only an open row's cited
+ *   pages read a citation (`namedRead`).
  *
  * A column left out comes back as an empty list, not as a missing field, so
  * every figure type still holds. That is also how a page that starts to need
@@ -37,7 +40,7 @@ import type { OverviewData } from "./overview-data.ts";
  * and a new use of their answers fails the census there.
  */
 
-export type AnswerColumns = "full" | "cites" | "verdicts" | "none";
+export type AnswerColumns = "full" | "cites" | "brands" | "verdicts" | "none";
 
 /** The tracking_answers columns each shape selects; "none" reads no answer. */
 export const ANSWER_SELECT: Record<Exclude<AnswerColumns, "none">, string> = {
@@ -45,8 +48,21 @@ export const ANSWER_SELECT: Record<Exclude<AnswerColumns, "none">, string> = {
   // Read again without it while the column is missing (readAnswers, review of the integration, 8 Oct 2026).
   full: "run_date, question_id, engine, answered, named, brands, brands_ok, citations",
   cites: "run_date, question_id, engine, answered, named, citations",
+  // 13 Oct 2026 (dashboard speed): Who is named with no row open. brands_ok as on the full read, and read again without it the same way.
+  brands: "run_date, question_id, engine, answered, named, brands, brands_ok",
   verdicts: "run_date, question_id, engine, answered, named",
 };
+
+/**
+ * Who is named's shape (13 Oct 2026, dashboard speed, payload): brands only,
+ * unless `?open=` names a row, whose "Pages cited in answers that name"
+ * list (citedWithBrand) is the page's one read of a citation.
+ * read-shape.test.mts holds everything else the page draws, an open row's
+ * prompt links included, equal on both reads.
+ */
+export function namedRead(open: string | null): AnswerColumns {
+  return open === null ? "brands" : "full";
+}
 
 /** The clusters, prompts and keywords: every page's frame, read without a single answer. */
 export type Structure = Pick<OverviewData, "clusters" | "questions" | "keywords">;

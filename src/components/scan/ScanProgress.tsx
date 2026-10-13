@@ -108,7 +108,7 @@ export default function ScanProgress(p: {
             >
               <div style={{ display: "flex", alignItems: "center", gap: "7px", fontSize: "12.5px", fontWeight: 600, color: T.ink }}>
                 <span aria-hidden="true" style={{ display: "grid", placeItems: "center", flexShrink: 0 }}>
-                  <EngineLogo engine={key} size={16} />
+                  <EngineLogo engine={key} size={16} inline />
                 </span>
                 {/* Wraps rather than truncates: "Google AI Overviews" is wider
                     than a quarter of the column at 1280, and a clipped engine
