@@ -1,6 +1,7 @@
 import type { Day } from "../../tracking/figures.ts";
 import { isHidden } from "./transitions.ts";
-import { KIND_GROUP, KIND_GROUPS, type KindGroup, PLAN_STATUSES, type PlanItem, type PlanStatus, SEVERITIES } from "./types.ts";
+import { KIND_GROUP, KIND_GROUPS, type KindGroup, PLAN_STATUSES, type PlanItem, type PlanStatus } from "./types.ts";
+import { byItemOrder } from "./week.ts";
 
 /**
  * How the Actions page arranges the items (13 Oct 2026, DIY P3; spec 10
@@ -31,13 +32,15 @@ export function pickCluster(v: string | null, clusterIds: readonly string[]): st
   return v !== null && clusterIds.includes(v) ? v : null;
 }
 
-const SEVERITY_RANK: Record<string, number> = { ...Object.fromEntries(SEVERITIES.map((s, i) => [s, i])), own: SEVERITIES.length };
-
-/** Within a column: Suggested in the weekly order's severity order; the rest newest change first; Done newest done first. */
+/**
+ * Within a column: Suggested in section 6.1's order - severity, then volume,
+ * then effort, then the newest evidence, as the weekly pick takes them
+ * (week.ts byItemOrder); the rest newest change first; Done newest done first.
+ */
 function order(status: PlanStatus) {
   return (a: PlanItem, b: PlanItem) => {
     if (status === "done") return (b.doneOn ?? "").localeCompare(a.doneOn ?? "") || b.statusAt.localeCompare(a.statusAt);
-    if (status === "suggested") return SEVERITY_RANK[a.severity]! - SEVERITY_RANK[b.severity]! || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+    if (status === "suggested") return byItemOrder(a, b) || a.id.localeCompare(b.id);
     return b.statusAt.localeCompare(a.statusAt) || a.id.localeCompare(b.id);
   };
 }

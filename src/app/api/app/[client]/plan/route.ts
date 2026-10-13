@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { appPath } from "@/lib/app-host";
 import { diyFixtureWrites } from "@/lib/diy/core/fixture";
 import { planFixture } from "@/lib/diy/plan/data";
-import { type Decision, ITEM_ID, type PlanDone, type PlanForm, type PlanWhy, decide, isPlanDo } from "@/lib/diy/plan/transitions";
+import { type Decision, ITEM_ID, type PlanDone, type PlanForm, type PlanWhy, decide, isPlanDo, overviewPlanCode } from "@/lib/diy/plan/transitions";
 import { KIND_GROUPS, PLAN_STATUSES } from "@/lib/diy/plan/types";
 import { getPlanItem, insertTask, patchRow, taskRow, updatePlanItem } from "@/lib/diy/plan/write";
 import { itemOf } from "@/lib/diy/plan/data";
@@ -80,7 +80,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   const post: PlanForm = { do: d, id, to: field(form, "to"), changed: field(form, "changed"), note: field(form, "note"), owner: field(form, "owner"), title: field(form, "title"), cluster: field(form, "cluster") };
 
   const back = (done: PlanDone, why: PlanWhy | null = null, itemId: string | null = id) => {
-    if (toOverview) return NextResponse.redirect(dashUrl(req, appPath(`/${encodeURIComponent(slug)}?${new URLSearchParams({ plan: done })}#this-week`)), 303);
+    // One key on the Overview, the refusal's reason folded in: transitions.ts overviewPlanCode.
+    if (toOverview) return NextResponse.redirect(dashUrl(req, appPath(`/${encodeURIComponent(slug)}?${new URLSearchParams({ plan: overviewPlanCode(done, why) })}#this-week`)), 303);
     const q = new URLSearchParams({ ...keep, done, ...(why ? { why } : {}) });
     const hash = toWeek ? "#this-week" : d === "add" && done !== "added" ? "#new-task" : itemId ? `#item-${itemId}` : "";
     return NextResponse.redirect(dashUrl(req, appPath(`/${encodeURIComponent(slug)}/plan?${q}${hash}`)), 303);
@@ -94,9 +95,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
 
   const today = repo.today();
   const now = new Date(repo.now()).toISOString();
-  // Only the post that needs them reads them: the team for assign, the clusters for add.
-  const members = d === "assign" ? (await repo.settings(client.id)).members : [];
-  const clusters = d === "add" ? (await repo.structure(client.id)).clusters.filter((c) => c.stopped_on === null).map((c) => c.id) : [];
+  // Only the post that needs them reads them: the team for assign, the clusters for add. A failed read is the
+  // "didn't save" toast, as every other failure here is, never an unhandled 500 to a JS-off form (review, 13 Oct 2026).
+  let members: { email: string }[] = [];
+  let clusters: string[] = [];
+  try {
+    if (d === "assign") members = (await repo.settings(client.id)).members;
+    if (d === "add") clusters = (await repo.structure(client.id)).clusters.filter((c) => c.stopped_on === null).map((c) => c.id);
+  } catch (err) {
+    console.warn(`[diy] plan ${d}: ${err instanceof Error ? err.message : String(err)}`);
+    return back("refused", "failed");
+  }
   const rule = (item: Parameters<typeof decide>[1]): Decision => decide(post, item, { role: writeRole(client), today, now, by: email, members, clusters });
 
   if (fixtureMode()) {

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { addDays } from "../../tracking/figures.ts";
 import { FIXTURE_STATES, expandFixture, fixtureState } from "../../tracking/fixture-mode.ts";
 import { shapeRead } from "../../tracking/read-shape.ts";
-import { type ReadoutData, TOO_EARLY_DAYS, WINDOW_CHECKS, googleLine, otherWork, promptsLine, readout, readoutRange } from "./readout.ts";
+import { PLACEMENTS_UNREAD, type ReadoutData, TOO_EARLY_DAYS, WINDOW_CHECKS, WINDOW_DAYS, googleLine, joinWindows, otherWork, promptsLine, readout, readoutWindows } from "./readout.ts";
 
 const DONE = "2026-11-03";
 const TODAY = "2026-12-12";
@@ -55,9 +55,20 @@ test("each count is over the answers actually read: a missing read lowers the de
 });
 
 test("a check is a day something was answered; days with no check are not counted as checks", () => {
-  const sparse = ["2026-10-01", "2026-10-05", "2026-10-09", "2026-10-15", "2026-10-20", "2026-10-25", "2026-10-30", "2026-11-01", "2026-12-10", "2026-12-12"];
+  // Within each window's 21-day reach: 7 checks before 3 Nov on 9 days, and 7 in the last 21 days on 12.
+  const sparse = ["2026-10-14", "2026-10-17", "2026-10-20", "2026-10-25", "2026-10-28", "2026-10-30", "2026-11-01", "2026-11-22", "2026-11-25", "2026-11-28", "2026-12-01", "2026-12-04", "2026-12-08", "2026-12-12"];
   const d = data({ answers: answers(sparse, ["p1"], () => false) });
   assert.equal(promptsLine("c1", DONE, d), "Its prompts named you in 0 of 7 answers in the 7 checks before 3 Nov, and 0 of 7 in the last 7 checks, same prompts.");
+});
+
+test("each window reaches back 21 days for its checks: fewer there are said as fewer, and the latest never reaches back before the item was done", () => {
+  assert.equal(WINDOW_DAYS, 21);
+  // Checks went missing: 5 in the 21 days before 3 Nov (two more, earlier, are out of reach), and 2 in the last 21 days.
+  const sparse = ["2026-10-01", "2026-10-05", "2026-10-15", "2026-10-20", "2026-10-25", "2026-10-30", "2026-11-01", "2026-12-10", "2026-12-12"];
+  const d = data({ answers: answers(sparse, ["p1"], () => false) });
+  assert.equal(promptsLine("c1", DONE, d), "Its prompts named you in 0 of 5 answers in the 5 checks before 3 Nov, and 0 of 2 in the last 2 checks, same prompts.");
+  // The latest reading is one from the last 21 days, after the item was done.
+  assert.equal(googleLine("k1", DONE, data({ serp: [{ run_date: DONE, keyword_id: "k1", position: 14 }, { run_date: "2026-11-15", keyword_id: "k1", position: 11 }] })), "'invoicing software': 14th on 3 Nov.", "nothing read in the last 21 days: the done day's reading alone");
 });
 
 test("same prompts: a prompt not read in both windows is left out of both", () => {
@@ -105,10 +116,61 @@ test("the copy holds no derived figure, no adjective of size and no causal word"
   assert.doesNotMatch(text, /%|\b(caused|drove|because|thanks|resulted|delivered|improved|better|worse|up|down)\b/i);
 });
 
-test("the range a page reads: from room for 7 checks before the oldest readable item to today, held to the client's start", () => {
-  assert.equal(readoutRange([{ status: "done", doneOn: "2026-12-03" }], TODAY, null), null, "nothing old enough");
-  assert.deepEqual(readoutRange([{ status: "done", doneOn: DONE }, { status: "todo", doneOn: null }], TODAY, null), { from: "2026-10-13", to: TODAY });
-  assert.deepEqual(readoutRange([{ status: "done", doneOn: DONE }], TODAY, "2026-10-30"), { from: "2026-10-30", to: TODAY });
+test("a placements read that failed is said, never read as no placements (review, 13 Oct 2026)", () => {
+  assert.equal(otherWork(done, "c1", DONE, data({ placements: null })), PLACEMENTS_UNREAD);
+  const d = data({ placements: null, items: [done, { id: "i2", clusterId: "c1", status: "done", doneOn: "2026-11-20" }] });
+  assert.equal(otherWork(done, "c1", DONE, d), `Other work on this cluster since: 1 other action done 20 Nov. ${PLACEMENTS_UNREAD}`);
+  assert.doesNotMatch(PLACEMENTS_UNREAD, /\b(caused|drove|because|thanks|resulted|delivered)\b/i);
+});
+
+test("what a page reads for its readouts: each readable item's 21 days to its done day and the latest 21 days, merged when close, held to the start (review, 13 Oct 2026)", () => {
+  assert.equal(readoutWindows([{ status: "done", doneOn: "2026-12-03", clusterId: "c1" }], TODAY, null), null, "nothing old enough");
+  assert.equal(readoutWindows([{ status: "done", doneOn: DONE, clusterId: null }], TODAY, null), null, "no cluster: the readout is its date, and reads nothing");
+  assert.deepEqual(readoutWindows([{ status: "done", doneOn: "2026-10-01", clusterId: "c1" }, { status: "todo", doneOn: null, clusterId: "c1" }], TODAY, null), {
+    windows: [
+      { from: "2026-09-10", to: "2026-10-01" },
+      { from: "2026-11-21", to: TODAY },
+    ],
+    cluster: "c1",
+  });
+  // A year-old item and one from three months ago: three short reads, not a year of history.
+  const old = readoutWindows(
+    [
+      { status: "done", doneOn: "2025-12-01", clusterId: "c1" },
+      { status: "done", doneOn: "2026-09-01", clusterId: "c2" },
+      { status: "done", doneOn: "2026-09-10", clusterId: "c1" },
+    ],
+    TODAY,
+    null,
+  )!;
+  assert.deepEqual(old.windows, [
+    { from: "2025-11-10", to: "2025-12-01" },
+    { from: "2026-08-11", to: "2026-09-10" },
+    { from: "2026-11-21", to: TODAY },
+  ]);
+  assert.equal(old.cluster, null, "two clusters: every prompt is read");
+  const days = old.windows.reduce((n, w) => n + (Date.parse(w.to) - Date.parse(w.from)) / 86_400_000 + 1, 0);
+  assert.ok(days < 80, `${days} days read`);
+  // Windows within 21 days of each other are one read: 3 Nov's ends 18 days before the latest begins.
+  assert.deepEqual(readoutWindows([{ status: "done", doneOn: DONE, clusterId: "c1" }], TODAY, null)!.windows, [{ from: "2026-10-13", to: TODAY }]);
+  assert.deepEqual(readoutWindows([{ status: "done", doneOn: "2026-10-01", clusterId: "c1" }], TODAY, "2026-09-20")!.windows[0], { from: "2026-09-20", to: "2026-10-01" });
+});
+
+test("each window's read is cut to its window, so a read that serves every day counts each reading once", () => {
+  const all = answers(span("2026-09-01", TODAY), ["p1"], () => true);
+  const serp = span("2026-09-01", TODAY).map((d) => ({ run_date: d, keyword_id: "k1", position: 5 }));
+  const early = { ...done, doneOn: "2026-10-01" };
+  const w = readoutWindows([early], TODAY, null)!.windows;
+  assert.equal(w.length, 2);
+  const joined = joinWindows(w.map((window) => ({ window, answers: all, serp })));
+  assert.equal(joined.answers.length, 22 + 22);
+  assert.equal(new Set(joined.answers.map((a) => a.run_date)).size, joined.answers.length, "no day twice");
+  // The readout on the joined read is the readout on the whole read.
+  const whole = data({ answers: answers(span("2026-09-01", TODAY), ["p1", "p2"], (d) => d >= "2026-12-01"), serp: [{ run_date: "2026-10-01", keyword_id: "k1", position: 14 }, { run_date: "2026-11-01", keyword_id: "k1", position: 12 }, { run_date: TODAY, keyword_id: "k1", position: 9 }] });
+  const cut = joinWindows(w.map((window) => ({ window, answers: whole.answers, serp: whole.serp })));
+  assert.equal(cut.serp.length, 2, "the reading between the windows is not read");
+  assert.deepEqual(readout(early, { ...whole, ...cut }), readout(early, whole));
+  assert.match(readout(early, { ...whole, ...cut })!.text, /14th on 1 Oct, 9th on 12 Dec\. Its prompts named you in 0 of 14 answers in the 7 checks before 1 Oct, and 14 of 14 in the last 7 checks/);
 });
 
 /**

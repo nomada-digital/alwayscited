@@ -14,9 +14,9 @@ import { diyDay } from "@/lib/diy/core/jobs";
 import { arrange, pickCluster, pickGroup, pickStatus, pickView } from "@/lib/diy/plan/board";
 import { readPlan, section } from "@/lib/diy/plan/data";
 import { ownerLabel, placementsGroup } from "@/lib/diy/plan/placements";
-import { type Readout, readout, readoutRange } from "@/lib/diy/plan/readout";
+import { type Readout, joinWindows, readout, readoutWindows } from "@/lib/diy/plan/readout";
 import { ENDED_REASON, VIEWER_REASON, planToast } from "@/lib/diy/plan/transitions";
-import { thisWeek, weekCounts } from "@/lib/diy/plan/week";
+import { mondayOf, thisWeek, weekCounts } from "@/lib/diy/plan/week";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { CLUSTER_BASE } from "@/lib/tracking/limits";
@@ -87,18 +87,26 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
   const filters = { kind: pickGroup(one("kind")), cluster: pickCluster(one("cluster"), clusters.map((c) => c.id)), status: pickStatus(one("status")) };
   const keep = { ...(view ? { view } : {}), ...(filters.kind ? { kind: filters.kind } : {}), ...(filters.cluster ? { cluster: filters.cluster } : {}), ...(filters.status ? { status: filters.status } : {}) };
 
-  // The readouts: two windows of verdicts before and since each done item, only when one is 21 days old.
-  const range = readoutRange(items, today, client.started_on);
-  const readings = range ? await section("plan readouts", () => repo.loadOverview(client.id, range, "none", { answers: "verdicts", structure })) : null;
+  // The readouts: verdicts in each done item's window before it and in the latest one, read only when one is 21
+  // days old, and only those windows (readout.ts readoutWindows), never the whole history since the oldest.
+  const windows = readoutWindows(items, today, client.started_on);
+  const readings = windows
+    ? await section("plan readouts", async () => {
+        const opts = { answers: "verdicts" as const, structure, ...(windows.cluster ? { cluster: windows.cluster } : {}) };
+        const parts = await Promise.all(windows.windows.map(async (w) => ({ window: w, ...(await repo.loadOverview(client.id, w, "none", opts)) })));
+        return joinWindows(parts);
+      })
+    : null;
   const readouts = new Map<string, Readout | { kind: "error"; text: string } | null>();
   for (const i of items) {
     if (i.status !== "done") continue;
     const early = readout(i, { today, clusters: [], keywords: [], prompts: [], answers: [], serp: [], placements: [], items: [] });
-    if (early?.kind === "early" || !readings) readouts.set(i.id, early);
+    if (early?.kind === "early" || !i.clusterId || !readings) readouts.set(i.id, early);
     else if (!readings.ok) readouts.set(i.id, { kind: "error", text: SECTION_ERROR });
     else {
       const d = readings.value;
-      readouts.set(i.id, readout(i, { today, clusters: d.clusters, keywords: d.keywords, prompts: d.questions, answers: d.answers, serp: d.serp, placements: placements.ok ? placements.value : [], items }));
+      // A failed placements read is said in the readout, never read as no placements (section 3.4).
+      readouts.set(i.id, readout(i, { today, clusters: structure.clusters, keywords: structure.keywords, prompts: structure.questions, answers: d.answers, serp: d.serp, placements: placements.ok ? placements.value : null, items }));
     }
   }
 
@@ -149,7 +157,7 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
           filters={filters}
           arranged={arranged}
           items={items}
-          ctx={{ slug, keep, canWrite, reason, members, viewer: email, clusterNames, readouts }}
+          ctx={{ slug, keep, canWrite, reason, members, viewer: email, clusterNames, readouts, monday: mondayOf(utc) }}
           toast={planToast(one("done"), one("why"))}
           week={
             plan.ok && items.length ? (

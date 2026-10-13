@@ -136,6 +136,9 @@ export type PlanItem = {
   doneOn: Day | null;
   verified: Verified | null;
   readoutBase: ReadoutBase | null;
+  /** The candidate's tie-breaks, kept so the Suggested column takes section 6.1's order, the weekly pick's (review, 13 Oct 2026). */
+  volume: number | null;
+  evidenceOn: Day | null;
   /** The weekly job's own bookkeeping (section 6.1, stale suggestions): the last day it was gathered, and runs since. */
   seenOn: Day | null;
   missed: number;
@@ -144,7 +147,7 @@ export type PlanItem = {
 
 /** The columns every read of plan_items takes, named. */
 export const PLAN_COLUMNS =
-  "id, cluster_id, kind, severity, status, title, why, grade, source_id, effort, href, ref_table, ref_id, dedupe_key, week_of, new_since_monday, owner_email, note, hidden_until, created_by, created_at, status_at, status_by, started_on, done_on, verified, readout_base, seen_on, missed, missed_on";
+  "id, cluster_id, kind, severity, status, title, why, grade, source_id, effort, href, ref_table, ref_id, dedupe_key, week_of, new_since_monday, owner_email, note, hidden_until, created_by, created_at, status_at, status_by, started_on, done_on, verified, readout_base, volume, evidence_on, seen_on, missed, missed_on";
 
 // ---- Words. The page and the cards read these; nothing types its own. ----
 

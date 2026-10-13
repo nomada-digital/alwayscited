@@ -15,7 +15,12 @@ import { BUTTON, DARK, H2, LINK, OFF, SECTION, SEVERITY_CHIP, SMALL } from "./st
  * shell (P5). Each card: the severity, a verb-first title, one "why" line
  * with its counts, the grade chip, our effort, the one button that does the
  * job, and - on a suggestion - Start and Not now, posted to the plan route.
- * Footer: "1 of 3 done this week · All 12 open items".
+ * Footer: "1 of 3 done this week · All 12 open items". Each card carries
+ * `data-plan-kind` for the gating census (spec 6.10 item 2), as PlanCard's
+ * article does.
+ *
+ * On the Overview (`back="overview"`) the route answers `?plan=<code>`, and
+ * the Overview passes transitions.ts overviewPlanToast(code) as `toast`.
  */
 export default function ThisWeek({
   items,
@@ -42,7 +47,8 @@ export default function ThisWeek({
   /** A toast for the Overview's way back (`?plan=`), already in words. */
   toast?: string | null;
 }) {
-  const off = canWrite ? {} : { disabled: true, "aria-describedby": "wk-ro" };
+  // Each card's buttons are described by its title, so "Start" is never one of several unnamed (review, 13 Oct 2026).
+  const off = (title: string) => (canWrite ? { "aria-describedby": title } : { disabled: true, "aria-describedby": `${title} wk-ro` });
   const offStyle = canWrite ? {} : OFF;
   const at = back === "overview" ? { back } : { ...keep, at: "week" as const };
   return (
@@ -66,15 +72,18 @@ export default function ThisWeek({
             const fact = item.why[0];
             const act = item.href ? clientHref(slug, item.href) : planPath(slug, {}, `#item-${item.id}`);
             const label = item.href ? actLabel(item.kind) : "Open in Actions";
+            const title = `wk-${item.id}-t`;
             return (
-              <li key={item.id} style={{ border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px", minWidth: 0, background: T.surface }}>
+              <li key={item.id} data-plan-kind={item.kind} style={{ border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px", display: "flex", flexDirection: "column", gap: "8px", minWidth: 0, background: T.surface }}>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "flex-start" }}>
                   <span style={SEVERITY_CHIP[item.severity]}>{SEVERITY_LABEL[item.severity]}</span>
                   {item.newSinceMonday ? <span style={{ ...SEVERITY_CHIP.blocking }}>New since Monday</span> : null}
                   {item.status !== "suggested" ? <span style={{ ...SEVERITY_CHIP.own }}>{STATUS_LABEL[item.status]}</span> : null}
                   {chip ? <Chip chip={chip} id={`w-${item.id}-src`} /> : null}
                 </div>
-                <h3 style={{ margin: 0, fontSize: "15px", fontWeight: 650, lineHeight: 1.35, color: T.ink, overflowWrap: "anywhere" }}>{clip(item.title, TITLE_COPY)}</h3>
+                <h3 id={title} style={{ margin: 0, fontSize: "15px", fontWeight: 650, lineHeight: 1.35, color: T.ink, overflowWrap: "anywhere" }}>
+                  {clip(item.title, TITLE_COPY)}
+                </h3>
                 {fact ? (
                   <p style={{ ...SMALL, color: T.ink, overflowWrap: "anywhere" }}>
                     {fact.text}
@@ -96,10 +105,10 @@ export default function ThisWeek({
                   </Link>
                   {item.status === "suggested" ? (
                     <form method="post" action={planAction(slug, { ...at, id: item.id })} style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      <button type="submit" name="do" value="start" style={{ ...BUTTON, ...offStyle }} {...off}>
+                      <button type="submit" name="do" value="start" style={{ ...BUTTON, ...offStyle }} {...off(title)}>
                         Start
                       </button>
-                      <button type="submit" name="do" value="later" style={{ ...BUTTON, ...offStyle }} {...off}>
+                      <button type="submit" name="do" value="later" style={{ ...BUTTON, ...offStyle }} {...off(title)}>
                         Not now
                       </button>
                     </form>

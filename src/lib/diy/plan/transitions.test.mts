@@ -15,6 +15,8 @@ import {
   isHidden,
   movePatch,
   movesFrom,
+  overviewPlanCode,
+  overviewPlanToast,
   planToast,
   readChanged,
   readNoteText,
@@ -152,4 +154,31 @@ test("the toast: fixed words for known codes only, nothing echoed", () => {
   assert.equal(planToast("nonsense", null), null);
   assert.equal(planToast(null, "viewer"), null);
   assert.equal(planToast("refused", "viewer"), VIEWER_REASON);
+});
+
+test("bringing back an item the system dropped clears its 'No longer applies' line; a member's note stays (review, 13 Oct 2026)", () => {
+  const stale = { id: "i1", status: "dropped" as const, startedOn: null, note: "No longer applies (checked 15 Oct)" };
+  const back = decide(form({ to: "todo" }), stale, ctx);
+  assert.equal(back.op === "update" && back.patch.note, null, "the system's line goes with the drop");
+  const mine = decide(form({ to: "todo" }), { ...stale, note: "Not for us right now" }, ctx);
+  assert.equal(mine.op === "update" && "note" in mine.patch, false, "a note someone wrote is theirs");
+  const other = movePatch({ status: "todo", startedOn: null, note: "No longer applies (checked 15 Oct)" }, "doing", { today: ctx.today, now: ctx.now, by: ctx.by });
+  assert.equal("note" in other, false, "only leaving Dropped clears it");
+});
+
+test("the Overview's way back: one key, the refusal's reason folded in, fixed words only (review, 13 Oct 2026)", () => {
+  assert.equal(overviewPlanCode("started", null), "started");
+  assert.equal(overviewPlanCode("refused", "gone"), "refused-gone");
+  assert.equal(overviewPlanCode("refused", null), "refused-failed");
+  assert.equal(overviewPlanToast("refused-gone"), planToast("refused", "gone"));
+  assert.equal(overviewPlanToast("refused-viewer"), VIEWER_REASON);
+  assert.equal(overviewPlanToast("refused-move"), planToast("refused", "move"));
+  assert.equal(overviewPlanToast("refused"), planToast("refused", "failed"));
+  assert.equal(overviewPlanToast("refused-<b>"), planToast("refused", "failed"), "an unknown reason is the plain failure, never echoed");
+  assert.equal(overviewPlanToast("started"), "Moved to Doing.");
+  assert.equal(overviewPlanToast("nonsense"), null);
+  assert.equal(overviewPlanToast(null), null);
+  for (const d of PLAN_DONE) for (const w of [null, ...PLAN_WHY]) assert.ok(overviewPlanToast(overviewPlanCode(d, w)), `${d} ${w}`);
+  const route = readFileSync(join(ROOT, "src/app/api/app/[client]/plan/route.ts"), "utf8");
+  assert.match(route, /plan: overviewPlanCode\(done, why\)/, "the route answers the Overview through it");
 });

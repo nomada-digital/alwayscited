@@ -26,6 +26,8 @@ export type CardContext = {
   viewer: string;
   clusterNames: ReadonlyMap<string, string>;
   readouts: ReadonlyMap<string, Readout | { kind: "error"; text: string } | null>;
+  /** This week's Monday (UTC), for "New since Monday". */
+  monday: string;
 };
 
 /** Each column's empty state (spec 4.6 States: "Done is empty"). */
@@ -52,6 +54,7 @@ export function Cards({ items, ctx }: { items: readonly PlanItem[]; ctx: CardCon
           clusterName={item.clusterId ? (ctx.clusterNames.get(item.clusterId) ?? null) : null}
           readout={ctx.readouts.get(item.id) ?? null}
           first={item.status === "suggested"}
+          monday={ctx.monday}
         />
       ))}
     </>

@@ -137,3 +137,14 @@ test("a failed nightly write fails the job with the count, after trying the rest
   await assert.rejects(applyRefresh(db, "me", plan), /1 plan writes failed/);
   assert.equal(tables.plan_items!.length, 1, "the good one still went in");
 });
+
+test("upsertPlanItemFor pins to a week without carrying an earlier week's 'New since Monday' (review, 13 Oct 2026)", async () => {
+  const { db, tables } = fakeDb({ plan_items: [{ id: 7, client_domain_id: "me", dedupe_key: "schema:org:kp1", status: "suggested", week_of: "2026-10-12", new_since_monday: true }] });
+  await upsertPlanItemFor(db, "me", cand({ severity: "blocking", kind: "unblock_crawler" }), { today: "2026-10-19", weekOf: "2026-10-19" });
+  assert.equal(tables.plan_items![0]!.week_of, "2026-10-19");
+  assert.equal(tables.plan_items![0]!.new_since_monday, false);
+  await upsertPlanItemFor(db, "me", cand({ severity: "blocking", kind: "unblock_crawler" }), { today: "2026-10-21", weekOf: "2026-10-19", newSinceMonday: true });
+  assert.equal(tables.plan_items![0]!.new_since_monday, true, "a caller that says it is new is believed");
+  await upsertPlanItemFor(db, "me", cand(), { today: "2026-10-22" });
+  assert.equal(tables.plan_items![0]!.new_since_monday, true, "no week given: the flag is left as it is");
+});

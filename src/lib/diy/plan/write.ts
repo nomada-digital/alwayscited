@@ -91,7 +91,8 @@ export async function upsertPlanItemFor(db: SupabaseClient, clientId: string, ca
   const now = had ?? (await read());
   if (!now) throw new Error("the item was neither added nor found");
   const patch: Record<string, unknown> = { seen_on: p.today, missed: 0, missed_on: null, ...(now.status === "suggested" ? contentOf(c) : {}) };
-  if (p.weekOf) patch.week_of = p.weekOf;
+  // Pinned to a week, it is new since Monday only when the caller says so: a flag from an earlier week never rides along (review, 13 Oct 2026).
+  if (p.weekOf) Object.assign(patch, { week_of: p.weekOf, new_since_monday: p.newSinceMonday ?? false });
   const { error } = await db.from("plan_items").update(patch).eq("client_domain_id", clientId).eq("id", now.id);
   if (error) throw new Error(`could not update the item: ${error.message}`);
   return { id: String(now.id), created: false };

@@ -80,7 +80,8 @@ export default function Actions({
   const used = new Set(items.map((i) => i.clusterId).filter((c): c is string => c !== null));
   const clusterPills = clusters.filter((c) => used.has(c.id) || c.id === filters.cluster);
   const list = view === "list" || filters.status === "dropped";
-  const droppedCount = items.filter((i) => i.status === "dropped").length;
+  // The dropped the link opens: under the kind and cluster filters the list keeps (review, 13 Oct 2026).
+  const droppedCount = arranged ? arranged.dropped.length : 0;
 
   return (
     <div className="app-col" style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>

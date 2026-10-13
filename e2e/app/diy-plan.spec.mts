@@ -15,7 +15,12 @@
  *
  * Saves each page's screens to test-results/diy/plan/<page>-<state>-<width>.png
  * (1280x900 and 390x844) and its HTML to test-results/diy/plan/<page>-<state>.html
- * for the gating census (section 6.10 item 2). Not committed.
+ * for the gating census (section 6.10 item 2). Not committed. The page is
+ * `plan` and the view rides in the state - plan-board-full, plan-list-placed -
+ * because P1's census knows a saved Actions page only by a name starting
+ * `plan-` (review, 13 Oct 2026: board-full.html and the rest were never swept).
+ * Saved here: plan-board-full, plan-list-full, plan-board-viewer, plan-day0,
+ * and with P2's placed states plan-list-placed and plan-list-placed-agency.
  *
  *   npm run build && node --test e2e/app/diy-plan.spec.mts
  */
@@ -149,8 +154,19 @@ test("board (full) at 1280: This week pinned with 3, the four columns, the reado
   assert.match(done, /Marked done by you\./);
   assert.match(await text(page), /1 hidden with Not now/);
   assert.match(await text(page), /Dropped \(3\)/);
+  // Every card names its kind for the gating census's price rule (spec 6.10 item 2), This week's as well.
+  const kinds = await page.evaluate(() => [...document.querySelectorAll("article.plan-card, #this-week li")].map((e) => e.getAttribute("data-plan-kind")));
+  assert.ok(kinds.length >= 22 && kinds.every((k) => k && /^[a-z_]+$/.test(k)), `${kinds.length} cards, each with its kind`);
+  assert.ok(kinds.includes("get_onto_page"), "an opportunity card is there to be swept");
+  // A writer's buttons say which card they are on.
+  const described = await page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement>("#app-content form button")].filter((b) => b.closest("article, #this-week li")).map((b) => document.getElementById((b.getAttribute("aria-describedby") ?? "").split(" ")[0]!)?.tagName));
+  assert.ok(described.length > 20 && described.every((t) => t === "H3"), "each card's controls are described by its title");
+  // Nobody is told they own an item nobody was given.
+  assert.doesNotMatch(await page.locator("#item-pi-14").innerText(), /Owner:/);
+  assert.match(await page.locator("#item-pi-18").innerText(), /Owner: You/);
+  assert.match(await page.locator("#item-pi-13").innerText(), /Owner: editor@example\.com/);
   await ctx.close();
-  await save(PLAN, "board", "full");
+  await save(PLAN, "plan-board", "full");
 });
 
 test("list (full): grouped by status, Dropped listed when asked, the system's drop dated", async () => {
@@ -161,7 +177,7 @@ test("list (full): grouped by status, Dropped listed when asked, the system's dr
   assert.match(t, /No longer applies \(checked 27 Sep\)/);
   assert.match(t, /Bring back to/);
   await ctx.close();
-  await save(`${PLAN}?view=list`, "list", "full");
+  await save(`${PLAN}?view=list`, "plan-list", "full");
 });
 
 test("no sideways scroll at 390 and 320, on the board, the list and day 0; the board stacks into the list below 640", async () => {
@@ -274,6 +290,52 @@ test("JS off: add a task lands in To do as Your task; a blank title is refused b
   assert.match(r.headers.get("location")!, /\/app\/tallyroo\/plan\?view=list&done=refused&why=title#new-task$/);
 });
 
+test("JS off: Save note, Save owner and Drop are each a 303 back with the toast", async () => {
+  as("default", { write: true });
+  const { ctx, page } = await open(PLAN, 1280, false);
+  // The note, behind "Note and owner": details and summary open without script.
+  await page.locator("#item-pi-14 summary").click();
+  await page.locator("#item-pi-14 input[name=note]").fill("Ask Sam for the list first");
+  await page.locator('#item-pi-14 button[value="note"]').click();
+  await page.waitForURL(/done=noted/, { timeout: 15_000 });
+  assert.match(page.url(), /#item-pi-14$/);
+  assert.match(await page.locator('p[role="status"]').first().innerText(), /^Note saved\.$/);
+  assert.match(await page.locator("#item-pi-14").innerText(), /Note: Ask Sam for the list first/);
+  // The owner: one of the team, matched by address.
+  await page.locator("#item-pi-14 summary").click();
+  await page.locator("#item-pi-14 select[name=owner]").selectOption("owner@example.com");
+  await page.locator('#item-pi-14 button[value="assign"]').click();
+  await page.waitForURL(/done=assigned/, { timeout: 15_000 });
+  assert.match(await page.locator('p[role="status"]').first().innerText(), /^Owner saved\.$/);
+  assert.match(await page.locator("#item-pi-14").innerText(), /Owner: You/);
+  // Drop, through the card's select.
+  await page.locator('#item-pi-17 select[name="to"]').selectOption("dropped");
+  await page.locator('#item-pi-17 button[value="move"]').click();
+  await page.waitForURL(/done=dropped/, { timeout: 15_000 });
+  assert.match(await page.locator('p[role="status"]').first().innerText(), /^Dropped\. It stays under Dropped if you want it back\.$/);
+  assert.equal(await page.locator("#item-pi-17").count(), 0, "off the board");
+  assert.match(await text(page), /Dropped \(4\)/);
+  await ctx.close();
+  // A refusal on each: a note too long, and someone not on the team.
+  for (const [k, v, why] of [["note", "x".repeat(201), "note"], ["owner", "stranger@example.com", "owner"]] as const) {
+    const body = new FormData();
+    body.set("do", k === "note" ? "note" : "assign");
+    body.set(k, v);
+    const r = await fetch(`${BASE}/api/app/tallyroo/plan?id=pi-13`, { method: "POST", body, redirect: "manual" });
+    assert.equal(r.status, 303);
+    assert.match(r.headers.get("location")!, new RegExp(`done=refused&why=${why}#item-pi-13$`));
+  }
+});
+
+test("the Overview's way back keeps the refusal's reason in its one key", async () => {
+  as("default", { write: true });
+  const body = new FormData();
+  body.set("do", "start");
+  const r = await fetch(`${BASE}/api/app/tallyroo/plan?back=overview&id=pi-99`, { method: "POST", body, redirect: "manual" });
+  assert.equal(r.status, 303);
+  assert.match(r.headers.get("location")!, /\/app\/tallyroo\?plan=refused-gone#this-week$/);
+});
+
 test("a viewer sees every control disabled with the reason, and the route refuses them", async () => {
   as("default", { role: "viewer", write: true });
   const { ctx, page } = await open(PLAN);
@@ -281,14 +343,17 @@ test("a viewer sees every control disabled with the reason, and the route refuse
   const controls = await page.evaluate(() => [...document.querySelectorAll<HTMLButtonElement | HTMLSelectElement | HTMLInputElement>("#app-content form button, #app-content form select, #app-content form input")].map((c) => ({ off: c.disabled, why: c.getAttribute("aria-describedby") })));
   assert.ok(controls.length > 40, `${controls.length} controls`);
   assert.ok(controls.every((c) => c.off && c.why), "every control off, each pointing at its reason");
-  const why = await page.evaluate(() => [...new Set([...document.querySelectorAll("[aria-describedby]")].map((c) => document.getElementById(c.getAttribute("aria-describedby")!)?.textContent))]);
+  const why = await page.evaluate(() => [...new Set([...document.querySelectorAll("#app-content form [aria-describedby]")].flatMap((c) => c.getAttribute("aria-describedby")!.split(" ").map((id) => document.getElementById(id)?.textContent)))]);
   assert.ok(why.includes("Viewers can't change this. Ask an owner or editor."));
+  const reasoned = await page.evaluate(() => [...document.querySelectorAll("#app-content form button, #app-content form select, #app-content form input")].every((c) => (c.getAttribute("aria-describedby") ?? "").split(" ").some((id) => document.getElementById(id)?.textContent === "Viewers can't change this. Ask an owner or editor.")));
+  assert.ok(reasoned, "every disabled control points at the reason");
+  assert.doesNotMatch(await text(page), /Owner: You/, "a viewer owns nothing here");
   await ctx.close();
   const body = new FormData();
   body.set("do", "start");
   const r = await fetch(`${BASE}/api/app/tallyroo/plan?id=pi-01`, { method: "POST", body, redirect: "manual" });
   assert.match(r.headers.get("location")!, /done=refused&why=viewer#item-pi-01$/);
-  await save(PLAN, "board", "viewer");
+  await save(PLAN, "plan-board", "viewer");
 });
 
 test("an ended client is read-only, with its own reason", async () => {
@@ -319,14 +384,16 @@ test("day 0: the actions fill in after the first check", async () => {
   await z.ctx.close();
 });
 
-test("the gating vocabulary: no banned word, no competitor tool and no Nomada in agency mode on any page saved", async () => {
+test("the gating vocabulary on the board and the list: no banned word, no competitor tool, no causal word", async () => {
   as("default");
-  const { ctx, page } = await open(`${PLAN}?view=list`);
-  const t = await text(page);
-  await ctx.close();
-  assert.doesNotMatch(t, /\b(marketplace|for sale|write for us|accepts guest|placeable|could place|place this|domain rating|difficulty|sponsored|guest post)\b|\bDR\b|\bKD\b/i);
-  assert.doesNotMatch(t, /\b(ahrefs|semrush|sitechecker|sparktoro|gumshoe|peec|profound|otterly|scrunch)\b/i);
-  assert.doesNotMatch(t, /\b(caused|drove|because of|thanks to|resulted in|delivered)\b/i);
+  for (const route of [PLAN, `${PLAN}?view=list`, `${PLAN}?view=list&status=dropped`]) {
+    const { ctx, page } = await open(route);
+    const t = await text(page);
+    await ctx.close();
+    assert.doesNotMatch(t, /\b(marketplace|for sale|write for us|accepts guest|placeable|could place|place this|domain rating|difficulty|sponsored|guest post)\b|\bDR\b|\bKD\b/i, route);
+    assert.doesNotMatch(t, /\b(ahrefs|semrush|sitechecker|sparktoro|gumshoe|peec|profound|otterly|scrunch)\b/i, route);
+    assert.doesNotMatch(t, /\b(caused|drove|because of|thanks to|resulted in|delivered)\b/i, route);
+  }
 });
 
 // The placed states are tracking-fixture states P2 adds to fixture-mode.ts (spec 7.0 item 6). Until P2 is merged
@@ -346,7 +413,7 @@ test("placed: the list ends with the read-only Placements group, owned by nomada
   const phone = await open(PLAN, 390);
   assert.equal(await phone.page.locator('section[aria-labelledby="pl-h"]').isVisible(), true, "the default view below 640px is the list");
   await phone.ctx.close();
-  await save(`${PLAN}?view=list`, "list", "placed");
+  await save(`${PLAN}?view=list`, "plan-list", "placed");
 });
 
 test("placed-agency: the group's owner is Your account contact, and no 'nomada' anywhere on the page", { skip: placed ? false : "TRACKING_FIXTURE_STATE=placed-agency is P2's, not merged into this branch yet" }, async () => {
@@ -355,5 +422,5 @@ test("placed-agency: the group's owner is Your account contact, and no 'nomada' 
   assert.match(await page.locator('section[aria-labelledby="pl-h"]').innerText(), /owned by your account contact\.[\s\S]*Owner: Your account contact/);
   assert.doesNotMatch(await page.locator("body").innerText(), /nomada/i);
   await ctx.close();
-  await save(`${PLAN}?view=list`, "list", "placed-agency");
+  await save(`${PLAN}?view=list`, "plan-list", "placed-agency");
 });

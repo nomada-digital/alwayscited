@@ -22,6 +22,8 @@ export function mondayOf(day: Day): Day {
 }
 
 const EFFORT_RANK: Record<Effort, number> = { minutes: 0, hour: 1, days: 2 };
+/** Where an item with no effort sorts: after every effort. */
+const EFFORTS_AFTER = 3;
 const SEVERITY_RANK = Object.fromEntries(SEVERITIES.map((s, i) => [s, i])) as Record<Severity, number>;
 
 /** Section 6.1's ordering, as a comparator. */
@@ -30,6 +32,24 @@ export function byOrder(a: Pick<Candidate, "severity" | "volume" | "effort" | "e
     SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] ||
     (b.volume ?? 0) - (a.volume ?? 0) ||
     EFFORT_RANK[a.effort] - EFFORT_RANK[b.effort] ||
+    (b.evidenceOn ?? "").localeCompare(a.evidenceOn ?? "") ||
+    a.dedupeKey.localeCompare(b.dedupeKey)
+  );
+}
+
+/**
+ * The same order for stored suggestions: the board's Suggested column, so
+ * the card at the top is the one the weekly pick would take first and its
+ * "Why this is first" line holds (review, 13 Oct 2026). A member's own task
+ * sorts after every severity; an item with no effort after every effort.
+ */
+export function byItemOrder(a: Pick<PlanItem, "severity" | "volume" | "effort" | "evidenceOn" | "dedupeKey">, b: Pick<PlanItem, "severity" | "volume" | "effort" | "evidenceOn" | "dedupeKey">): number {
+  const sev = (s: PlanItem["severity"]) => (s === "own" ? SEVERITIES.length : SEVERITY_RANK[s]);
+  const eff = (e: Effort | null) => (e === null ? EFFORTS_AFTER : EFFORT_RANK[e]);
+  return (
+    sev(a.severity) - sev(b.severity) ||
+    (b.volume ?? 0) - (a.volume ?? 0) ||
+    eff(a.effort) - eff(b.effort) ||
     (b.evidenceOn ?? "").localeCompare(a.evidenceOn ?? "") ||
     a.dedupeKey.localeCompare(b.dedupeKey)
   );

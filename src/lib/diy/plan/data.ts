@@ -86,6 +86,8 @@ export function itemOf(r: Record<string, unknown>): PlanItem | null {
     doneOn: day(r.done_on),
     verified: verifiedOf(r.verified),
     readoutBase: baseOf(r.readout_base),
+    volume: typeof r.volume === "number" && Number.isFinite(r.volume) && r.volume >= 0 ? r.volume : null,
+    evidenceOn: day(r.evidence_on),
     seenOn: day(r.seen_on),
     missed: typeof r.missed === "number" ? r.missed : 0,
     missedOn: day(r.missed_on),

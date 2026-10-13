@@ -4,7 +4,7 @@ import { T } from "@/config/tokens";
 import type { GradeChip } from "@/lib/diy/core/evidence";
 import { clientHref, planAction, type PlanKeep } from "@/lib/diy/plan/paths";
 import type { Readout } from "@/lib/diy/plan/readout";
-import { staleNote } from "@/lib/diy/plan/refresh";
+import { type Member, noteLines, ownerName } from "@/lib/diy/plan/card";
 import { movesFrom } from "@/lib/diy/plan/transitions";
 import { ASKS_CHANGED, CHANGED, CHANGED_LABEL, EFFORT_LABEL, type PlanItem, SEVERITY_LABEL, STATUS_LABEL, TITLE_COPY, actLabel, clip } from "@/lib/diy/plan/types";
 import { itemChip, whyFirst } from "@/lib/diy/plan/why-first";
@@ -22,16 +22,15 @@ import { BUTTON, CHIP, DARK, FIELD, LABEL, LINK, OFF, SEVERITY_CHIP, SMALL } fro
  *
  * A viewer, or anyone on an ended client, sees the controls disabled with
  * the reason (`reason`). The grade chip's source and date show on hover and
- * focus, and as text under the card on a phone.
+ * focus, and as text under the card on a phone. Every control is described
+ * by the card's title, so a list of buttons says which card each is on
+ * (review, 13 Oct 2026); a disabled one by the reason as well.
+ *
+ * The article carries `data-plan-kind`, which the gating census reads to
+ * hold opportunity and link cards to the price rule (spec 6.10 item 2).
  */
 
-export type Member = { email: string; name: string | null };
-
-export function ownerName(email: string | null, viewer: string, members: readonly Member[] | null): string {
-  if (!email || email.toLowerCase() === viewer.toLowerCase()) return "You";
-  const m = members?.find((x) => x.email.toLowerCase() === email.toLowerCase());
-  return m?.name?.trim() || email;
-}
+export type { Member };
 
 export function Chip({ chip, id }: { chip: GradeChip; id: string }) {
   return (
@@ -65,6 +64,7 @@ export default function PlanCard({
   clusterName,
   readout,
   first = false,
+  monday,
 }: {
   item: PlanItem;
   slug: string;
@@ -81,22 +81,26 @@ export default function PlanCard({
   readout: Readout | { kind: "error"; text: string } | null;
   /** Show "Why this is first" (suggestions). */
   first?: boolean;
+  /** This week's Monday (UTC): "New since Monday" is drawn only on an item pinned to it. */
+  monday: string;
 }) {
   const uid = `p-${item.id}`;
   const chip = itemChip(item);
   const lead = first ? whyFirst(item.severity) : null;
   const action = planAction(slug, { ...keep, id: item.id });
-  const off = canWrite ? {} : { disabled: true, "aria-describedby": `${uid}-ro` };
+  const off = canWrite ? { "aria-describedby": `${uid}-t` } : { disabled: true, "aria-describedby": `${uid}-t ${uid}-ro` };
   const offStyle = canWrite ? {} : OFF;
   const verified = verifiedLine(item);
   const moves = movesFrom(item.status);
-  const system = item.status === "dropped" && item.statusBy === "system";
+  const owner = ownerName(item.ownerEmail, viewer, members);
+  const lines = noteLines(item);
+  const fresh = item.newSinceMonday && item.weekOf === monday;
 
   return (
-    <article id={`item-${item.id}`} aria-labelledby={`${uid}-t`} className="plan-card" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0, scrollMarginTop: "16px" }}>
+    <article id={`item-${item.id}`} aria-labelledby={`${uid}-t`} data-plan-kind={item.kind} className="plan-card" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0, scrollMarginTop: "16px" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "flex-start" }}>
         <span style={SEVERITY_CHIP[item.severity]}>{SEVERITY_LABEL[item.severity]}</span>
-        {item.newSinceMonday ? <span style={{ ...CHIP, background: T.badBg, color: T.badFg }}>New since Monday</span> : null}
+        {fresh ? <span style={{ ...CHIP, background: T.badBg, color: T.badFg }}>New since Monday</span> : null}
         {clusterName ? <span style={{ ...CHIP, background: T.chip, color: T.ink, whiteSpace: "normal" }}>{clusterName}</span> : null}
         {chip ? <Chip chip={chip} id={`${uid}-src`} /> : null}
       </div>
@@ -128,7 +132,7 @@ export default function PlanCard({
       ) : null}
       <p style={{ ...SMALL, display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
         {item.effort ? <span>{`Effort: ${EFFORT_LABEL[item.effort]} (our estimate)`}</span> : null}
-        <span>{`Owner: ${ownerName(item.ownerEmail, viewer, members)}`}</span>
+        {owner ? <span>{`Owner: ${owner}`}</span> : null}
         {item.status === "doing" && item.startedOn ? <span>{`Started ${formatDay(item.startedOn)}`}</span> : null}
       </p>
       {item.href ? (
@@ -138,8 +142,8 @@ export default function PlanCard({
           </Link>
         </p>
       ) : null}
-      {item.note ? <p style={{ ...SMALL, color: T.ink, overflowWrap: "anywhere" }}>{`Note: ${item.note}`}</p> : null}
-      {system && item.note !== staleNote(item.statusAt.slice(0, 10)) ? <p style={SMALL}>{staleNote(item.statusAt.slice(0, 10))}</p> : null}
+      {lines.note ? <p style={{ ...SMALL, color: T.ink, overflowWrap: "anywhere" }}>{`Note: ${lines.note}`}</p> : null}
+      {lines.stale ? <p style={SMALL}>{lines.stale}</p> : null}
       {verified ? <p style={{ ...SMALL, color: item.verified ? T.goodFg : T.soft, fontWeight: item.verified ? 600 : 400 }}>{verified}</p> : null}
       {readout ? (
         <p data-readout={readout.kind} style={{ margin: 0, fontSize: "13px", lineHeight: 1.55, color: T.ink, background: T.bg, borderRadius: "10px", padding: "10px 12px" }}>
@@ -203,7 +207,7 @@ export default function PlanCard({
                   <label htmlFor={`${uid}-note`} style={LABEL}>
                     Note (up to {APP_LIMITS.note} characters)
                   </label>
-                  <input id={`${uid}-note`} name="note" type="text" maxLength={APP_LIMITS.note} defaultValue={item.note ?? ""} style={{ ...FIELD, width: "100%", ...offStyle }} {...off} />
+                  <input id={`${uid}-note`} name="note" type="text" maxLength={APP_LIMITS.note} defaultValue={lines.note ?? ""} style={{ ...FIELD, width: "100%", ...offStyle }} {...off} />
                 </span>
                 <button type="submit" name="do" value="note" style={{ ...BUTTON, ...offStyle }} {...off}>
                   Save note

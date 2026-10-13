@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { cleanCandidate, planRefresh, refreshNote, staleNote, STALE_RUNS } from "./refresh.ts";
+import { cleanCandidate, isStaleNote, planRefresh, refreshNote, staleNote, STALE_RUNS } from "./refresh.ts";
 import type { Candidate, PlanItem } from "./types.ts";
 
 const c = (key: string, o: Partial<Candidate> = {}): Candidate => ({
@@ -17,7 +17,7 @@ const c = (key: string, o: Partial<Candidate> = {}): Candidate => ({
   ...o,
 });
 
-type Known = Pick<PlanItem, "id" | "dedupeKey" | "status" | "statusBy" | "createdBy" | "hiddenUntil" | "weekOf" | "note" | "missed" | "missedOn">;
+type Known = Pick<PlanItem, "id" | "dedupeKey" | "status" | "statusBy" | "createdBy" | "hiddenUntil" | "weekOf" | "note" | "missed" | "missedOn"> & { newSinceMonday?: boolean };
 const item = (key: string, o: Partial<Known> = {}): Known => ({ id: `id-${key}`, dedupeKey: key, status: "suggested", statusBy: "system", createdBy: "system", hiddenUntil: null, weekOf: null, note: null, missed: 0, missedOn: null, ...o });
 
 const MON = "2026-10-12";
@@ -123,4 +123,52 @@ test("a candidate that may not be stored is refused, and a href that leaves the 
   assert.deepEqual(odd.why, [{ text: "a" }, { text: "b" }, { text: "c", href: "/cited?open=a.example/b" }]);
   const plan = run([c("x", { title: "" })], [], WED);
   assert.equal(plan.skipped, 1);
+});
+
+test("a suggestion the system dropped comes back without its 'No longer applies' line; a member's note stays (review, 13 Oct 2026)", () => {
+  // Gone on two runs: dropped with the dated line.
+  let items: Known[] = [item("s1", { weekOf: MON })];
+  for (const day of ["2026-10-14", "2026-10-15"]) {
+    const plan = run([], items, day);
+    const p = plan.updates[0]!.patch;
+    items = items.map((i) => ({ ...i, missed: p.missed as number, missedOn: p.missed_on as string, ...(p.status ? { status: p.status as Known["status"], statusBy: "system", note: (p.note as string) ?? i.note } : {}) }));
+  }
+  assert.equal(items[0]!.status, "dropped");
+  assert.equal(items[0]!.note, "No longer applies (checked 15 Oct)");
+  // Gathered again: back as a suggestion, and the line is cleared.
+  const back = run([c("s1")], items, "2026-10-16").updates[0]!.patch;
+  assert.equal(back.status, "suggested");
+  assert.equal(back.note, null);
+  const mine = run([c("s1")], [{ ...items[0]!, note: "We asked about this" }], "2026-10-16").updates[0]!.patch;
+  assert.equal(mine.status, "suggested");
+  assert.equal("note" in mine, false, "a note someone wrote is never cleared");
+  assert.equal(isStaleNote(staleNote("2026-10-15")), true);
+  assert.equal(isStaleNote("No longer applies to us, see the call notes"), false, "only the system's exact line");
+  assert.equal(isStaleNote(null), false);
+});
+
+test("'New since Monday' lasts its week: the next Monday's pick pins it as one of the three, and clears any left over (review, 13 Oct 2026)", () => {
+  // A Blocking item joined on Wednesday 14 Oct, flagged; the Monday 19 Oct run pins the week again.
+  const NEXT = "2026-10-19";
+  const joined = item("b1", { weekOf: MON, newSinceMonday: true });
+  const left = item("t1", { status: "todo", statusBy: "owner@example.com", weekOf: MON, newSinceMonday: true });
+  const plan = run([c("b1", { severity: "blocking" }), c("s1")], [joined, left], NEXT);
+  assert.deepEqual(plan.picked, ["b1", "s1"]);
+  const b1 = plan.updates.find((u) => u.id === "id-b1")!.patch;
+  assert.equal(b1.week_of, NEXT);
+  assert.equal(b1.new_since_monday, false, "pinned on Monday is one of the three, not new");
+  assert.equal(plan.updates.find((u) => u.id === "id-t1")!.patch.new_since_monday, false, "an item not picked again loses last week's flag too");
+  assert.equal(plan.updates.filter((u) => u.id === "id-b1").length, 1, "one patch per item");
+  // Mid-week, an item already flagged this week keeps it.
+  const mid = run([c("b1", { severity: "blocking" })], [item("b1", { weekOf: NEXT, newSinceMonday: true })], "2026-10-21");
+  assert.equal(mid.updates[0]!.patch.new_since_monday, undefined);
+});
+
+test("the candidate's tie-breaks are stored with it, so the board can take the weekly pick's order", () => {
+  const plan = run([c("k1", { volume: 1900.4, evidenceOn: "2026-10-13" }), c("k2", { volume: -3, evidenceOn: "13 Oct" as never })], [], WED);
+  const [k1, k2] = plan.inserts;
+  assert.equal(k1!.volume, 1900);
+  assert.equal(k1!.evidence_on, "2026-10-13");
+  assert.equal(k2!.volume, null, "a volume that is not one is not stored");
+  assert.equal(k2!.evidence_on, null);
 });

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import type { Source } from "../core/evidence.ts";
 import { SOURCES } from "../core/core.sources.ts";
 import { arrange, filterItems, pickCluster, pickGroup, pickStatus, pickView } from "./board.ts";
+import { noteLines, ownerName } from "./card.ts";
 import { planAction, planPath } from "./paths.ts";
 import { AGENCY_OWNER, NOMADA_OWNER, ownerLabel, placementsGroup } from "./placements.ts";
 import { type PlanItem, actLabel, clip, clientPath } from "./types.ts";
@@ -39,6 +40,8 @@ const item = (id: string, o: Partial<PlanItem> = {}): PlanItem => ({
   doneOn: null,
   verified: null,
   readoutBase: null,
+  volume: null,
+  evidenceOn: null,
   seenOn: null,
   missed: 0,
   missedOn: null,
@@ -187,4 +190,35 @@ test("copy helpers: a title cut at a word under 70; the primary button per kind;
   assert.equal(actLabel("recover_prompt"), "Open the cluster");
   assert.equal(clientPath("/clusters/c1?prompt=2"), "/clusters/c1?prompt=2");
   for (const bad of ["//x.example", "https://x.example", "javascript:alert(1)", "/\\x.example", "clusters", "/a:b", 42]) assert.equal(clientPath(bad), null, String(bad));
+});
+
+test("Suggested takes section 6.1's order, the weekly pick's: severity, then volume, then effort, then the newest evidence (review, 13 Oct 2026)", () => {
+  const s = (id: string, o: Partial<PlanItem>) => item(id, { status: "suggested", severity: "slipping", kind: "recover_keyword", dedupeKey: `kw:${id}`, ...o });
+  const all = [
+    s("old-low", { volume: 90, effort: "hour", evidenceOn: "2026-10-10", createdAt: "2026-09-01T00:00:00Z" }),
+    s("big", { volume: 1900, effort: "days", evidenceOn: "2026-10-01" }),
+    s("quick", { volume: 90, effort: "minutes", evidenceOn: "2026-10-01" }),
+    s("newer", { volume: 90, effort: "hour", evidenceOn: "2026-10-12", createdAt: "2026-10-12T00:00:00Z" }),
+    s("block", { severity: "blocking", kind: "unblock_crawler", volume: null, effort: null }),
+    s("tidy", { severity: "tidy", kind: "add_schema", volume: 5000, effort: "minutes" }),
+  ];
+  const col = arrange(all, { kind: null, cluster: null, status: null }, "2026-10-13").columns[0]!;
+  assert.deepEqual(col.items.map((i) => i.id), ["block", "big", "quick", "newer", "old-low", "tidy"]);
+});
+
+test("the owner line: You only for the viewer, a member's name otherwise, nothing when nobody is assigned (review, 13 Oct 2026)", () => {
+  const team = [{ email: "Editor@example.com", name: "Sam" }, { email: "owner@example.com", name: null }];
+  assert.equal(ownerName(null, "owner@example.com", team), null, "unassigned is nobody's, not every viewer's");
+  assert.equal(ownerName("OWNER@example.com", "owner@example.com", team), "You");
+  assert.equal(ownerName("editor@example.com", "owner@example.com", team), "Sam");
+  assert.equal(ownerName("owner@example.com", "viewer@example.com", team), "owner@example.com");
+  assert.equal(ownerName("gone@example.com", "owner@example.com", null), "gone@example.com");
+});
+
+test("the note lines: the system's 'No longer applies' only on an item it dropped, never as a member's note (review, 13 Oct 2026)", () => {
+  const at = "2026-09-27T03:31:00Z";
+  assert.deepEqual(noteLines({ status: "dropped", statusBy: "system", statusAt: at, note: "No longer applies (checked 27 Sep)" }), { note: null, stale: "No longer applies (checked 27 Sep)" });
+  assert.deepEqual(noteLines({ status: "dropped", statusBy: "system", statusAt: at, note: "Ask Sam" }), { note: "Ask Sam", stale: "No longer applies (checked 27 Sep)" });
+  assert.deepEqual(noteLines({ status: "todo", statusBy: "owner@example.com", statusAt: at, note: "No longer applies (checked 27 Sep)" }), { note: null, stale: null }, "a live card never says it no longer applies");
+  assert.deepEqual(noteLines({ status: "dropped", statusBy: "owner@example.com", statusAt: at, note: "Not for us right now" }), { note: "Not for us right now", stale: null });
 });

@@ -15,6 +15,20 @@
 -- that did not gather it; missed_on, the day of the last such run, so a job
 -- run twice on one day (the worker's 15-minute stale reclaim) counts once.
 --
+-- Two more, added after review (13 Oct 2026, before anything was applied):
+-- volume and evidence_on, the candidate's tie-breaks (section 6.1: volume
+-- high first, then effort, then the newest evidence), so the Suggested column
+-- takes the weekly pick's order. Written as add column if not exists below
+-- the create, so the file is right whether or not an earlier draft ran.
+--
+-- The two foreign keys are the spec's DDL as written, with no on delete
+-- action, as P1's diy_core is: a hand delete of a client_domains or
+-- tracked_clusters row that has items fails loudly instead of cascading the
+-- client's action history away or orphaning it silently. The tracking tables
+-- cascade (20260929000000); whether plan_items should follow them is Danny's
+-- call before this is applied, and changing it after is a constraint
+-- rewrite, not an additive change. No code deletes either row today.
+--
 -- Service-role reads only, authorisation in the app, as every tracking table:
 -- row level security on, no policies.
 create table if not exists plan_items (
@@ -49,6 +63,8 @@ create table if not exists plan_items (
   missed_on date,
   unique (client_domain_id, dedupe_key)
 );
+alter table plan_items add column if not exists volume integer check (volume is null or volume >= 0);
+alter table plan_items add column if not exists evidence_on date;
 create index if not exists plan_items_client_status on plan_items (client_domain_id, status);
 -- The verifying jobs (P7 watch, P8 key_pages_weekly) find an item by what it refers to (write.ts itemsByRef).
 create index if not exists plan_items_client_ref on plan_items (client_domain_id, ref_table, ref_id) where ref_table is not null;

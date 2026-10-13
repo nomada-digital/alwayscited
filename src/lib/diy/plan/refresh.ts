@@ -21,7 +21,12 @@ import { mondayOf, pickWeek } from "./week.ts";
  *   unless that run found nothing), and a new Blocking item joins mid-week.
  * - A suggestion no longer gathered on 2 runs is dropped by the system with
  *   "No longer applies (checked 14 Oct)". Only when every source answered:
- *   a source that failed has not said its candidates are gone.
+ *   a source that failed has not said its candidates are gone. When it comes
+ *   back that line goes with it (review, 13 Oct 2026): a live card never
+ *   says it no longer applies.
+ * - "New since Monday" lasts one week. The week's first run clears it on
+ *   every item still carrying it from an earlier week, and an item it pins
+ *   again is pinned as one of the three, not as new (review, 13 Oct 2026).
  */
 
 /** Who the system writes as, in created_by and status_by. */
@@ -73,6 +78,8 @@ export function insertRow(clientId: string, c: Candidate, p: { today: Day; weekO
 export function contentOf(c: Candidate): Record<string, unknown> {
   return {
     cluster_id: c.clusterId,
+    volume: typeof c.volume === "number" && Number.isFinite(c.volume) && c.volume >= 0 ? Math.round(c.volume) : null,
+    evidence_on: typeof c.evidenceOn === "string" && /^\d{4}-\d{2}-\d{2}$/.test(c.evidenceOn) ? c.evidenceOn : null,
     kind: c.kind,
     severity: c.severity,
     title: c.title,
@@ -96,7 +103,7 @@ export type RefreshPlan = {
   skipped: number;
 };
 
-type Known = Pick<PlanItem, "id" | "dedupeKey" | "status" | "statusBy" | "createdBy" | "hiddenUntil" | "weekOf" | "note" | "missed" | "missedOn">;
+type Known = Pick<PlanItem, "id" | "dedupeKey" | "status" | "statusBy" | "createdBy" | "hiddenUntil" | "weekOf" | "note" | "missed" | "missedOn"> & { newSinceMonday?: boolean };
 
 /**
  * The run's writes. `complete` is false when any source failed: then no
@@ -129,7 +136,9 @@ export function planRefresh(input: { clientId: string; candidates: readonly Cand
   const pickedKeys = new Set(picks.map((c) => c.dedupeKey));
 
   const inserts: Record<string, unknown>[] = [];
-  const updates: RefreshPlan["updates"] = [];
+  // One patch per item, merged in the order the rules below write them.
+  const patches = new Map<string, Record<string, unknown>>();
+  const patch = (id: string, p: Record<string, unknown>) => patches.set(id, { ...patches.get(id), ...p });
   let added = 0;
   for (const c of candidates) {
     const i = byKey.get(c.dedupeKey);
@@ -141,33 +150,39 @@ export function planRefresh(input: { clientId: string; candidates: readonly Cand
       added++;
       continue;
     }
-    const patch: Record<string, unknown> = { seen_on: today, missed: 0, missed_on: null };
-    if (i.status === "suggested") Object.assign(patch, contentOf(c));
-    if (reopen(i)) Object.assign(patch, contentOf(c), { status: "suggested", status_at: now, status_by: SYSTEM });
-    if (pinned) patch.week_of = monday;
-    updates.push({ id: i.id, patch });
+    patch(i.id, { seen_on: today, missed: 0, missed_on: null });
+    if (i.status === "suggested") patch(i.id, contentOf(c));
+    if (reopen(i)) patch(i.id, { ...contentOf(c), status: "suggested", status_at: now, status_by: SYSTEM, ...(isStaleNote(i.note) ? { note: null } : {}) });
+    if (pinned) patch(i.id, { week_of: monday, new_since_monday: false });
   }
+
+  // The week's first run: last week's "New since Monday" is not new this week.
+  if (!weekPicked) for (const i of input.items) if (i.newSinceMonday && i.weekOf !== monday) patch(i.id, { new_since_monday: false });
 
   let dropped = 0;
   if (input.complete) {
     for (const i of input.items) {
       if (i.status !== "suggested" || i.createdBy !== SYSTEM || seen.has(i.dedupeKey) || i.missedOn === today) continue;
       const missed = i.missed + 1;
-      const patch: Record<string, unknown> = { missed, missed_on: today };
+      patch(i.id, { missed, missed_on: today });
       if (missed >= STALE_RUNS) {
-        Object.assign(patch, { status: "dropped", status_at: now, status_by: SYSTEM });
-        if (!i.note) patch.note = staleNote(today);
+        patch(i.id, { status: "dropped", status_at: now, status_by: SYSTEM, ...(i.note ? {} : { note: staleNote(today) }) });
         dropped++;
       }
-      updates.push({ id: i.id, patch });
     }
   }
+  const updates = [...patches].map(([id, p]) => ({ id, patch: p }));
   return { inserts, updates, picked: picks.map((c) => c.dedupeKey), added, dropped, skipped };
 }
 
 /** The note on a suggestion the system dropped. */
 export function staleNote(today: Day): string {
   return `No longer applies (checked ${formatDay(today)})`;
+}
+
+/** Whether a note is the system's stale line rather than a member's words: cleared when the item comes back, never drawn on a live card. */
+export function isStaleNote(note: string | null | undefined): boolean {
+  return typeof note === "string" && /^No longer applies \(checked \d{1,2} [A-Z][a-z]{2}(?: \d{4})?\)$/.test(note);
 }
 
 /** The job's one-line note: what the run did, for diy_jobs.note and the run-health mail. */

@@ -1,6 +1,7 @@
 import { APP_LIMITS } from "../../../config/contact.ts";
 import { isPlausibleEmail } from "../../email-address.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
+import { isStaleNote } from "./refresh.ts";
 import { CHANGED, type Changed, PLAN_STATUSES, type PlanItem, type PlanStatus } from "./types.ts";
 
 /**
@@ -83,9 +84,13 @@ export type PlanPatch = {
  *   change the page?" in `readout_base.changed`.
  * - Leaving Done clears `done_on`, the readout's base and any verification:
  *   a reopened item is not done, so nothing may read as verified.
+ * - Bringing back an item the system dropped clears its "No longer applies"
+ *   line (review, 13 Oct 2026): it is the system's note, not the member's,
+ *   and it is not true of a live card. A note a member wrote stays.
  */
-export function movePatch(item: Pick<PlanItem, "status" | "startedOn">, to: PlanStatus, p: { today: Day; now: string; by: string; changed?: Changed | null }): PlanPatch {
+export function movePatch(item: Pick<PlanItem, "status" | "startedOn"> & { note?: string | null }, to: PlanStatus, p: { today: Day; now: string; by: string; changed?: Changed | null }): PlanPatch {
   const patch: PlanPatch = { status: to, status_at: p.now, status_by: p.by };
+  if (item.status === "dropped" && to !== "dropped" && isStaleNote(item.note)) patch.note = null;
   if (to === "doing" && !item.startedOn) patch.started_on = p.today;
   if (to === "done") {
     patch.done_on = p.today;
@@ -200,6 +205,24 @@ export function planToast(done: string | null, why: string | null): string | nul
   return null;
 }
 
+/**
+ * The Overview's way back carries one key, `plan` (review, 13 Oct 2026): a
+ * done code, or `refused-<why>`, so a refusal from This week keeps its
+ * reason - "That item has changed or gone", not "That didn't save" - without
+ * the Overview reading a second key. The shell registers `plan` on the
+ * Overview with `overviewPlanToast` as its bound.
+ */
+export function overviewPlanCode(done: PlanDone, why: PlanWhy | null): string {
+  return done === "refused" ? `refused-${why ?? "failed"}` : done;
+}
+
+/** The toast for the Overview's `?plan=`, or null: planToast's fixed words, nothing echoed. */
+export function overviewPlanToast(code: string | null): string | null {
+  if (!code) return null;
+  if (code === "refused" || code.startsWith("refused-")) return planToast("refused", code.slice("refused-".length) || null);
+  return planToast(code, null);
+}
+
 /** What the route read off the form, before any rule. */
 export type PlanForm = { do: PlanDo; id: string | null; to: unknown; changed: unknown; note: unknown; owner: unknown; title: unknown; cluster: unknown };
 
@@ -214,7 +237,7 @@ export type Decision =
  * this client). `role` is writeRole(client); `members` are this client's
  * live members; `clusters` its live cluster ids.
  */
-export function decide(form: PlanForm, item: Pick<PlanItem, "id" | "status" | "startedOn"> | null, ctx: { role: string; today: Day; now: string; by: string; members: readonly { email: string }[]; clusters: readonly string[] }): Decision {
+export function decide(form: PlanForm, item: (Pick<PlanItem, "id" | "status" | "startedOn"> & { note?: string | null }) | null, ctx: { role: string; today: Day; now: string; by: string; members: readonly { email: string }[]; clusters: readonly string[] }): Decision {
   if (refusePlanRole(ctx.role)) return { op: "refuse", why: "viewer" };
   const stamp = { today: ctx.today, now: ctx.now, by: ctx.by };
   if (form.do === "add") {
@@ -225,7 +248,8 @@ export function decide(form: PlanForm, item: Pick<PlanItem, "id" | "status" | "s
     return { op: "insert", title: t.title, clusterId: cluster, done: "added" };
   }
   if (!item) return { op: "refuse", why: "gone" };
-  const update = (patch: PlanPatch): Decision => ({ op: "update", id: item.id, patch, expect: item.status, done: DONE_OF[form.do] });
+  // Dropped through the card's select says so, as the drop button would.
+  const update = (patch: PlanPatch): Decision => ({ op: "update", id: item.id, patch, expect: item.status, done: patch.status === "dropped" ? "dropped" : DONE_OF[form.do] });
   if (refuseOnSuggestion(form.do, item.status)) return { op: "refuse", why: "move" };
   switch (form.do) {
     case "later":
