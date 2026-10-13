@@ -3,6 +3,7 @@ import "server-only";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { sendLifecycle } from "@/lib/email/lifecycle-mail";
 import { type SweepIo, type SweepResult, sweepLifecycleMail } from "@/lib/email/lifecycle-sweep";
+import { thisWeekContent } from "@/lib/email/this-week-source";
 import { siteUrl } from "@/lib/scan/verify-email";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -14,9 +15,13 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
  * canonical origin, TRACKED_PRICE. The Stripe webhook's trial_will_end uses
  * lifecycleIo too, so the cron and the webhook cannot word a trial_ending
  * differently.
+ *
+ * 13 Oct 2026, DIY P9: and the This week email's content source, read on the
+ * server through the app's own readers (this-week-source.ts); the sweep asks
+ * its flag, email_this_week_enabled, before reading any of it.
  */
 export function lifecycleIo(): SweepIo {
-  return { send: sendLifecycle, origin: siteUrl(), price: TRACKED_PRICE };
+  return { send: sendLifecycle, origin: siteUrl(), price: TRACKED_PRICE, thisWeek: thisWeekContent };
 }
 
 /** The cron's call: its own admin client, and nothing it does can fail the dispatch's answer. */

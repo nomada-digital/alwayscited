@@ -127,12 +127,14 @@ test("gather: the stored pulls, the client's slots, its tracked keywords and liv
   assert.deepEqual(await keywordCandidates.gather(f.db, testClient(), today), [], "an unread switch fails closed");
 });
 
-// ---- ready for the wave 2 shell (P9 registers both; this package does not edit wiring.ts) ----
+// ---- registered by the wave 2 shell (P9 registers both; this package does not edit wiring.ts) ----
+// 13 Oct 2026, DIY P9: the fact moved - the shell has registered both, so this holds that they are there, once each.
 
-test("the footprint handler and the keyword candidates fit beside what wiring.ts registers today", async () => {
+test("the footprint handler and the keyword candidates are registered in wiring.ts, once each", async () => {
   const { CANDIDATE_SOURCES, JOB_HANDLERS } = await import("../wiring.ts");
   const { refuseHandlers } = await import("../core/jobs.ts");
-  const { footprintHandler } = await import("./footprint.job.ts");
-  assert.deepEqual(refuseHandlers([...JOB_HANDLERS, footprintHandler()]), []);
-  assert.ok(!CANDIDATE_SOURCES.some((s) => s.name === keywordCandidates.name), "a candidate source name is unique");
+  const { FOOTPRINT_KIND } = await import("./footprint.job.ts");
+  assert.deepEqual(refuseHandlers(JOB_HANDLERS), []);
+  assert.equal(JOB_HANDLERS.filter((h) => h.kind === FOOTPRINT_KIND).length, 1, "the footprint handler is registered once");
+  assert.equal(CANDIDATE_SOURCES.filter((s) => s.name === keywordCandidates.name).length, 1, "the keyword candidates are registered once");
 });

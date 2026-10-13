@@ -26,6 +26,9 @@ import { placedTier } from "@/lib/tracking/placement-figures";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { refuseRole } from "@/lib/tracking/stop";
 import { appPath } from "@/lib/app-host";
+import UpgradePrompt from "@/components/app/UpgradePrompt";
+import { stalledOpportunities } from "@/lib/diy/shell/stalled";
+import { pickRow, rowCopy } from "@/lib/tracking/upgrade-prompts";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +148,14 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
   const emptyText = empty ? (started ? "Nothing open. New items arrive as your checks find them." : "Your actions fill in after your first check and your first page checks.") : null;
   const notice = !empty && arranged?.nothingOpen && !filters.status ? "Nothing open. New items arrive as your checks find them." : null;
   const members = team.ok ? team.value.members.map((m) => ({ email: m.email, name: m.name })) : null;
+  // 13 Oct 2026, DIY P9 (spec 10 sections 2.7 and 4.6): U4, three or more opportunity items in Doing with no change for
+  // 21 days, by the one-per-screen rule; never on an empty or error state, and none for an ended client (section 2.2).
+  // Its ask lists the opportunities those items are about (kind=opportunity), so it names pages, never typed text.
+  const stalled = plan.ok ? stalledOpportunities(items, today) : null;
+  const facts = { tier, mode: upgrade.mode, state: !plan.ok ? ("error" as const) : empty ? ("empty" as const) : ("ok" as const), startedOn: client.started_on ?? today, today, hidden: upgrade.hidden, ...(stalled ? { stalled } : {}) };
+  const row = client.status === "ended" ? null : pickRow(facts);
+  const copy = row === "U4" ? rowCopy("U4", facts) : null;
+  const upgradeSlot = copy && stalled ? <UpgradePrompt copy={copy} cta="mentioned" slug={slug} items={stalled.ids} keep={{ kind: "opportunity" }} surface="plan" /> : null;
 
   return (
     <div className="app-shell" style={{ display: "flex", flexWrap: "wrap", minHeight: "100vh", color: T.ink }}>
@@ -169,6 +180,7 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
           emptyText={emptyText}
           notice={notice}
           readOnly={canWrite ? null : reason}
+          upgrade={upgradeSlot}
         />
       </div>
     </div>

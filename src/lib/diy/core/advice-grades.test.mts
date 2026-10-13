@@ -36,10 +36,16 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 /**
  * Advice lines across every advice file. 13 Oct 2026, DIY P1: 0 - none written yet; P5 and P9 raise it as P3, P7 and P8 merge.
  * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 5 - P3's "Why this is first" line per severity (plan/why-first.advice.ts).
+ * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 104 - P3's 5, P7's 43 playbook lines (opportunities/playbooks.advice.ts)
+ * and P8's 56 schema lines (pages/schema.advice.ts).
  */
-const ADVICE_FLOOR = 5;
-/** Rendered (not internal) sources. 13 Oct 2026, DIY P1: 5 at seed - G1, G2, G3, G4 and S41 (core.sources.ts). */
-const RENDERED_SOURCE_FLOOR = 5;
+const ADVICE_FLOOR = 104;
+/**
+ * Rendered (not internal) sources. 13 Oct 2026, DIY P1: 5 at seed - G1, G2, G3, G4 and S41 (core.sources.ts).
+ * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 11 - the seed's 5 and P8's 6 crawler sources (pages.sources.ts), which
+ * are seeded unverified: a line citing one does not render until it is verified (evidence.ts adviceProblem).
+ */
+const RENDERED_SOURCE_FLOOR = 11;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);

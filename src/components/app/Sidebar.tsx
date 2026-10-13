@@ -91,6 +91,27 @@ ICONS.Actions = (
     <path d="M11 6.5h9M11 12.5h9M11 18.5h9" />
   </>
 );
+// 13 Oct 2026, DIY P9: Google is the search mark, Opportunities a target, Your pages a page holding a code block (its
+// schema fixes). Same 24px grid and stroke.
+ICONS.Google = (
+  <>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-4-4" />
+  </>
+);
+ICONS.Opportunities = (
+  <>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="3.5" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </>
+);
+ICONS["Your pages"] = (
+  <>
+    <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+    <path d="M14 3v6h6M10 12l-2 2.5 2 2.5M14 12l2 2.5-2 2.5" />
+  </>
+);
 // The phone's fifth tab (audit mobile-10): the pages the four tabs leave out.
 ICONS.More = (
   <>
@@ -299,7 +320,7 @@ export default function Sidebar({
               <span aria-hidden="true" style={{ fontSize: "18px", lineHeight: 1 }}>+</span>
               Add
             </summary>
-            {/* A group, not a nav landmark: three links to forms, inside the sidebar's own region (host.spec.mts reads the first nav's links as the dashboard's). */}
+            {/* A group, not a nav landmark: links to forms (five since wave 2), inside the sidebar's own region (host.spec.mts reads the first nav's links as the dashboard's). */}
             <div role="group" aria-label="Add" style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 6px)", zIndex: 30, display: "grid", padding: "6px", background: T.surface, border: `1px solid ${T.line}`, borderRadius: "12px", boxSizing: "border-box", boxShadow: `0 8px 24px color-mix(in srgb, ${T.ink} 12%, transparent)` }}>
               {ADD_ITEMS.map((a) => (
                 <Link key={a.label} href={addHref(a, client.slug, keep)} style={addLink}>

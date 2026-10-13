@@ -45,7 +45,10 @@ export default function Actions({
   emptyText,
   notice,
   readOnly,
+  upgrade = null,
 }: {
+  /** 13 Oct 2026, DIY P9 (spec 10 sections 2.7 and 4.6): the screen's one upgrade slot, U4, drawn by the page; null draws none. */
+  upgrade?: React.ReactNode;
   slug: string;
   /** The view the URL states, or null for the default. */
   view: PlanView | null;
@@ -98,6 +101,8 @@ export default function Actions({
       {readOnly ? <p style={{ margin: 0, padding: "12px 16px", borderRadius: "12px", background: T.wash, border: `1px solid ${T.washLine}`, fontSize: "14px", color: T.ink }}>{readOnly}</p> : null}
 
       {week}
+
+      {upgrade ? <div data-upgrade-slot="plan" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", minWidth: 0 }}>{upgrade}</div> : null}
 
       {arranged === null ? (
         <section aria-label="Your actions" style={SECTION}>

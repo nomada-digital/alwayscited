@@ -99,6 +99,64 @@ const KEYS: Record<string, Record<string, string>> = {
     done: 'planToast(one("done"), one("why"))',
     why: 'planToast(one("done"), one("why"))',
   },
+  // 13 Oct 2026, DIY P9 (spec 10 sections 3.5 and 4.3): Google (P6). keys.ts's pick* functions hold view, band,
+  // intent, sort, dir and page to their lists; cluster must be one of this client's clusters; row one of this client's
+  // tracked keywords; done and why the keywords route's codes, drawn through write.ts's fixed words (readDone,
+  // readWhy). done and why are P6's additions to section 3.5, for the Dismiss and Restore toasts.
+  "/google": {
+    view: 'pickView(one("view"))',
+    gaining: 'one("gaining") === "1"',
+    cluster: '(data.clusters ?? []).some((c) => c.id === one("cluster"))',
+    band: 'pickBand(one("band"))',
+    intent: 'pickIntent(one("intent"))',
+    q: 'clusterSearch(one("q"))',
+    sort: 'pickSort(one("sort"))',
+    dir: 'pickDir(one("dir"))',
+    page: 'pickPage(one("page"))',
+    row: "rowId && data.keywords.some((k) => k.id === rowId)",
+    done: 'readDone(one("done"))',
+    why: 'readWhy(one("why"))',
+  },
+  // 13 Oct 2026, DIY P9 (spec 10 sections 3.5 and 4.7): Opportunities (P7). view and lens are whitelists in the page,
+  // cluster one of this client's clusters, engine one of its tier's, q cut as every search is, page 1-50; done and
+  // why the opportunity and prompt-offer routes' codes, drawn through oppToast's fixed words. The spec's `status`
+  // key is not read: the Pursuing view is the status filter.
+  "/opportunities": {
+    view: 'pickView(one("view"))',
+    lens: 'pickLens(one("lens"))',
+    cluster: 'structure.clusters.some((c) => c.id === one("cluster"))',
+    engine: 'engines.find((e) => e === one("engine"))',
+    q: 'clusterSearch(one("q"))',
+    page: 'pickPage(one("page"))',
+    done: 'oppToast(one("done"), one("why"),',
+    why: 'oppToast(one("done"), one("why"),',
+  },
+  // 13 Oct 2026, DIY P9 (spec 10 section 3.5): one opportunity (P7). [id] must be one of this client's rows, else 404
+  // (world.rows.find); swap opens the swap picker only on the exact word; done and why through oppToast.
+  "/opportunities/[id]": {
+    swap: 'one("swap") === "1"',
+    done: 'oppToast(one("done"), one("why"),',
+    why: 'oppToast(one("done"), one("why"),',
+  },
+  // 13 Oct 2026, DIY P9 (spec 10 sections 3.5 and 4.9): Your pages (P8). view and issue are paths.ts whitelists,
+  // cluster one of this client's clusters, url a key on the client's own domain of at most 500 characters (else
+  // nothing is focused); done and why the pages route's codes, drawn through pagesToast's fixed words.
+  "/pages": {
+    view: 'pickView(one("view"))',
+    issue: 'pickIssue(one("issue"))',
+    cluster: 'pickCluster(one("cluster"), clusterIds)',
+    url: "rawUrl && rawUrl.length <= 500 && isOwnUrl(",
+    done: 'pagesToast(one("done"), one("why"),',
+    why: 'pagesToast(one("done"), one("why"),',
+  },
+  // 13 Oct 2026, DIY P9 (spec 10 section 3.5): one key page (P8). [page] must be a live key page of this client, else
+  // 404; tab a paths.ts whitelist, cluster one this page serves, done and why through pagesToast.
+  "/pages/[page]": {
+    tab: 'pickTab(one("tab"))',
+    cluster: 'pickCluster(one("cluster"), served.map((c) => c.id))',
+    done: 'pagesToast(one("done"), one("why"),',
+    why: 'pagesToast(one("done"), one("why"),',
+  },
   "/clusters": {
     filter: 'f === "named" || f === "never" ? f : "all"',
     // "moved" added 2 Oct 2026 (R170 part 2): the /group route's 303 after Move into a cluster.
@@ -129,6 +187,9 @@ const KEYS: Record<string, Record<string, string>> = {
     hid: 'one("hid") === "1" && !ask',
     // R151, 3 Oct 2026: the prompt route's refusal code; slotRefusal maps it to SLOT_WHY's fixed words, own keys only.
     why: 'slotRefusal(one("why"))',
+    // 13 Oct 2026, DIY P9 (spec 10 section 3.5, P6): `src` is read as the exact word gaining or nothing, and rides the
+    // add panel as a hidden field so the drafted prompts get the Momentum origin (cluster/route.ts momentumOrigin).
+    src: 'one("src") === "gaining" ? "gaining" : null',
   },
   "/clusters/[cluster]": {
     prompt: "promptIndex(sp.prompt, detail.card.prompts.length)",
@@ -156,6 +217,10 @@ const KEYS: Record<string, Record<string, string>> = {
     open: 'openPage(one("open"))',
     // DS20, 2 Oct 2026 (R173 pass 2, "lists over 10 rows have search"): the page search, cut as the Clusters search is.
     q: 'clusterSearch(one("q"))',
+    // 13 Oct 2026, DIY P9 (spec 10 sections 3.5 and 4.5, P7): `type` a domain type from DOMAIN_TYPES (cited.ts
+    // pickCitedType), else none; `leaves` the exact flag 1. `kind` keeps its own meaning (yours, others, all).
+    type: 'pickCitedType(one("type"))',
+    leaves: 'one("leaves") === "1"',
   },
   "/reports": {},
   "/settings": {
@@ -207,6 +272,13 @@ const ROLE_READS: Record<string, string[]> = {
   // 13 Oct 2026, DIY P5: Actions' controls are drawn disabled with the reason for a viewer and on an ended client
   // (writeRole); the plan route refuses them too (transitions.ts decide).
   "/plan": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  // 13 Oct 2026, DIY P9: wave 2's pages draw their controls disabled with the reason for a viewer and on an ended
+  // client (writeRole), as Actions does; each page's route refuses them too (keywords, opportunity, prompt-offer, pages).
+  "/google": ["canWrite={refuseRole(writeRole(client)) === null}"],
+  "/opportunities": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  "/opportunities/[id]": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  "/pages": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  "/pages/[page]": ["const canWrite = refuseRole(writeRole(client)) === null;"],
 };
 
 /**
@@ -223,9 +295,13 @@ const ROLE_READS: Record<string, string[]> = {
  * 9 Oct 2026, wave 2b merged: 42 keys - DB-2's day and ON-1's three, counted together.
  * Raised 13 Oct 2026 (DIY P5, wave 1 of the DIY platform): 12 pages - /ai (P4) and /plan (P3); 64 keys - /ai's 15
  * (ten view keys and U1's five way-back keys), /plan's 6, and the Overview's plan, This week's way back.
+ * Raised 13 Oct 2026 (DIY P9, wave 2 of the DIY platform): 17 pages - /google (P6), /opportunities and
+ * /opportunities/[id] (P7), /pages and /pages/[page] (P8); 110 keys - the 74 registered before (the floor
+ * had stayed at 64) and wave 2's 36: /google's 12, /opportunities' 8, /opportunities/[id]'s 3, /pages' 6,
+ * /pages/[page]'s 4, /cited's type and leaves, and /clusters' src.
  */
-const PAGE_FLOOR = 12;
-const KEY_FLOOR = 64;
+const PAGE_FLOOR = 17;
+const KEY_FLOOR = 110;
 
 /** The query keys a page reads by name, as written. */
 export function keysRead(src: string): string[] {

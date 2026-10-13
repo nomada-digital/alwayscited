@@ -94,7 +94,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     console.warn(`[diy] keywords ${d}: ${err instanceof Error ? err.message : String(err)}`);
     return back("refused", "failed");
   }
-  // Recorded once the wave 2 shell registers the event (usage.ts USAGE_EVENTS); until then the guard skips it.
+  // Registered in usage.ts USAGE_EVENTS by the wave 2 shell (13 Oct 2026, DIY P9); the guard stays as the type's narrowing.
   const event: string = "gaining_dismiss";
   if (decision.op === "dismiss" && isUsageEvent(event)) await recordUsage(db, { clientId: client.id, email, event, path: "/google", today });
   return back(done);

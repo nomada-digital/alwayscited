@@ -4,7 +4,7 @@ import { test } from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { trialCharge, trialMoment } from "../../config/trial.ts";
-import { dashboardUrl, type Rendered } from "./lifecycle.ts";
+import { actionsUrl, dashboardUrl, type Rendered } from "./lifecycle.ts";
 import { mailTrialEnding, planEndedOwners, sweepLifecycleMail, type SweepIo } from "./lifecycle-sweep.ts";
 
 /**
@@ -80,7 +80,8 @@ function fakeDb(tables: Tables, opts: { beforeInsert?: (table: string, row: Row)
       if (q.op === "insert") {
         opts.beforeInsert?.(table, q.row!);
         const row: Row = { id: nextId++, ...q.row };
-        const once = (r: Row) => ONCE.includes(String(r.event));
+        // 13 Oct 2026, DIY P9: and this_week's, 20261014200000's partial unique index on this_week_mail_<monday>.
+        const once = (r: Row) => ONCE.includes(String(r.event)) || String(r.event).startsWith("this_week_mail_");
         if (table === "dashboard_events" && once(row) && rows.some((r) => once(r) && r.client_domain_id === row.client_domain_id && r.event === row.event)) {
           return { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "dashboard_events_lifecycle_mail_once"' } };
         }
@@ -339,7 +340,8 @@ test("every flag off: nothing is read past the flags, and nothing is sent", asyn
   assert.deepEqual(await sweepLifecycleMail(db, io, NOW), { sent: [], unsent: [], errors: [] });
   assert.equal(await mailTrialEnding(db, io, "c2", NOW), true);
   assert.deepEqual([...new Set(reads)], ["app_settings"], "only the flags were read");
-  assert.equal(reads.length, 4, "three flags for the sweep, one for trial_will_end");
+  // 13 Oct 2026, DIY P9: five - the sweep asks this_week's flag too (missing here, so off).
+  assert.equal(reads.length, 5, "four flags for the sweep, one for trial_will_end");
   assert.equal(outbox.length, 0);
   assert.deepEqual(claims(t), []);
 });
@@ -380,4 +382,140 @@ test("plan_ended goes to live owners in nomada mode only, and to nobody when the
   assert.deepEqual(await planEndedOwners(db, "a4"), [], "off");
   const { db: broken } = fakeDb(fixture(), { failReads: new Set(["accounts"]) });
   assert.deepEqual(await planEndedOwners(broken, "a1"), [], "the account read failed: nobody");
+});
+
+// ---- 13 Oct 2026, DIY P9 (spec 10 section 7.10): the Monday "This week" email ----
+
+/** Monday 19 Oct 2026, 05:00 UTC: Monday in London (06:00) and in New York (01:00). */
+const MONDAY = Date.parse("2026-10-19T05:00:00Z");
+
+/**
+ * The This week fixture. a1 is a nomada account, a2 an agency.
+ *
+ * - w1: UK, three items this week - mailed.
+ * - w2: US, one item - mailed (still Monday in New York at 01:00).
+ * - w3: on the agency account - never mailed until Danny answers the agency-mode question.
+ * - w4: ended - nothing.
+ * - w5: nothing pinned and no change held - an empty week is not mailed.
+ *
+ * Members of a1: an owner, an editor with no scope rows (every client), an editor limited to w2, a viewer, a removed
+ * editor. Only the owner and the editors who can see the client are mailed.
+ */
+function weekFixture(on: boolean | "missing" = true): Tables {
+  return {
+    app_settings: on === "missing" ? [] : [{ key: "email_this_week_enabled", value: on }],
+    accounts: [
+      { id: "a1", upsell_mode: "nomada" },
+      { id: "a2", upsell_mode: "agency" },
+    ],
+    client_domains: [client("w1", "a1", { market: "UK" }), client("w2", "a1"), client("w3", "a2", { market: "UK" }), client("w4", "a1", { status: "ended" }), client("w5", "a1", { market: "UK" })],
+    dashboard_events: [],
+    dashboard_members: [
+      { id: "m-o", account_id: "a1", email: "owner@example.com", role: "owner", removed_at: null },
+      { id: "m-e", account_id: "a1", email: "editor@example.com", role: "editor", removed_at: null },
+      { id: "m-l", account_id: "a1", email: "limited@example.com", role: "editor", removed_at: null },
+      { id: "m-v", account_id: "a1", email: "viewer@example.com", role: "viewer", removed_at: null },
+      { id: "m-r", account_id: "a1", email: "removed@example.com", role: "editor", removed_at: at(MONDAY - 3 * DAY) },
+      { id: "m-a", account_id: "a2", email: "agency@example.com", role: "owner", removed_at: null },
+    ],
+    dashboard_member_clients: [
+      { member_id: "m-l", client_domain_id: "w2", removed_at: null },
+      { member_id: "m-l", client_domain_id: "w1", removed_at: at(MONDAY - 10 * DAY) },
+    ],
+  };
+}
+
+/** A content source that records who it was asked about. */
+function weekIo() {
+  const r = recorder();
+  const asked: string[] = [];
+  const item = (title: string) => ({ severity: "tidy" as const, title, why: "A fact with its count (checked 17 Oct)." });
+  r.io.thisWeek = async (c) => {
+    asked.push(c.id);
+    if (c.id === "w5") return { items: [], changes: { state: "ok", lines: [], more: 0 } };
+    return { items: c.id === "w2" ? [item("One thing")] : [item("First"), item("Second"), item("Third")], changes: { state: "early" } };
+  };
+  return { ...r, asked };
+}
+
+const weekClaims = (t: Tables) => t.dashboard_events.map((e) => `${e.client_domain_id} ${e.event}`).sort();
+
+test("This week: the flag off (or missing) sends nothing and reads nothing past the flags", async () => {
+  for (const on of [false, "missing"] as const) {
+    const t = weekFixture(on);
+    const { db, reads } = fakeDb(t);
+    const { io, outbox, asked } = weekIo();
+    const out = await sweepLifecycleMail(db, io, MONDAY);
+    assert.deepEqual(out, { sent: [], unsent: [], errors: [] });
+    assert.equal(outbox.length, 0);
+    assert.deepEqual(asked, [], "no content was read");
+    assert.deepEqual([...new Set(reads)], ["app_settings"], "nothing read past the flags");
+  }
+});
+
+test("This week on a Monday: owners and the editors who see the client, once a Monday, never agency, ended or an empty week", async () => {
+  const t = weekFixture();
+  const { db } = fakeDb(t);
+  const { io, outbox, asked } = weekIo();
+
+  const first = await sweepLifecycleMail(db, io, MONDAY);
+  assert.deepEqual(first.errors, []);
+  assert.deepEqual(first.sent.sort(), ["this_week w1", "this_week w2"]);
+  assert.deepEqual(weekClaims(t), ["w1 this_week_mail_2026-10-19", "w2 this_week_mail_2026-10-19"]);
+  assert.deepEqual(asked.sort(), ["w1", "w2", "w5"], "never asked about the agency or the ended client");
+  assert.deepEqual(
+    outbox.map((m) => `${m.mail.subject} -> ${m.to}`).sort(),
+    [
+      "This week for w1.com: 3 actions -> editor@example.com",
+      "This week for w1.com: 3 actions -> owner@example.com",
+      "This week for w2.com: 1 action -> editor@example.com",
+      "This week for w2.com: 1 action -> limited@example.com",
+      "This week for w2.com: 1 action -> owner@example.com",
+    ],
+    "no viewer, no removed editor, and the editor limited to w2 gets only w2's",
+  );
+  const w1 = outbox.find((m) => m.mail.subject.startsWith("This week for w1.com"))!.mail;
+  assert.ok(w1.text.includes(`Open your actions: ${actionsUrl("w1-com", ORIGIN)}`), "the button opens the client's Actions on the origin the sweep was handed");
+  assert.match(w1.text, /week of 19 Oct/);
+
+  const again = await sweepLifecycleMail(db, io, MONDAY + 2 * HOUR);
+  assert.deepEqual(again, { sent: [], unsent: [], errors: [] }, "a second run the same Monday mails nobody");
+  const tuesday = await sweepLifecycleMail(db, io, MONDAY + DAY);
+  assert.deepEqual(tuesday, { sent: [], unsent: [], errors: [] }, "not on a Tuesday");
+  assert.equal(outbox.length, 5);
+
+  const next = await sweepLifecycleMail(db, io, MONDAY + 7 * DAY);
+  assert.deepEqual(next.sent.sort(), ["this_week w1", "this_week w2"], "next Monday is a new week");
+  assert.ok(weekClaims(t).includes("w1 this_week_mail_2026-10-26"));
+});
+
+test("This week: a send that reached nobody releases its claim; a failed content read is that client's alone", async () => {
+  const t = weekFixture();
+  const { db } = fakeDb(t);
+  const { io, state } = weekIo();
+  state.fail = true;
+  const out = await sweepLifecycleMail(db, io, MONDAY);
+  assert.deepEqual(out.unsent.sort(), ["this_week w1", "this_week w2"]);
+  assert.deepEqual(weekClaims(t), ["w1 unsent_this_week_mail_2026-10-19", "w2 unsent_this_week_mail_2026-10-19"]);
+
+  const t2 = weekFixture();
+  const { db: db2 } = fakeDb(t2);
+  const w = weekIo();
+  const inner = w.io.thisWeek!;
+  w.io.thisWeek = async (c, today) => {
+    if (c.id === "w1") throw new Error("the plan could not be read");
+    return inner(c, today);
+  };
+  const out2 = await sweepLifecycleMail(db2, w.io, MONDAY);
+  assert.deepEqual(out2.sent, ["this_week w2"]);
+  assert.deepEqual(out2.errors, ["this_week w1: the plan could not be read"]);
+});
+
+test("This week with no content source is not built, whatever the flag says", async () => {
+  const t = weekFixture();
+  const { db } = fakeDb(t);
+  const { io, outbox } = recorder();
+  const out = await sweepLifecycleMail(db, io, MONDAY);
+  assert.deepEqual(out, { sent: [], unsent: [], errors: [] });
+  assert.equal(outbox.length, 0);
 });

@@ -2,7 +2,7 @@ import { type ClusterCard, type ClusterInput, type ClusterSummary, clusterCards,
 import { type Day, type Range, firstCheckDay, keywordRows, keywordsIn, overview, ungroupedRead } from "../../tracking/figures.ts";
 import type { Compare, OverviewData } from "../../tracking/overview-data.ts";
 import { engineRates } from "../ai/engine-rates.ts";
-import { type Diff, diffChecks } from "./diff.ts";
+import { type Diff, type Watched, diffChecks } from "./diff.ts";
 import { type Bullet, type Headline, clusterChanges, headline, whatItMeans } from "./meaning.ts";
 
 /**
@@ -59,7 +59,11 @@ export type Story = {
   firstReading: Day | null;
 };
 
-export function overviewStory(b: Basis, p: { data: StoryData; range: Range; today: Day; engines: readonly string[]; brand: string; domain: string; startedOn: Day | null; recent?: Recent }): Story {
+/**
+ * 13 Oct 2026, DIY P9 (spec 10 sections 4.1 row 5 and 6.8 line 8): `watched` - the pursued pages and live placements
+ * whose first citation is known - is handed through to diffChecks, which writes line 8 for one first cited this week.
+ */
+export function overviewStory(b: Basis, p: { data: StoryData; range: Range; today: Day; engines: readonly string[]; brand: string; domain: string; startedOn: Day | null; recent?: Recent; watched?: readonly Watched[] }): Story {
   const { o, cards, cs, byCluster, lflIds } = b;
   const { data, range, today, engines } = p;
   // The headline paragraph: one rule over the figures the card draws, in its first-reading, compared or plain variant.
@@ -116,6 +120,7 @@ export function overviewStory(b: Basis, p: { data: StoryData; range: Range; toda
           brand: p.brand,
           domain: p.domain,
           engines,
+          ...(p.watched ? { watched: p.watched } : {}),
         });
   return { said, bullets, diff, firstReading };
 }

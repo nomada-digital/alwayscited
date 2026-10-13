@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { selectAll } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, readDiyFixture } from "../core/fixture.ts";
+import { countOpenOpportunities } from "../opportunities/data.ts";
+import { LIST_TYPES } from "../opportunities/types.ts";
 import type { SchemaFound, SchemaResults } from "./own-parse.ts";
 import { KEY_PAGE_COLUMNS, keyPageOf } from "./key-pages.ts";
 import type { Basics, BotCheck, CrawlerVerdict, HostRobots, JobState, KeyPage, KeywordSerp, PageCheck, ReoptExample, SerpReading, TopResult, TopStructure } from "./types.ts";
@@ -20,6 +22,11 @@ import type { Basics, BotCheck, CrawlerVerdict, HostRobots, JobState, KeyPage, K
  * parallel with this package, so until the shell (P9) points this one line
  * at it the count is null and the copy reads "(see Opportunities)" - which is
  * what the reader itself answers while the opportunities table is absent.
+ * 13 Oct 2026, DIY P9: pointed at P7's `countOpenOpportunities`, held to the
+ * cluster and to the list page types (LIST_TYPES: best-of lists, comparisons
+ * and alternatives, the pages the lists lens is about). On the fixture there
+ * is no database, so the count stays null there and the copy says "(see
+ * Opportunities)".
  *
  * One read crosses clients, and only to subtract: `readPlacedElsewhere`, the
  * url_key of every placement of every other client, whatever its status
@@ -33,7 +40,7 @@ type Env = Record<string, string | undefined>;
 
 /** How many lists-lens opportunities a cluster has, or null when that cannot be read. P9 wires P7's tolerant reader here. */
 export type OpportunityCountReader = (db: SupabaseClient | null, clientId: string, clusterId: string) => Promise<number | null>;
-export const OPPORTUNITY_COUNT: OpportunityCountReader = async () => null;
+export const OPPORTUNITY_COUNT: OpportunityCountReader = async (db, clientId, clusterId) => (db ? countOpenOpportunities(db, clientId, { clusterId, pageTypes: LIST_TYPES }) : null);
 
 /** The night jobs this package registers (through the shell): the weekly own reads and the monthly paid ones. */
 export const WEEKLY_KIND = "key_pages_weekly";

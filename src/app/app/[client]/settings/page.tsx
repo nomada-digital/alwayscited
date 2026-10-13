@@ -14,6 +14,10 @@ import { trackingRepo } from "@/lib/tracking/repo";
 import { askRefusal, askToast } from "@/lib/tracking/ask";
 import { inviteRefusal, teamToast } from "@/lib/tracking/team";
 import { appPath } from "@/lib/app-host";
+import { diyClient } from "@/lib/diy/core/client";
+import { type DiyUsage, loadDiyUsage } from "@/lib/diy/core/usage-meter";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +47,23 @@ export default async function ClientSettings({ params, searchParams }: { params:
   const today = repo.today();
   // perf-4 (8 Oct 2026): Settings draws the clusters and prompts only, so no answer is read.
   const [structure, upgrade, settings] = await Promise.all([repo.structure(client.id), repo.upgradeContext(client.id, email, today), repo.settings(client.id)]);
+  // 13 Oct 2026, DIY P9 (spec 10 section 4.13): this month's research, counts only. Each count is read on its own
+  // (loadDiyUsage); a whole failure says so in its section and the rest of Settings draws. Link targets are wave 3's
+  // (P10's Links), so their row is left out until that page exists.
+  const research: DiyUsage | { failed: true } = await (async () => {
+    try {
+      const diy = diyClient(
+        { id: client.id, slug: client.slug, domain: client.domain, brand_name: client.brand, market: client.market, tier: client.tier, started_on: client.started_on, status: client.status ?? "active", trial_ends_at: client.trial_ends_at ?? null },
+        { setupConfirmedAt: null, upsellMode: upgrade.mode },
+        repo.now(),
+      );
+      const usage = await loadDiyUsage(fixtureMode() ? null : supabaseAdmin(), diy, repo.now());
+      return { ...usage, rows: usage.rows.filter((r) => r.key !== "link_targets") };
+    } catch (err) {
+      console.warn(`[diy] settings research: ${err instanceof Error ? err.message : String(err)}`);
+      return { failed: true as const };
+    }
+  })();
   const clusterLimit = client.cluster_limit ?? CLUSTER_BASE;
   // A stopped cluster frees its slot at once, as the Clusters page counts it.
   const inUse = (structure.clusters ?? []).filter((c) => c.stopped_on === null).length;
@@ -85,6 +106,7 @@ export default async function ClientSettings({ params, searchParams }: { params:
           livePrompts={(structure.questions ?? []).filter((q) => q.stopped_on === null).length}
           accountClients={settings.accountClients}
           scoping={settings.scoping}
+          research={research}
         />
       </div>
     </div>

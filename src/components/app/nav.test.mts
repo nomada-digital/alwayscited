@@ -16,7 +16,7 @@ import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { ADD_ITEMS, CLUSTER_NAV, CLUSTER_TABS, GROUPS, NAV, NAV_TARGET, PLACEMENTS_ITEM, SEE_ALL, SOON, TABS, TAB_LABEL, groupOf } from "./nav.ts";
+import { ADD_ITEMS, CLUSTER_NAV, PAGES_ADD_ANCHOR, CLUSTER_TABS, GROUPS, NAV, NAV_TARGET, PLACEMENTS_ITEM, SEE_ALL, SOON, TABS, TAB_LABEL, groupOf } from "./nav.ts";
 
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 const CLIENT = join(ROOT, "src", "app", "app", "[client]");
@@ -55,9 +55,11 @@ test("every off-nav route is a built route", () => {
  * on purpose (the keyword lives on its cluster card); the test below holds that they stay gone.
  * Raised 13 Oct 2026 (DIY P5, wave 1): 12 routes - the eight static pages, /setup, the one-cluster page, the
  * catch-all, and the DIY wave's /ai and /plan; 9 items - AI visibility and Actions join the seven.
+ * Raised 13 Oct 2026 (DIY P9, wave 2): 17 routes - wave 2's /google, /opportunities, /opportunities/[id], /pages and
+ * /pages/[page]; 12 items - Google, Opportunities and Your pages join the nine.
  */
-const ROUTE_FLOOR = 12;
-const ITEM_FLOOR = 9;
+const ROUTE_FLOOR = 17;
+const ITEM_FLOOR = 12;
 
 const ITEMS = [...new Set<string>([...NAV, ...TABS, ...CLUSTER_NAV, ...CLUSTER_TABS])];
 
@@ -167,14 +169,16 @@ test("R141: no Keywords item on a flat or a cluster client", () => {
  * 13 Oct 2026, DIY P5 (spec 10 sections 1.1 row 33, 3.1 and 3.2): the wave 1 nav, recorded. Overview alone,
  * then Results, Do and Manage, each a label and never a link. Wave 2 adds Google to Results and Opportunities
  * and Your pages to Do, and moves this fact with its date; wave 3 adds Links to Do.
+ * 13 Oct 2026, DIY P9 (spec 10 section 3.1, "after W2"): the fact moved - Google second in Results; Opportunities
+ * and Your pages in Do after Actions, Placements last. Links (wave 3) goes between Opportunities and Your pages.
  */
-test("DIY W1: the nav is in its groups, in order, and a group label is never an item", () => {
+test("DIY W2: the nav is in its groups, in order, and a group label is never an item", () => {
   assert.deepEqual(
     GROUPS.map((g) => [g.label, [...g.items]]),
     [
       [null, ["Overview"]],
-      ["Results", ["AI visibility", "Who is named", "Cited pages"]],
-      ["Do", ["Actions", PLACEMENTS_ITEM]],
+      ["Results", ["AI visibility", "Google", "Who is named", "Cited pages"]],
+      ["Do", ["Actions", "Opportunities", "Your pages", PLACEMENTS_ITEM]],
       ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
   );
@@ -201,22 +205,46 @@ test("DIY W1: Actions is the client's word for the Plan, and the route keeps /pl
   assert.ok(ROUTES.includes("/ai"), "the AI visibility page is built");
 });
 
-test("DIY W1: the phone's tabs are Overview, AI, Actions, Clusters, then More", () => {
-  assert.deepEqual([...TABS], ["Overview", "AI visibility", "Actions", "Clusters"]);
+test("DIY W2: Google, Opportunities and Your pages open their built pages", () => {
+  assert.equal(NAV_TARGET.Google, "/google");
+  assert.equal(NAV_TARGET.Opportunities, "/opportunities");
+  assert.equal(NAV_TARGET["Your pages"], "/pages");
+  for (const r of ["/google", "/opportunities", "/opportunities/[]", "/pages", "/pages/[]"]) assert.ok(ROUTES.includes(r), `${r} is not built`);
+  assert.equal(groupOf("Google"), "Results");
+  assert.equal(groupOf("Opportunities"), "Do");
+  assert.equal(groupOf("Your pages"), "Do");
+});
+
+// 13 Oct 2026, DIY P9 (spec 10 section 3.2, final): the fact moved - Google takes Clusters' tab, and Clusters moves
+// into More under Manage.
+test("DIY W2: the phone's tabs are Overview, AI, Google, Actions, then More", () => {
+  assert.deepEqual([...TABS], ["Overview", "AI visibility", "Google", "Actions"]);
   assert.deepEqual([...CLUSTER_TABS], [...TABS]);
-  assert.deepEqual(TABS.map((t) => TAB_LABEL[t] ?? t), ["Overview", "AI", "Actions", "Clusters"]);
+  assert.deepEqual(TABS.map((t) => TAB_LABEL[t] ?? t), ["Overview", "AI", "Google", "Actions"]);
   for (const t of Object.keys(TAB_LABEL)) assert.ok(TABS.includes(t), `TAB_LABEL shortens ${t}, which is not a tab`);
   const src = readFileSync(join(ROOT, "src", "components", "app", "Sidebar.tsx"), "utf8");
   assert.ok(src.includes("{TAB_LABEL[item] ?? item}"), "the tab draws its short word");
   assert.ok(src.includes("moreGroups.map("), "More's sheet lists the groups");
 });
 
-test("DIY W1: every + Add item opens a built page, and the sidebar gates it on writeRole", () => {
+// 13 Oct 2026, DIY P9: the fact moved - wave 2's "Add a page to check" and "Log a site I found", each landing on its
+// form's anchor, which is held here so a renamed id cannot leave the link landing at the top of the page.
+test("DIY W2: every + Add item opens a built page, and the sidebar gates it on writeRole", () => {
   assert.deepEqual(
     ADD_ITEMS.map((a) => a.label),
-    ["Add a keyword", "Add a prompt", "Add a task"],
+    ["Add a keyword", "Add a prompt", "Add a task", "Add a page to check", "Log a site I found"],
   );
   for (const a of ADD_ITEMS) assert.ok(ROUTES.includes(a.route), `${a.label} opens ${a.route}, which is not built`);
+  const anchors: Record<string, [string, string]> = {
+    "#new-task": ["src/components/app/plan/AddTask.tsx", 'id="new-task"'],
+    [`#${PAGES_ADD_ANCHOR}`]: ["src/lib/diy/pages/paths.ts", `export const ADD_ANCHOR = "${PAGES_ADD_ANCHOR}";`],
+    "#log": ["src/components/app/opportunities/Opportunities.tsx", '<section id="log"'],
+  };
+  for (const a of ADD_ITEMS.filter((x) => x.hash)) {
+    const [file, needs] = anchors[a.hash!] ?? ["", ""];
+    assert.ok(file && readFileSync(join(ROOT, file), "utf8").includes(needs), `${a.label} lands on ${a.hash}, which no form carries`);
+  }
+  assert.ok(readFileSync(join(ROOT, "src/components/app/pages/KeyPagesList.tsx"), "utf8").includes("<section id={ADD_ANCHOR}"), "Your pages' add form no longer carries ADD_ANCHOR");
   const src = readFileSync(join(ROOT, "src", "components", "app", "Sidebar.tsx"), "utf8");
   assert.ok(src.includes("const canAdd = refuseRole(writeRole({ role, status: client.status })) === null;"), "+ Add is not gated as the writes are");
   assert.match(src, /aria-disabled="true" aria-describedby="add-why"/, "a viewer's + Add is not drawn disabled with its reason");

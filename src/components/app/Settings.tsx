@@ -4,6 +4,7 @@ import { APP_LIMITS } from "@/config/contact";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { trialMoment, trialStatus } from "@/config/trial";
 import { T } from "@/config/tokens";
+import type { DiyUsage } from "@/lib/diy/core/usage-meter";
 import type { UpsellMode } from "@/lib/tracking/ask";
 import { checkTime, nextCheckAt } from "@/lib/tracking/check-time";
 import { addDays, formatDay } from "@/lib/tracking/figures";
@@ -46,6 +47,38 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
+/**
+ * "This month's research" (13 Oct 2026, DIY P9; spec 10 section 4.13). Every member sees it. Counts only: "Page
+ * checks: 3 of 30 used", "Pursuing: 4 of 10", then when the monthly ones reset. A count that could not be read is
+ * said as such. While DIY is off, the paid-read counts (page checks, drafted examples, link checks) are left out,
+ * as every DIY section that exists only because of a paid read is (spec 10 section 4, the dark rule).
+ */
+function Research({ usage }: { usage: DiyUsage | { failed: true } }) {
+  if ("failed" in usage) {
+    return (
+      <section aria-labelledby="set-research" style={SECTION} data-research="failed">
+        <h2 id="set-research" style={HEAD}>This month&apos;s research</h2>
+        <p style={{ ...ROW, margin: 0, color: T.soft }}>We couldn&apos;t read this part just now. The rest of the page is up to date.</p>
+      </section>
+    );
+  }
+  const rows = usage.rows.filter((r) => usage.enabled || r.key === "pursuits");
+  const monthly = rows.some((r) => r.period === "month");
+  return (
+    <section aria-labelledby="set-research" style={SECTION} data-research={usage.enabled ? "on" : "dark"}>
+      <h2 id="set-research" style={HEAD}>This month&apos;s research</h2>
+      {rows.map((r) => (
+        <Row key={r.key} label={r.label}>
+          <span data-usage-row={r.key}>{r.used === null ? "Not read just now" : `${r.used} of ${r.limit}${r.key === "page_checks" ? " used" : ""}`}</span>
+        </Row>
+      ))}
+      <p style={{ ...ROW, margin: 0, color: T.soft, fontSize: "13px" }}>
+        {monthly ? `Resets ${usage.resetsLabel}. ` : ""}Pursuing counts the pages in Pursuing or Pitched now.
+      </p>
+    </section>
+  );
+}
+
 export default function Settings({
   domain,
   brand,
@@ -70,7 +103,14 @@ export default function Settings({
   livePrompts = 1,
   accountClients = 1,
   scoping = true,
+  research = null,
 }: {
+  /**
+   * This month's research (13 Oct 2026, DIY P9; spec 10 section 4.13): the DIY allowances' counts, never dollars,
+   * from P1's loadDiyUsage. Null draws nothing (no DIY read for this page); a row whose count could not be read says
+   * so and never reads as 0. While DIY is off only Pursuing shows: the other counts exist only because of paid reads.
+   */
+  research?: DiyUsage | { failed: true } | null;
   /**
    * Clients on this account (AG-1, 9 Oct 2026). With two or more, owners see
    * which clients each member sees, Remove says what it takes, and the invite
@@ -169,6 +209,8 @@ export default function Settings({
           )}
         </div>
       </section>
+
+      {research ? <Research usage={research} /> : null}
 
       <section aria-labelledby="set-team" style={SECTION}>
         <h2 id="set-team" style={HEAD}>Team</h2>

@@ -1,4 +1,5 @@
 import { TRIAL } from "../../config/trial.ts";
+import { zoneDay } from "../tracking/check-time.ts";
 import { type AnswerRow, type Day, brandBoard, formatDay, namedRate } from "../tracking/figures.ts";
 import type { TrialRecap } from "./lifecycle.ts";
 
@@ -172,4 +173,25 @@ export function firstChargeFailed(sub: Record<string, unknown>): boolean {
   if (trialEnd === null || details?.reason !== "payment_failed") return false;
   const start = periodStart(sub);
   return start !== null && Math.abs(start - trialEnd) <= HOUR;
+}
+
+/**
+ * The Monday "This week" email (13 Oct 2026, DIY P9; spec 10 section 7.10):
+ * once a week, on the Monday of the client's own zone. The daily cron runs
+ * at 05:00 UTC, which is Monday morning in London and the first hour of
+ * Monday in New York, so each client's Monday is its own. The claim is one
+ * dashboard_events row per client per Monday, named for the day, so a week's
+ * email is never sent twice and next Monday's is a new row
+ * (20261014200000_this_week_email_flag.sql makes the claim exact).
+ */
+export const THIS_WEEK_EVENT_PREFIX = "this_week_mail_";
+export const thisWeekEvent = (monday: Day) => `${THIS_WEEK_EVENT_PREFIX}${monday}`;
+
+/** The claim's event when today is a Monday in the client's zone and this week's has not gone, else null. */
+export function thisWeekDue(p: { status: string | null; market: string; sent: ReadonlySet<string>; now: number }): string | null {
+  if (p.status !== "active") return null;
+  const day = zoneDay(p.now, p.market);
+  if (new Date(`${day}T00:00:00Z`).getUTCDay() !== 1) return null;
+  const event = thisWeekEvent(day);
+  return p.sent.has(event) ? null : event;
 }

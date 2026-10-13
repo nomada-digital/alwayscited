@@ -121,8 +121,12 @@ test("every route that spends money refuses GET, except the email link", () => {
   // it - unlock, resend and the verify link. Lowered to what is actually there
   // rather than left as a floor nothing can meet, because a floor that always
   // fails is a floor nobody reads.
+  // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 21 - the measured set, which spend-gates.test.mts pins name by
+  // name: the scan's five (start, confirm, questions, email-report, walkthrough), the coverage check's three, the
+  // tier pages' walkthrough, app/login, the dashboard's ask, check, member and setup, the tracking pair (cron/track,
+  // track/run), the DIY night three (diy/run and the two night crons), and wave 2's opportunity and pages doors.
   assert.ok(
-    paid.length >= 7,
+    paid.length >= 21,
     `only ${paid.length} paid routes detected - the spend walk in spenders.mts has gone blind: ` +
       paid.map((r) => r.name).join(", "),
   );

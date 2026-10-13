@@ -4,9 +4,15 @@ import { test } from "node:test";
 import { USAGE_EVENTS, dashPath, readUsage, usagePath, usageProps, usageSlug, weekOf, weeklyUsage } from "./usage.ts";
 
 // 13 Oct 2026, DIY P5: twenty - the brief's sixteen and wave 1's plan_move, plan_task_added, plan_hidden and ai_filter.
-test("the event list is the brief's sixteen, T10 (30 Sep 2026), and DIY wave 1's four (13 Oct 2026)", () => {
-  assert.equal(USAGE_EVENTS.length, 20);
-  assert.deepEqual(USAGE_EVENTS.slice(16), ["plan_move", "plan_task_added", "plan_hidden", "ai_filter"]);
+// 13 Oct 2026, DIY P9: thirty-one - wave 2's eleven, as P6, P7 and P8 handed them over (usage.ts says what each records).
+test("the event list is the brief's sixteen, T10 (30 Sep 2026), DIY wave 1's four and wave 2's eleven (13 Oct 2026)", () => {
+  assert.equal(USAGE_EVENTS.length, 31);
+  assert.deepEqual(USAGE_EVENTS.slice(16, 20), ["plan_move", "plan_task_added", "plan_hidden", "ai_filter"]);
+  assert.deepEqual(USAGE_EVENTS.slice(20), [
+    "gaining_track", "gaining_dismiss", "opportunity_status", "opportunity_log", "prompt_offer", "brief_copy",
+    "key_page_add", "page_check", "example_request", "fix_copy", "example_copy",
+  ]);
+  for (const e of USAGE_EVENTS) assert.ok(e.length >= 2 && e.length <= 60, `${e}: dashboard_events.event holds 2-60 characters`);
   assert.ok(!(USAGE_EVENTS as readonly string[]).includes("keyword_checked"), "the spend cap's row is not a usage event");
 });
 
@@ -90,8 +96,14 @@ test("every usage event has a sender, bar the recorded exemption", async () => {
   const src = files.map((f) => readFileSync(f, "utf8")).join("\n");
   // No range control exists yet: the date on /app is display only (30 Sep 2026).
   const EXEMPT: Record<string, string> = { range_change: "no range picker is built; the date range is display only" };
+  // 13 Oct 2026, DIY P9: a copy button's event is a prop - CopyButton's and CopyBlock's `usage="<event>"` - which
+  // each draws as `data-usage={usage}` on its button, so the beacon sends it on the click. The pass-through is
+  // asserted here, so a component that stops drawing it stops counting as a sender.
+  const COPIERS = ["components/app/opportunities/CopyButton.tsx", "components/app/pages/CopyBlock.tsx"];
+  for (const c of COPIERS) assert.ok(readFileSync(join(root, c), "utf8").includes("data-usage={usage}"), `${c} no longer draws its usage prop as data-usage`);
   const sent = (e: string) =>
     src.includes(`data-usage="${e}"`) ||
+    src.includes(`usage="${e}"`) ||
     src.includes(`"${e}"`) && (src.includes(`event: "${e}"`) || new RegExp(`event: [^,}]*"${e}"`).test(src)) ||
     (e === "view" && src.includes('send(slug, "view")')) ||
     (e === "cta_shown" && src.includes("data-usage-shown={cta}"));

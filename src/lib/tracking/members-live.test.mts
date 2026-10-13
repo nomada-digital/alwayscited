@@ -132,6 +132,9 @@ const APPLIES_SCOPE: Record<string, string> = {
   "src/lib/tracking/settings-data.ts": "Settings' team list on one client.",
   "src/lib/tracking/team.ts": "readTeam: the member route's team, which onClient narrows to the client posted from.",
   "src/app/admin/tracking/page.tsx": "/admin/tracking's member line under each client.",
+  // 13 Oct 2026, DIY P9 (spec 10 section 7.10): the Monday This week email goes to owners and editors, and an editor
+  // limited to other clients must not be mailed this one's actions.
+  "src/lib/email/week-recipients.ts": "weekRecipients: the This week email's owners and editors who can see the client.",
 };
 
 /**

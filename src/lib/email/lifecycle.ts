@@ -9,6 +9,7 @@ import { TIER_PLAIN, type TierKey } from "../tier-text.ts";
 import { checkTime } from "../tracking/check-time.ts";
 import { PROMPTS_PER_CLUSTER } from "../tracking/limits.ts";
 import { firstAsked, setupChecks } from "../tracking/setup-landing.ts";
+import { type ThisWeekData, thisWeekParts } from "./this-week-mail.ts";
 
 /**
  * The lifecycle emails (R159, Danny, 1 Oct 2026, danny.md lines 159-167), as
@@ -29,6 +30,14 @@ import { firstAsked, setupChecks } from "../tracking/setup-landing.ts";
  * (lifecycle-sweep.ts), picked by lifecycle-schedule.ts. Each names the moment
  * the trial ends in the client's zone (trialMoment), what is charged then
  * (trialCharge) and where to cancel. Each has its own flag, off.
+ *
+ * this_week (13 Oct 2026, DIY P9; spec 10 sections 7.10 and 8.3 Q3): the
+ * Monday "This week" email - the week's Actions items and the top changes
+ * since the last check - built by this-week-mail.ts and rendered here, sent by
+ * the daily cron's sweep on Mondays in the client's zone to owners and editors,
+ * never in agency mode. Its flag, email_this_week_enabled, ships false
+ * (20261014200000_this_week_email_flag.sql): nothing goes until Danny approves
+ * its preview at /admin/emails and turns it on.
  */
 
 export const LIFECYCLE_EMAILS = [
@@ -41,6 +50,7 @@ export const LIFECYCLE_EMAILS = [
   "trial_ending",
   "invite",
   "plan_ended",
+  "this_week",
 ] as const;
 export type LifecycleEmail = (typeof LIFECYCLE_EMAILS)[number];
 
@@ -97,7 +107,15 @@ const linkLine = (link: string) =>
  */
 type Line = string | { text: string; link: { label: string; href: string }; after: string };
 
-type Parts = { subject: string; preheader: string; heading: string; body: Line[]; list?: string[]; cta: { href: string; label: string }; footnote: string; tier: TierKey };
+/**
+ * `after` (13 Oct 2026, DIY P9): lines drawn after the list, before the button - this_week's changes since the last
+ * check, below its items. Every other email has none, and renders as before.
+ */
+type Parts = { subject: string; preheader: string; heading: string; body: Line[]; list?: string[]; after?: Line[]; cta: { href: string; label: string }; footnote: string; tier: TierKey };
+
+/** The shapes this-week-mail.ts builds, for render (type-only, so the two modules import no values from each other). */
+export type MailLine = Line;
+export type MailParts = Parts;
 
 const lineHtml = (l: Line) =>
   typeof l === "string" ? escapeHtml(l) : `${escapeHtml(l.text)}<a href="${escapeHtml(l.link.href)}" style="color:${P.accent};">${escapeHtml(l.link.label)}</a>${escapeHtml(l.after)}`;
@@ -113,7 +131,7 @@ function render(p: Parts): Rendered {
     title: escapeHtml(p.subject),
     preheader: escapeHtml(p.preheader),
     heading: escapeHtml(p.heading),
-    body: p.body.map(lineHtml).join("<br><br>") + list,
+    body: p.body.map(lineHtml).join("<br><br>") + list + (p.after?.length ? `<p style="margin:16px 0 0;">${p.after.map(lineHtml).join("<br>")}</p>` : ""),
     cta: { href: p.cta.href, label: escapeHtml(p.cta.label) },
     footnote: `${escapeHtml(p.footnote)} ${linkLine(p.cta.href)}`,
     aside: h.html,
@@ -123,6 +141,7 @@ function render(p: Parts): Rendered {
     "",
     ...p.body.flatMap((b) => [lineText(b), ""]),
     ...(p.list?.length ? [...p.list.map((l, i) => `${i + 1}. ${l}`), ""] : []),
+    ...(p.after?.length ? [...p.after.map(lineText), ""] : []),
     `${p.cta.label}: ${p.cta.href}`,
     p.footnote,
     "",
@@ -420,6 +439,17 @@ export function planEnded(d: { tier: TierKey; domain: string; billing: string; t
   });
 }
 
+/**
+ * this_week (13 Oct 2026, DIY P9): the Monday email, from this-week-mail.ts's parts, with the sign-in line every
+ * cron email carries. `link` is the client's Actions page.
+ */
+export function thisWeek(d: ThisWeekData): Rendered {
+  return render({ ...thisWeekParts(d), footnote: SIGN_IN_ASKS });
+}
+
+/** A client's Actions page, where the This week email's button goes. */
+export const actionsUrl = (slug: string, origin: string) => appUrl(`/${slug}/plan`, origin);
+
 export type Preview = { label: string; mail: Rendered };
 
 /**
@@ -494,6 +524,32 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
       { label: "the alwayscited plan, paid", mail: planEnded({ tier: "cited", domain, billing }) },
       { label: "an alwaystracked trial that ended with no charge", mail: planEnded({ tier: "tracked", domain, billing, trial: true }) },
     ],
+    // 13 Oct 2026, DIY P9: every body this_week can take - three items with changes and more on the dashboard, a
+    // Blocking item new since Monday, a week with items before the second check, and a week with changes only.
+    this_week: (() => {
+      const actions = actionsUrl(slug, ORIGIN);
+      // Each title and fact in the words the candidate rules write them (pages/candidates.ts), on made-up rows.
+      const items = [
+        { severity: "blocking" as const, title: "Let Googlebot crawl /pricing", why: "robots.txt line 'Disallow: /pricing' blocks Googlebot from 1 key page of 8 (checked 17 Oct)." },
+        { severity: "closest" as const, title: "Get onto the best-of lists ranking for 'invoicing software'", why: "'invoicing software' read #11 on 18 Oct." },
+        { severity: "tidy" as const, title: "Add Organization schema to your homepage", why: "No Organization markup in the structured data we found (checked 17 Oct)." },
+      ];
+      const changes = {
+        state: "ok" as const,
+        lines: [
+          "ChatGPT stopped naming you for 'best invoicing app for freelancers'. Ledgerly is named there now; it wasn't on 14 Oct",
+          "'invoice app for contractors' entered page 1: 13th to 8th",
+          "Perplexity started naming you for 'simple invoicing for a small agency'",
+        ],
+        more: 2,
+      };
+      return [
+        { label: "three actions and three changes, UK", mail: thisWeek({ tier: "tracked", domain, weekOf: "2026-10-19", items, changes, link: actions }) },
+        { label: "a Blocking item new since Monday, and no change held", mail: thisWeek({ tier: "tracked", domain, weekOf: "2026-10-19", items: items.slice(0, 1), changes: { state: "ok", lines: [], more: 0 }, link: actions }) },
+        { label: "actions before the second check", mail: thisWeek({ tier: "tracked", domain, weekOf: "2026-10-12", items: items.slice(1), changes: { state: "early" }, link: actions }) },
+        { label: "changes only, nothing pinned", mail: thisWeek({ tier: "mentioned", domain, weekOf: "2026-10-19", items: [], changes, link: actions }) },
+      ];
+    })(),
   };
 }
 

@@ -31,6 +31,17 @@ import { workLog } from "@/lib/diy/plan/worklog";
 import { loadPromptOrigins, originKinds } from "@/lib/diy/prompts/origins";
 import { promptsAdded, workMarks } from "@/lib/diy/shell/work";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import WhereYouStand from "@/components/app/WhereYouStand";
+import type { Watched } from "@/lib/diy/changes/diff";
+import { loadFootprint } from "@/lib/diy/keywords/data";
+import { citedFacts } from "@/lib/diy/opportunities/cited";
+import { oppDetailPath } from "@/lib/diy/opportunities/paths";
+import { loadOppWorld } from "@/lib/diy/opportunities/world";
+import { readPagesPart } from "@/lib/diy/pages/data";
+import { isHomepage } from "@/lib/diy/pages/view";
+import { beforeFirstCheck, whereYouStand } from "@/lib/diy/shell/day-zero";
+import { citedPageRows } from "@/lib/tracking/figures";
+import { firstCitedBy } from "@/lib/diy/prompts/placement-lines";
 
 export const dynamic = "force-dynamic";
 
@@ -143,6 +154,81 @@ export default async function ClientDashboard({
   );
   // The chart's work markers (row 8): Actions items started and done, placements live; a cluster's chart draws its own.
   const marks = workMarks({ slug, items: plan.ok ? plan.value : [], placements: rows });
+
+  // ---- 13 Oct 2026, DIY P9 (spec 10 sections 4.1 and 7.10): wave 2 on the Overview ----
+  // P7's opportunities, read once, for two things: the cited card's "Leaves you out" tags (row 9) and the pursued
+  // pages whose first citation Since last check can report (section 6.8 line 8). A failed read draws neither, says
+  // so in the log, and the rest of the page draws.
+  const oppWorld = firstCheckYet
+    ? await loadOppWorld(repo, client).then(
+        (w) => ({ ok: true as const, value: w }),
+        (err: unknown) => (console.warn(`[diy] overview opportunities: ${err instanceof Error ? err.message : String(err)}`), { ok: false as const }),
+      )
+    : null;
+  const OPEN_OPP = ["new", "pursuing", "pitched"];
+  const leavesOut = oppWorld?.ok
+    ? (() => {
+        const pages = citedPageRows(data.answers, range, client.domain).map((p) => ({ page: p.page, host: p.host }));
+        const f = citedFacts({ pages, answers: data.answers, range, reads: oppWorld.value.reads, kinds: new Map(), placedKeys: oppWorld.value.placedKeys, rows: oppWorld.value.rows.filter((o) => OPEN_OPP.includes(o.status)) });
+        return new Map([...f.leaves].filter((k) => f.opps.has(k)).map((k) => [k, oppDetailPath(slug, f.opps.get(k)!)] as const));
+      })()
+    : undefined;
+  // Watched (line 8): a pursued page's first citation since it was pursued (P7 keeps it per engine), and a live
+  // placement's first citation - only for one gone live inside the range read, so "first" is a fact, not the
+  // range's edge.
+  const watched: Watched[] = [];
+  if (oppWorld?.ok) {
+    for (const o of oppWorld.value.rows) {
+      if (!["pursuing", "pitched", "won"].includes(o.status) || !o.firstCited) continue;
+      const first = Object.entries(o.firstCited).sort((a, b) => a[1].day.localeCompare(b[1].day))[0];
+      if (first) watched.push({ urlKey: o.urlKey, label: `${o.domain}'s page`, href: oppDetailPath(slug, o.id), firstCited: { day: first[1].day, engine: first[0] } });
+    }
+  }
+  if (placements) {
+    const cites = data.answers.flatMap((a) => (a.citations ?? []).filter((c) => c.url).map((c) => ({ run_date: a.run_date, engine: a.engine, url: c.url! })));
+    for (const p of placements) {
+      if (p.status !== "live" || !p.live_on || p.live_on < range.from) continue;
+      const first = firstCitedBy(cites, p.url_key, p.live_on, engines)[0];
+      if (first) watched.push({ urlKey: p.url_key, label: `Your placement on ${p.url_key.split("/")[0]}`, href: appPath(`/${slug}/placements`), firstCited: first });
+    }
+  }
+  // Day 0 (section 4.1, "Confirmed, no check yet"): "Where you stand today" from the reads that land before the first
+  // check - the footprint (paid, so only while DIY is on and a pull exists) and our own key-page and robots.txt reads -
+  // and "3 things you can do before your first check" from the open Blocking and Tidy-up items. Not for an ended client.
+  const dayZero = !firstCheckYet && client.status !== "ended";
+  const [footprint, keyPages, checks, bots] = dayZero
+    ? await Promise.all([
+        loadFootprint(client.id).catch((err: unknown) => (console.warn(`[diy] overview footprint: ${err instanceof Error ? err.message : String(err)}`), null)),
+        section("overview key pages", () => readPagesPart("keyPages", fixtureMode() ? null : () => supabaseAdmin(), client.id, today)),
+        section("overview page checks", () => readPagesPart("checks", fixtureMode() ? null : () => supabaseAdmin(), client.id, today)),
+        section("overview bots", () => readPagesPart("bots", fixtureMode() ? null : () => supabaseAdmin(), client.id, today)),
+      ])
+    : [null, null, null, null];
+  const stand = dayZero
+    ? whereYouStand({
+        domain: client.domain,
+        market: client.market,
+        pull: footprint?.enabled && footprint.pulls?.ok ? footprint.pulls.value.latest : null,
+        bot: bots?.ok ? (bots.value[0] ?? null) : null,
+        homepage: keyPages?.ok ? (keyPages.value.find((k) => k.removedOn === null && isHomepage(k, client.domain)) ?? null) : null,
+        checks: checks?.ok ? checks.value : [],
+      })
+    : [];
+  const firstThings = dayZero && plan.ok ? beforeFirstCheck(plan.value, utc) : [];
+  const dayZeroWeek =
+    firstThings.length > 0 ? (
+      <ThisWeek
+        items={firstThings}
+        counts={{ done: 0, of: firstThings.length, open: weekCounts(plan.ok ? plan.value : [], utc).open }}
+        slug={slug}
+        canWrite={canWrite}
+        reason={reason}
+        back="overview"
+        heading={`${firstThings.length === 1 ? "1 thing" : `${firstThings.length} things`} you can do before your first check`}
+        tally={false}
+        toast={overviewPlanToast(typeof sp.plan === "string" ? sp.plan : null)}
+      />
+    ) : null;
   const steps =
     checklist && team && reportOpened !== null
       ? activationSteps({
@@ -200,7 +286,10 @@ export default async function ClientDashboard({
           ended={client.status === "ended"}
           lead={steps ? <Activation steps={steps} /> : null}
           recent={weekRead ?? { ok: true, data }}
-          thisWeek={weekNode}
+          thisWeek={dayZeroWeek ?? weekNode}
+          dayZero={stand.length ? <WhereYouStand lines={stand} slug={slug} /> : null}
+          watched={watched}
+          leavesOut={leavesOut}
           workLog={logNode}
           origins={originKinds(origins)}
           marks={marks}

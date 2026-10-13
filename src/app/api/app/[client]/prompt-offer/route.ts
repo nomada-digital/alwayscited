@@ -83,7 +83,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       }
       await appendHistory(db!, client.id, opp, e);
     };
-    // Until the shell adds prompt_offer to USAGE_EVENTS (usage.ts is a registry file), nothing is recorded.
+    // prompt_offer is in USAGE_EVENTS since 13 Oct 2026 (DIY P9, the wave 2 shell); nothing is recorded on the fixture.
     const usage = async (event: "prompt_offer" = "prompt_offer") => {
       if (!entry && isUsageEvent(event)) await recordUsage(db!, { clientId: client.id, email, event, path: "/opportunities", today });
     };

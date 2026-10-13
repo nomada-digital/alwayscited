@@ -6,7 +6,8 @@
  *
  * Holds what section 7.6 asks of the shell: the nav groups at 1280 with
  * "Actions" as the label; the phone tabs at 390 (Overview, AI, Actions,
- * Clusters, then More); More's sheet marks the current page and closes on
+ * Clusters, then More; since 13 Oct 2026, DIY P9, Overview, AI, Google,
+ * Actions, then More); More's sheet marks the current page and closes on
  * Escape and on a choice; "+ Add" is disabled for a viewer and on an ended
  * client, with the reason; the Actions badge's count. And what it mounts: the
  * Overview's This week (its writes with JS off, 303 and toast) and work log,
@@ -160,12 +161,16 @@ test("1280: the nav in its groups, Overview alone, Actions the word for the Plan
     nav.map((g) => [g.label, g.items]),
     [
       [null, ["Overview"]],
-      ["Results", ["AI visibility", "Who is named", "Cited pages"]],
-      ["Do", ["Actions"]],
+      ["Results", ["AI visibility", "Google", "Who is named", "Cited pages"]],
+      ["Do", ["Actions", "Opportunities", "Your pages"]],
       ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
-    "the default fixture is on alwaystracked, so Do holds Actions alone (Placements is placed tiers')",
+    // 13 Oct 2026, DIY P9 (spec 10 section 3.1, after W2): Google in Results, Opportunities and Your pages in Do.
+    "the default fixture is on alwaystracked, so Do has no Placements (placed tiers')",
   );
+  assert.match(nav[1]!.hrefs[1]!, /\/tallyroo\/google$/, "Google opens /google");
+  assert.match(nav[2]!.hrefs[1]!, /\/tallyroo\/opportunities$/, "Opportunities opens /opportunities");
+  assert.match(nav[2]!.hrefs[2]!, /\/tallyroo\/pages$/, "Your pages opens /pages");
   assert.match(nav[2]!.hrefs[0]!, /\/tallyroo\/plan$/, "Actions opens /plan");
   // Group labels are MICRO and sentence case, never upper case, and never links.
   const labels = await page.evaluate(() => [...document.querySelectorAll('aside.app-side nav[aria-label="Dashboard"] > div > span')].map((s) => ({ t: s.textContent, tt: getComputedStyle(s).textTransform, fs: getComputedStyle(s).fontSize, a: !!s.closest("a") })));
@@ -179,11 +184,12 @@ test("1280: the nav in its groups, Overview alone, Actions the word for the Plan
   await ai.ctx.close();
 });
 
-test("390: the tabs are Overview, AI, Actions, Clusters and More; AI is current on AI visibility", async () => {
+// 13 Oct 2026, DIY P9 (spec 10 section 3.2, final): Google takes Clusters' tab; Clusters moves into More.
+test("390: the tabs are Overview, AI, Google, Actions and More; AI is current on AI visibility", async () => {
   as("default");
   const { ctx, page } = await open(`${HOME}/ai`, 390);
   const tabs = await page.evaluate(() => [...document.querySelectorAll("nav.app-tabs > a .app-tab-label, nav.app-tabs > details > summary .app-tab-label")].map((s) => s.textContent));
-  assert.deepEqual(tabs, ["Overview", "AI", "Actions", "Clusters", "More"]);
+  assert.deepEqual(tabs, ["Overview", "AI", "Google", "Actions", "More"]);
   const current = await page.evaluate(() => [...document.querySelectorAll('nav.app-tabs > a[aria-current="page"] .app-tab-label')].map((s) => s.textContent));
   assert.deepEqual(current, ["AI"]);
   // Every tab is a 44px target or more (spec 3.2).
@@ -209,9 +215,10 @@ test("390: More's sheet has the groups as headed lists, marks the current page, 
   assert.deepEqual(
     sheet.map((g) => [g.label, g.links.map((l) => l.t)]),
     [
-      ["Add", ["Add a keyword", "Add a prompt", "Add a task"]],
+      ["Add", ["Add a keyword", "Add a prompt", "Add a task", "Add a page to check", "Log a site I found"]],
       ["Results", ["Who is named", "Cited pages"]],
-      ["Manage", ["Reports", "Settings"]],
+      ["Do", ["Opportunities", "Your pages"]],
+      ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
   );
   assert.deepEqual(
@@ -240,19 +247,25 @@ test("390: More's sheet has the groups as headed lists, marks the current page, 
   await ctx.close();
 });
 
-test("+ Add: an owner's opens its three forms, each resolving; a viewer and an ended client see it disabled with the reason", async () => {
+// 13 Oct 2026, DIY P9: five forms - wave 2's "Add a page to check" (Your pages' add form) and "Log a site I found"
+// (Opportunities' Log a site form), each landing on its form's anchor.
+test("+ Add: an owner's opens its five forms, each resolving; a viewer and an ended client see it disabled with the reason", async () => {
   as("default");
   const owner = await open(HOME);
   await hydrated(owner.page);
   await owner.page.locator("details.app-add > summary").click();
   const links = await owner.page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>('details.app-add [role="group"][aria-label="Add"] a')].map((a) => [a.textContent, a.getAttribute("href")!]));
-  assert.deepEqual(links.map(([t]) => t), ["Add a keyword", "Add a prompt", "Add a task"]);
+  assert.deepEqual(links.map(([t]) => t), ["Add a keyword", "Add a prompt", "Add a task", "Add a page to check", "Log a site I found"]);
   assert.match(links[0]![1], /\/tallyroo\/clusters\?add=1$/);
   assert.match(links[2]![1], /\/tallyroo\/plan\?view=list#new-task$/);
+  assert.match(links[3]![1], /\/tallyroo\/pages#add$/);
+  assert.match(links[4]![1], /\/tallyroo\/opportunities#log$/);
   await resolves(links.map(([, h]) => h));
-  // The task form is where Add a task lands.
+  // The task form is where Add a task lands; the page and log forms are where theirs land.
   const task = await fetch(new URL(links[2]![1], BASE));
   assert.ok((await task.text()).includes('id="new-task"'), "Add a task's anchor is on Actions");
+  assert.ok((await (await fetch(new URL(links[3]![1], BASE))).text()).includes('id="add"'), "Add a page to check's anchor is on Your pages");
+  assert.ok((await (await fetch(new URL(links[4]![1], BASE))).text()).includes('id="log"'), "Log a site I found's anchor is on Opportunities");
   await owner.page.screenshot({ path: path.join(OUT, "add-default-1280.png") });
   await owner.ctx.close();
 

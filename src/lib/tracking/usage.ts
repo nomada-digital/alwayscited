@@ -36,6 +36,23 @@ export const USAGE_EVENTS = [
   "plan_task_added",
   "plan_hidden",
   "ai_filter",
+  // 13 Oct 2026, DIY P9 (spec 10 sections 7.7-7.9): wave 2's, as P6, P7 and P8 handed them over. Google: Track as a
+  // cluster on a gaining keyword (gaining_track) and its Dismiss (gaining_dismiss). Opportunities: a status moved
+  // (opportunity_status), a site logged (opportunity_log), the prompt step's add or swap (prompt_offer), the pitch
+  // outline copied (brief_copy). Your pages: a key page added (key_page_add), Check this page now (page_check), Draft
+  // an example (example_request), a JSON-LD block or robots.txt lines copied (fix_copy), a drafted example copied
+  // (example_copy). Names only: never a keyword, a URL, a note or a copied text.
+  "gaining_track",
+  "gaining_dismiss",
+  "opportunity_status",
+  "opportunity_log",
+  "prompt_offer",
+  "brief_copy",
+  "key_page_add",
+  "page_check",
+  "example_request",
+  "fix_copy",
+  "example_copy",
 ] as const;
 
 export type UsageEvent = (typeof USAGE_EVENTS)[number];

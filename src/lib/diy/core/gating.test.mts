@@ -66,16 +66,23 @@ const FATGRID_ROOTS = ["src/app/app", "src/components/app", "src/lib/diy"];
  * OriginChip, P3's plan library, page and components, P4's /ai page, its
  * components and the changes and ai libraries, and the shell's wiring.ts and
  * shell/work.ts.
+ * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 174 - wave 1's, plus P6's
+ * keywords library, /google page and components, P7's opportunities library,
+ * pages and components, P8's pages library, pages and components, and their
+ * fixtures.
  */
-const SOURCE_FLOOR = 72;
+const SOURCE_FLOOR = 174;
 /**
  * Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai.
  * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 11 on a built tree - P3's six Actions pages (board full and viewer,
  * day 0, list full, placed and placed-agency), P4's three AI visibility pages (default, missing, new), and the
  * shell's ai-shell and plan-shell. Held on a built tree only, as the test above is: on an unbuilt tree the e2e
  * specs have not run either, and that tree's capture and sweeps skip.
+ * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 40 - wave 1's 11, P6's six Google pages, P7's eight Opportunities
+ * pages, P8's eleven Your pages pages, and the wave 2 journey's Google, Opportunities, key page and Actions
+ * (e2e/app/diy-wave2.spec.mts).
  */
-const SAVED_FLOOR = 11;
+const SAVED_FLOOR = 40;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);
@@ -272,8 +279,9 @@ test("no payload built under src/lib/diy puts a price beside a link or placement
  * P8 and P10 put theirs - could mint a ctx and skip runOnDemand's tracking-run
  * and allowance checks with the census green. Floor: 416 such files on 13 Oct
  * 2026 (DIY P1); a walk that stops matching reports a clean tree.
+ * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 569, measured on the merged tree.
  */
-const ALL_SOURCE_FLOOR = 400;
+const ALL_SOURCE_FLOOR = 569;
 const ALL_SOURCE = walk("src").filter((f) => /\.(tsx?|mts)$/.test(f) && !f.endsWith(".test.mts"));
 
 test("only the worker and runOnDemand mint a ReadCtx, anywhere in src", () => {

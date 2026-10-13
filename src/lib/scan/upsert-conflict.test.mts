@@ -274,7 +274,7 @@ test("the upsert sites are the ones we think they are", () => {
       "dashboard_members:account_id,email",
       // 13 Oct 2026, DIY P6 (spec 10 sections 3.6 and 4.3): gaining ground's
       // Dismiss writes one dismissal per client, kind and keyword on
-      // diy_dismissals' primary key in 20261014000000_footprint.sql, again
+      // diy_dismissals' primary key in 20261014010000_footprint.sql, again
       // on a second dismiss so the newest is the one a toast's Undo restores
       // (keywords/write.ts writeDismissal).
       "diy_dismissals:client_domain_id,key,kind",

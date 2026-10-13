@@ -7,9 +7,12 @@ import type { AnswerRow } from "../tracking/figures.ts";
 import { CLUSTER_BASE } from "../tracking/limits.ts";
 import { SETUP_CONFIRMED_EVENT, firstAsked } from "../tracking/setup-landing.ts";
 import type { TierKey } from "../tier-text.ts";
-import { billingUrl, dashboardUrl, type Rendered, setupReminder, setupUrl, trialEnding, trialMidpoint, trialTerms } from "./lifecycle.ts";
+import { actionsUrl, billingUrl, dashboardUrl, type Rendered, setupReminder, setupUrl, thisWeek, trialEnding, trialMidpoint, trialTerms } from "./lifecycle.ts";
 import { lifecycleOn } from "./lifecycle-flag.ts";
-import { SETUP_MAIL_EVENTS, SETUP_WINDOW_MS, TRIAL_MAIL_EVENT, type TrialMail, setupReminderDue, setupStillEmpty, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
+import { SETUP_MAIL_EVENTS, SETUP_WINDOW_MS, TRIAL_MAIL_EVENT, type TrialMail, setupReminderDue, setupStillEmpty, thisWeekDue, thisWeekEvent, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
+import { type ThisWeekChanges, type ThisWeekItem, worthSending } from "./this-week-mail.ts";
+import { weekRecipients } from "./week-recipients.ts";
+import { zoneDay } from "../tracking/check-time.ts";
 
 /**
  * The lifecycle emails the daily cron sends (8 Oct 2026, audit activation-1):
@@ -40,7 +43,16 @@ export type SweepIo = {
   send: (input: { memberEmail: string; mail: Rendered }) => Promise<boolean>;
   origin: string;
   price: { us: number; uk: number };
+  /**
+   * 13 Oct 2026, DIY P9: the This week email's content for one client - the week's Actions items and Since last
+   * check's top lines - read by the server (this-week-source.ts, through the Overview's own readers), handed in
+   * as the sender is so node --test runs the sweep on a fake. None, and no This week email is built.
+   */
+  thisWeek?: (c: ThisWeekClient, today: string) => Promise<{ items: ThisWeekItem[]; changes: ThisWeekChanges }>;
 };
+
+/** What the This week source reads a client by. */
+export type ThisWeekClient = { id: string; domain: string; brand: string; market: string; tier: TierKey; startedOn: string | null };
 
 type Client = {
   id: string;
@@ -167,13 +179,44 @@ async function deliver(db: SupabaseClient, io: SweepIo, c: Client, event: string
   return "unsent";
 }
 
+/**
+ * The This week claim and send (13 Oct 2026, DIY P9), as deliver does it for the owners' emails: the
+ * dashboard_events row is written before the send, a claim another run holds (the unique index) is "taken",
+ * and a send that reached nobody releases its row for the next run.
+ */
+async function deliverWeek(db: SupabaseClient, io: SweepIo, c: Client, event: string, mail: Rendered): Promise<"sent" | "unsent" | "taken"> {
+  const to = await weekRecipients(db, c.account_id, c.id);
+  if (!to.length) return "taken";
+  const { data: claim, error: cErr } = await db.from("dashboard_events").insert({ client_domain_id: c.id, member_email: null, event, path: null, props: {} }).select("id").single();
+  if (cErr) {
+    if (cErr.code === "23505") return "taken";
+    throw new Error(`could not record ${event}: ${cErr.message}`);
+  }
+  let mailed = 0;
+  for (const email of to) if (await io.send({ memberEmail: email, mail })) mailed++;
+  if (mailed) return "sent";
+  const { error: uErr } = await db.from("dashboard_events").update({ event: unsentEvent(event) }).eq("id", claim.id as number);
+  if (uErr) console.warn(`[mail] ${event} for ${c.id} not sent, and its claim not released: ${uErr.message}`);
+  return "unsent";
+}
+
 export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: number = Date.now()): Promise<SweepResult> {
   const out: SweepResult = { sent: [], unsent: [], errors: [] };
-  const on: Record<TrialMail | "setup_reminder", boolean> = {
+  const on: Record<TrialMail | "setup_reminder" | "this_week", boolean> = {
     trial_midpoint: await lifecycleOn(db, "trial_midpoint"),
     trial_ending: await lifecycleOn(db, "trial_ending"),
     setup_reminder: await lifecycleOn(db, "setup_reminder"),
+    this_week: await lifecycleOn(db, "this_week"),
   };
+  if (!on.trial_midpoint && !on.trial_ending && !on.setup_reminder && !on.this_week) return out;
+  // 13 Oct 2026, DIY P9: the Monday This week email, before and apart from the owners' emails below.
+  if (on.this_week) {
+    try {
+      await sweepThisWeek(db, io, now, out);
+    } catch (err) {
+      out.errors.push(`this_week: ${msg(err)}`);
+    }
+  }
   if (!on.trial_midpoint && !on.trial_ending && !on.setup_reminder) return out;
 
   const trials: Client[] = [];
@@ -248,6 +291,42 @@ export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: n
     }
   }
   return out;
+}
+
+/**
+ * The Monday "This week" email (13 Oct 2026, DIY P9; spec 10 section 7.10), behind email_this_week_enabled,
+ * which ships false. On the Monday of each active client's own zone, to the live owners and editors who can see
+ * it, never in agency mode (HANDOVER item 5: the agency-mode email question is Danny's), once per client per
+ * Monday. A week with no item and no change is not mailed. Without a content source (io.thisWeek) nothing is
+ * built. Each client's failure is its own: logged, and the rest still go.
+ */
+async function sweepThisWeek(db: SupabaseClient, io: SweepIo, now: number, out: SweepResult): Promise<void> {
+  if (!io.thisWeek) return;
+  const clients = await selectAll<Client>((from, to) => db.from("client_domains").select(CLIENT_COLUMNS).eq("status", "active").order("id", { ascending: true }).range(from, to));
+  if (!clients.length) return;
+  // This Monday's claim for each client, by the day in its own zone.
+  const due = new Map(clients.map((c) => [c.id, thisWeekEvent(zoneDay(now, c.market))] as const));
+  const { data: claimed, error } = await db.from("dashboard_events").select("client_domain_id, event").in("client_domain_id", [...due.keys()]).in("event", [...new Set(due.values())]);
+  if (error) throw new Error(`could not read this week's claims: ${error.message}`);
+  const sent = new Map<string, Set<string>>();
+  for (const r of claimed ?? []) sent.set(r.client_domain_id as string, (sent.get(r.client_domain_id as string) ?? new Set<string>()).add(r.event as string));
+  const agency = await agencyAccounts(db, [...new Set(clients.map((c) => c.account_id))]);
+  const today = trackingDay(new Date(now));
+  for (const c of clients) {
+    if (agency.has(c.account_id)) continue;
+    const event = thisWeekDue({ status: c.status, market: c.market, sent: sent.get(c.id) ?? new Set<string>(), now });
+    if (!event) continue;
+    try {
+      const tier = (["tracked", "mentioned", "cited", "everywhere"].includes(c.tier ?? "") ? c.tier : "tracked") as TierKey;
+      const content = await io.thisWeek({ id: c.id, domain: c.domain, brand: c.brand_name ?? c.domain, market: c.market, tier, startedOn: c.started_on }, today);
+      const data = { tier, domain: c.domain, weekOf: event.slice(-10), items: content.items, changes: content.changes, link: actionsUrl(c.slug, io.origin) };
+      if (!worthSending(data)) continue;
+      const r = await deliverWeek(db, io, c, event, thisWeek(data));
+      if (r !== "taken") out[r].push(`this_week ${c.id}`);
+    } catch (err) {
+      out.errors.push(`this_week ${c.id}: ${msg(err)}`);
+    }
+  }
 }
 
 /**

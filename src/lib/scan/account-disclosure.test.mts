@@ -259,6 +259,11 @@ const MENTIONED: Record<string, string> = {
     "Audit activation-1 (8 Oct 2026, package E): reads a client's account_id to skip agency mode and to find its " +
     "live owners for trial_midpoint, trial_ending, setup_reminder and plan_ended. Run only by the CRON_SECRET-gated " +
     "cron and the signed Stripe webhook; SweepResult carries email names and client ids, never the account id.",
+  // 13 Oct 2026, DIY P9 (spec 10 section 7.10): the This week email's recipients.
+  "src/lib/email/week-recipients.ts":
+    "DIY P9 (13 Oct 2026): reads the members of a client's account by account_id for the Monday This week email - " +
+    "its live owners and editors who can see the client. Called only from lifecycle-sweep.ts behind CRON_SECRET; " +
+    "returns email addresses to mail, never the account id.",
 };
 
 test("nothing in this tree selects *", () => {

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { test } from "node:test";
 
 import type { AnswerRow } from "../tracking/figures.ts";
-import { ENDING_BEFORE_MS, SETUP_MAIL_EVENTS, TRIAL_MAIL_EVENT, endedInTrial, firstChargeFailed, planEndedInTrial, setupReminderDue, setupStillEmpty, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
+import { ENDING_BEFORE_MS, SETUP_MAIL_EVENTS, TRIAL_MAIL_EVENT, endedInTrial, firstChargeFailed, planEndedInTrial, setupReminderDue, setupStillEmpty, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent, thisWeekDue, thisWeekEvent } from "./lifecycle-schedule.ts";
 
 /**
  * When the daily cron sends a trial or setup email (8 Oct 2026, audit
@@ -160,4 +160,30 @@ test("the migration's unique index names exactly the events the sweep claims", (
   const listed = /where event in \(([^)]*)\)/.exec(sql)?.[1]?.match(/'([a-z0-9_]+)'/g)?.map((s) => s.slice(1, -1)) ?? [];
   assert.deepEqual(listed.sort(), [...Object.values(TRIAL_MAIL_EVENT), ...SETUP_MAIL_EVENTS].sort());
   for (const e of listed) assert.ok(!listed.includes(unsentEvent(e)), "a released claim must fall outside the index");
+});
+
+// 13 Oct 2026, DIY P9 (spec 10 section 7.10): the Monday "This week" email.
+test("This week: once a Monday in the client's own zone, never for a client that is not active", () => {
+  const sent = new Set<string>();
+  // Monday 19 Oct 2026 at the cron's 05:00 UTC: Monday in London (06:00) and in New York (01:00).
+  const monday = Date.parse("2026-10-19T05:00:00Z");
+  assert.equal(thisWeekDue({ status: "active", market: "UK", sent, now: monday }), "this_week_mail_2026-10-19");
+  assert.equal(thisWeekDue({ status: "active", market: "US", sent, now: monday }), "this_week_mail_2026-10-19");
+  assert.equal(thisWeekDue({ status: "active", market: "UK", sent: new Set(["this_week_mail_2026-10-19"]), now: monday }), null, "once a Monday");
+  assert.equal(thisWeekDue({ status: "active", market: "UK", sent: new Set(["unsent_this_week_mail_2026-10-19"]), now: monday }), "this_week_mail_2026-10-19", "a released claim tries again");
+  assert.equal(thisWeekDue({ status: "active", market: "UK", sent, now: monday + 86_400_000 }), null, "not on a Tuesday");
+  assert.equal(thisWeekDue({ status: "ended", market: "UK", sent, now: monday }), null);
+  // Sunday 18 Oct at 23:30 in New York is already Monday in London: each client's own Monday.
+  const late = Date.parse("2026-10-19T03:30:00Z");
+  assert.equal(thisWeekDue({ status: "active", market: "UK", sent, now: late }), "this_week_mail_2026-10-19");
+  assert.equal(thisWeekDue({ status: "active", market: "US", sent, now: late }), null);
+  assert.equal(thisWeekEvent("2026-10-26"), "this_week_mail_2026-10-26");
+});
+
+test("This week's claim is outside the trial index and inside its own, and its released claim outside both", () => {
+  const sql = fs.readFileSync(new URL("../../../supabase/migrations/20261014200000_this_week_email_flag.sql", import.meta.url), "utf8");
+  assert.match(sql, /insert into app_settings \(key, value\) values \('email_this_week_enabled', 'false'::jsonb\)\s*on conflict \(key\) do nothing;/);
+  assert.match(sql, /create unique index if not exists dashboard_events_this_week_mail_once\s+on public\.dashboard_events \(client_domain_id, event\)\s+where event like 'this\\_week\\_mail\\_%';/);
+  assert.ok(thisWeekEvent("2026-10-19").startsWith("this_week_mail_"));
+  assert.ok(!unsentEvent(thisWeekEvent("2026-10-19")).startsWith("this_week_mail_"), "a released claim falls outside the index");
 });

@@ -52,7 +52,8 @@ export const runtime = "nodejs";
 export default async function ClientOpportunity({ params, searchParams }: { params: Promise<{ client: string; id: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const repo = trackingRepo();
   const email = await repo.sessionEmail();
-  if (!email) redirect(loginHref(appPath(`/${(await params).client}/opportunities`), await searchParams));
+  // 13 Oct 2026, DIY P9: back to this opportunity after signing in, as the one-cluster and key-page pages come back to theirs.
+  if (!email) redirect(loginHref(appPath(`/${(await params).client}/opportunities/${(await params).id}`), await searchParams));
   const { client: slug, id } = await params;
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);

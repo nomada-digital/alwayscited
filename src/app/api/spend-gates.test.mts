@@ -329,6 +329,33 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     evidence: /if \(!verifyRun\(body, req\.headers\.get\(DIY_SIGNATURE_HEADER\), secret\)\)/,
     where: "src/app/api/diy/run/route.ts",
   },
+  /**
+   * 13 October 2026, DIY P9 (P7's and P8's handoffs, spec 10 sections 3.6 and
+   * 5.6): wave 2's two on-demand doors. A member's button, not a visitor's
+   * scan, so checkCeilings is the wrong guard; each paid read goes through
+   * runOnDemand, which refuses an inactive client, refuses while a tracking run
+   * is reading, counts the allowance and preflights the DIY caps before
+   * anything is reserved, and the DIY ledger reserves and caps every read as
+   * it goes out ("the DIY ledger holds the caps" below).
+   */
+  "app/[client]/opportunity": {
+    why:
+      "Verify now and Log a site, for a signed-in owner or editor (writeRole). Each reads the page with our own fetch " +
+      "first, which is free; only the content_parsing fallback is paid, and it goes through runOnDemand: refused for an " +
+      "inactive client, while a tracking run is reading, past the month's 30 link checks (10 in trial; a logged site " +
+      "counts as one) or past the DIY caps, and refused while diy_enabled is off.",
+    evidence: /await runOnDemand\(\{ db, client: diy, member: email!, action: "verify" \}/,
+    where: "src/app/api/app/[client]/opportunity/route.ts",
+  },
+  "app/[client]/pages": {
+    why:
+      "Check this page now (an inline instant_pages read) and Draft an example (one model call in after()), for a " +
+      "signed-in owner or editor (writeRole). Both go through runOnDemand: refused for an inactive client, while a " +
+      "tracking run is reading, past the month's 30 page checks or 10 drafted examples (10 and 3 in trial) or past the " +
+      "DIY caps, and refused while diy_enabled is off; each read is reserved in diy_reads before it goes out.",
+    evidence: /await runOnDemand\(\{ db, client: diy, member: email, action: "page_check", now: \(\) => nowMs \}/,
+    where: "src/app/api/app/[client]/pages/route.ts",
+  },
   "cron/purge-responses": {
     why:
       "DIY night pass 1 at 03:30 UTC, behind CRON_SECRET. Makes the two free vendor reads (cost 0) once a UTC day, " +
@@ -636,8 +663,14 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * `cron/reap-stalled-scans`. They start no scan; the DIY platform has its
      * own switch, `diy_enabled`, and its own caps in the DIY ledger, so
      * `scans_enabled` has nothing to refuse and the decision is not moved.
+     *
+     * Seventeen on 13 Oct 2026 (DIY P9, wave 2): `app/[client]/opportunity`
+     * and `app/[client]/pages`, a member's on-demand DIY buttons. They start
+     * no scan; runOnDemand and the DIY ledger hold them behind `diy_enabled`,
+     * the allowances and the DIY caps, so `scans_enabled` has nothing to
+     * refuse and the decision is not moved.
      */
-    15,
+    17,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });

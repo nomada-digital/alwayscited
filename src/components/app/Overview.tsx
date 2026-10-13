@@ -34,7 +34,7 @@ import type { Compare, OverviewData } from "@/lib/tracking/overview-data";
 import { type PlacementRow, chartMarkers } from "@/lib/tracking/placement-figures";
 import { MISSING_READS, brandGapNote, failedTodayNote, lostReads, runNote, sovGapNote, todayRun } from "@/lib/tracking/run-note";
 import { answerHref, answersByPromptDay, dayAnswerIn } from "@/lib/tracking/evidence";
-import type { ChangeLink } from "@/lib/diy/changes/diff";
+import type { ChangeLink, Watched } from "@/lib/diy/changes/diff";
 import type { Bullet } from "@/lib/diy/changes/meaning";
 import { type Recent, overviewBasis, overviewStory } from "@/lib/diy/changes/story";
 import { addedFromWork } from "@/lib/diy/ai/prompt-table";
@@ -165,7 +165,22 @@ export default function Overview({
   workLog = null,
   origins,
   marks,
+  watched,
+  leavesOut,
+  dayZero = null,
 }: {
+  /**
+   * 13 Oct 2026, DIY P9 (spec 10 section 6.8 line 8): pursued pages and placements whose first citation is known, for
+   * Since last check's "first cited" line. None writes no such line.
+   */
+  watched?: readonly Watched[];
+  /**
+   * 13 Oct 2026, DIY P9 (spec 10 section 4.1 row 9): the cited pages that leave the client out and are open
+   * opportunities, by page key, each with its opportunity's address. The card tags each "Leaves you out". None tags none.
+   */
+  leavesOut?: ReadonlyMap<string, string>;
+  /** 13 Oct 2026, DIY P9 (spec 10 section 4.1, day 0): "Where you stand today", drawn before the first check only. */
+  dayZero?: React.ReactNode;
   /**
    * 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 5): the last week of checks
    * for "Since last check", whatever the range shows - the page's own read when
@@ -376,6 +391,7 @@ export default function Overview({
             </Link>
           ) : null}
         </section>
+        {dayZero}
         {thisWeek}
       </div>
     );
@@ -427,7 +443,9 @@ export default function Overview({
 
   // ---- 13 Oct 2026, DIY P4 (spec 10 section 4.1 rows 3 to 6) ----
   // The headline paragraph, "What it means" and "Since last check": story.ts overviewStory, over the basis above.
-  const { said, bullets, diff } = overviewStory(basis, { data, range, today, engines, brand, domain, startedOn, recent });
+  const { said, bullets, diff } = overviewStory(basis, { data, range, today, engines, brand, domain, startedOn, recent, ...(watched ? { watched } : {}) });
+  // 13 Oct 2026, DIY P9 (spec 10 section 4.1 rows 3b and 5): a keyword opens its row on Google, "who holds page 1".
+  const keywordHref = (id: string): string | null => (clientPath ? `${clientPath}/google?${new URLSearchParams({ ...rangeQuery, row: id })}#kw-h` : null);
   const bulletHref = (b: Bullet): string | null =>
     !b.link || !clientPath
       ? null
@@ -435,7 +453,9 @@ export default function Overview({
         ? `${clientPath}/ai?${new URLSearchParams({ ...rangeQuery, eng: b.link.engine })}`
         : b.link.to === "cluster" && detailHref
           ? detailHref(b.link.cluster)
-          : null; // a keyword is plain text until the Google page exists (wave 2)
+          : b.link.to === "keyword"
+            ? keywordHref(b.link.keyword)
+            : null;
   // The headline's answer count opens /ai on the same range: every prompt behind it, each row opening its answers (DB-2).
   const countHref = clientPath ? `${clientPath}/ai?${new URLSearchParams(rangeQuery)}` : null;
   const promptAt = new Map((cards ?? []).flatMap((c) => c.prompts.map((p, i) => [p.id, { cluster: c.id, index: i }] as const)));
@@ -448,7 +468,8 @@ export default function Overview({
     if (l.to === "cited") return `${clientPath}/cited?${new URLSearchParams({ ...rangeQuery, kind: "yours" })}`;
     if (l.to === "named") return `${clientPath}/named?${new URLSearchParams({ ...rangeQuery, open: l.key })}`;
     if (l.to === "href") return l.href;
-    return null; // a keyword: plain text until the Google page exists (wave 2)
+    if (l.to === "keyword") return keywordHref(l.keyword);
+    return null;
   };
   // The basis line under the key figures (row 4): prompts added from work, which are likelier to name the client.
   const fromWork = origins ? addedFromWork(origins, data.questions.filter((q) => q.stopped_on === null && q.added_on <= today).map((q) => q.id)) : null;
@@ -681,6 +702,12 @@ export default function Overview({
                   </span>
                   <span style={{ display: "flex", gap: "10px", alignItems: "center", flexShrink: 0 }}>
                     {p.yours ? <span style={{ fontSize: "12px", fontWeight: 600, color: T.accent, background: T.wash, borderRadius: "999px", padding: "2px 8px" }}>You</span> : null}
+                    {/* 13 Oct 2026, DIY P9 (spec 10 section 4.1 row 9): an open opportunity whose page leaves the client out. */}
+                    {!p.yours && leavesOut?.has(p.page) ? (
+                      <Link href={leavesOut.get(p.page)!} data-leaves-out="" style={{ display: "inline-flex", alignItems: "center", minHeight: "24px", fontSize: "12px", fontWeight: 600, color: T.warnFg, background: T.warnBg, borderRadius: "999px", padding: "2px 8px", textDecoration: "none", whiteSpace: "nowrap" }}>
+                        Leaves you out
+                      </Link>
+                    ) : null}
                     <span style={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{p.count}</span>
                   </span>
                 </li>

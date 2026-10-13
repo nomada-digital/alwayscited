@@ -286,8 +286,13 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     method: "POST",
     // BRIEF-2 T11 /ask, 30 Sep 2026: first caller is Add a cluster's "Ask us to pick one".
     // DS16, 2 Oct 2026: the action now carries the page's view in its query (fact moved).
-    why: "Posted by the plain HTML Ask us to pick one form in the Clusters page's Add panel, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/ask${view ? `?${view}` : \"\"}`}"),
+    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): also "Suggest this to your account lead" on one
+    // opportunity, kind=opportunity&id=<uuid> and nothing typed (paths.ts oppAskAction).
+    why: "Posted by the plain HTML Ask us to pick one form in the Clusters page's Add panel, and the Suggest this to your account lead form on one opportunity, which the fetch scanner does not read.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/ask${view ? `?${view}` : \"\"}`}") &&
+      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/ask${query({ kind: \"opportunity\", id })}`;") &&
+      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes("action={oppAskAction(p.slug, p.id)}"),
   },
   {
     route: "/api/app/[client]/hide",
@@ -391,6 +396,45 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
       readFileSync(join(ROOT, "src/components/app/plan/PlanCard.tsx"), "utf8").includes("planAction(slug, { ...keep, id: item.id })") &&
       readFileSync(join(ROOT, "src/components/app/plan/ThisWeek.tsx"), "utf8").includes("action={planAction(slug, { ...at, id: item.id })}") &&
       readFileSync(join(ROOT, "src/components/app/plan/AddTask.tsx"), "utf8").includes("action={planAction(slug, keep)}"),
+  },
+  {
+    route: "/api/app/[client]/keywords",
+    method: "POST",
+    // 13 Oct 2026, DIY P9 (P6's handoff, spec 10 section 3.6): gaining ground's Dismiss, Restore and the toast's Undo on Google.
+    why: "Posted by the plain HTML Dismiss, Restore and Undo forms in gaining ground on the Google page, which the fetch scanner does not read.",
+    earns: () => {
+      const src = readFileSync(join(ROOT, "src/components/app/google/GainingGround.tsx"), "utf8");
+      return src.includes("const route = `/api/app/${encodeURIComponent(p.slug)}/keywords?${new URLSearchParams(p.keep)}`;") && src.includes('<form method="post" action={route}');
+    },
+  },
+  {
+    route: "/api/app/[client]/opportunity",
+    method: "POST",
+    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): every status form, Log a site and Verify now on Opportunities.
+    why: "Posted by the plain HTML status, Log a site and Verify now forms on Opportunities and one opportunity, which the fetch scanner does not read; paths.ts oppAction builds every one of their actions.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/opportunity${query(q)}`;") &&
+      readFileSync(join(ROOT, "src/components/app/opportunities/Opportunities.tsx"), "utf8").includes("action={oppAction(p.slug, p.keep)}") &&
+      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes('const action = oppAction(p.slug, { id: p.id, at: "detail" });'),
+  },
+  {
+    route: "/api/app/[client]/prompt-offer",
+    method: "POST",
+    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 sections 3.6 and 6.7): the prompt step on one opportunity - add, swap, undo, watch.
+    why: "Posted by the plain HTML prompt step and swap picker forms on one opportunity, which the fetch scanner does not read; paths.ts promptOfferAction builds their action.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/prompt-offer${query({ id })}`;") &&
+      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes("const offer = promptOfferAction(p.slug, p.id);"),
+  },
+  {
+    route: "/api/app/[client]/pages",
+    method: "POST",
+    // 13 Oct 2026, DIY P9 (P8's handoff, spec 10 section 3.6): add, remove, check, example and Add to Actions on Your pages.
+    why: "Posted by the plain HTML forms on Your pages and one key page (Add page, Remove, Check this page now, Draft an example, Add to Actions), which the fetch scanner does not read; paths.ts pagesAction builds every one of their actions.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/lib/diy/pages/paths.ts"), "utf8").includes("const base = `/api/app/${encodeURIComponent(slug)}/pages`;") &&
+      readFileSync(join(ROOT, "src/components/app/pages/KeyPagesList.tsx"), "utf8").includes("const action = pagesAction(slug, keep);") &&
+      readFileSync(join(ROOT, "src/components/app/pages/SchemaPanel.tsx"), "utf8").includes('const action = pageAction(slug, pageId, "schema");'),
   },
   {
     route: "/api/verify/[vtoken]",

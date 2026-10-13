@@ -461,6 +461,97 @@ const EXEMPT: Record<string, Exemption> = {
     why: "An ungrouped prompt's bulk tick. type=checkbox, nothing typed; readBulkIds keeps well-formed ids once each, capped at BULK_MAX, and each id still goes through the one-row stop or move rules.",
     holds: [{ file: "lib/tracking/stop.ts", needs: "[...new Set(ids)].slice(0, BULK_MAX)" }],
   },
+  // 13 Oct 2026, DIY P9 (wave 2's hidden fields, as P6 and P7 handed them over). Each type=hidden: maxLength does
+  // not apply and nobody types in it. What bounds each is on the server or in the page that re-reads it.
+  // Cited pages (P7, spec 10 section 4.5): the search form keeps ?type= and ?leaves=1, as it keeps the other filters.
+  "ct-type": {
+    why: "the Cited pages search form's hidden type, copied from the current URL so a search keeps it. type=hidden, nobody types in it; the page re-reads it through cited.ts pickCitedType, which accepts only a DOMAIN_TYPES word.",
+    holds: [{ file: "app/app/[client]/cited/page.tsx", needs: 'pickCitedType(one("type"))' }],
+  },
+  "ct-leaves": {
+    why: "the Cited pages search form's hidden leaves flag, the fixed value 1. type=hidden, nobody types in it; the page reads only the exact value 1 as on.",
+    holds: [{ file: "app/app/[client]/cited/page.tsx", needs: 'one("leaves") === "1"' }],
+  },
+  // Clusters (P6, spec 10 section 3.5): `src` rides Check keyword and the add as a hidden field, the word gaining only.
+  "kw-src": {
+    why: "Check keyword's hidden src, set only to the word gaining when Clusters was opened from a gaining-ground keyword. type=hidden, nobody types in it; the check route carries it back only when new-cluster.ts momentumOrigin reads the exact word.",
+    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: 'momentumOrigin(form?.get("src"))' }],
+  },
+  "nc-src": {
+    why: "Add a cluster step 2's hidden src, the word gaining only. type=hidden, nobody types in it; the cluster route sets the Momentum origin only when momentumOrigin reads the exact word, and refuses the add unless verifyCheck passes.",
+    holds: [
+      { file: "app/api/app/[client]/cluster/route.ts", needs: 'momentumOrigin(field("src"))' },
+      { file: "lib/tracking/new-cluster.ts", needs: 'return src === MOMENTUM_SRC ? "momentum" : null;' },
+    ],
+  },
+  // Google's gaining ground (P6, spec 10 sections 3.6 and 4.3): Dismiss, Restore and the toast's Undo post the op and
+  // the keyword as hidden fields. The keywords route accepts only dismiss or restore, a keyword of at most
+  // KEYWORD_MAX (120) characters, and only one in the latest pull or a live dismissal of this client.
+  ...Object.fromEntries(
+    ["gg-undo-do", "gg-undo-kw", "gg-do-${i}", "gg-kw-${i}", "gg-r-do-${i}", "gg-r-kw-${i}"].map((id) => [
+      id,
+      {
+        why: [
+          "a gaining-ground Dismiss, Restore or Undo form's hidden op or keyword, drawn from the page's own rows.",
+          "type=hidden, nobody types in it. The keywords route accepts only dismiss or restore (isKeywordsDo), and",
+          "decideKeywords refuses a keyword over KEYWORD_MAX or one not in this client's latest pull or live dismissals.",
+        ].join(" "),
+        holds: [
+          { file: "lib/diy/keywords/write.ts", needs: "if (!raw || raw.length > KEYWORD_MAX) return { op: \"refuse\", why: \"unknown\" };" },
+          { file: "lib/diy/keywords/write.ts", needs: "export const KEYWORD_MAX = 120;" },
+        ],
+      },
+    ]),
+  ),
+  // Google's search forms (P6): the page's view state bar q and page, re-read by the page against its own bounds.
+  "g-${k}": {
+    why: [
+      "Google's search forms' hidden view keys (the range, view, gaining, cluster, band, intent, sort and dir), copied",
+      "from the page's own state so a search keeps it. type=hidden, nobody types in it. The page re-validates each:",
+      "rangeFrom for the range, this client's clusters, and keys.ts's fixed lists for the rest.",
+    ].join(" "),
+    holds: [
+      { file: "app/app/[client]/google/page.tsx", needs: "rangeFrom(sp, today, client.started_on)" },
+      { file: "app/app/[client]/google/page.tsx", needs: '(data.clusters ?? []).some((c) => c.id === one("cluster"))' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'pickView(one("view"))' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'one("gaining") === "1"' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'pickBand(one("band"))' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'pickIntent(one("intent"))' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'pickSort(one("sort"))' },
+      { file: "app/app/[client]/google/page.tsx", needs: 'pickDir(one("dir"))' },
+    ],
+  },
+  // U7, the pack prompt (P6, spec 10 section 2.7): its Hide for 30 days posts cta=pack, as every upgrade prompt's does.
+  "up-hide-pack-${surface}": {
+    why: "the pack prompt's Hide for 30 days hidden cta, the fixed word pack. type=hidden, nobody types in it; ask.ts readHideCta accepts only the five cta_events ctas.",
+    holds: [{ file: "app/api/app/[client]/hide/route.ts", needs: 'readHideCta(form?.get("cta"))' }],
+  },
+  // Setup's suggested keywords (P6, spec 10 section 4.12): Use this keyword runs the existing Check keyword on a card.
+  "setup-sg-card-${i}": {
+    why: "a suggested keyword's hidden card id on Setup. type=hidden, nobody types in it; the check route clamps it to 64 and the setup page matches it against its own cards.",
+    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("card") as string).slice(0, 64)' }],
+  },
+  "setup-sg-own-${i}": {
+    why: "a suggested keyword's hidden current keyword on Setup, always empty here. type=hidden, nobody types in it; the check route clamps it to ADMIN_LIMITS.question.",
+    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("own") as string).slice(0, ADMIN_LIMITS.question)' }],
+  },
+  "setup-sg-kw-${i}": {
+    why: "a suggested keyword itself on Setup, drawn from the footprint. type=hidden, nobody types in it; the check route trims it and clamps it to ADMIN_LIMITS.question before the paid door's own prechecks.",
+    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("keyword") as string).trim().slice(0, ADMIN_LIMITS.question)' }],
+  },
+  // Opportunities' search form (P7, spec 10 section 4.7): it keeps the lens, cluster and engine.
+  "op-lens": {
+    why: "Opportunities' search form's hidden lens, copied from the page's state. type=hidden, nobody types in it; the page re-reads it against TAB_LENSES.",
+    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'pickLens(one("lens"))' }],
+  },
+  "op-cluster": {
+    why: "Opportunities' search form's hidden cluster. type=hidden, nobody types in it; the page keeps it only when it is one of this client's clusters.",
+    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'structure.clusters.some((c) => c.id === one("cluster"))' }],
+  },
+  "op-engine": {
+    why: "Opportunities' search form's hidden engine. type=hidden, nobody types in it; the page keeps it only when it is one of this client's tier's engines.",
+    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'engines.find((e) => e === one("engine"))' }],
+  },
   "cc-coverage": {
     why: [
       "type=file, which maxLength does not apply to at all. It is bounded by bytes",
@@ -486,11 +577,13 @@ test("the census still sees every field - a shrinking count is a blind probe", (
   const found = inputs();
   const files = new Set(found.map((f) => f.file));
   // 23 when the walk was widened to textarea: 22 <input> and 1 <textarea>.
+  // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 185 fields across 36 files, measured on the merged tree - the
+  // dashboard's forms through wave 2 (Google, Opportunities, Your pages). The floor had stayed at 23 and 11.
   assert.ok(
-    found.length >= 23,
-    `only ${found.length} fields were found across the tree, and there were 23 when this was written - a falling count means the scanner broke, not that fields were deleted`,
+    found.length >= 185,
+    `only ${found.length} fields were found across the tree, and there were 185 on 13 Oct 2026 - a falling count means the scanner broke, not that fields were deleted`,
   );
-  assert.ok(files.size >= 11, `only ${files.size} files carry a field, and 11 did`);
+  assert.ok(files.size >= 36, `only ${files.size} files carry a field, and 36 did on 13 Oct 2026`);
 });
 
 /**

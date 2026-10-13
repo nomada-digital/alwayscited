@@ -29,13 +29,15 @@ const every = Object.entries(sets).flatMap(([name, list]) => list.map((p) => [`$
 test("every lifecycle email has a template and a preview, and its flag is email_<name>_enabled", () => {
   assert.deepEqual(Object.keys(all).sort(), [...LIFECYCLE_EMAILS].sort());
   assert.deepEqual(Object.keys(sets).sort(), [...LIFECYCLE_EMAILS].sort());
-  assert.equal(LIFECYCLE_EMAILS.length, 9);
+  // 13 Oct 2026, DIY P9: ten - this_week, the Monday "This week" email, built dark (spec 10 section 7.10).
+  assert.equal(LIFECYCLE_EMAILS.length, 10);
   for (const n of LIFECYCLE_EMAILS) {
     assert.match(flagFor(n), /^email_[a-z_]+_enabled$/);
     assert.ok(sets[n].length >= 1, `${n} has no preview`);
     assert.equal(new Set(sets[n].map((p) => p.label)).size, sets[n].length, `${n}: two previews share a label`);
   }
-  assert.ok(every.length >= 15, `only ${every.length} preview cases: the sweep below is reading too few`);
+  // Raised 13 Oct 2026 (DIY P9): 27 - the 23 before and this_week's 4.
+  assert.ok(every.length >= 27, `only ${every.length} preview cases: the sweep below is reading too few`);
 });
 
 test("each has one button, the help block and the footer company line, in HTML and plain text", () => {
@@ -245,7 +247,8 @@ test("the welcome carries the sign-in link on its one button and the 3-step stri
 
 test("the templates do not send: no mail client, network or flag write in the module", async () => {
   // lifecycle-schedule.ts joined 8 Oct 2026: it decides when, and must not send either.
-  for (const file of ["./lifecycle.ts", "./lifecycle-schedule.ts"]) {
+  // this-week-mail.ts joined 13 Oct 2026 (DIY P9): the This week email's builder, a template like the rest.
+  for (const file of ["./lifecycle.ts", "./lifecycle-schedule.ts", "./this-week-mail.ts"]) {
     const src = fs.readFileSync(new URL(file, import.meta.url), "utf8");
     assert.doesNotMatch(src, /resend|fetch\(|\.from\(|process\.env/i, file);
   }
@@ -319,8 +322,12 @@ test("the lifecycle sweep: flags first, claim before send, live owners, no agenc
   const sweep = fs.readFileSync(new URL("./lifecycle-sweep.ts", import.meta.url), "utf8");
   const body = sweep.slice(sweep.indexOf("export async function sweepLifecycleMail("));
   assert.ok(body.length > 500, "sweepLifecycleMail is gone from lifecycle-sweep.ts");
-  const flags = ["trial_midpoint", "trial_ending", "setup_reminder"].map((n) => body.indexOf(`lifecycleOn(db, "${n}")`));
-  for (const at of flags) assert.ok(at >= 0 && at < body.indexOf('.from("client_domains")'), "a flag is asked before the first read");
+  // 13 Oct 2026, DIY P9: this_week's flag joins, asked with the others before any read; with every flag off nothing is
+  // read, and the owners' three still return early when only this_week is on.
+  const flags = ["trial_midpoint", "trial_ending", "setup_reminder", "this_week"].map((n) => body.indexOf(`lifecycleOn(db, "${n}")`));
+  for (const at of flags) assert.ok(at >= 0 && at < body.indexOf('.from("client_domains")') && at < body.indexOf("sweepThisWeek(db"), "a flag is asked before the first read");
+  assert.match(body, /if \(!on\.trial_midpoint && !on\.trial_ending && !on\.setup_reminder && !on\.this_week\) return out;/);
+  assert.match(body, /if \(on\.this_week\) \{\s*try \{\s*await sweepThisWeek\(db, io, now, out\);/, "This week goes only with its own flag on, and its failure is its own");
   assert.match(body, /if \(!on\.trial_midpoint && !on\.trial_ending && !on\.setup_reminder\) return out;/);
   assert.match(body, /if \(!due \|\| !on\[due\]\) continue;/, "a trial email goes only with its own flag on");
   const deliver = sweep.slice(sweep.indexOf("async function deliver("), sweep.indexOf("export async function sweepLifecycleMail("));
@@ -329,13 +336,23 @@ test("the lifecycle sweep: flags first, claim before send, live owners, no agenc
   // sendLifecycle - asserted below, with the sweep importing no sender of its own.
   const claimAt = deliver.indexOf(".insert({ client_domain_id: c.id");
   assert.ok(claimAt >= 0 && claimAt < deliver.indexOf("io.send("), "the claim is written before the send");
+  // 13 Oct 2026, DIY P9: the This week email claims and sends the same way, to the owners and editors who see the client.
+  const week = sweep.slice(sweep.indexOf("async function deliverWeek("), sweep.indexOf("export async function sweepLifecycleMail("));
+  assert.ok(week.indexOf(".insert({ client_domain_id: c.id") >= 0 && week.indexOf(".insert({ client_domain_id: c.id") < week.indexOf("io.send("), "This week's claim is written before the send");
+  assert.match(week, /const to = await weekRecipients\(db, c\.account_id, c\.id\);/, "mailed to week-recipients.ts's list");
+  const team = fs.readFileSync(new URL("./week-recipients.ts", import.meta.url), "utf8");
+  assert.match(team, /\.from\("dashboard_members"\)\.select\("id, email, role"\)\.eq\("account_id", accountId\)\.in\("role", \["owner", "editor"\]\)\.is\("removed_at", null\)/, "owners and editors, live");
+  assert.match(team, /sees\(scopes\.of\.get\(String\(m\.id\)\), clientId\)/, "only members who can see this client");
   assert.doesNotMatch(sweep, /^import [^;]*(?:"resend"|lifecycle-mail|"server-only")/m, "the sweep sends only through the io it is handed");
   const cronIo = fs.readFileSync(new URL("./lifecycle-cron.ts", import.meta.url), "utf8");
-  assert.match(cronIo, /return \{ send: sendLifecycle, origin: siteUrl\(\), price: TRACKED_PRICE \};/, "the live io is Resend, the canonical origin and the real price");
+  // 13 Oct 2026, DIY P9: and the This week content source, read on the server through the app's own readers.
+  assert.match(cronIo, /return \{ send: sendLifecycle, origin: siteUrl\(\), price: TRACKED_PRICE, thisWeek: thisWeekContent \};/, "the live io is Resend, the canonical origin, the real price and the app's readers");
   assert.match(cronIo, /sweepLifecycleMail\(supabaseAdmin\(\), lifecycleIo\(\)\)/);
   assert.match(fs.readFileSync(new URL("../checkout/signup.ts", import.meta.url), "utf8"), /return mailTrialEnding\(db, lifecycleIo\(\), clientId\);/, "trial_will_end sends with the same io");
   assert.match(deliver, /\.from\("dashboard_members"\)\.select\("email"\)\.eq\("account_id", c\.account_id\)\.eq\("role", "owner"\)\.is\("removed_at", null\)/);
-  assert.equal(body.match(/if \(agency\.has\(c\.account_id\)\) continue;/g)?.length, 2, "both loops skip agency mode");
+  // 13 Oct 2026, DIY P9: three - the This week loop skips agency mode too, until Danny answers the agency-mode
+  // email question (HANDOVER item 5).
+  assert.equal(body.match(/if \(agency\.has\(c\.account_id\)\) continue;/g)?.length, 3, "every loop skips agency mode");
   const ending = sweep.slice(sweep.indexOf("export async function mailTrialEnding("));
   assert.ok(ending.indexOf('lifecycleOn(db, "trial_ending")') >= 0 && ending.indexOf('lifecycleOn(db, "trial_ending")') < ending.indexOf("deliver("), "trial_will_end asks the flag first");
   const cron = fs.readFileSync(new URL("../../app/api/cron/track/route.ts", import.meta.url), "utf8");

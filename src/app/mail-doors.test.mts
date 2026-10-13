@@ -210,16 +210,25 @@ const SENDERS: Record<
    * header, which said "only from the signed Stripe webhook": it goes from the
    * setup route, to the signed-in owner or editor who confirmed, once a
    * client. Both copies now name every caller.
+   * 13 Oct 2026, DIY P9 (spec 10 section 7.10): this_week, the Monday "This
+   * week" email, from the same sweep behind CRON_SECRET, to the live owners and
+   * editors who can see the client (week-recipients.ts applies the member
+   * scope), never in agency mode, once per client per Monday (claimed before
+   * the send; 20261014200000's unique index makes the claim exact), and only
+   * when email_this_week_enabled is true, which ships false. Same sender, same
+   * cron, so the reach and evidence below are unchanged; the bound now names it.
    */
   "src/lib/email/lifecycle-mail.ts": {
     reach: "signed by Stripe",
     bound:
       "Mails only a dashboard owner the webhook stored or read back with removed_at null, or the signed-in " +
-      "owner or editor who confirmed setup. Sent only from the Stripe webhook after the signature verifies " +
+      "owner or editor who confirmed setup, or - the Monday This week email - the live owners and editors " +
+      "who can see the client. Sent only from the Stripe webhook after the signature verifies " +
       "and the event id is newly recorded in stripe_events, from a claimed tracking run when it is the " +
       "client's first finished one, from the setup route after its one setup_confirmed row, or from " +
       "the daily cron behind CRON_SECRET once per client per email (a dashboard_events row claimed " +
-      "before the send), and only when its email_<name>_enabled flag is true; every flag starts false.",
+      "before the send; This week's once per client per Monday), and only when its email_<name>_enabled " +
+      "flag is true; every flag starts false.",
     evidence: /if \(!verifyStripeSignature\(raw, signature, secret, nowS\)\) return/,
     where: "src/lib/checkout/webhook.ts",
   },

@@ -56,7 +56,19 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
  * diy_jobs (the night's queue), diy_vendor_status (two rows a night, no client data, but it grows a row pair a
  * day like the rest) and plan_items. Each grows with every client and every day as the tracking tables do.
  */
-const TABLES = ["tracked_questions", "tracked_keywords", "tracked_clusters", "tracking_runs", "tracking_answers", "tracking_serp", "tracking_notes", "diy_reads", "diy_jobs", "diy_vendor_status", "plan_items"];
+/**
+ * 13 Oct 2026, DIY P9 (spec 10 sections 5.8 and 7.10): the wave 2 tables join, each growing with every client as
+ * the rest do - P6's keyword_footprints (a pull a week) and diy_dismissals; P7's opportunities, page_reads and
+ * source_kinds (a global cache of page and domain types, keyed by URL, which grows with every client's citations);
+ * P8's key_pages, page_checks, bot_checks, reopt_examples and top_structures.
+ */
+const TABLES = [
+  "tracked_questions", "tracked_keywords", "tracked_clusters", "tracking_runs", "tracking_answers", "tracking_serp", "tracking_notes",
+  "diy_reads", "diy_jobs", "diy_vendor_status", "plan_items",
+  "keyword_footprints", "diy_dismissals",
+  "opportunities", "page_reads", "source_kinds",
+  "key_pages", "page_checks", "bot_checks", "reopt_examples", "top_structures",
+];
 
 /** Reads across every client that may take one page, and why. Empty: a new entry is an argument, not a fix. */
 const FLEET_UNPAGED: Record<string, string> = {};
@@ -132,8 +144,13 @@ test("the probe reads a chain to its end, and classifies the shapes that are wro
 test("the walk found the reads, so a clean sweep is not a blind one", () => {
   // 9 Oct 2026: 40 selects of the five tables across the tree, 14 of them paged. Later that day
   // (review of 348abbd), with tracked_clusters and tracking_notes walked too: 60 selects, 17 paged.
-  assert.ok(READS.length >= 50, `only ${READS.length} tracking-table selects found - the walk has drifted`);
-  assert.ok(READS.filter((r) => r.bound === "paged").length >= 14, "the paged reads are not being seen");
+  // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 140 selects across the 21 tables, 39 of them paged, measured on the
+  // merged tree; and every wave 2 table has a select the walk sees, so a renamed table is not a clean sweep.
+  assert.ok(READS.length >= 140, `only ${READS.length} tracking-table selects found - the walk has drifted`);
+  assert.ok(READS.filter((r) => r.bound === "paged").length >= 39, "the paged reads are not being seen");
+  for (const t of ["keyword_footprints", "diy_dismissals", "opportunities", "page_reads", "source_kinds", "key_pages", "page_checks", "bot_checks", "reopt_examples", "top_structures"]) {
+    assert.ok(READS.some((r) => r.table === t), `${t} has no select the walk can see`);
+  }
   assert.ok(READS.filter((r) => r.table === "tracked_clusters").length >= 12, "the cluster reads are not being seen");
   for (const at of ["src/lib/tracking/run-health.ts", "src/app/admin/tracking/page.tsx", "src/lib/tracking/runner.ts"]) {
     assert.ok(READS.some((r) => r.at.startsWith(`${at}:`)), `${at} has no tracking read the walk can see`);

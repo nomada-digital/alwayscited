@@ -32,7 +32,16 @@ export default function ThisWeek({
   keep = {},
   empty,
   toast = null,
+  heading = "This week",
+  tally = true,
 }: {
+  /** The footer's "1 of 3 done this week": off where the cards are not this week's pins (day 0). */
+  tally?: boolean;
+  /**
+   * The heading. 13 Oct 2026, DIY P9 (spec 10 section 4.1, day 0): before a client's first check the Overview draws
+   * the same cards as "3 things you can do before your first check", from the open Blocking and Tidy-up items.
+   */
+  heading?: string;
   /** thisWeek(items, today): already cut to this week and ordered. */
   items: readonly PlanItem[];
   counts: { done: number; of: number; open: number };
@@ -55,7 +64,7 @@ export default function ThisWeek({
     <section id="this-week" aria-labelledby="wk-h" style={{ ...SECTION, scrollMarginTop: "16px" }}>
       <PlanStyle />
       <h2 id="wk-h" style={H2}>
-        This week
+        {heading}
       </h2>
       {toast ? (
         <p role="status" style={{ margin: 0, padding: "10px 14px", borderRadius: "12px", background: T.ink, color: T.surface, fontSize: "14px" }}>
@@ -126,7 +135,7 @@ export default function ThisWeek({
       )}
       {items.length || counts.open ? (
         <p style={SMALL}>
-          {items.length ? `${counts.done} of ${counts.of} done this week · ` : ""}
+          {items.length && tally ? `${counts.done} of ${counts.of} done this week · ` : ""}
           <Link href={planPath(slug, { view: "list" })} style={LINK}>
             {`All ${counts.open} open ${counts.open === 1 ? "item" : "items"}`}
           </Link>
