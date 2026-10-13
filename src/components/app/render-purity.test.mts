@@ -231,7 +231,15 @@ const WRITERS: Record<string, { writes: string; pure: Record<string, string>; pa
   },
   "src/lib/tracking/scope.ts": {
     writes: "addScope, dropScope and clearScope write dashboard_member_clients, through team.ts from POST /member.",
-    pure: { readScopes: "the membership read (member.ts)", sees: "a test", visibleClients: "a filter" },
+    // 13 Oct 2026 (merge with the dashboard speed work's render package): the membership read no longer calls
+    // readScopes - it embeds the live scope rows in its one members read (shell.ts readShell), as Settings'
+    // members read does (settings-data.ts), and both group them with scopesFrom.
+    pure: {
+      readScopes: "a read of dashboard_member_clients; team.ts's readTeam and removeMember take it",
+      scopesFrom: "groups live scope rows by member; no I/O (shell.ts, settings-data.ts)",
+      sees: "a test",
+      visibleClients: "a filter",
+    },
     passes: {
       addScope: { by: ["src/lib/tracking/team.ts"], why: "invite and changeRole, from POST /member" },
       clearScope: { by: ["src/lib/tracking/team.ts"], why: "invite and changeRole, from POST /member" },
