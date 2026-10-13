@@ -3,9 +3,9 @@ import { test } from "node:test";
 
 import type { Source } from "../core/evidence.ts";
 import { SOURCES } from "../core/core.sources.ts";
-import { arrange, filterItems, pickCluster, pickGroup, pickStatus, pickView } from "./board.ts";
-import { noteLines, ownerName } from "./card.ts";
-import { planAction, planPath } from "./paths.ts";
+import { DONE_RECENT, arrange, drawnView, filterItems, listSections, pickCluster, pickGroup, pickStatus, pickView } from "./board.ts";
+import { noteLines, ownerName, stateLine } from "./card.ts";
+import { itemPath, planAction, planPath } from "./paths.ts";
 import { AGENCY_OWNER, NOMADA_OWNER, ownerLabel, placementsGroup } from "./placements.ts";
 import { type PlanItem, actLabel, clip, clientPath } from "./types.ts";
 import { ADVICE } from "./why-first.advice.ts";
@@ -221,4 +221,76 @@ test("the note lines: the system's 'No longer applies' only on an item it droppe
   assert.deepEqual(noteLines({ status: "dropped", statusBy: "system", statusAt: at, note: "Ask Sam" }), { note: "Ask Sam", stale: "No longer applies (checked 27 Sep)" });
   assert.deepEqual(noteLines({ status: "todo", statusBy: "owner@example.com", statusAt: at, note: "No longer applies (checked 27 Sep)" }), { note: null, stale: null }, "a live card never says it no longer applies");
   assert.deepEqual(noteLines({ status: "dropped", statusBy: "owner@example.com", statusAt: at, note: "Not for us right now" }), { note: "Not for us right now", stale: null });
+});
+
+// 13 Oct 2026 (Danny): Actions is simple by default - the list at every width, the board an option.
+test("the default view is the list; the board only when asked for, and never for Dropped", () => {
+  assert.equal(drawnView(null, null), "list");
+  assert.equal(drawnView("list", null), "list");
+  assert.equal(drawnView("board", null), "board");
+  assert.equal(drawnView("board", "todo"), "board");
+  assert.equal(drawnView("board", "dropped"), "list", "Dropped is a list");
+});
+
+test("the list's sections: Suggested best first, In progress Doing then To do, Done the newest few, each filtered out by a status", () => {
+  const today = "2026-10-13";
+  const all = [
+    item("s1", { status: "suggested", severity: "gap", kind: "get_onto_page" }),
+    item("s2", { status: "suggested", severity: "blocking", kind: "unblock_crawler" }),
+    item("t1", { status: "todo", statusAt: "2026-10-02T00:00:00Z" }),
+    item("t2", { status: "todo", statusAt: "2026-10-05T00:00:00Z" }),
+    item("g1", { status: "doing", statusAt: "2026-10-01T00:00:00Z", startedOn: "2026-10-01" }),
+    ...Array.from({ length: DONE_RECENT + 2 }, (_, i) => item(`d${i}`, { status: "done", doneOn: `2026-09-${String(10 + i).padStart(2, "0")}` })),
+    item("x1", { status: "dropped" }),
+  ];
+  const none = { kind: null, cluster: null, status: null };
+  const s = listSections(arrange(all, none, today), null);
+  assert.deepEqual(s.suggested!.map((i) => i.id), ["s2", "s1"]);
+  assert.deepEqual(s.progress!.map((i) => i.id), ["g1", "t2", "t1"], "Doing first, then To do, each newest change first");
+  assert.equal(s.done!.of, DONE_RECENT + 2);
+  assert.deepEqual(s.done!.items.map((i) => i.id), ["d6", "d5", "d4", "d3", "d2"], "the most recent few");
+  const done = listSections(arrange(all, { ...none, status: "done" }, today), "done");
+  assert.equal(done.done!.items.length, DONE_RECENT + 2, "status=done lists every one");
+  assert.equal(done.suggested, null);
+  assert.equal(done.progress, null);
+  const todo = listSections(arrange(all, { ...none, status: "todo" }, today), "todo");
+  assert.deepEqual(todo.progress!.map((i) => i.id), ["t2", "t1"]);
+  assert.equal(todo.done, null);
+  const dropped = listSections(arrange(all, { ...none, status: "dropped" }, today), "dropped");
+  assert.deepEqual([dropped.suggested, dropped.progress, dropped.done], [null, null, null], "Dropped is drawn apart");
+  const empty = listSections(arrange([], none, today), null);
+  assert.deepEqual([empty.suggested, empty.progress, empty.done?.items], [[], [], []], "every section drawn, each with its empty line");
+});
+
+// Review, 13 Oct 2026: the list draws only the DONE_RECENT newest Done items, so a link to an older one (Your pages'
+// History, This week's "Open in Actions") carried no anchor that landed. itemPath adds the item's status when it is
+// done or dropped: the list under that status draws the item, so every link's #item- lands on a card.
+test("a link to one item lands on its card: done and dropped carry their status, the open ones the plain list", () => {
+  const today = "2026-10-13";
+  const none = { kind: null, cluster: null, status: null };
+  const all = [
+    item("t1", { status: "todo" }),
+    ...Array.from({ length: DONE_RECENT + 2 }, (_, i) => item(`d${i}`, { status: "done", doneOn: `2026-09-${String(10 + i).padStart(2, "0")}` })),
+    item("x1", { status: "dropped" }),
+  ];
+  assert.equal(itemPath("tallyroo", all[0]!), "/app/tallyroo/plan#item-t1");
+  assert.equal(itemPath("tallyroo", all[1]!, { view: "list" }), "/app/tallyroo/plan?view=list&status=done#item-d0");
+  assert.equal(itemPath("tallyroo", all.at(-1)!), "/app/tallyroo/plan?status=dropped#item-x1");
+  // Every item is drawn on the page its link opens: d0, the oldest Done, is not among the plain list's five.
+  const drawn = (st: "done" | "dropped" | null) => {
+    const a = arrange(all, { ...none, status: st }, today);
+    const s = listSections(a, st);
+    return new Set([...(s.suggested ?? []), ...(s.progress ?? []), ...(s.done?.items ?? []), ...(st === null || st === "dropped" ? a.dropped : [])].map((i) => i.id));
+  };
+  assert.equal(drawn(null).has("d0"), false, "the plain list stops at the five newest");
+  for (const i of all) {
+    const st = new URL(itemPath("tallyroo", i), "https://x.example").searchParams.get("status") as "done" | "dropped" | null;
+    assert.ok(drawn(st).has(i.id), i.id);
+  }
+});
+
+test("In progress says each card's state in words", () => {
+  assert.equal(stateLine({ status: "todo", startedOn: null }), "To do");
+  assert.equal(stateLine({ status: "doing", startedOn: "2026-10-03" }), "Doing since 3 Oct");
+  assert.equal(stateLine({ status: "doing", startedOn: null }), "Doing");
 });

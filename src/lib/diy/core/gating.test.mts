@@ -85,6 +85,9 @@ const SOURCE_FLOOR = 199;
  * (e2e/app/diy-wave2.spec.mts).
  * Raised 13 Oct 2026 (DIY P10, wave 3): 51 - wave 2's 40 and P10's eleven Links pages (profile full, dark and
  * nolinks; gap full and fewcompetitors; targets full, revealed and capped; mentions; check full and nolinks).
+ * 13 Oct 2026 (Danny, Actions simple by default): the list is Actions' default, so diy-plan.spec saves the viewer's
+ * list (plan-list-viewer) beside the viewer's board, and plan-list-full is the page with no view: seven Actions pages,
+ * one more than wave 1 counted. Merged after wave 3: the floor stays 51 - a minimum - and the saved pages are 52.
  */
 const SAVED_FLOOR = 51;
 

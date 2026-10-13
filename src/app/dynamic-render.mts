@@ -203,7 +203,8 @@ export const STATES: Record<string, State> = {
   "/app/[client]/[...rest]": { urls: ["/app/example/nope"] },
   // 13 Oct 2026, DIY P3: Actions (internally the Plan), same session rule. The signed-in page is swept from
   // the HTML e2e/app/diy-plan.spec.mts saves (spec 10 section 6.10 item 2).
-  "/app/[client]/plan": { urls: ["/app/example/plan", "/app/example/plan?view=list&status=done"] },
+  // 13 Oct 2026 (review): the list became the default, so both URLs drew the list; the board is asked for by name.
+  "/app/[client]/plan": { urls: ["/app/example/plan", "/app/example/plan?view=list&status=done", "/app/example/plan?view=board"] },
   // 13 Oct 2026, DIY P6: Google (tracked keywords, gaining ground, the footprint), same session rule. Its signed-in
   // states are swept from the HTML e2e/app/diy-google.spec.mts saves (spec 10 section 6.10 item 2).
   "/app/[client]/google": { urls: ["/app/example/google", "/app/example/google?view=all&intent=commercial"] },

@@ -23,7 +23,7 @@ import { BULK_ID, BULK_MAX, refuseRole } from "@/lib/tracking/stop";
 import { HIDE_DAYS, hiddenUntil } from "@/lib/tracking/upgrade-prompts";
 import { appPath } from "@/lib/app-host";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
-import { loadFootprint } from "@/lib/diy/keywords/data";
+import { loadFootprint, loadWhoRanks } from "@/lib/diy/keywords/data";
 import { trackedSet } from "@/lib/diy/keywords/momentum";
 import { footprintFacts, suggestedClusters } from "@/lib/diy/keywords/setup-suggestions";
 import { readOnlyReason } from "@/lib/diy/keywords/write";
@@ -73,14 +73,17 @@ export default async function ClientClusters({
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
   // 13 Oct 2026, DIY P2: each prompt's origin, for its chip and the "From placements" sub-list (loadOverview reads no origin column).
-  const [data, upgrade, typed, origins, footprint, settings] = await Promise.all([
-    repo.loadOverview(client.id, range, compare),
+  // 13 Oct 2026 (Danny): the cluster keywords whose page 1 the Google page has stored, for each slot's "See who ranks".
+  const loaded = repo.loadOverview(client.id, range, compare);
+  const [data, upgrade, typed, origins, footprint, settings, whoRanks] = await Promise.all([
+    loaded,
     repo.upgradeContext(client.id, email, today),
     repo.orderKeyword(client.id),
     loadPromptOrigins(client.id),
     loadFootprint(client.id),
     // DIY P6: the brand's aliases for the footprint's brand rule; the footprint read carries them in production.
     fixtureMode() ? section("clusters aliases", () => repo.settings(client.id)) : Promise.resolve(null),
+    loaded.then((d) => loadWhoRanks(client.id, range.to, d.serp)),
   ]);
   const subject = { brand: client.brand ?? null, domain: client.domain, aliases: settings?.ok ? settings.value.aliases : footprint.aliases };
   const { latest, gaining } = footprintFacts(footprint, { tracked: data.keywords, subject, today });
@@ -125,6 +128,7 @@ export default async function ClientClusters({
           brand={client.brand ?? client.domain}
           subject={{ brand: client.brand, domain: client.domain }}
           market={client.market}
+          whoRanks={whoRanks}
           engines={engines}
           today={today}
           range={range}

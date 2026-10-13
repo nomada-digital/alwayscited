@@ -1,7 +1,7 @@
 import Link from "@/components/app/AppLink";
 import ChipRow from "@/components/app/ChipRow";
 import { T } from "@/config/tokens";
-import type { Arranged, PlanView } from "@/lib/diy/plan/board";
+import { type Arranged, type PlanView, drawnView } from "@/lib/diy/plan/board";
 import { type PlanKeep, planPath } from "@/lib/diy/plan/paths";
 import { KIND_GROUPS, KIND_GROUP_LABEL, type KindGroup, PLAN_STATUSES, type PlanItem, type PlanStatus, STATUS_LABEL } from "@/lib/diy/plan/types";
 
@@ -9,21 +9,22 @@ import AddTask from "./AddTask";
 import Board, { type CardContext } from "./Board";
 import List from "./List";
 import PlanStyle from "./PlanStyle";
-import { SECTION, SMALL } from "./styles";
+import { LABEL, SECTION, SMALL } from "./styles";
 
 /**
  * The Actions page's body (13 Oct 2026, DIY P3; spec 10 section 4.6):
- * heading, toast, This week pinned at the top, the view switch and filters,
- * the board or the list, Dropped, and Add a task. Everything is a link or a
- * plain form, so it all works with JS off; the filters and the view live in
- * the URL.
+ * heading, toast, This week pinned at the top, the view switch and the
+ * filters, the list or the board, and Add a task. Everything is a link, a
+ * plain form or a `<details>`, so it all works with JS off; the filters and
+ * the view live in the URL.
  *
- * With no view stated the page draws the board, which stacks into the list
- * below 640px, and the Placements group shows only there (`plan-only-sm`):
- * the list is the phone's default (spec: "?view=list is the default under
- * 640 px") without drawing the items twice.
+ * Simple by default (13 Oct 2026, Danny): with no view stated the page draws
+ * the list at every width - This week, then Suggested, In progress (To do and
+ * Doing together), Done and Dropped folded away - with Add a task at the top of
+ * In progress. The kind, cluster and status chips sit behind one "Filter"
+ * disclosure, closed until a filter is on. The four-column board is the
+ * option, `view=board`, with Add a task under it as before.
  */
-
 
 const PILL = (on: boolean) =>
   ({ display: "inline-flex", alignItems: "center", minHeight: "36px", padding: "0 14px", borderRadius: "999px", border: `1px solid ${on ? T.washLine : T.line}`, background: on ? T.wash : T.surface, color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }) as const;
@@ -50,7 +51,7 @@ export default function Actions({
   /** 13 Oct 2026, DIY P9 (spec 10 sections 2.7 and 4.6): the screen's one upgrade slot, U4, drawn by the page; null draws none. */
   upgrade?: React.ReactNode;
   slug: string;
-  /** The view the URL states, or null for the default. */
+  /** The view the URL states, or null for the default (the list). */
   view: PlanView | null;
   keep: PlanKeep;
   filters: { kind: KindGroup | null; cluster: string | null; status: PlanStatus | null };
@@ -79,12 +80,16 @@ export default function Actions({
     }
     return planPath(slug, q, hash);
   };
-  const filtered = Boolean(filters.kind || filters.cluster || filters.status);
+  const on = [filters.kind, filters.cluster, filters.status].filter(Boolean).length;
   const used = new Set(items.map((i) => i.clusterId).filter((c): c is string => c !== null));
   const clusterPills = clusters.filter((c) => used.has(c.id) || c.id === filters.cluster);
-  const list = view === "list" || filters.status === "dropped";
+  const drawn = drawnView(view, filters.status);
+  const list = drawn === "list";
   // The dropped the link opens: under the kind and cluster filters the list keeps (review, 13 Oct 2026).
   const droppedCount = arranged ? arranged.dropped.length : 0;
+  // Add a task sits at the top of In progress when the list draws that section; anywhere else, under the page as before.
+  const progressDrawn = list && arranged !== null && !emptyText && (filters.status === null || filters.status === "todo" || filters.status === "doing");
+  const addTask = (compact: boolean) => <AddTask slug={slug} keep={keep} clusters={clusters} canWrite={ctx.canWrite} reason={ctx.reason} compact={compact} />;
 
   return (
     <div className="app-col" style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
@@ -115,70 +120,93 @@ export default function Actions({
           <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>{emptyText}</p>
           {droppedCount ? (
             <p style={SMALL}>
-              <Link href={href({ view: "list", status: "dropped" })} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>{`Dropped (${droppedCount})`}</Link>
+              <Link href={href({ view: null, status: "dropped" })} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>{`Dropped (${droppedCount})`}</Link>
             </p>
           ) : null}
         </section>
       ) : (
         <>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
-            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 16px" }}>
-              <nav aria-label="View" style={{ display: "flex", gap: "8px" }}>
-                <Link href={href({ view: "board" })} aria-current={view === "board" ? "page" : undefined} style={PILL(view === "board")}>
-                  Board
-                </Link>
-                <Link href={href({ view: "list" })} aria-current={view === "list" ? "page" : undefined} style={PILL(view === "list")}>
-                  List
-                </Link>
-              </nav>
-              {filtered ? (
-                <Link href={href({ kind: null, cluster: null, status: null })} style={{ fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none" }}>
-                  Clear filters
-                </Link>
-              ) : null}
-            </div>
-            <ChipRow label="Kind" current={filters.kind ?? "all"}>
-              <Link href={href({ kind: null })} aria-current={filters.kind === null ? "true" : undefined} style={PILL(filters.kind === null)}>
-                All kinds
+          {/* The Filter disclosure on the left, its chips opening full width under it; the view switch on the right of its row. */}
+          <div className="plan-tools" style={{ position: "relative", minWidth: 0 }}>
+            {/* The view switch first in the DOM (review, 13 Oct 2026, WCAG 2.4.3): after the details, a keyboard reached List and
+                Board only past every open filter chip. Drawn top right, beside the Filter pill, as before. The Board link
+                clears the status: the board draws no Status chips, so a status kept there could be undone only by Clear filters. */}
+            <nav aria-label="View" style={{ position: "absolute", top: 0, right: 0, display: "flex", gap: "8px" }}>
+              <Link href={href({ view: null })} aria-current={list ? "page" : undefined} style={PILL(list)}>
+                List
               </Link>
-              {KIND_GROUPS.map((g) => (
-                <Link key={g} href={href({ kind: g })} aria-current={filters.kind === g ? "true" : undefined} style={PILL(filters.kind === g)}>
-                  {KIND_GROUP_LABEL[g]}
-                </Link>
-              ))}
-            </ChipRow>
-            {clusterPills.length ? (
-              <ChipRow label="Cluster" current={filters.cluster ?? "all"}>
-                <Link href={href({ cluster: null })} aria-current={filters.cluster === null ? "true" : undefined} style={PILL(filters.cluster === null)}>
-                  All clusters
-                </Link>
-                {clusterPills.map((c) => (
-                  <Link key={c.id} href={href({ cluster: c.id })} aria-current={filters.cluster === c.id ? "true" : undefined} style={PILL(filters.cluster === c.id)}>
-                    {c.name}
+              <Link href={href({ view: "board", status: null })} aria-current={list ? undefined : "page"} style={PILL(!list)}>
+                Board
+              </Link>
+            </nav>
+            <details className="plan-filter" open={on > 0} style={{ minWidth: 0 }}>
+              <summary style={{ ...PILL(on > 0), cursor: "pointer", listStyle: "none", width: "fit-content", gap: "6px" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M4 6h16M7 12h10M10 18h4" />
+                </svg>
+                {on ? `Filter (${on} on)` : "Filter"}
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", paddingTop: "10px", minWidth: 0 }}>
+                <span style={LABEL}>Kind</span>
+                <ChipRow label="Kind" current={filters.kind ?? "all"}>
+                  <Link href={href({ kind: null })} aria-current={filters.kind === null ? "true" : undefined} style={PILL(filters.kind === null)}>
+                    All kinds
                   </Link>
-                ))}
-              </ChipRow>
-            ) : null}
-            {list ? (
-              <ChipRow label="Status" current={filters.status ?? "all"}>
-                <Link href={href({ status: null })} aria-current={filters.status === null ? "true" : undefined} style={PILL(filters.status === null)}>
-                  All statuses
-                </Link>
-                {PLAN_STATUSES.map((s) => (
-                  <Link key={s} href={href({ status: s, view: "list" })} aria-current={filters.status === s ? "true" : undefined} style={PILL(filters.status === s)}>
-                    {STATUS_LABEL[s]}
+                  {KIND_GROUPS.map((g) => (
+                    <Link key={g} href={href({ kind: g })} aria-current={filters.kind === g ? "true" : undefined} style={PILL(filters.kind === g)}>
+                      {KIND_GROUP_LABEL[g]}
+                    </Link>
+                  ))}
+                </ChipRow>
+                {clusterPills.length ? (
+                  <>
+                    <span style={LABEL}>Cluster</span>
+                    <ChipRow label="Cluster" current={filters.cluster ?? "all"}>
+                      <Link href={href({ cluster: null })} aria-current={filters.cluster === null ? "true" : undefined} style={PILL(filters.cluster === null)}>
+                        All clusters
+                      </Link>
+                      {clusterPills.map((c) => (
+                        <Link key={c.id} href={href({ cluster: c.id })} aria-current={filters.cluster === c.id ? "true" : undefined} style={PILL(filters.cluster === c.id)}>
+                          {c.name}
+                        </Link>
+                      ))}
+                    </ChipRow>
+                  </>
+                ) : null}
+                {list ? (
+                  <>
+                    <span style={LABEL}>Status</span>
+                    <ChipRow label="Status" current={filters.status ?? "all"}>
+                      <Link href={href({ status: null })} aria-current={filters.status === null ? "true" : undefined} style={PILL(filters.status === null)}>
+                        All statuses
+                      </Link>
+                      {PLAN_STATUSES.map((s) => (
+                        <Link key={s} href={href({ status: s })} aria-current={filters.status === s ? "true" : undefined} style={PILL(filters.status === s)}>
+                          {STATUS_LABEL[s]}
+                        </Link>
+                      ))}
+                    </ChipRow>
+                  </>
+                ) : null}
+                {on ? (
+                  <Link href={href({ kind: null, cluster: null, status: null })} style={{ fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none", width: "fit-content" }}>
+                    Clear filters
                   </Link>
-                ))}
-              </ChipRow>
-            ) : null}
+                ) : null}
+              </div>
+            </details>
           </div>
 
           {notice ? <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>{notice}</p> : null}
-          {list ? <List arranged={arranged} ctx={ctx} dropped={filters.status === "dropped"} after={placements} /> : <Board arranged={arranged} ctx={ctx} after={placements} />}
+          {list ? (
+            <List arranged={arranged} ctx={ctx} status={filters.status} after={placements} add={progressDrawn ? addTask(true) : null} allDone={href({ view: null, status: "done" }, "#col-done")} />
+          ) : (
+            <Board arranged={arranged} ctx={ctx} after={placements} />
+          )}
 
-          {filters.status !== "dropped" ? (
+          {!list ? (
             <p style={SMALL}>
-              <Link href={href({ view: "list", status: "dropped" })} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>
+              <Link href={href({ view: null, status: "dropped" })} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>
                 {`Dropped (${droppedCount})`}
               </Link>
             </p>
@@ -186,7 +214,7 @@ export default function Actions({
         </>
       )}
 
-      <AddTask slug={slug} keep={keep} clusters={clusters} canWrite={ctx.canWrite} reason={ctx.reason} />
+      {progressDrawn ? null : addTask(false)}
     </div>
   );
 }

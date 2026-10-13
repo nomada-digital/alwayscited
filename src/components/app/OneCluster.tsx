@@ -28,6 +28,8 @@ import Fig from "./Fig";
 import ScrollCue from "./ScrollCue";
 import { PagePath } from "./PagePath";
 import { Chip, PositionChip, noChange } from "./Overview";
+import PositionValue, { WhoRanks } from "./PositionValue";
+import { positionSlot } from "@/lib/tracking/position-slot";
 import OriginChip from "./prompts/OriginChip";
 
 /**
@@ -88,7 +90,10 @@ export default function OneCluster({
   mode = "off",
   slug = "",
   placementsPath = null,
+  whoRanks,
 }: {
+  /** 13 Oct 2026 (Danny): the keywords whose page 1 the Google page has stored (keywords/data.ts loadWhoRanks), for "See who ranks". */
+  whoRanks?: ReadonlySet<string>;
   brand: string;
   domain: string;
   market: string;
@@ -181,7 +186,11 @@ export default function OneCluster({
   const kw = c.keyword ?? c.name;
   // DS66 (2 Oct 2026, R173 pass 7): a pending cluster read "Not in the top 20" before its first check; the prompt rows' words.
   // Audit data-7 (8 Oct 2026): "Not in the top 20" only for a keyword read and unranked, not one with no reading in the range.
-  const posLine = c.position === null ? (!c.keyword ? "No keyword yet" : pending ? "Not checked yet" : c.positionRead ? "Not in the top 20" : "No Google reading in this range") : domain;
+  // 13 Oct 2026 (Danny): the slot in words, with the market for a keyword read outside the top 20 (position-slot.ts).
+  const slot = positionSlot(c, market, range);
+  const posLine =
+    slot.kind === "ranked" ? domain : slot.kind === "none" ? "Nothing to check on Google yet" : slot.kind === "out" ? (c.positionOn ? `Checked ${formatDay(c.positionOn)}` : "") : slot.kind === "pending" ? "From the first check" : range.from === range.to ? "No Google reading that day" : "No Google reading in this range";
+  const whoRanksHref = c.keywordId && c.positionRead && whoRanks?.has(c.keywordId) ? `${clustersPath.replace(/\/clusters$/, "")}/google?${new URLSearchParams({ ...rangeQuery, row: c.keywordId })}#kw-h` : null;
   // 8 Oct 2026 (audit data-7): never "same as" for a keyword that left or entered the top 20 (cluster-figures.ts positionMove).
   const upFrom = positionMove(c, detail.positionBeforeOn);
   // 13 Oct 2026, DIY P2: the angle prompts beside the keyword, the placement prompts under them (spec 4.10). Each keeps its
@@ -298,7 +307,7 @@ export default function OneCluster({
       <section aria-label="Summary" className="app-cl-sum" style={{ ...CARD, display: "flex", flexWrap: "wrap" }}>
         {/* R148 pass 7 (1 Oct 2026): before the first answer there is no count to give - "-", not "0 of 0" or "0 of 5". */}
         {fig("Answers naming you", "cl-named", big(c.now.den ? `${c.now.num} of ${c.now.den}` : "-"), <Chip value={c.delta} unit=" pts" none={noChange(c)} vs={vs} />, !c.now.den ? "No answers yet" : periodPair(c.now, c.before, cmp.kind), true)}
-        {fig("Google position", "cl-google", big(c.position === null ? "-" : `#${c.position}`), <PositionChip c={c} vs={vs} />, `${posLine}${upFrom}`)}
+        {fig("Google position", "cl-google", <PositionValue slot={slot} big={{ fontSize: "30px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }} words={{ fontSize: "20px", fontWeight: 700, lineHeight: 1.25, letterSpacing: "-0.01em", color: T.ink }} />, <PositionChip c={c} vs={vs} />, `${posLine}${upFrom}`)}
         {fig("Prompts naming you", "cl-prompts", big(c.now.den ? `${c.promptsNamed.num} of ${c.promptsNamed.den}` : "-"), null, c.now.den ? "Each named you on at least one engine" : `${c.promptsNamed.den} prompts, none checked yet`)}
         {fig(
           "Most reliable engine",
@@ -378,9 +387,10 @@ export default function OneCluster({
             <span style={{ fontSize: "12px", fontWeight: 600, color: T.soft }}>Google keyword</span>
             <span style={{ fontSize: "16px", fontWeight: 700, lineHeight: 1.3 }}>{kw}</span>
             <span style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
-              <span style={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{c.position === null ? "-" : `#${c.position}`}</span>
+              <PositionValue slot={slot} big={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }} words={{ fontSize: "18px", fontWeight: 700, lineHeight: 1.25, letterSpacing: "-0.01em", color: T.ink }} />
               <PositionChip c={c} vs={vs} />
             </span>
+            {whoRanksHref && c.keyword ? <WhoRanks href={whoRanksHref} keyword={c.keyword} /> : null}
             {c.positionBefore !== null && detail.positionBeforeOn ? <span style={{ fontSize: "13px", color: T.soft }}>{`was #${c.positionBefore} on ${formatDay(detail.positionBeforeOn)}`}</span> : null}
             <span style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
               {c.intent ? <span style={{ ...PILL, background: T.wash, color: T.accent }}>{cap(c.intent)}</span> : null}
@@ -389,7 +399,7 @@ export default function OneCluster({
             <span style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: `1px solid ${T.line}` }}>
               <span style={{ fontSize: "12px", color: T.soft, paddingTop: "10px" }}>Your ranking page</span>
               {/* R148 pass 10 (1 Oct 2026): with no keyword nothing was checked, so "None in the top 20" was a reading that never happened. */}
-              <span style={{ fontSize: "13px", fontWeight: 500 }}>{c.keyword === null ? "Once its keyword is added" : pending && c.position === null ? "From the first check" : c.position === null ? "None in the top 20" : domain}</span>
+              <span style={{ fontSize: "13px", fontWeight: 500 }}>{c.keyword === null ? "Once its keyword is added" : pending && c.position === null ? "From the first check" : c.position !== null ? domain : slot.kind === "out" ? "None in the top 20" : slot.short}</span>
             </span>
           </div>
         </div>

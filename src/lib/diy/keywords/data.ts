@@ -224,6 +224,30 @@ export async function loadSerpDetail(clientId: string, window: { from: Day; to: 
   return { urls, tops };
 }
 
+/**
+ * The tracked keywords whose page 1 the Google page can open (13 Oct 2026,
+ * Danny: the cluster slots' "See who ranks"): each with a stored top 20 on
+ * a reading within TOP_LOOKBACK_DAYS of `to`, the window loadSerpDetail's
+ * tops are read over, so the link lands on a row that has its page 1 to
+ * show. Keyword ids only - no `top` is carried here. A failed read is logged
+ * and answers none: the link is left out, never pointed at a page that
+ * cannot show it.
+ */
+export async function loadWhoRanks(clientId: string, to: Day, positions: readonly { run_date: Day; keyword_id: string }[], deps: Deps = {}): Promise<ReadonlySet<string>> {
+  const env = deps.env ?? process.env;
+  if (diyFixtureState(env) !== null) return clientId === FIXTURE_CLIENT ? new Set(fixtureTops(keywordsFixture(env, deps.root), positions, to).keys()) : new Set();
+  try {
+    const db = await admin(deps);
+    const rows = await selectAll<{ keyword_id: string }>((lo, hi) =>
+      db.from("tracking_serp").select("keyword_id").eq("client_domain_id", clientId).gte("run_date", addDays(to, -TOP_LOOKBACK_DAYS)).lte("run_date", to).not("top", "is", null).order("id", { ascending: true }).range(lo, hi),
+    );
+    return new Set(rows.map((r) => r.keyword_id));
+  } catch (err) {
+    console.warn(`[diy] who ranks: ${err instanceof Error ? err.message : String(err)}`);
+    return new Set();
+  }
+}
+
 export async function readUrls(db: SupabaseClient, clientId: string, window: { from: Day; to: Day }): Promise<Map<string, string | null>> {
   const rows = await selectAll<{ run_date: string; keyword_id: string; url: string | null }>((from, to) =>
     db.from("tracking_serp").select("run_date, keyword_id, url").eq("client_domain_id", clientId).gte("run_date", window.from).lte("run_date", window.to).order("id", { ascending: true }).range(from, to),

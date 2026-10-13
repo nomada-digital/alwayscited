@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import { fakeDiyDb, settingsRows } from "../core/fake-diy.mts";
 
-import { FIXTURE_CLIENT, firstReadOn, fixtureTops, fixtureUrls, keywordsFixture, latestTops, loadFootprint, loadOthersPlaced, loadSerpDetail, readJob, readPulls } from "./data.ts";
+import { FIXTURE_CLIENT, firstReadOn, fixtureTops, fixtureUrls, keywordsFixture, latestTops, loadFootprint, loadOthersPlaced, loadSerpDetail, loadWhoRanks, readJob, readPulls } from "./data.ts";
 import { gainingLabel, momentum } from "./momentum.ts";
 import { urlAt } from "./tracked.ts";
 
@@ -144,4 +144,30 @@ test("the first read is promised only from a queued footprint job: its due day, 
   assert.deepEqual(await readJob(f.db, "c2"), { dueOn: "2026-10-14", queued: false, failed: true }, "out of attempts: not queued");
   assert.deepEqual(await readJob(f.db, "c3"), { dueOn: "2026-10-07", queued: false, failed: false });
   assert.deepEqual(await readJob(f.db, "c4"), { dueOn: null, queued: false, failed: false }, "another kind's row is not the footprint's");
+});
+
+// 13 Oct 2026 (Danny): the cluster slots link "See who ranks" only for a keyword whose page 1 the Google page has
+// stored to show - a top 20 on a reading within TOP_LOOKBACK_DAYS of the range's end, one client's rows only.
+test("who ranks: the keywords with a stored top in the window, this client's only; a failed read links none", async () => {
+  const f = fakeDiyDb({
+    tracking_serp: [
+      { id: 1, client_domain_id: "c1", keyword_id: "k1", run_date: "2026-10-12", top: [{ rank: 1, domain: "a.example", url: "https://a.example/" }] },
+      { id: 2, client_domain_id: "c1", keyword_id: "k2", run_date: "2026-10-12", top: null },
+      { id: 3, client_domain_id: "c1", keyword_id: "k3", run_date: "2026-09-01", top: [{ rank: 1, domain: "b.example", url: "https://b.example/" }] },
+      { id: 4, client_domain_id: "c2", keyword_id: "k4", run_date: "2026-10-12", top: [{ rank: 1, domain: "c.example", url: "https://c.example/" }] },
+    ],
+  });
+  assert.deepEqual([...(await loadWhoRanks("c1", "2026-10-13", [], { db: () => f.db, env: {} }))], ["k1"], "no top, too old, or another client's: none");
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    const broken = fakeDiyDb({}, { failSelect: (t) => t === "tracking_serp" });
+    assert.equal((await loadWhoRanks("c1", "2026-10-13", [], { db: () => broken.db, env: {} })).size, 0);
+  } finally {
+    console.warn = warn;
+  }
+  const fixture = await loadWhoRanks(FIXTURE_CLIENT, fx.today, fx.data.serp, { env: env(), root: ROOT });
+  assert.ok(fixture.has("k1"), "the fixture's stored tops");
+  assert.deepEqual([...fixture].sort(), [...fixtureTops(keywordsFixture(env(), ROOT), fx.data.serp, fx.today).keys()].sort());
+  assert.equal((await loadWhoRanks("someone-else", fx.today, fx.data.serp, { env: env(), root: ROOT })).size, 0);
 });

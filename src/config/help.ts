@@ -309,6 +309,17 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           blocks: [
             `Each cluster keyword is checked in Google's organic results for your market, down to position ${SERP_DEPTH}. The position is where your site's best-ranking page sits, and the dashboard shows which page that is.`,
             `Outside the top ${SERP_DEPTH} is a reading, not a gap: the Keywords CSV leaves the position blank, and an average position counts it as #${UNRANKED_AS}, so dropping out makes the average worse rather than better.`,
+            // 13 Oct 2026 (Danny: a keyword we read outside the top 20 showed 3rd in a signed-in browser). The
+            // request, read in dataforseo-request.ts keywordRankRequest that day: Google organic results, location_code
+            // by the client's market, desktop, depth SERP_DEPTH, and nothing else - we send no account, cookie or
+            // history. Only what we send is claimed (review, 13 Oct 2026): how DataForSEO fetches is theirs, so the line
+            // no longer says "not personalised". Only organic results count: engines.ts collectOrganic keeps
+            // type "organic" alone, so a local pack or map place, an ad or an AI Overview link is never a position.
+            // Google's side is Google's own page, "Why your Google Search results differ from others"
+            // (support.google.com/websearch/answer/12412910, no updated date shown, read 13 Oct 2026): results can be
+            // personalised from your activity, signed in, and customised signed out unless turned off; location and
+            // device change results too. position-slot.test.mts holds the request, the runner's read and the organic filter.
+            "Each reading is a Google search for your market, the UK or the US, made on desktop. We send no Google account, cookies or search history with it. Only Google's ordinary (organic) results count: a place in the map results, an ad or a link in an AI Overview is not a position here. A search you make yourself can show you in a different place: Google says your results can be personalised from your own activity, and that location and device change results too.",
           ],
         },
       ],

@@ -19,8 +19,15 @@
  * `plan` and the view rides in the state - plan-board-full, plan-list-placed -
  * because P1's census knows a saved Actions page only by a name starting
  * `plan-` (review, 13 Oct 2026: board-full.html and the rest were never swept).
- * Saved here: plan-board-full, plan-list-full, plan-board-viewer, plan-day0,
- * and with P2's placed states plan-list-placed and plan-list-placed-agency.
+ * Saved here: plan-board-full, plan-list-full, plan-list-viewer,
+ * plan-board-viewer, plan-day0, and with P2's placed states plan-list-placed
+ * and plan-list-placed-agency.
+ *
+ * 13 Oct 2026 (Danny, Actions simple by default): the list is the default at
+ * every width - This week, Suggested, In progress (To do and Doing together,
+ * Add a task at its top), Done, and Dropped folded - with the filters behind
+ * one Filter disclosure and the board at `view=board`. The board's own tests
+ * open `?view=board`; the list's open the page with no view.
  *
  *   npm run build && node --test e2e/app/diy-plan.spec.mts
  */
@@ -48,11 +55,11 @@ type Locator = {
   isDisabled(): Promise<boolean>;
   isVisible(): Promise<boolean>;
   getAttribute(name: string): Promise<string | null>;
-  locator(sel: string): Locator;
+  locator(sel: string, o?: object): Locator;
 };
 type Page = {
   goto(url: string, o?: object): Promise<{ status(): number } | null>;
-  locator(sel: string): Locator;
+  locator(sel: string, o?: object): Locator;
   waitForURL(url: RegExp, o?: object): Promise<void>;
   evaluate<R>(fn: () => R | Promise<R>): Promise<R>;
   addScriptTag(o: { content: string }): Promise<unknown>;
@@ -136,9 +143,9 @@ async function axe(page: Page): Promise<string[]> {
   });
 }
 
-test("board (full) at 1280: This week pinned with 3, the four columns, the readouts, Dropped (3)", async () => {
+test("board (full) at 1280, view=board: This week pinned with 3, the four columns, the readouts, Dropped (3)", async () => {
   as("default");
-  const { ctx, page, status } = await open(PLAN);
+  const { ctx, page, status } = await open(`${PLAN}?view=board`);
   assert.equal(status, 200);
   assert.equal(await page.locator("h1").innerText(), "Actions");
   const week = await page.locator("#this-week").innerText();
@@ -165,32 +172,107 @@ test("board (full) at 1280: This week pinned with 3, the four columns, the reado
   assert.doesNotMatch(await page.locator("#item-pi-14").innerText(), /Owner:/);
   assert.match(await page.locator("#item-pi-18").innerText(), /Owner: You/);
   assert.match(await page.locator("#item-pi-13").innerText(), /Owner: editor@example\.com/);
+  assert.equal(await page.locator('nav[aria-label="View"] a[aria-current="page"]').innerText(), "Board");
   await ctx.close();
-  await save(PLAN, "plan-board", "full");
+  await save(`${PLAN}?view=board`, "plan-board", "full");
 });
 
-test("list (full): grouped by status, Dropped listed when asked, the system's drop dated", async () => {
+test("the list is the default at 1280: This week, Suggested, In progress with Add a task first, Done, Dropped folded, the filters closed", async () => {
+  as("default");
+  const { ctx, page, status } = await open(PLAN);
+  assert.equal(status, 200);
+  assert.equal(await page.locator(".plan-board").count(), 0, "no board unless asked for");
+  assert.equal(await page.locator('nav[aria-label="View"] a[aria-current="page"]').innerText(), "List");
+  assert.match((await page.locator('nav[aria-label="View"] a', { hasText: "Board" }).getAttribute("href"))!, /\/plan\?view=board$/, "the board is remembered by view=board");
+  assert.doesNotMatch((await page.locator('nav[aria-label="View"] a', { hasText: "List" }).getAttribute("href"))!, /view=/, "the list is the page with no view");
+  const heads = await page.evaluate(() => [...document.querySelectorAll("#app-content h2, #app-content h3#new-task-h, details.plan-filter > summary")].map((h) => [...h.childNodes].map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ")));
+  assert.deepEqual(heads.slice(0, 7), ["This week", "Filter", "Suggested 7", "In progress 9", "Add a task", "Done 3", "Dropped 3"]);
+  // The outline (review, 13 Oct 2026): Add a task an h3 inside In progress, Dropped an h2 of its own inside its summary,
+  // so heading navigation reaches it and its cards do not fall under Done.
+  const outline = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("#app-content h2, #app-content h3")].filter((h) => !h.closest("article, .plan-week")).map((h) => `${h.tagName} ${[...h.childNodes].map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ")}`));
+  assert.deepEqual(outline.slice(outline.indexOf("H2 In progress 9"), outline.indexOf("H2 Dropped 3") + 1), ["H2 In progress 9", "H3 Add a task", "H2 Done 3", "H2 Dropped 3"]);
+  assert.equal(await page.evaluate(() => document.querySelector("#col-dropped")?.parentElement?.tagName), "SUMMARY");
+  // The view switch comes before the filters in the DOM (WCAG 2.4.3): a keyboard reaches List and Board before any chip.
+  assert.equal(await page.evaluate(() => !!(document.querySelector('nav[aria-label="View"]')!.compareDocumentPosition(document.querySelector("details.plan-filter")!) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
+  // In progress is To do and Doing together, Doing first, each card saying its state in words.
+  const states = await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="col-progress"] article [data-plan-state]')].map((e) => e.textContent));
+  assert.equal(states.length, 9);
+  assert.deepEqual([...new Set(states.map((t) => t!.replace(/ since .*/, "")))], ["Doing", "To do"], "Doing first, then To do");
+  assert.ok(states.filter((t) => /^Doing since \d+ \w{3}$/.test(t!)).length >= 1, "Doing says since when");
+  // Add a task is the first thing in In progress, under its heading.
+  assert.equal(await page.evaluate(() => document.querySelector('section[aria-labelledby="col-progress"] > h2 + *')?.id), "new-task");
+  assert.equal(await page.locator("#new-task").count(), 1, "one Add a task on the page");
+  // The filters are one disclosure, closed with none on; Dropped is folded, its cards there to open.
+  assert.equal(await page.locator("details.plan-filter").getAttribute("open"), null);
+  assert.equal(await page.locator('nav[aria-label="Kind"]').isVisible(), false);
+  assert.equal(await page.locator("details#dropped").getAttribute("open"), null);
+  assert.equal(await page.locator("details#dropped article").count(), 3);
+  // Done keeps its readouts.
+  const done = await page.locator('section[aria-labelledby="col-done"]').innerText();
+  assert.match(done, /Too early to read: 20 days to go/);
+  assert.match(done, /Verified: Product found with name and description, 12 Sep/);
+  await ctx.close();
+});
+
+test("a filter on opens the Filter disclosure; the board keeps its view through the filters; JS off opens Filter and Dropped by hand", async () => {
+  as("default");
+  const on = await open(`${PLAN}?kind=pages`);
+  assert.notEqual(await on.page.locator("details.plan-filter").getAttribute("open"), null, "open while a filter is on");
+  assert.match(await on.page.locator("details.plan-filter > summary").innerText(), /Filter \(1 on\)/);
+  assert.equal(await on.page.locator('nav[aria-label="Kind"] a[aria-current="true"]').innerText(), "Your pages");
+  assert.ok(await on.page.locator("details.plan-filter a", { hasText: "Clear filters" }).isVisible());
+  await on.ctx.close();
+  const board = await open(`${PLAN}?view=board&kind=pages`);
+  assert.equal(await board.page.locator(".plan-board").count(), 1);
+  const kinds = await board.page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Kind"] a')].map((a) => a.getAttribute("href")));
+  assert.ok(kinds.every((h) => /view=board/.test(h!)), "each filter link keeps the board");
+  await board.ctx.close();
+  // From a list filtered by status, Board opens the whole board: it draws no Status chips to undo one (review, 13 Oct 2026).
+  const todo = await open(`${PLAN}?status=todo&kind=pages`);
+  const toBoard = (await todo.page.locator('nav[aria-label="View"] a', { hasText: "Board" }).getAttribute("href"))!;
+  assert.match(toBoard, /\/plan\?kind=pages&view=board$|\/plan\?view=board&kind=pages$/, "the status is cleared, the kind kept");
+  await todo.ctx.close();
+  // With Filter open, Tab from the page's top reaches List and Board before the first filter chip.
+  const keys = await open(`${PLAN}?kind=pages`);
+  const order = await keys.page.evaluate(() => [...document.querySelectorAll<HTMLElement>('nav[aria-label="View"] a, details.plan-filter > summary, nav[aria-label="Kind"] a')].map((e) => e.textContent!.trim()));
+  assert.deepEqual(order.slice(0, 4), ["List", "Board", "Filter (1 on)", "All kinds"]);
+  await keys.ctx.close();
+  const off = await open(PLAN, 1280, false);
+  await off.page.locator("details.plan-filter > summary").click();
+  assert.equal(await off.page.locator('nav[aria-label="Kind"]').isVisible(), true, "the disclosure opens with no script");
+  await off.page.locator("details#dropped > summary").click();
+  assert.equal(await off.page.locator("#item-pi-21").isVisible(), true, "a dropped card shows once Dropped is opened");
+  await off.ctx.close();
+});
+
+test("list (full): Dropped open when asked for, the system's drop dated; view=list is still the list", async () => {
   as("default");
   const { ctx, page } = await open(`${PLAN}?view=list&status=dropped`, 390);
   const t = await text(page);
   assert.match(t, /Dropped\s*3/);
+  assert.notEqual(await page.locator("details#dropped").getAttribute("open"), null);
   assert.match(t, /No longer applies \(checked 27 Sep\)/);
   assert.match(t, /Bring back to/);
   await ctx.close();
-  await save(`${PLAN}?view=list`, "plan-list", "full");
+  const list = await open(`${PLAN}?view=list`);
+  assert.equal(await list.page.locator(".plan-board").count(), 0);
+  assert.equal(await list.page.locator('section[aria-labelledby="col-progress"]').count(), 1);
+  await list.ctx.close();
+  await save(PLAN, "plan-list", "full");
 });
 
-test("no sideways scroll at 390 and 320, on the board, the list and day 0; the board stacks into the list below 640", async () => {
+test("no sideways scroll at 390 and 320, on the board, the list and day 0; the board stacks into one column below 640", async () => {
   for (const [route, state, diy] of [
+    [`${PLAN}?view=board`, "default", undefined],
     [PLAN, "default", undefined],
-    [`${PLAN}?view=list`, "default", undefined],
+    [`${PLAN}?kind=pages&status=todo`, "default", undefined],
     [PLAN, "new", "day0"],
   ] as const) {
     as(state, { diy });
     for (const width of [390, 320]) {
       const { ctx, page } = await open(route, width);
       assert.equal(await sideways(page), 0, `${route} ${state} at ${width}`);
-      if (route === PLAN && state === "default") {
+      if (route.endsWith("view=board")) {
         const columns = await page.evaluate(() => getComputedStyle(document.querySelector(".plan-board")!).gridTemplateColumns.split(" ").length);
         assert.equal(columns, 1, "one column below 640px: the list");
       }
@@ -203,6 +285,8 @@ test("axe: no serious or critical violation on the board, the list, day 0 and th
   for (const [route, state, o, width] of [
     [PLAN, "default", {}, 1280],
     [PLAN, "default", {}, 390],
+    [`${PLAN}?view=board`, "default", {}, 1280],
+    [`${PLAN}?kind=keywords`, "default", {}, 1280],
     [`${PLAN}?view=list&status=done`, "default", {}, 1280],
     [PLAN, "new", { diy: "day0" }, 1280],
     [PLAN, "default", { role: "viewer" }, 1280],
@@ -217,7 +301,10 @@ test("axe: no serious or critical violation on the board, the list, day 0 and th
 test("every evidence link and every place to act resolves", async () => {
   as("default");
   const { ctx, page } = await open(PLAN);
-  const hrefs = await page.evaluate(() => [...new Set([...document.querySelectorAll<HTMLAnchorElement>("#app-content a[href]")].map((a) => a.getAttribute("href")!))]);
+  const fromBoard = await open(`${PLAN}?view=board`);
+  const boardHrefs = await fromBoard.page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>("#app-content a[href]")].map((a) => a.getAttribute("href")!));
+  await fromBoard.ctx.close();
+  const hrefs = [...new Set([...(await page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>("#app-content a[href]")].map((a) => a.getAttribute("href")!))), ...boardHrefs])];
   await ctx.close();
   const evidence = hrefs.filter((h) => /\/clusters\/c\d|\/cited\?/.test(h));
   assert.ok(evidence.length >= 5, `found ${evidence.length} evidence links`);
@@ -235,12 +322,13 @@ test("JS off: Start, Accept and Not now are each a 303 back with the toast, and 
   await page.waitForURL(/done=started/, { timeout: 15_000 });
   assert.match(page.url(), /#this-week$/);
   assert.match(await page.locator('p[role="status"]').first().innerText(), /^Moved to Doing\.$/);
-  assert.match(await page.locator('section[aria-labelledby="col-doing"]').innerText(), /Let Googlebot crawl tallyroo\.com\/pricing/);
+  assert.match(await page.locator('section[aria-labelledby="col-progress"]').innerText(), /Doing since \d+ \w{3}[\s\S]*Let Googlebot crawl tallyroo\.com\/pricing/);
   // Accept on a board suggestion.
   await page.locator('#item-pi-06 button[value="accept"]').click();
   await page.waitForURL(/done=accepted/, { timeout: 15_000 });
   assert.match(page.url(), /#item-pi-06$/);
-  assert.match(await page.locator('section[aria-labelledby="col-todo"]').innerText(), /Which bookkeeping software is better than/);
+  assert.match(await page.locator("#item-pi-06").innerText(), /^To do[\s\S]*Which bookkeeping software is better than/);
+  assert.equal(await page.locator('section[aria-labelledby="col-progress"] #item-pi-06').count(), 1, "in In progress");
   // Not now hides it for 14 days.
   await page.locator('#item-pi-07 button[value="later"]').click();
   await page.waitForURL(/done=hidden/, { timeout: 15_000 });
@@ -279,8 +367,8 @@ test("JS off: add a task lands in To do as Your task; a blank title is refused b
   await page.waitForURL(/done=added/, { timeout: 15_000 });
   assert.match(page.url(), /view=list/);
   assert.match(await page.locator('p[role="status"]').first().innerText(), /^Task added to To do\.$/);
-  const todo = await page.locator('section[aria-labelledby="col-todo"]').innerText();
-  assert.match(todo, /Your task\s+Email the bookkeeping list about the new guide/);
+  const todo = await page.locator('section[aria-labelledby="col-progress"]').innerText();
+  assert.match(todo, /To do\s+Your task\s+Email the bookkeeping list about the new guide/);
   await ctx.close();
   const body = new FormData();
   body.set("do", "add");
@@ -313,8 +401,9 @@ test("JS off: Save note, Save owner and Drop are each a 303 back with the toast"
   await page.locator('#item-pi-17 button[value="move"]').click();
   await page.waitForURL(/done=dropped/, { timeout: 15_000 });
   assert.match(await page.locator('p[role="status"]').first().innerText(), /^Dropped\. It stays under Dropped if you want it back\.$/);
-  assert.equal(await page.locator("#item-pi-17").count(), 0, "off the board");
-  assert.match(await text(page), /Dropped \(4\)/);
+  assert.equal(await page.locator('section[aria-labelledby="col-progress"] #item-pi-17').count(), 0, "out of In progress");
+  assert.equal(await page.locator("details#dropped #item-pi-17").count(), 1, "under Dropped");
+  assert.match(await page.locator("#col-dropped").innerText(), /Dropped\s*4/);
   await ctx.close();
   // A refusal on each: a note too long, and someone not on the team.
   for (const [k, v, why] of [["note", "x".repeat(201), "note"], ["owner", "stranger@example.com", "owner"]] as const) {
@@ -353,7 +442,8 @@ test("a viewer sees every control disabled with the reason, and the route refuse
   body.set("do", "start");
   const r = await fetch(`${BASE}/api/app/tallyroo/plan?id=pi-01`, { method: "POST", body, redirect: "manual" });
   assert.match(r.headers.get("location")!, /done=refused&why=viewer#item-pi-01$/);
-  await save(PLAN, "plan-board", "viewer");
+  await save(PLAN, "plan-list", "viewer");
+  await save(`${PLAN}?view=board`, "plan-board", "viewer");
 });
 
 test("an ended client is read-only, with its own reason", async () => {
@@ -386,7 +476,7 @@ test("day 0: the actions fill in after the first check", async () => {
 
 test("the gating vocabulary on the board and the list: no banned word, no competitor tool, no causal word", async () => {
   as("default");
-  for (const route of [PLAN, `${PLAN}?view=list`, `${PLAN}?view=list&status=dropped`]) {
+  for (const route of [PLAN, `${PLAN}?view=board`, `${PLAN}?view=list&status=dropped`]) {
     const { ctx, page } = await open(route);
     const t = await text(page);
     await ctx.close();
@@ -407,12 +497,14 @@ test("placed: the list ends with the read-only Placements group, owned by nomada
   assert.match(group, /Read-only\. Each placement is owned by nomada digital\./);
   assert.match(group, /Live since/);
   await ctx.close();
-  const board = await open(PLAN);
-  assert.equal(await board.page.locator('section[aria-labelledby="pl-h"]').isVisible(), false, "not on the board above 640px");
+  const board = await open(`${PLAN}?view=board`);
+  assert.equal(await board.page.locator('section[aria-labelledby="pl-h"]').count(), 0, "not on the board");
   await board.ctx.close();
-  const phone = await open(PLAN, 390);
-  assert.equal(await phone.page.locator('section[aria-labelledby="pl-h"]').isVisible(), true, "the default view below 640px is the list");
-  await phone.ctx.close();
+  for (const width of [1280, 390]) {
+    const list = await open(PLAN, width);
+    assert.equal(await list.page.locator('section[aria-labelledby="pl-h"]').isVisible(), true, `the default view at ${width} is the list`);
+    await list.ctx.close();
+  }
   await save(`${PLAN}?view=list`, "plan-list", "placed");
 });
 

@@ -1,6 +1,6 @@
 import Link from "@/components/app/AppLink";
 import { T } from "@/config/tokens";
-import { clientHref, planAction, planPath, type PlanKeep } from "@/lib/diy/plan/paths";
+import { clientHref, itemPath, planAction, planPath, type PlanKeep } from "@/lib/diy/plan/paths";
 import { EFFORT_LABEL, type PlanItem, SEVERITY_LABEL, STATUS_LABEL, TITLE_COPY, actLabel, clip } from "@/lib/diy/plan/types";
 import { itemChip, whyFirst } from "@/lib/diy/plan/why-first";
 
@@ -79,7 +79,8 @@ export default function ThisWeek({
             const chip = itemChip(item);
             const lead = whyFirst(item.severity);
             const fact = item.why[0];
-            const act = item.href ? clientHref(slug, item.href) : planPath(slug, {}, `#item-${item.id}`);
+            // A done item past the list's five newest is drawn only under status=done (review, 13 Oct 2026: itemPath).
+            const act = item.href ? clientHref(slug, item.href) : itemPath(slug, item);
             const label = item.href ? actLabel(item.kind) : "Open in Actions";
             const title = `wk-${item.id}-t`;
             return (

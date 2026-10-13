@@ -91,6 +91,9 @@ const KEYS: Record<string, Record<string, string>> = {
   // 13 Oct 2026, DIY P5 (spec 10 sections 3.5 and 4.6): Actions, internally the Plan (P3). board.ts's pick* functions
   // hold view, status and kind to their lists; cluster must be one of this client's live clusters; done and why are
   // the plan route's codes, drawn through planToast's fixed words.
+  // 13 Oct 2026 (Danny, Actions simple by default): the same six keys and bounds; what `view` means moved. None stated
+  // is now the list at every width (spec 4.6 had the board on desktop), `view=board` the four columns, and `view=list`
+  // still the list (board.ts drawnView). The Filter disclosure opens from the filters themselves - no new key.
   "/plan": {
     view: 'pickView(one("view"))',
     status: 'pickStatus(one("status"))',

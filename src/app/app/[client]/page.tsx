@@ -33,7 +33,7 @@ import { promptsAdded, workMarks } from "@/lib/diy/shell/work";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import WhereYouStand from "@/components/app/WhereYouStand";
 import type { Watched } from "@/lib/diy/changes/diff";
-import { loadFootprint } from "@/lib/diy/keywords/data";
+import { loadFootprint, loadWhoRanks } from "@/lib/diy/keywords/data";
 import { citedFacts } from "@/lib/diy/opportunities/cited";
 import { oppDetailPath } from "@/lib/diy/opportunities/paths";
 import { loadOppWorld } from "@/lib/diy/opportunities/world";
@@ -91,8 +91,10 @@ export default async function ClientDashboard({
   // 13 Oct 2026, DIY P5 (spec 10 section 7.6): the Plan's items for This week, the work log and the chart's work markers,
   // and P2's prompt origins for the basis line and the log. Each is its own section: a failed plan read says so where it
   // would have drawn, and origins never throw (an empty map draws no basis line).
-  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead, plan, origins] = await Promise.all([
-    repo.loadOverview(client.id, range, compare),
+  // 13 Oct 2026 (Danny): the cluster keywords whose page 1 the Google page has stored, for each card's "See who ranks".
+  const loaded = repo.loadOverview(client.id, range, compare);
+  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead, plan, origins, whoRanks] = await Promise.all([
+    loaded,
     repo.upgradeContext(client.id, email, today),
     repo.placements(client.id),
     needsSetup(client) || fixtureMode() ? repo.setupConfirmed(client.id) : null,
@@ -106,6 +108,7 @@ export default async function ClientDashboard({
         ),
     section("overview plan", () => readPlan(() => supabaseAdmin(), client.id)),
     loadPromptOrigins(client.id),
+    loaded.then((d) => loadWhoRanks(client.id, range.to, d.serp)),
   ]);
   // DS10: a member who left setup before confirming gets back to it from here. Only a client that needs setup pays the read.
   const outstanding = setupOutstanding(client, confirmed, fixtureMode());
@@ -293,6 +296,7 @@ export default async function ClientDashboard({
           workLog={logNode}
           origins={originKinds(origins)}
           marks={marks}
+          whoRanks={whoRanks}
         />
       </div>
     </div>

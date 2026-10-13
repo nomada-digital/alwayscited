@@ -21,6 +21,18 @@ export function planPath(slug: string, keep: PlanKeep = {}, hash = ""): string {
 }
 
 /**
+ * One item's card on the Actions page (review, 13 Oct 2026). The list draws only
+ * the DONE_RECENT newest Done items and folds Dropped away, so a link to an item
+ * that is done or dropped carries its status - the list then draws every Done
+ * item, or opens Dropped - and its `#item-` anchor always lands. Your pages'
+ * History and This week's "Open in Actions" link through here.
+ */
+export function itemPath(slug: string, item: { id: string; status: string }, keep: PlanKeep = {}): string {
+  const closed = item.status === "done" || item.status === "dropped";
+  return planPath(slug, { ...keep, ...(closed ? { status: item.status } : {}) }, `#item-${encodeURIComponent(item.id)}`);
+}
+
+/**
  * Where every Actions form posts: the plan route, with the item it is about
  * (`id`) and the page state it returns to. `back` is "overview" from the
  * Overview's This week; `at` lands back on This week. The button pressed

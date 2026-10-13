@@ -4,7 +4,7 @@ import { T } from "@/config/tokens";
 import type { GradeChip } from "@/lib/diy/core/evidence";
 import { clientHref, planAction, type PlanKeep } from "@/lib/diy/plan/paths";
 import type { Readout } from "@/lib/diy/plan/readout";
-import { type Member, noteLines, ownerName } from "@/lib/diy/plan/card";
+import { type Member, noteLines, ownerName, stateLine } from "@/lib/diy/plan/card";
 import { movesFrom } from "@/lib/diy/plan/transitions";
 import { ASKS_CHANGED, CHANGED, CHANGED_LABEL, EFFORT_LABEL, type PlanItem, SEVERITY_LABEL, STATUS_LABEL, TITLE_COPY, actLabel, clip } from "@/lib/diy/plan/types";
 import { itemChip, whyFirst } from "@/lib/diy/plan/why-first";
@@ -65,6 +65,7 @@ export default function PlanCard({
   readout,
   first = false,
   monday,
+  state = false,
 }: {
   item: PlanItem;
   slug: string;
@@ -83,6 +84,11 @@ export default function PlanCard({
   first?: boolean;
   /** This week's Monday (UTC): "New since Monday" is drawn only on an item pinned to it. */
   monday: string;
+  /**
+   * Say the status in words, first on the card (13 Oct 2026, Danny): the list's In progress holds To do and Doing
+   * together, so each card says which - "To do", or "Doing since 3 Oct" with the day it was started.
+   */
+  state?: boolean;
 }) {
   const uid = `p-${item.id}`;
   const chip = itemChip(item);
@@ -95,10 +101,12 @@ export default function PlanCard({
   const owner = ownerName(item.ownerEmail, viewer, members);
   const lines = noteLines(item);
   const fresh = item.newSinceMonday && item.weekOf === monday;
+  const stateWords = state ? stateLine(item) : null;
 
   return (
     <article id={`item-${item.id}`} aria-labelledby={`${uid}-t`} data-plan-kind={item.kind} className="plan-card" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "10px", minWidth: 0, scrollMarginTop: "16px" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "flex-start" }}>
+        {stateWords ? <span data-plan-state={item.status} style={{ ...CHIP, background: item.status === "doing" ? T.ink : T.surface, color: item.status === "doing" ? T.surface : T.ink, border: `1px solid ${item.status === "doing" ? T.ink : T.line}` }}>{stateWords}</span> : null}
         <span style={SEVERITY_CHIP[item.severity]}>{SEVERITY_LABEL[item.severity]}</span>
         {fresh ? <span style={{ ...CHIP, background: T.badBg, color: T.badFg }}>New since Monday</span> : null}
         {clusterName ? <span style={{ ...CHIP, background: T.chip, color: T.ink, whiteSpace: "normal" }}>{clusterName}</span> : null}
@@ -133,7 +141,7 @@ export default function PlanCard({
       <p style={{ ...SMALL, display: "flex", flexWrap: "wrap", gap: "4px 14px" }}>
         {item.effort ? <span>{`Effort: ${EFFORT_LABEL[item.effort]} (our estimate)`}</span> : null}
         {owner ? <span>{`Owner: ${owner}`}</span> : null}
-        {item.status === "doing" && item.startedOn ? <span>{`Started ${formatDay(item.startedOn)}`}</span> : null}
+        {item.status === "doing" && item.startedOn && !stateWords ? <span>{`Started ${formatDay(item.startedOn)}`}</span> : null}
       </p>
       {item.href ? (
         <p style={{ margin: 0, fontSize: "13px" }}>
