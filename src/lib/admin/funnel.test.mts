@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { FUNNEL_SELECTS, FUNNEL_STEPS, funnelDays, funnelTotals, marketOf, walkthroughMarket } from "./funnel.ts";
+import { FUNNEL_SELECTS, FUNNEL_STEPS, funnelDays, funnelTotals, marketOf } from "./funnel.ts";
 
 const rows = {
   scans: [
@@ -64,24 +64,8 @@ test("the page's reads ask for no personal column, and the page reads only throu
   }
   const page = await readFile(new URL("../../app/admin/funnel/page.tsx", import.meta.url), "utf8");
   const selects = [...page.matchAll(/\.select\(([^)]*)\)/g)].map((m) => m[1]);
-  // Four since 13 Oct 2026, three tables: walkthrough_requests is read again
-  // through walkthroughsBefore only when its market column is missing (a
-  // deploy before 20261014000000_walkthrough_fields.sql). Was three.
-  assert.equal(selects.length, 4, "the page makes exactly four reads, one of them the pre-migration walkthrough fallback");
+  assert.equal(selects.length, 3, "the page makes exactly three reads");
   for (const s of selects) assert.match(s, /^FUNNEL_SELECTS\.\w+$/, `a read not through FUNNEL_SELECTS: ${s}`);
-  assert.equal(new Set(selects).size, 4, "each read is a different select");
-});
-
-// 13 Oct 2026: an ask carries its own market (Danny made it required), so a
-// tier page's ask - no scan - counts under it; an older ask falls back to its scan's.
-test("a walkthrough ask counts under its own market, else its scan's, else neither", () => {
-  assert.equal(walkthroughMarket({ market: "US", scans: null }), "US", "a tier page's ask");
-  assert.equal(walkthroughMarket({ market: "UK", scans: { market: "US" } }), "UK", "its own market is what the person picked");
-  assert.equal(walkthroughMarket({ market: null, scans: { market: "US" } }), "US", "an older ask, by its scan");
-  assert.equal(walkthroughMarket({ scans: [{ market: "UK" }] }), "UK", "the pre-migration read has no market key, and an embed may be an array");
-  assert.equal(walkthroughMarket({ market: null, scans: null }), null, "an older tier page ask counts under neither");
-  const days = funnelDays({ scans: [], walkthroughs: [{ created_at: "2026-10-14T09:00:00Z", market: walkthroughMarket({ market: "US", scans: null }) }], orders: [] }, "2026-10-01");
-  assert.deepEqual(days[0].counts.walkthrough, { US: 1, UK: 0 });
 });
 
 test("market spellings: orders store lower case, scans upper", () => {

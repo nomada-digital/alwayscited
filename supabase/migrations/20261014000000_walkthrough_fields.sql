@@ -11,9 +11,12 @@
 --
 -- Harmless before or after the deploy. Until this is applied, a write naming
 -- the columns is refused and src/lib/scan/walkthrough-store.ts writes the ask
--- again without them, so nothing is lost: the alert to Luke and Danny carries
--- all three either way. /admin/funnel reads the ask's market and falls back
--- to its scan's while the column is missing.
+-- again without them, and the alert to Luke and Danny carries all three
+-- either way. But if that alert also fails in the window, the row survives
+-- for the notified_at-is-null recovery without the three, which then exist
+-- nowhere: apply this with the deploy or before it (13 Oct 2026 review).
+-- /admin/funnel does not read these; it counts an ask under its scan's market,
+-- as before.
 --
 --   name      the person's name as typed, whitespace tidied, at most 120
 --             characters (WALKTHROUGH_LIMITS.name).

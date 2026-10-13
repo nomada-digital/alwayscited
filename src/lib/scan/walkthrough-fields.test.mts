@@ -45,7 +45,13 @@ test("the markets are the scan's two, US first", () => {
 test("a name is required, tidied, and bounded", () => {
   assert.deepEqual(readWalkthroughName("  Jane   Smith \n"), { ok: true, value: "Jane Smith" });
   assert.deepEqual(readWalkthroughName("Ann\u0000Lee"), { ok: true, value: "Ann Lee" }, "a control character is a space");
-  for (const empty of [undefined, null, "", "   ", "\n\t", 42, ["Jane"]]) {
+  assert.deepEqual(readWalkthroughName("Ann\u200bLee\u202e"), { ok: true, value: "Ann Lee" }, "a format character is a space");
+  assert.deepEqual(readWalkthroughName("\u0645\u0647\u200c\u0631\u0627\u0646"), { ok: true, value: "\u0645\u0647\u200c\u0631\u0627\u0646" }, "a Persian name keeps its non-joiner");
+  assert.deepEqual(readWalkthroughName("\u674e"), { ok: true, value: "\u674e" }, "one letter in any script is a name");
+  assert.deepEqual(readWalkthroughName("R2"), { ok: true, value: "R2" });
+  // 13 Oct 2026 (review): invisible characters and punctuation alone are not
+  // a name - \s does not match U+200B, so a lone zero-width space passed.
+  for (const empty of [undefined, null, "", "   ", "\n\t", 42, ["Jane"], "\u200b", "\u200b \u200b", "\ufeff", "\u202e\u2066", "\u200d", "\u0085", "-", ". ."]) {
     const r = readWalkthroughName(empty);
     assert.equal(r.ok, false, String(empty));
     if (!r.ok) assert.equal(r.error, "bad_name");
@@ -123,6 +129,21 @@ test("the form asks for all four, required, labelled, each error tied to its fie
   assert.match(form, /WALKTHROUGH_MARKETS\.map/, "the markets come from the shared list");
   // The JSON posts carry all three, both calls.
   assert.equal((form.match(/JSON\.stringify\(\{ name, email, category, market, kind/g) ?? []).length, 2, "both posts send name, category and market");
+
+  // 13 Oct 2026 (review): focus only announces a field when it moves, so
+  // Enter pressed in the wrong field was silent. Every field error is an
+  // alert, as wt-error was, remounted per refusal; focus moves after the
+  // render; each market radio carries the error as well as its group; and
+  // the browser's own `required` runs until script takes over.
+  const src = code(form);
+  assert.match(src, /<p key=\{`\$\{f\}-\$\{refusal\?\.n \?\? 0\}`\} id=\{`wt-\$\{f\}-error`\} role="alert"/, "a field error is an alert, remounted on each refusal");
+  for (const f of ["name", "email", "category", "market"]) assert.ok(src.includes(`{errorLine("${f}")}`), `${f}'s error is drawn through errorLine`);
+  assert.doesNotMatch(src, /<p id="wt-(name|email|category|market)-error"/, "no field error drawn outside errorLine, without its alert");
+  assert.match(src, /useEffect\(\(\) => \{\s*if \(refusal\) document\.getElementById\(focusId\(refusal\.first\)\)\?\.focus\(\);\s*\}, \[refusal\]\)/, "focus moves in an effect, after the error is rendered");
+  assert.doesNotMatch(src.slice(src.indexOf("function refuse("), src.indexOf("const errorLine")), /\.focus\(/, "refuse() itself does not move focus before the render");
+  assert.equal((src.match(/aria-describedby=\{errors\.market \? "wt-market-error" : undefined\}/g) ?? []).length, 2, "the market error is on the group and on each radio");
+  assert.match(src, /<form id="walkthrough"[^>]*\bnoValidate=\{hydrated\}/, "noValidate only once script runs");
+  assert.doesNotMatch(src, /\bnoValidate>/, "never a bare noValidate in the server HTML");
 });
 
 test("a write refused for the new columns goes again without them; any other error is left alone", async () => {

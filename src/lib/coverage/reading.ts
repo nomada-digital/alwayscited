@@ -76,6 +76,13 @@ export type CampaignReading = {
      * walkthrough route 404s on it.
      */
     scanToken: string | null;
+    /**
+     * The market the visitor chose for this reading, as the scan row stores
+     * it, or null. Not `campaign.market`, which reads a missing value as "UK":
+     * the walkthrough form preselects this, and a guess would let a required
+     * field look answered when nobody answered it (13 Oct 2026).
+     */
+    market: string | null;
     status: string;
     step: string | null;
     error: string | null;
@@ -149,7 +156,7 @@ export async function readCampaign(token: string): Promise<CampaignReading | nul
    */
   const { data: scans, error: scansErr } = await db
     .from("scans")
-    .select("id, public_token, status, step, error, created_at, completed_at, engines, engines_answered")
+    .select("id, public_token, status, step, error, created_at, completed_at, engines, engines_answered, market")
     .eq("campaign_id", campaignId)
     .order("created_at", { ascending: false });
   if (scansErr) throw new Error("could not read the readings for a campaign: " + scansErr.message);
@@ -193,6 +200,7 @@ export async function readCampaign(token: string): Promise<CampaignReading | nul
   base.reading = {
     id: readingId,
     scanToken: (current.public_token as string | null) ?? null,
+    market: (current.market as string | null) ?? null,
     status: current.status as string,
     step: (current.step as string | null) ?? null,
     error: (current.error as string | null) ?? null,

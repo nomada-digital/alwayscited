@@ -20,7 +20,8 @@
  * walkthrough form's required name, category and market on a tier page. Both
  * read-only like the rest: (11) presses Send with the fields empty, which the
  * form refuses before any request, and asserts that none went out. Screens of
- * both land in test-results/site/ (not committed).
+ * both land in test-results/site/ (not committed). (11) also presses Enter on
+ * a personal address, which the form refuses before any request too.
  */
 import { mkdirSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -30,6 +31,7 @@ import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 
 import { trackOffer } from "../../src/components/scan/track-offer.ts";
+import { WORK_EMAIL_REFUSAL } from "../../src/lib/work-email.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..", "..");
 const require = createRequire(path.join(os.homedir(), "code/.parity/package.json"));
@@ -45,6 +47,7 @@ type Locator = {
   boundingBox(): Promise<{ height: number; width: number; x: number; y: number } | null>;
   textContent(): Promise<string | null>;
   fill(v: string): Promise<void>;
+  press(key: string): Promise<void>;
   selectOption(v: string): Promise<unknown>;
   check(): Promise<void>;
   screenshot(o: { path: string }): Promise<unknown>;
@@ -517,6 +520,15 @@ for (const width of [1280, 390]) {
         assert.equal(await group.getAttribute("aria-invalid"), "true", "the market group invalid");
         assert.equal(await group.getAttribute("aria-describedby"), "wt-market-error");
         assert.equal((await page.locator("#wt-market-error").first().textContent())?.trim(), "Pick your market.");
+        for (const m of ["US", "UK"]) {
+          const radio = page.locator(`#wt-market-${m}`).first();
+          assert.equal(await radio.getAttribute("aria-describedby"), "wt-market-error", `the ${m} radio described by the error, where focus lands`);
+        }
+        // 13 Oct 2026 (review): every field error is an alert, so it is heard
+        // whether or not focus moves.
+        for (const f of ["name", "email", "category", "market"]) {
+          assert.equal(await page.locator(`#wt-${f}-error`).first().getAttribute("role"), "alert", `${f}'s error is announced`);
+        }
         assert.equal(await page.evaluate(() => document.activeElement?.id), "wt-name", "focus on the first wrong field");
         assert.ok((await overflow(page)) <= 0, "no sideways scroll with the errors");
         await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}-refused.png`) });
@@ -531,6 +543,25 @@ for (const width of [1280, 390]) {
         assert.equal((await page.locator("#wt-email-error").first().textContent())?.trim(), "Enter your work email.", "the email error stays");
         assert.deepEqual(posted, [], "still nothing sent");
         await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}-filled.png`) });
+
+        // The review's case (13 Oct 2026): a personal address and Enter in the
+        // email box. Focus does not move, so only the alert can say why; a
+        // second Enter remounts it, so it is said again.
+        const email = page.locator("#wt-email").first();
+        await email.fill("jane@gmail.com");
+        assert.equal(await page.locator("#wt-email-error").count(), 0, "the email error clears as it is typed");
+        await email.press("Enter");
+        await page.waitForTimeout(200);
+        const refused = page.locator("#wt-email-error").first();
+        assert.equal((await refused.textContent())?.trim(), WORK_EMAIL_REFUSAL, "a personal address is refused at the field");
+        assert.equal(await refused.getAttribute("role"), "alert", "and the refusal is announced");
+        assert.equal(await page.evaluate(() => document.activeElement?.id), "wt-email", "focus stays in the email box");
+        await refused.evaluate((e) => e.setAttribute("data-heard", "1"));
+        await email.press("Enter");
+        await page.waitForTimeout(200);
+        assert.equal(await page.locator("#wt-email-error").first().getAttribute("data-heard"), null, "a second refusal is a new alert, announced again");
+        assert.deepEqual(posted, [], "a personal address is never sent");
+        await form.screenshot({ path: path.join(SHOTS, `walkthrough-tier-${width}-personal.png`) });
 
         // axe on the form: labels, names, ARIA and contrast, in its refused state.
         await page.addScriptTag({ content: AXE });

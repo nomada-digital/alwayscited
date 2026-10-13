@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { SCAN_LIMITS, WALKTHROUGH_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
@@ -64,6 +64,16 @@ import { btn, field, label } from "./screens";
  * did, and the route's outcome word names the field it refused. `market`
  * preselects the scan's own market, which the visitor chose when they ran it;
  * the tier pages have no such choice to go on, so nothing is preselected there.
+ *
+ * Three things from the 13 Oct 2026 review. Each field error is role="alert",
+ * as wt-error was before it, because focus only announces a field when it
+ * moves: Enter pressed in the field that is wrong left it where it was and the
+ * refusal was silent. A refusal remounts the errors (keyed on its count) so a
+ * second one is heard too. Focus moves in an effect after the render, as
+ * ContactForm does, so aria-invalid and aria-describedby are on the field when
+ * it lands. And noValidate goes on only once script runs: without it the
+ * browser's own `required` stops an empty field before the post, rather than
+ * the route sending back one field per round trip with everything typed lost.
  */
 type Errors = Partial<Record<WalkthroughField, string>>;
 
@@ -80,6 +90,9 @@ const FIELD_ORDER: WalkthroughField[] = ["name", "email", "category", "market"];
 /** The element a field's error sends focus to; the market's is its first radio. */
 const focusId = (f: WalkthroughField) => (f === "market" ? `wt-market-${WALKTHROUGH_MARKETS[0]}` : `wt-${f}`);
 
+/** False while the server renders and while it hydrates, true once script runs. */
+const noSubscribe = () => () => {};
+
 const fieldError: React.CSSProperties = { fontSize: "13px", lineHeight: 1.5, color: T.badFg, margin: "6px 0 0" };
 
 export default function WalkthroughForm(p: { token: string; back?: string; outcome?: WalkthroughOutcome | null; market?: string | null } | { from: string }) {
@@ -87,8 +100,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   // R151 (3 Oct 2026): the scan version posts without script as well, and the
   // route's 303 brings back only `outcome`, which the page passes in.
   const outcome = "token" in p ? (p.outcome ?? null) : null;
-  const [mounted, setMounted] = useState(token !== null);
-  useEffect(() => setMounted(true), []);
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const [kind, setKind] = useState<"video" | "demo">(outcome === "demo" ? "demo" : "video");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -99,6 +111,11 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   });
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<Errors>((outcome && OUTCOME_ERRORS[outcome]) ?? {});
+  /** The latest refusal: `n` counts them, so the same field refused twice still moves focus and is announced. */
+  const [refusal, setRefusal] = useState<{ n: number; first: WalkthroughField } | null>(null);
+  useEffect(() => {
+    if (refusal) document.getElementById(focusId(refusal.first))?.focus();
+  }, [refusal]);
   const [err, setErr] = useState(outcome === "failed" ? "That did not go through. Please try again." : "");
   const [done, setDone] = useState(outcome === "video" ? "Thanks. Luke will send your Loom." : outcome === "demo" ? "Thanks. Danny will be in touch." : "");
 
@@ -121,8 +138,16 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   function refuse(next: Errors) {
     setErrors(next);
     const first = FIELD_ORDER.find((f) => next[f]);
-    if (first) document.getElementById(focusId(first))?.focus();
+    if (first) setRefusal((r) => ({ n: (r?.n ?? 0) + 1, first }));
   }
+
+  /** A field's error, under it; announced when it appears, and again on each refusal. */
+  const errorLine = (f: WalkthroughField) =>
+    errors[f] ? (
+      <p key={`${f}-${refusal?.n ?? 0}`} id={`wt-${f}-error`} role="alert" style={fieldError}>
+        {errors[f]}
+      </p>
+    ) : null;
 
   /** A field's error clears as soon as it is changed. */
   function edited(f: WalkthroughField) {
@@ -177,7 +202,9 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
     }
   }
 
-  if (!mounted) return null;
+  // The scan version renders on the server so it can post without script; the
+  // tier pages' version needs script to post at all, so it waits for it.
+  if (!token && !hydrated) return null;
 
   if (done) {
     return (
@@ -218,7 +245,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   }
 
   return (
-    <form id="walkthrough" action={token ? "/api/scan/" + token + "/walkthrough" : undefined} method="post" onSubmit={submit} noValidate>
+    <form id="walkthrough" action={token ? "/api/scan/" + token + "/walkthrough" : undefined} method="post" onSubmit={submit} noValidate={hydrated}>
       <input type="hidden" id="wt-kind" name="kind" value={kind} />
       {"token" in p && p.back ? <input type="hidden" id="wt-back" name="back" value={p.back} /> : null}
       <div role="radiogroup" aria-label="How would you like to see it" className="wt-toggle">
@@ -261,11 +288,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         aria-invalid={Boolean(errors.name)}
         aria-describedby={errors.name ? "wt-name-error" : undefined}
       />
-      {errors.name ? (
-        <p id="wt-name-error" style={fieldError}>
-          {errors.name}
-        </p>
-      ) : null}
+      {errorLine("name")}
       <label htmlFor="wt-email" style={{ ...label, marginTop: "14px", display: "block" }}>
         Work email
       </label>
@@ -286,11 +309,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         aria-invalid={Boolean(errors.email)}
         aria-describedby={errors.email ? "wt-email-error" : undefined}
       />
-      {errors.email ? (
-        <p id="wt-email-error" style={fieldError}>
-          {errors.email}
-        </p>
-      ) : null}
+      {errorLine("email")}
       <label htmlFor="wt-category" style={{ ...label, marginTop: "14px", display: "block" }}>
         Category
       </label>
@@ -314,11 +333,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
           </option>
         ))}
       </select>
-      {errors.category ? (
-        <p id="wt-category-error" style={fieldError}>
-          {errors.category}
-        </p>
-      ) : null}
+      {errorLine("category")}
       <fieldset
         role="radiogroup"
         aria-labelledby="wt-market-label"
@@ -362,6 +377,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
                   setMarket(m);
                   edited("market");
                 }}
+                aria-describedby={errors.market ? "wt-market-error" : undefined}
                 style={{ width: "18px", height: "18px", margin: 0, accentColor: T.accent, flexShrink: 0 }}
               />
               {m}
@@ -369,11 +385,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
           ))}
         </div>
       </fieldset>
-      {errors.market ? (
-        <p id="wt-market-error" style={fieldError}>
-          {errors.market}
-        </p>
-      ) : null}
+      {errorLine("market")}
       {err ? (
         <p id="wt-error" role="alert" style={{ fontSize: "13px", color: T.badFg, marginTop: "8px" }}>
           {err}

@@ -55,10 +55,24 @@ type Read<T> = { ok: true; value: T } | { ok: false; error: "bad_name" | "bad_ca
  * A name as typed: control characters out, runs of whitespace one space, ends
  * trimmed. Refused when nothing is left, or over the bound - it goes into the
  * alert we send ourselves and into the row.
+ *
+ * Invisible format characters (Unicode Cf: zero-width space, the bidi
+ * overrides, the byte-order mark) go too, and a name must hold at least one
+ * letter or digit (13 Oct 2026, review: a lone U+200B is not whitespace to
+ * `\s`, so it survived the trim and a "required" name reached the row and the
+ * alert blank). The zero-width joiner and non-joiner stay, because some
+ * scripts - Persian, the Indic ones - spell names with them.
  */
+const FORMAT_CHARS = /\p{Cf}/gu;
+const KEEP_FORMAT = new Set(["\u200c", "\u200d"]);
+
 export function readWalkthroughName(raw: unknown): Read<string> {
-  const name = (typeof raw === "string" ? raw : "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-  if (!name) return { ok: false, error: "bad_name", message: WALKTHROUGH_REFUSAL.name };
+  const name = (typeof raw === "string" ? raw : "")
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+    .replace(FORMAT_CHARS, (c) => (KEEP_FORMAT.has(c) ? c : " "))
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!/[\p{L}\p{N}]/u.test(name)) return { ok: false, error: "bad_name", message: WALKTHROUGH_REFUSAL.name };
   if (name.length > WALKTHROUGH_LIMITS.name) return { ok: false, error: "bad_name", message: WALKTHROUGH_REFUSAL.nameLong };
   return { ok: true, value: name };
 }
