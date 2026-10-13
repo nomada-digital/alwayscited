@@ -1,6 +1,6 @@
 import type { ClusterCard } from "./cluster-figures.ts";
-import type { CitationRow, Range } from "./figures.ts";
-import type { Facts } from "./upgrade-prompts.ts";
+import type { CitationRow, Day, Range, SerpRow } from "./figures.ts";
+import { FIT_READINGS, type Facts, STALLED_DAYS } from "./upgrade-prompts.ts";
 
 /**
  * The facts the two cluster prompts are judged on (BRIEF-3 T11: "prompts that
@@ -55,4 +55,30 @@ export function offPageOneFacts(cards: ClusterCard[]): NonNullable<Facts["offPag
   const off = offCards.map((c) => c.position as number);
   const ids = offCards.map((c) => c.keywordId).filter((id): id is string => id !== null);
   return { keywords: off.length, of: read.length, best: off.length ? Math.min(...off) : 0, worst: off.length ? Math.max(...off) : 0, ids };
+}
+
+/**
+ * U6's readings (13 Oct 2026, DIY P4; spec 10 section 2.7): of a keyword's
+ * last FIT_READINGS readings - days Google was read for it, whatever the
+ * range - how many were #11 to #20. A day it was not read is not a reading.
+ * The fit verdict itself is P8's; the page joins the two into `fit`.
+ */
+export function offPageOneReadings(serp: readonly SerpRow[], keywordId: string): { offPage1: number; readings: number } {
+  const byDay = new Map<Day, number | null>();
+  for (const s of serp) if (s.keyword_id === keywordId && !byDay.has(s.run_date)) byDay.set(s.run_date, s.position);
+  const last = [...byDay].sort((a, b) => b[0].localeCompare(a[0])).slice(0, FIT_READINGS);
+  return { offPage1: last.filter(([, p]) => p !== null && p >= 11 && p <= 20).length, readings: last.length };
+}
+
+/**
+ * U4's facts (section 2.7): opportunity items in Doing whose status has not
+ * changed for STALLED_DAYS or more, and the latest day one of them got there,
+ * so "since <day>" is true of every one. The plan's own status words are P3's;
+ * the page maps each item to these two flags.
+ */
+export function stalledFacts(items: readonly { opportunity: boolean; doing: boolean; statusAt: Day }[], today: Day): NonNullable<Facts["stalled"]> | null {
+  const cutoff = new Date(Date.parse(`${today}T00:00:00Z`) - STALLED_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const stalled = items.filter((i) => i.opportunity && i.doing && i.statusAt <= cutoff);
+  if (!stalled.length) return null;
+  return { items: stalled.length, since: stalled.map((i) => i.statusAt).sort().reverse()[0]! };
 }

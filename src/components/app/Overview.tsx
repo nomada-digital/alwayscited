@@ -6,7 +6,6 @@ import { CLOSE_WASH, D } from "@/components/home/dark";
 import { T } from "@/config/tokens";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import {
-  keywordsIn,
   type Day,
   type Range,
   type Rate,
@@ -24,12 +23,10 @@ import {
   keywordRows,
   movers,
   namedRate,
-  overview,
   pointsDelta,
   sparkPoints,
-  ungroupedRead,
 } from "@/lib/tracking/figures";
-import { type ClusterCard, clusterCards, clusterChart, clusterSummary, keyFigureChanges, pendingBasis } from "@/lib/tracking/cluster-figures";
+import { type ClusterCard, clusterChart, keyFigureChanges, pendingBasis } from "@/lib/tracking/cluster-figures";
 import { NO_PROMPT_NO_CHECK, checkTime, clockIn } from "@/lib/tracking/check-time";
 import { rangeLabel } from "@/lib/tracking/date-range";
 import { whoIsNamedCard } from "@/lib/tracking/named-figures";
@@ -37,8 +34,14 @@ import type { Compare, OverviewData } from "@/lib/tracking/overview-data";
 import { type PlacementRow, chartMarkers } from "@/lib/tracking/placement-figures";
 import { MISSING_READS, brandGapNote, failedTodayNote, lostReads, runNote, sovGapNote, todayRun } from "@/lib/tracking/run-note";
 import { answerHref, answersByPromptDay, dayAnswerIn } from "@/lib/tracking/evidence";
+import type { ChangeLink } from "@/lib/diy/changes/diff";
+import type { Bullet } from "@/lib/diy/changes/meaning";
+import { type Recent, overviewBasis, overviewStory } from "@/lib/diy/changes/story";
+import { addedFromWork } from "@/lib/diy/ai/prompt-table";
 
+import type { ChartMark } from "./chart-board";
 import ClusterChart from "./ClusterChart";
+import SinceLastCheck from "./SinceLastCheck";
 import DatePicker from "./DatePicker";
 import Fig from "./Fig";
 import OverviewChart, { type ChartDay } from "./OverviewChart";
@@ -157,7 +160,27 @@ export default function Overview({
   canWrite = true,
   ended = false,
   lead = null,
+  recent,
+  thisWeek = null,
+  workLog = null,
+  origins,
+  marks,
 }: {
+  /**
+   * 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 5): the last week of checks
+   * for "Since last check", whatever the range shows - the page's own read when
+   * its range holds that week, a narrow read when it does not, or `ok: false`
+   * when that read failed (the section says so; the rest of the page draws).
+   * None draws no section (/app/parity).
+   */
+  recent?: Recent;
+  /** 13 Oct 2026, DIY P4: the slots P5 fills in wave 1 - P3's This week (section 4.1 row 6) and work log (row 10). */
+  thisWeek?: React.ReactNode;
+  workLog?: React.ReactNode;
+  /** P2's prompt origins by prompt id (loadPromptOrigins), for the basis line under the key figures (row 4). None draws no line. */
+  origins?: ReadonlyMap<string, string>;
+  /** Work markers for the chart (row 8): Actions items started and done, placements live. None draws none. */
+  marks?: ChartMark[];
   /** client_domains.status is ended: no next check is promised (8 Oct 2026, audit activation-5). */
   ended?: boolean;
   /** ON-3 (9 Oct 2026): the activation checklist, drawn under the page's heading and date. */
@@ -188,7 +211,10 @@ export default function Overview({
   // 9 Oct 2026 (audit copy-2, ia-9): every check time here is the client's zone's, labelled, from the
   // cron's hour on the day meant (check-time.ts). A bare London time was an hour wrong from 25 Oct.
   const next = checkTime(addDays(today, 1), market);
-  const o = overview({ range, compare: compareMode, startedOn, engines, questions: data.questions, answers: data.answers, serp: data.serp, keywordCount: keywordsIn(data.keywords, range), keywords: data.keywords, runs: data.runs });
+  // Review of P4 (13 Oct 2026): the figures and the cluster reading come from overviewBasis, the one wiring
+  // fixture-states.test.mts runs on every fixture state; what each step is for is said there.
+  const basis = overviewBasis({ data, range, compare: compareMode, startedOn, engines, today });
+  const { o, clusterInput, cards, cs, loose, byCluster, lflIds } = basis;
   // 8 Oct 2026 (audit data-10): a young client's comparison is its first week, and the charts draw no dashed
   // "same day last period" line for it - a week laid over the range's first seven days would read as a period it is not.
   // ON-3 (9 Oct 2026): nor against a first reading - one day is not a period to lay over the range.
@@ -197,14 +223,7 @@ export default function Overview({
   const vs = o.compare ? comparisonLabel(o.compare, o.compareKind) : null;
   // BRIEF-3 T4b part 3 (30 Sep 2026): the headline, heat map and four figures
   // read by cluster (boards-3/Main.dc.html). A client with no cluster rows yet
-  // keeps the flat T4 reading rather than print 0 of 0. `?.` because
-  // /app/parity reads docs/parity/T4/fixture.json, generated before clusters.
-  // R138: cluster rows with no prompt in any of them are still the ungrouped state.
-  const clusterInput = data.clusters?.length && data.questions.some((q) => q.cluster_id)
-    ? { clusters: data.clusters, questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: o.compare, today, engines }
-    : null;
-  const cards = clusterInput ? clusterCards(clusterInput) : null;
-  const cs = cards ? clusterSummary(cards) : null;
+  // keeps the flat T4 reading rather than print 0 of 0 (story.ts overviewBasis).
   // T4b part 5b: the picked card (?cluster=) sets the chart; the first card by default, as the board opens on c1.
   const picked = cards ? (cards.find((c) => c.id === selected) ?? cards[0]!) : null;
   const drawn = clusterInput && picked ? clusterChart(clusterInput, picked.id) : null;
@@ -285,13 +304,13 @@ export default function Overview({
           </span>
         </span>
       </DatePicker>
-      {/* Main.dc.html: the dark "Download report" after the date. */}
+      {/* Main.dc.html: the dark "Download report" after the date; "Download CSV" since 13 Oct 2026 (DIY P4, RP-1: it is the range's CSV). */}
       {download ? (
         <a className="app-hide-sm" href={download("answers")} download style={{ display: "inline-flex", alignItems: "center", gap: "8px", height: "48px", padding: "0 18px", boxSizing: "border-box", borderRadius: "12px", background: T.ink, color: T.surface, fontSize: "14px", fontWeight: 600, textDecoration: "none" }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke={T.surface} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
           </svg>
-          Download report
+          Download CSV
         </a>
       ) : null}
       </div>
@@ -353,6 +372,7 @@ export default function Overview({
             </Link>
           ) : null}
         </section>
+        {thisWeek}
       </div>
     );
   }
@@ -360,8 +380,6 @@ export default function Overview({
   // ---- 1. headline ----
   // DS1 / R177 (2 Oct 2026): clusters and ungrouped prompts with readings side by side. The headline and the
   // first figures then count every prompt, as Who is named does, and say so; by cluster only when all are grouped.
-  const loose = cs ? ungroupedRead(data.questions, data.answers, range) : 0;
-  const byCluster = cs && !loose ? cs : null;
   const looseWords = `${loose} ungrouped prompt${loose === 1 ? "" : "s"}`;
   // A pending cluster has no answers yet, so it is not named in the count ("5 ungrouped prompts", not "0 clusters and ...").
   const across = !cs ? "" : loose && !cs.clusters ? looseWords : `${cs.clusters} cluster${cs.clusters === 1 ? "" : "s"}${loose ? ` and ${looseWords}` : ""}`;
@@ -386,39 +404,13 @@ export default function Overview({
     !k.ranked ? "No keyword in the top 20 yet" : `Average position ${k.avg}${k.unranked ? `; the ${k.unranked} outside the top 20 count${k.unranked === 1 ? "s" : ""} as #${UNRANKED_AS}` : ""}`;
   const gridDays = daysIn(range).slice(-28);
   const gridFrom = daysIn(range).length - gridDays.length;
-  // DS77 (2 Oct 2026, R173 pass 13, failed cold read): a day with no reading after a cluster started
-  // read "not tracked yet" in the heat grid, though the cluster was tracked and only the check missed.
-  const gapLabel = (startedOn: Day, d: Day) => (d >= startedOn ? "no reading" : "not tracked yet");
-  const heatGap = heatRows.some((c) => gridDays.some((d, col) => !c.heat[gridFrom + col] && d >= c.started_on));
-  // DB-2 (9 Oct 2026): a cell with a reading opens one of the answers it counts, on the one-cluster page at that
-  // day and engine (evidence.ts dayAnswerIn) - a name when the cell counted one. None on /app/parity (no detailHref).
-  // Review of 95a8747 (same day): only the days the grid draws are indexed, not the range's comparison period too.
-  const byPromptDay = detailHref && heatRows.length ? answersByPromptDay(data.answers, { from: gridDays[0]!, to: gridDays[gridDays.length - 1]! }) : null;
-  const heatW = gridDays.length * 14 - 3;
-  const heatH = heatRows.length * 14 - 3;
-  const heatOpens = (c: ClusterCard, d: Day) => {
-    const at = byPromptDay && clustersPath ? dayAnswerIn(byPromptDay, c.prompts.map((p) => p.id), d, engines) : null;
-    return at ? answerHref(`${clustersPath}/${encodeURIComponent(c.id)}`, { ...rangeQuery, prompt: String(at.prompt) }, at) : null;
-  };
   const questionsAnswered = o.questions.den;
   const direction = (d: number) => (d > 0 ? "up from" : d < 0 ? "down from" : "the same as");
   const headlineRate = fig.now;
-  // DS71 (R173 pass 9, 2 Oct 2026): read only from ungrouped prompts, the line counted them twice ("across 5 ungrouped prompts, 5 prompts and four engines").
-  const subLine = cs
-    ? `${fig.now.num.toLocaleString("en-GB")} of ${fig.now.den.toLocaleString("en-GB")} answers across ${across}${loose && !cs.clusters ? "" : `, ${byCluster ? byCluster.prompts : questionsAnswered} prompts`} and ${WORDS[engines.length] ?? engines.length} engines.`
-    : `${o.named.num.toLocaleString("en-GB")} of ${o.named.den.toLocaleString("en-GB")} answers across ${questionsAnswered} prompts and ${WORDS[engines.length] ?? engines.length} engines.`;
-  // Audit data-10 (8 Oct 2026): against the first week, "all period" is since tracking began.
-  const allPeriod = o.compareKind === "start" ? "since your first week" : o.compareKind === "first" ? "since your first reading" : "all period";
+  // 13 Oct 2026, DIY P4: the desktop sub-line and its like-for-like sentence are the headline paragraph now
+  // (lib/diy/changes/meaning.ts headline, below); the phone's short line keeps its own words.
   const inBefore = o.compareKind === "start" ? " in your first week" : o.compareKind === "first" ? " on your first reading" : "";
-  const lflLine = byCluster
-    ? byCluster.lflBefore && lflDelta !== null
-      ? ` On the ${byCluster.clustersLfl} cluster${byCluster.clustersLfl === 1 ? "" : "s"} tracked ${allPeriod} that's ${pct(byCluster.lfl)}, ${direction(lflDelta)} ${pct(byCluster.lflBefore)}${inBefore}.`
-      : ""
-    : o.lfl && lflDelta !== null
-      ? ` On the ${o.lfl.questions} prompts tracked ${allPeriod} that's ${pct(o.lfl.now)}, ${direction(lflDelta)} ${pct(o.lfl.before)}${inBefore}.`
-      : "";
-  // The prompts tracked from the comparison's first day to the range's last: like-for-like when not by cluster.
-  const lflIds = o.compare ? new Set(data.questions.filter((q) => q.added_on <= o.compare!.from && (q.stopped_on === null || q.stopped_on > range.to)).map((q) => q.id)) : null;
+  // lflIds (story.ts overviewBasis): the prompts tracked from the comparison's first day to the range's last.
   // Audit ia-3 (8 Oct 2026): the brand named in most of the headline's own answers, on the headline's basis.
   // Review of audit ia-3 (8 Oct 2026): the card below and this line read the headline's own answers - by
   // cluster, the prompts of the clusters with readings - and the card's change the headline's like-for-like ones.
@@ -428,6 +420,34 @@ export default function Overview({
   // were not all read (figures.ts brandsRead) the leader's share is of the answers that were, and says so.
   const leaderOf = who.page.answers === fig.now.den ? "the same answers" : `the ${who.page.answers.toLocaleString("en-GB")} of them whose other brands were read`;
   const leaderLine = !leader || !leader.answers ? "" : leader.you ? " No other brand was named in more of them." : ` ${leader.name} was named in ${pct(leader.reach)} of ${leaderOf}.`;
+
+  // ---- 13 Oct 2026, DIY P4 (spec 10 section 4.1 rows 3 to 6) ----
+  // The headline paragraph, "What it means" and "Since last check": story.ts overviewStory, over the basis above.
+  const { said, bullets, diff } = overviewStory(basis, { data, range, today, engines, brand, domain, startedOn, recent });
+  const bulletHref = (b: Bullet): string | null =>
+    !b.link || !clientPath
+      ? null
+      : b.link.to === "engine"
+        ? `${clientPath}/ai?${new URLSearchParams({ ...rangeQuery, eng: b.link.engine })}`
+        : b.link.to === "cluster" && detailHref
+          ? detailHref(b.link.cluster)
+          : null; // a keyword is plain text until the Google page exists (wave 2)
+  // The headline's answer count opens /ai on the same range: every prompt behind it, each row opening its answers (DB-2).
+  const countHref = clientPath ? `${clientPath}/ai?${new URLSearchParams(rangeQuery)}` : null;
+  const promptAt = new Map((cards ?? []).flatMap((c) => c.prompts.map((p, i) => [p.id, { cluster: c.id, index: i }] as const)));
+  const changeHref = (l: ChangeLink): string | null => {
+    if (!clientPath) return null;
+    if (l.to === "answer") {
+      const at = promptAt.get(l.question);
+      return at && clustersPath ? answerHref(`${clustersPath}/${encodeURIComponent(at.cluster)}`, { ...rangeQuery, prompt: String(at.index) }, { day: l.day, engine: l.engine }) : null;
+    }
+    if (l.to === "cited") return `${clientPath}/cited?${new URLSearchParams({ ...rangeQuery, kind: "yours" })}`;
+    if (l.to === "named") return `${clientPath}/named?${new URLSearchParams({ ...rangeQuery, open: l.key })}`;
+    if (l.to === "href") return l.href;
+    return null; // a keyword: plain text until the Google page exists (wave 2)
+  };
+  // The basis line under the key figures (row 4): prompts added from work, which are likelier to name the client.
+  const fromWork = origins ? addedFromWork(origins, data.questions.filter((q) => q.stopped_on === null && q.added_on <= today).map((q) => q.id)) : null;
 
   // ---- 3. chart ----
   const toChart = (days: ReturnType<typeof dailySeries>): ChartDay[] => days.map((d) => ({ label: formatDay(d.day), all: d.all, by: d.by }));
@@ -703,9 +723,23 @@ export default function Overview({
             </h2>
           ) : null}
           <p className={cs ? "app-hide-sm" : undefined} style={{ margin: 0, fontSize: cs ? "15px" : "16px", lineHeight: 1.55, color: D.cardHead, maxWidth: "500px" }}>
-            {subLine}
+            <span data-headline={said.variant}>
+              {(() => {
+                // The answer count opens /ai on this range (DB-2); the rest of the paragraph is the rule's words.
+                const at = countHref ? said.text.indexOf(said.count) : -1;
+                if (at < 0) return said.text;
+                return (
+                  <>
+                    {said.text.slice(0, at)}
+                    <Link href={countHref!} data-headline-count="" style={{ color: T.surface, fontWeight: 600, textDecorationColor: D.quiet, textUnderlineOffset: "3px" }}>
+                      {said.count}
+                    </Link>
+                    {said.text.slice(at + said.count.length)}
+                  </>
+                );
+              })()}
+            </span>
             {leaderLine}
-            {lflLine}
             {o.compareHidden ? ` ${o.compareHidden}` : ""}
           </p>
           {cs ? (
@@ -724,91 +758,42 @@ export default function Overview({
               <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 10px", borderRadius: "999px", background: D.fieldLine, color: D.cardHead, fontSize: "13px", fontWeight: 500 }}>{comparisonLabel(o.compare, o.compareKind)}</span>
             </div>
           ) : null}
+          {/* 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 3b): "What it means", fixed rules over the figures above. */}
+          {bullets.length ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", maxWidth: "520px" }}>
+              <h3 id="wim-h" style={{ margin: 0, fontSize: "13px", fontWeight: 600, color: D.muted }}>
+                What it means
+              </h3>
+              <ul aria-labelledby="wim-h" data-meaning="" style={{ margin: 0, padding: "0 0 0 18px", display: "flex", flexDirection: "column", gap: "6px", fontSize: "14px", lineHeight: 1.5, color: D.cardHead }}>
+                {bullets.map((b) => {
+                  const to = bulletHref(b);
+                  const at = to && b.linkText ? b.text.indexOf(b.linkText) : -1;
+                  return (
+                    <li key={b.kind} data-kind={b.kind}>
+                      {to && at >= 0 ? (
+                        <>
+                          {b.text.slice(0, at)}
+                          <Link href={to} style={{ color: T.surface, fontWeight: 600, textDecorationColor: D.quiet, textUnderlineOffset: "3px" }}>
+                            {b.linkText}
+                          </Link>
+                          {b.text.slice(at + b.linkText!.length)}
+                        </>
+                      ) : (
+                        b.text
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
         {/* R151 (3 Oct 2026): a pilot whose only cluster starts tomorrow drew this grid with no rows -
             labels and a legend round nothing - while every answer counted came from ungrouped prompts.
             With no cluster read yet, the by-engine grid below shows those answers. */}
         {cs && heatRows.length ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: "0 1 auto", minWidth: 0 }}>
-            <div style={{ fontSize: "13px", fontWeight: 600, color: D.cardHead }}>
-              <span className="app-hide-sm">Every daily check, by cluster</span>
-              <span className="app-show-sm">Every daily check, one row per cluster</span>
-            </div>
-            <div style={{ display: "flex", gap: "12px", minWidth: 0 }}>
-              <div className="app-heat-labels app-hide-sm" style={{ display: "flex", flexDirection: "column", width: "196px", minWidth: 0, flexShrink: 1 }}>
-                {heatRows.map((c) => (
-                  // DS43 (2 Oct 2026): a block, not a flex row - a flex container's text never draws the ellipsis, so a long keyword was cut mid-letter.
-                  <div key={c.id} title={c.keyword ?? c.name} style={{ height: "11px", marginBottom: "3px", textAlign: "right", fontSize: "11px", fontWeight: 500, color: D.cardHead, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: "11px" }}>
-                    {c.keyword ?? c.name}
-                  </div>
-                ))}
-              </div>
-              {/* Audit mobile-1 (8 Oct 2026): the grid scaled to fit (maxWidth 100%) while its labels kept
-                  their 14px rows, so at 600 and 900 the labels drifted 2px a row off theirs. It keeps its
-                  size now and scrolls, opening on Today (.app-heat-scroll); on a phone, where it has no
-                  labels, it still fits the card (.app-heat-fit). */}
-              <div id="ov-heat-scroll" className="app-heat-scroll app-heat-fit" role="group" aria-label="Daily checks by cluster" style={{ minWidth: 0, flex: "0 1 auto", overflowX: "auto" }}>
-              <div className="app-heat-in" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                {/* DB-2 (9 Oct 2026): with links in it the grid is a group, not an image - an image's children are not read. */}
-                <svg width={gridDays.length * 14 - 3} height={heatRows.length * 14 - 3} viewBox={`0 0 ${gridDays.length * 14 - 3} ${heatRows.length * 14 - 3}`} style={{ display: "block" }} role={detailHref ? "group" : "img"} aria-label={`Daily share of answers naming ${brand}, one row per cluster, ${formatDay(gridDays[0]!)} to ${formatDay(gridDays[gridDays.length - 1]!, true)}${detailHref ? ". Each day opens its answers; the arrow keys move between days" : ""}`}>
-                  {heatRows.map((c, row) =>
-                    gridDays.map((d, col) => {
-                      const cell = c.heat[gridFrom + col] ?? null;
-                      const label = `${c.keyword ?? c.name}, ${formatDay(d)}: ${cell ? `${cell.pct}% (${cell.num} of ${cell.den})` : gapLabel(c.started_on, d)}`;
-                      const to = cell ? heatOpens(c, d) : null;
-                      // DB-2: a link the size of the cell's whole pitch, so a tap between two squares still lands on one -
-                      // held inside the grid at its edges (review of 95a8747, 9 Oct 2026), where the SVG cut the focus ring.
-                      // Its one name is its <title>, which is also the hover tip: an aria-label beside it read it twice.
-                      // Known gap, 9 Oct 2026 (target size): the pitch is 14px here and about 11px on a phone, under
-                      // WCAG 2.5.8's 24px. Not restructured: each cell's answers are also one tap from the one-cluster
-                      // page's day grid, whose squares are 24px wide.
-                      const hx = Math.max(0, col * 14 - 1.5);
-                      const hy = Math.max(0, row * 14 - 1.5);
-                      return to && cell ? (
-                        <a key={`${c.id}-${d}`} href={to} className="app-heat-a" data-row={row} data-col={col}>
-                          <title>{`${c.keyword ?? c.name}, ${formatDay(d, true)}: named you in ${cell.num} of ${cell.den} answers (${cell.pct}%). Open that day's answers.`}</title>
-                          <rect x={hx} y={hy} width={Math.min(heatW, col * 14 + 12.5) - hx} height={Math.min(heatH, row * 14 + 12.5) - hy} fill="transparent" />
-                          <rect x={col * 14} y={row * 14} width={11} height={11} rx={3} fill={heat(cell.pct)} />
-                        </a>
-                      ) : cell ? (
-                        <rect key={`${c.id}-${d}`} x={col * 14} y={row * 14} width={11} height={11} rx={3} fill={heat(cell.pct)}>
-                          <title>{label}</title>
-                        </rect>
-                      ) : (
-                        <rect key={`${c.id}-${d}`} x={col * 14 + 0.5} y={row * 14 + 0.5} width={10} height={10} rx={2.5} fill="none" stroke={D.quiet} strokeOpacity={0.45}>
-                          <title>{label}</title>
-                        </rect>
-                      );
-                    }),
-                  )}
-                </svg>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: D.quiet }}>
-                  <span>{formatDay(gridDays[0]!)}</span>
-                  <span className="app-hide-sm">{formatDay(gridDays[Math.floor(gridDays.length / 2)]!)}</span>
-                  <span>{gridDays[gridDays.length - 1] === today ? "Today" : formatDay(gridDays[gridDays.length - 1]!)}</span>
-                </div>
-              </div>
-              </div>
-            </div>
-            <ScrollCue target="ov-heat-scroll" color={D.quiet} phone={false}>{`Swipe for the earlier days, back to ${formatDay(gridDays[0]!)}.`}</ScrollCue>
-            {/* DB-2: 280 day links are one tab stop with script, the arrow keys moving between days and clusters. */}
-            {detailHref ? <GridKeys target="ov-heat-scroll" version={`${range.from} ${range.to} ${compareMode}`} /> : null}
-            <div className="app-hide-sm" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: D.quiet, flexWrap: "wrap" }}>
-              {/* DS74 (2 Oct 2026): "up to" once a shown day had fewer answers - a partial check or a stopped prompt - so the count is never one a cell was not read on. */}
-              {`Share of the cluster's ${heatRows.some((c) => gridDays.some((_, col) => { const h = c.heat[gridFrom + col]; return h && h.den < 5 * engines.length; })) ? "up to " : ""}${5 * engines.length} answers naming you that day`}
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}>
-                <span style={{ display: "flex", gap: "3px" }} aria-hidden="true">
-                  {[0, 15, 30, 45, 60].map((p) => (
-                    <span key={p} style={{ width: "11px", height: "11px", borderRadius: "3px", background: heat(p) }} />
-                  ))}
-                </span>
-                0 to 60%+
-              </span>
-              <span aria-hidden="true" style={{ display: "inline-flex", width: "10px", height: "10px", borderRadius: "2.5px", border: `1px solid ${D.quiet}`, opacity: 0.45, marginLeft: "6px" }} />
-              {heatGap ? "no reading" : "not tracked yet"}
-            </div>
-          </div>
+          <ClusterHeat heatRows={heatRows} data={data} range={range} compareMode={compareMode} today={today} brand={brand} engines={engines} clustersPath={clustersPath} rangeQuery={rangeQuery} detailHref={!!detailHref} />
         ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: "0 1 auto", minWidth: 0 }}>
           <div style={{ fontSize: "13px", fontWeight: 600, color: D.cardHead }}>Every daily check, by engine</div>
@@ -866,6 +851,20 @@ export default function Overview({
         </div>
         )}
       </section>
+
+      {/* 13 Oct 2026, DIY P4 (spec 10 section 4.1 rows 5 and 6): Since last check on the left (7 of 12) and This week on
+          the right (5 of 12); on a phone This week comes first. This week is first in the source and the row runs right to
+          left, so wrapping puts it on top with no media query and no script. */}
+      {diff || thisWeek ? (
+        <div data-overview-work="" style={{ display: "flex", flexDirection: "row-reverse", flexWrap: "wrap", gap: "24px", alignItems: "flex-start", minWidth: 0 }}>
+          {thisWeek ? <div style={{ flex: "5 1 300px", minWidth: 0 }}>{thisWeek}</div> : null}
+          {diff ? (
+            <div style={{ flex: "7 1 420px", minWidth: 0 }}>
+              <SinceLastCheck diff={diff} href={changeHref} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <section aria-label="Key figures" className={cs ? "app-figures app-hide-sm" : "app-figures"} style={{ ...CARD, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", overflow: "hidden" }}>
         {(cs
@@ -975,6 +974,19 @@ export default function Overview({
         </section>
       ) : null}
 
+      {/* 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 4): the basis line, when prompts added from work are live - they are
+          likelier to name the client, and the figures above count them (audit data-2). */}
+      {fromWork ? (
+        <p data-basis="origins" style={{ margin: "-8px 0 0", fontSize: "13px", lineHeight: 1.5, color: T.soft }}>
+          {`${fromWork.text} `}
+          {clientPath ? (
+            <Link href={`${clientPath}/ai?${new URLSearchParams({ ...rangeQuery, origin: "chosen" })}`} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>
+              See the figures on the prompts you chose
+            </Link>
+          ) : null}
+        </p>
+      ) : null}
+
       {cards ? <ClusterCards cards={cards} engines={engines} picked={picked?.id ?? null} href={clusterHref} detail={detailHref} manage={manage} next={next} vs={vs} /> : ungroupedCard}
       {cards ? <ClusterRows cards={cards} picked={detailHref ? null : (picked?.id ?? null)} href={detailHref ?? clusterHref} opens={!!detailHref} manage={manage} next={next} vs={vs} /> : null}
       {/* R151 (3 Oct 2026): the headline counts read ungrouped prompts beside clusters ("1 cluster and 5 ungrouped prompts"), so they get their card too. */}
@@ -1007,6 +1019,8 @@ export default function Overview({
                 : null,
             phoneLine,
             placements: placements ? chartMarkers(pickedChart.days, placements, picked.id) : null,
+            isoDays: pickedChart.days,
+            marks,
             // T7 part 2b: the phone board's "Open this cluster" goes to QuestionDetail, the one-cluster page.
             openHref: clustersPath ? `${clustersPath}/${encodeURIComponent(picked.id)}?${new URLSearchParams(rangeQuery)}` : null,
           }}
@@ -1024,6 +1038,8 @@ export default function Overview({
           notes,
           brand,
           questions: questionsAnswered,
+          isoDays: daysIn(range),
+          marks,
         }}
       />
       )}
@@ -1042,7 +1058,139 @@ export default function Overview({
           {citedCard}
         </>
       )}
+      {/* 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 10): the work log slot, which P5 fills with P3's WorkLog. */}
+      {workLog}
     </div>
+  );
+}
+
+/**
+ * The by-cluster heat map (T4b part 3, 30 Sep 2026; DB-2, 9 Oct 2026): one
+ * row per cluster with readings, one cell per day of the range's last 28, each
+ * a link to an answer it counts. Its own component since 13 Oct 2026 (DIY P4,
+ * spec 10 section 4.2 row 7) so the AI visibility page draws the same map,
+ * full width, on the same dark ground - not a second copy of it. `detailHref`
+ * is whether the one-cluster page exists to open (none on /app/parity).
+ */
+export function ClusterHeat({
+  heatRows,
+  data,
+  range,
+  compareMode,
+  today,
+  brand,
+  engines,
+  clustersPath,
+  rangeQuery,
+  detailHref,
+}: {
+  heatRows: ClusterCard[];
+  data: Pick<OverviewData, "answers">;
+  range: Range;
+  compareMode: Compare;
+  today: Day;
+  brand: string;
+  engines: readonly Engine[];
+  clustersPath?: string;
+  rangeQuery: Record<string, string>;
+  detailHref: boolean;
+}) {
+  const gridDays = daysIn(range).slice(-28);
+  const gridFrom = daysIn(range).length - gridDays.length;
+  // DS77 (2 Oct 2026, R173 pass 13, failed cold read): a day with no reading after a cluster started
+  // read "not tracked yet" in the heat grid, though the cluster was tracked and only the check missed.
+  const gapLabel = (startedOn: Day, d: Day) => (d >= startedOn ? "no reading" : "not tracked yet");
+  const heatGap = heatRows.some((c) => gridDays.some((d, col) => !c.heat[gridFrom + col] && d >= c.started_on));
+  // DB-2 (9 Oct 2026): a cell with a reading opens one of the answers it counts, on the one-cluster page at that
+  // day and engine (evidence.ts dayAnswerIn) - a name when the cell counted one. None on /app/parity (no detailHref).
+  // Review of 95a8747 (same day): only the days the grid draws are indexed, not the range's comparison period too.
+  const byPromptDay = detailHref && heatRows.length ? answersByPromptDay(data.answers, { from: gridDays[0]!, to: gridDays[gridDays.length - 1]! }) : null;
+  const heatW = gridDays.length * 14 - 3;
+  const heatH = heatRows.length * 14 - 3;
+  const heatOpens = (c: ClusterCard, d: Day) => {
+    const at = byPromptDay && clustersPath ? dayAnswerIn(byPromptDay, c.prompts.map((p) => p.id), d, engines) : null;
+    return at ? answerHref(`${clustersPath}/${encodeURIComponent(c.id)}`, { ...rangeQuery, prompt: String(at.prompt) }, at) : null;
+  };
+  return (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", flex: "0 1 auto", minWidth: 0 }}>
+            <div style={{ fontSize: "13px", fontWeight: 600, color: D.cardHead }}>
+              <span className="app-hide-sm">Every daily check, by cluster</span>
+              <span className="app-show-sm">Every daily check, one row per cluster</span>
+            </div>
+            <div style={{ display: "flex", gap: "12px", minWidth: 0 }}>
+              <div className="app-heat-labels app-hide-sm" style={{ display: "flex", flexDirection: "column", width: "196px", minWidth: 0, flexShrink: 1 }}>
+                {heatRows.map((c) => (
+                  // DS43 (2 Oct 2026): a block, not a flex row - a flex container's text never draws the ellipsis, so a long keyword was cut mid-letter.
+                  <div key={c.id} title={c.keyword ?? c.name} style={{ height: "11px", marginBottom: "3px", textAlign: "right", fontSize: "11px", fontWeight: 500, color: D.cardHead, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", lineHeight: "11px" }}>
+                    {c.keyword ?? c.name}
+                  </div>
+                ))}
+              </div>
+              {/* Audit mobile-1 (8 Oct 2026): the grid scaled to fit (maxWidth 100%) while its labels kept
+                  their 14px rows, so at 600 and 900 the labels drifted 2px a row off theirs. It keeps its
+                  size now and scrolls, opening on Today (.app-heat-scroll); on a phone, where it has no
+                  labels, it still fits the card (.app-heat-fit). */}
+              <div id="ov-heat-scroll" className="app-heat-scroll app-heat-fit" role="group" aria-label="Daily checks by cluster" style={{ minWidth: 0, flex: "0 1 auto", overflowX: "auto" }}>
+              <div className="app-heat-in" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {/* DB-2 (9 Oct 2026): with links in it the grid is a group, not an image - an image's children are not read. */}
+                <svg width={gridDays.length * 14 - 3} height={heatRows.length * 14 - 3} viewBox={`0 0 ${gridDays.length * 14 - 3} ${heatRows.length * 14 - 3}`} style={{ display: "block" }} role={detailHref ? "group" : "img"} aria-label={`Daily share of answers naming ${brand}, one row per cluster, ${formatDay(gridDays[0]!)} to ${formatDay(gridDays[gridDays.length - 1]!, true)}${detailHref ? ". Each day opens its answers; the arrow keys move between days" : ""}`}>
+                  {heatRows.map((c, row) =>
+                    gridDays.map((d, col) => {
+                      const cell = c.heat[gridFrom + col] ?? null;
+                      const label = `${c.keyword ?? c.name}, ${formatDay(d)}: ${cell ? `${cell.pct}% (${cell.num} of ${cell.den})` : gapLabel(c.started_on, d)}`;
+                      const to = cell ? heatOpens(c, d) : null;
+                      // DB-2: a link the size of the cell's whole pitch, so a tap between two squares still lands on one -
+                      // held inside the grid at its edges (review of 95a8747, 9 Oct 2026), where the SVG cut the focus ring.
+                      // Its one name is its <title>, which is also the hover tip: an aria-label beside it read it twice.
+                      // Known gap, 9 Oct 2026 (target size): the pitch is 14px here and about 11px on a phone, under
+                      // WCAG 2.5.8's 24px. Not restructured: each cell's answers are also one tap from the one-cluster
+                      // page's day grid, whose squares are 24px wide.
+                      const hx = Math.max(0, col * 14 - 1.5);
+                      const hy = Math.max(0, row * 14 - 1.5);
+                      return to && cell ? (
+                        <a key={`${c.id}-${d}`} href={to} className="app-heat-a" data-row={row} data-col={col}>
+                          <title>{`${c.keyword ?? c.name}, ${formatDay(d, true)}: named you in ${cell.num} of ${cell.den} answers (${cell.pct}%). Open that day's answers.`}</title>
+                          <rect x={hx} y={hy} width={Math.min(heatW, col * 14 + 12.5) - hx} height={Math.min(heatH, row * 14 + 12.5) - hy} fill="transparent" />
+                          <rect x={col * 14} y={row * 14} width={11} height={11} rx={3} fill={heat(cell.pct)} />
+                        </a>
+                      ) : cell ? (
+                        <rect key={`${c.id}-${d}`} x={col * 14} y={row * 14} width={11} height={11} rx={3} fill={heat(cell.pct)}>
+                          <title>{label}</title>
+                        </rect>
+                      ) : (
+                        <rect key={`${c.id}-${d}`} x={col * 14 + 0.5} y={row * 14 + 0.5} width={10} height={10} rx={2.5} fill="none" stroke={D.quiet} strokeOpacity={0.45}>
+                          <title>{label}</title>
+                        </rect>
+                      );
+                    }),
+                  )}
+                </svg>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: D.quiet }}>
+                  <span>{formatDay(gridDays[0]!)}</span>
+                  <span className="app-hide-sm">{formatDay(gridDays[Math.floor(gridDays.length / 2)]!)}</span>
+                  <span>{gridDays[gridDays.length - 1] === today ? "Today" : formatDay(gridDays[gridDays.length - 1]!)}</span>
+                </div>
+              </div>
+              </div>
+            </div>
+            <ScrollCue target="ov-heat-scroll" color={D.quiet} phone={false}>{`Swipe for the earlier days, back to ${formatDay(gridDays[0]!)}.`}</ScrollCue>
+            {/* DB-2: 280 day links are one tab stop with script, the arrow keys moving between days and clusters. */}
+            {detailHref ? <GridKeys target="ov-heat-scroll" version={`${range.from} ${range.to} ${compareMode}`} /> : null}
+            <div className="app-hide-sm" style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "12px", color: D.quiet, flexWrap: "wrap" }}>
+              {/* DS74 (2 Oct 2026): "up to" once a shown day had fewer answers - a partial check or a stopped prompt - so the count is never one a cell was not read on. */}
+              {`Share of the cluster's ${heatRows.some((c) => gridDays.some((_, col) => { const h = c.heat[gridFrom + col]; return h && h.den < 5 * engines.length; })) ? "up to " : ""}${5 * engines.length} answers naming you that day`}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px", whiteSpace: "nowrap" }}>
+                <span style={{ display: "flex", gap: "3px" }} aria-hidden="true">
+                  {[0, 15, 30, 45, 60].map((p) => (
+                    <span key={p} style={{ width: "11px", height: "11px", borderRadius: "3px", background: heat(p) }} />
+                  ))}
+                </span>
+                0 to 60%+
+              </span>
+              <span aria-hidden="true" style={{ display: "inline-flex", width: "10px", height: "10px", borderRadius: "2.5px", border: `1px solid ${D.quiet}`, opacity: 0.45, marginLeft: "6px" }} />
+              {heatGap ? "no reading" : "not tracked yet"}
+            </div>
+          </div>
   );
 }
 

@@ -6,6 +6,8 @@ import { useRef, useState, type KeyboardEvent } from "react";
 import { T } from "@/config/tokens";
 import type { PlacementKind } from "@/lib/tracking/placements";
 
+import ChartMarks, { MarkLegend, MarkList } from "./ChartMarks";
+import { type ChartMark, placeMarks } from "./chart-board";
 import { KIND_DOT } from "./PlacementsChart";
 
 /**
@@ -57,10 +59,21 @@ export type ClusterChartData = {
   placements?: { id: string; i: number; kind: PlacementKind; label: string }[] | null;
   /** The one-cluster page: "Open cluster" in the desktop header, "Open this cluster" under the phone card. */
   openHref: string | null;
+  /** 13 Oct 2026, DIY P4: the ISO day of each point, so work markers can be placed by date. */
+  isoDays?: string[];
+  /**
+   * Work markers (spec 10 section 4.1 row 8): Actions items started (T.warnFg)
+   * and done (T.goodFg), placements live (T.accent), drawn under the plot and
+   * always on - unlike "Show placements", whose lines run through both panels.
+   * None draws none.
+   */
+  marks?: ChartMark[];
 };
 
 const W = 1056;
-const H = 428;
+/** The board's height with no markers; a strip of WORK_STRIP under the date labels holds them when there are some. */
+const H_PLAIN = 428;
+const WORK_STRIP = 30;
 const X0 = 44;
 const X1 = 1040;
 const A_TOP = 26;
@@ -92,6 +105,8 @@ const area = (rs: [number, number][][]) =>
   rs.map((r) => `M${r[0]![0].toFixed(1)},${A_BOT} ` + r.map(([x, y]) => `L${x.toFixed(1)},${y.toFixed(1)}`).join(" ") + ` L${r[r.length - 1]![0].toFixed(1)},${A_BOT} Z`).join(" ");
 
 export default function ClusterChart({ data }: { data: ClusterChartData }) {
+  const work = data.isoDays && data.marks ? placeMarks(data.isoDays, data.marks) : [];
+  const H = work.length ? H_PLAIN + WORK_STRIP : H_PLAIN;
   const [prev, setPrev] = useState(true);
   const [hover, setHover] = useState<number | null>(null);
   const [placed, setPlaced] = useState(false);
@@ -208,7 +223,7 @@ export default function ClusterChart({ data }: { data: ClusterChartData }) {
             Page 1
           </text>
           {ticks.map((i) => (
-            <text key={`d${i}`} x={xAt(i)} y={H - 6} textAnchor="middle" fontSize={12} fill={T.soft}>
+            <text key={`d${i}`} x={xAt(i)} y={H_PLAIN - 6} textAnchor="middle" fontSize={12} fill={T.soft}>
               {data.days[i]}
             </text>
           ))}
@@ -284,6 +299,8 @@ export default function ClusterChart({ data }: { data: ClusterChartData }) {
           </div>
         ) : null}
 
+        <ChartMarks marks={work} n={n} x0={X0} x1={X1} w={W} h={H} y={H_PLAIN + WORK_STRIP / 2} dayLabels={data.dayLabels} />
+
         {data.pending ? (
           <div style={{ position: "absolute", left: `${(X0 / W) * 100}%`, width: `${((X1 - X0) / W) * 100}%`, top: 0, height: `${(B_BOT / H) * 100}%`, display: "flex", alignItems: "center", justifyContent: "center", background: `color-mix(in srgb, ${T.surface} 86%, transparent)` }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", textAlign: "center", padding: "0 16px" }}>
@@ -309,8 +326,14 @@ export default function ClusterChart({ data }: { data: ClusterChartData }) {
             {data.beforeLabel}
           </span>
         ) : null}
+        <MarkLegend marks={work} />
         {data.note ? <span>{data.note}</span> : null}
       </div>
+      {work.length ? (
+        <div className="app-show-sm">
+          <MarkList marks={work} dayLabels={data.dayLabels} />
+        </div>
+      ) : null}
       {data.openHref ? (
         <Link href={data.openHref} className="app-show-sm" data-usage="detail_open" style={{ fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none" }}>
           Open this cluster

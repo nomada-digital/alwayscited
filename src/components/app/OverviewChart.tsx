@@ -2,11 +2,13 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 
+import Link from "@/components/app/AppLink";
 import EngineLogo from "@/components/EngineLogo";
 import { T } from "@/config/tokens";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 
-import { H, READOUT_W, W, X0, X1, Y0, Y1, boardDayAt, dayStrip, readoutAt } from "./chart-board";
+import ChartMarks, { MarkLegend, MarkList } from "./ChartMarks";
+import { type ChartMark, H, READOUT_W, W, X0, X1, Y0, Y1, boardDayAt, dayStrip, placeMarks, readoutAt } from "./chart-board";
 
 /**
  * The overview's chart (T4, 29 Sep 2026), hand-built SVG as
@@ -50,6 +52,18 @@ export type ChartData = {
   notes: { index: number; text: string }[];
   brand: string;
   questions: number;
+  /** 13 Oct 2026, DIY P4: the ISO day of each point in `now`, so work markers can be placed by date. */
+  isoDays?: string[];
+  /** Work markers (chart-board.ts ChartMark): prompts added, placements live, Actions items done. None draws none. */
+  marks?: ChartMark[];
+  /**
+   * The AI visibility page holds the engine and like-for-like in its URL
+   * (`?eng=`, `?lfl=1`; spec 10 section 4.2 row 3): the chips and the switch
+   * are then links to those URLs, the picked view comes from the page, and it
+   * reads the same with JS off. Without it they are client state, as on the
+   * Overview.
+   */
+  view?: { engine: "all" | Engine; lfl: boolean; hrefs: { all: string; engines: Record<string, string>; lfl: string } };
 };
 
 function path(days: ChartDay[], pick: (d: ChartDay) => Point, max: number): string {
@@ -132,8 +146,11 @@ function Switch({ on, label, onToggle, disabled }: { on: boolean; label: string;
 
 export default function OverviewChart({ data }: { data: ChartData }) {
   const [prev, setPrev] = useState(true);
-  const [lfl, setLfl] = useState(false);
-  const [shown, setShown] = useState<"all" | Engine>("all");
+  const [lflState, setLfl] = useState(false);
+  const [shownState, setShown] = useState<"all" | Engine>("all");
+  // A view held in the URL is the page's to say; otherwise each switch is this chart's own state.
+  const lfl = data.view ? data.view.lfl : lflState;
+  const shown = data.view ? data.view.engine : shownState;
   const [hover, setHover] = useState<number | null>(null);
   const [picked, setCursor] = useState(data.now.length - 1);
   const dayRefs = useRef<(HTMLButtonElement | null)[]>([]);
@@ -192,6 +209,10 @@ export default function OverviewChart({ data }: { data: ChartData }) {
     first === null
       ? `No daily checks in this range yet`
       : `Daily share of answers naming ${data.brand}, ${now[0]!.label} to ${now[now.length - 1]!.label}, from ${first}% to ${last}%`;
+  // Work markers sit in a strip under the date labels; the board grows by its height only when there are some.
+  const marks = data.isoDays && data.marks ? placeMarks(data.isoDays, data.marks) : [];
+  const boardH = marks.length ? H + 30 : H;
+  const dayLabels = now.map((d) => d.label);
 
   return (
     <section aria-labelledby="chart-h" className="app-chart-card app-ovc" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", padding: "24px 27px 20px", display: "flex", flexDirection: "column", gap: "18px", minWidth: 0, overflowX: "clip" }}>
@@ -208,13 +229,39 @@ export default function OverviewChart({ data }: { data: ChartData }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
           <Switch on={prev && !!data.before} label="Previous period" onToggle={() => setPrev((v) => !v)} disabled={!data.before} />
-          <Switch on={lfl && !!data.lflNow} label="Like-for-like only" onToggle={() => setLfl((v) => !v)} disabled={!data.lflNow} />
+          {data.view && data.lflNow ? (
+            <Link href={data.view.hrefs.lfl} aria-current={lfl ? "true" : undefined} data-usage="compare_change" style={{ display: "inline-flex", alignItems: "center", gap: "10px", height: "36px", padding: "0 4px", color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+              <span style={{ position: "relative", width: "34px", height: "20px", borderRadius: "999px", background: lfl ? T.accent : T.line }}>
+                <span style={{ position: "absolute", top: "2px", left: lfl ? "16px" : "2px", width: "16px", height: "16px", borderRadius: "50%", background: T.surface, boxShadow: `0 1px 2px color-mix(in srgb, ${T.ink} 25%, transparent)` }} />
+              </span>
+              Like-for-like only
+            </Link>
+          ) : (
+            <Switch on={lfl && !!data.lflNow} label="Like-for-like only" onToggle={() => setLfl((v) => !v)} disabled={!data.lflNow} />
+          )}
         </div>
       </div>
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         {(["all", ...data.engines] as const).map((e) => {
           const on = shown === e;
+          if (data.view) {
+            const href = e === "all" ? data.view.hrefs.all : data.view.hrefs.engines[e];
+            if (href)
+              return (
+                <Link
+                  key={e}
+                  href={href}
+                  aria-current={on ? "true" : undefined}
+                  data-usage="engine_toggle"
+                  data-usage-engine={e}
+                  style={{ display: "inline-flex", alignItems: "center", gap: "8px", height: "36px", padding: "0 14px", boxSizing: "border-box", borderRadius: "999px", border: `1px solid ${on ? T.washLine : T.line}`, background: on ? T.wash : T.surface, color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none" }}
+                >
+                  {e === "all" ? <span style={{ width: "10px", height: "10px", borderRadius: "50%", background: T.accent }} /> : <EngineLogo engine={e} size={14} />}
+                  {e === "all" ? "All engines" : ENGINE_SPECS[e].label}
+                </Link>
+              );
+          }
           return (
             <button
               key={e}
@@ -232,7 +279,9 @@ export default function OverviewChart({ data }: { data: ChartData }) {
         })}
       </div>
 
-      <Compact now={now} before={prev ? before : null} pick={pick} max={max} ticks={ticks} colour={colour} notes={data.notes} engines={shown === "all" ? data.engines : [shown]} lfl={lfl} hover={hover} setHover={setHover} cursor={cursor} setCursor={setCursor} refs={smRefs} onDayKey={onDayKey} summary={summary} />
+      <Compact now={now} before={prev ? before : null} pick={pick} max={max} ticks={ticks} colour={colour} notes={data.notes} engines={shown === "all" ? data.engines : [shown]} lfl={lfl} hover={hover} setHover={setHover} cursor={cursor} setCursor={setCursor} refs={smRefs} onDayKey={onDayKey} summary={summary}>
+        <MarkList marks={marks} dayLabels={dayLabels} />
+      </Compact>
 
       <div
         ref={plot}
@@ -247,7 +296,7 @@ export default function OverviewChart({ data }: { data: ChartData }) {
           if (e.pointerType !== "mouse" && e.buttons) setHover(slideTo(e));
         }}
       >
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} style={{ display: "block", overflow: "visible" }}>
+        <svg width="100%" viewBox={`0 0 ${W} ${boardH}`} role="img" aria-label={summary} style={{ display: "block", overflow: "visible" }}>
           {area ? <path d={area} fill={colour} fillOpacity={0.07} /> : null}
           {ticks.map((v, i) => {
             const y = Y0 - (v / max) * (Y0 - Y1);
@@ -293,7 +342,7 @@ export default function OverviewChart({ data }: { data: ChartData }) {
         ))}
 
         {/* One button per day, each centred on its day's line (chart-board.ts, dayStrip). */}
-        <div style={{ position: "absolute", inset: `0 ${((W - strip.right) / W) * 100}% 12% ${(strip.left / W) * 100}%`, display: "flex" }}>
+        <div style={{ position: "absolute", inset: `0 ${((W - strip.right) / W) * 100}% ${((boardH - 0.88 * H) / boardH) * 100}% ${(strip.left / W) * 100}%`, display: "flex" }}>
           {now.map((d, i) => {
             const p = pick(d);
             return (
@@ -325,6 +374,7 @@ export default function OverviewChart({ data }: { data: ChartData }) {
             <ReadoutBody day={read} engines={shown === "all" ? data.engines : [shown]} lfl={lfl} before={readBefore} beforePct={readBefore ? pick(readBefore).pct : null} note={null} />
           </div>
         ) : null}
+        <ChartMarks marks={marks} n={now.length} x0={X0} x1={X1} w={W} h={boardH} y={H + 15} dayLabels={dayLabels} />
       </div>
 
       <div style={{ display: "flex", gap: "20px", fontSize: "12px", color: T.soft, flexWrap: "wrap" }}>
@@ -338,6 +388,7 @@ export default function OverviewChart({ data }: { data: ChartData }) {
             {data.beforeLabel}
           </span>
         ) : null}
+        <MarkLegend marks={marks} />
         {data.lflNote ? <span>{data.lflNote}</span> : null}
       </div>
     </section>
@@ -371,7 +422,9 @@ function Compact({
   refs,
   onDayKey,
   summary,
+  children,
 }: {
+  children?: React.ReactNode;
   now: ChartDay[];
   before: ChartDay[] | null;
   pick: (d: ChartDay) => Point;
@@ -485,6 +538,7 @@ function Compact({
           <span data-axis="">{now[n - 1]?.label}</span>
         </div>
       </div>
+      {children}
     </div>
   );
 }

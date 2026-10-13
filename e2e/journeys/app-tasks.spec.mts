@@ -92,23 +92,29 @@ for (const width of [1280, 390]) {
       await ctx.close();
     });
 
+    // 13 Oct 2026, DIY P4 (spec 10 section 4.1 rows 1 and 3): the desktop sub-line "N of M answers across ..." is the
+    // headline paragraph now ("Named in N of M AI answers to your K prompts ..."), and "Download report" is "Download
+    // CSV" (RP-1). The facts these two tasks hold have moved, not gone: where I am named, in N of M answers at 1280
+    // (the phone keeps its short line), and the CSV's rows equal to the headline's M, read from [data-headline].
     test("task 7: the Overview says where I am named and where I rank", async () => {
       as("default");
       const { ctx, page } = await open(HOME);
       const t = await text(page);
       assert.match(t, /named in \d+% of AI answers/i);
-      assert.match(t, /[\d,]+ of [\d,]+ answers across/);
+      assert.match(t, width < 600 ? /[\d,]+ of [\d,]+ answers across/ : /Named in [\d,]+ of [\d,]+ AI answers to your \d+ prompts/);
       await ctx.close();
     });
 
     test("task 10: the downloaded report matches the Overview headline", async () => {
       as("default");
       const { ctx, page } = await open(HOME);
-      const head = /([\d,]+) of ([\d,]+) answers across/.exec(await text(page));
-      assert.ok(head, "headline read");
+      // The headline paragraph is in the page at both widths (the phone hides it behind its short line).
+      const said = await page.evaluate(() => document.querySelector("[data-headline]")?.textContent ?? "", null);
+      const head = /^(?:First reading on [^:]+: named|Named) in ([\d,]+) of ([\d,]+) AI answers/.exec(said.trim());
+      assert.ok(head, `headline read: "${said}"`);
       // The phone header folds the button away, so fetch what its link points at, as a click would.
       const csv = await page.evaluate(async () => {
-        const a = [...document.querySelectorAll("a")].find((x) => x.innerText.trim() === "Download report");
+        const a = [...document.querySelectorAll("a")].find((x) => (x.textContent ?? "").trim() === "Download CSV");
         return a ? (await fetch(a.href)).text() : "";
       }, null);
       const rows = csv.trim().split("\n").slice(1);
