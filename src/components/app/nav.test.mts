@@ -57,9 +57,10 @@ test("every off-nav route is a built route", () => {
  * catch-all, and the DIY wave's /ai and /plan; 9 items - AI visibility and Actions join the seven.
  * Raised 13 Oct 2026 (DIY P9, wave 2): 17 routes - wave 2's /google, /opportunities, /opportunities/[id], /pages and
  * /pages/[page]; 12 items - Google, Opportunities and Your pages join the nine.
+ * Raised 13 Oct 2026 (DIY P10, wave 3): 18 routes - /links; 13 items - Links joins the twelve.
  */
-const ROUTE_FLOOR = 17;
-const ITEM_FLOOR = 12;
+const ROUTE_FLOOR = 18;
+const ITEM_FLOOR = 13;
 
 const ITEMS = [...new Set<string>([...NAV, ...TABS, ...CLUSTER_NAV, ...CLUSTER_TABS])];
 
@@ -171,14 +172,16 @@ test("R141: no Keywords item on a flat or a cluster client", () => {
  * and Your pages to Do, and moves this fact with its date; wave 3 adds Links to Do.
  * 13 Oct 2026, DIY P9 (spec 10 section 3.1, "after W2"): the fact moved - Google second in Results; Opportunities
  * and Your pages in Do after Actions, Placements last. Links (wave 3) goes between Opportunities and Your pages.
+ * 13 Oct 2026, DIY P10 (spec 10 section 3.1, "after W3"): the fact moved - Links in Do, between Opportunities and
+ * Your pages. The nav is final.
  */
-test("DIY W2: the nav is in its groups, in order, and a group label is never an item", () => {
+test("DIY W3: the nav is in its groups, in order, and a group label is never an item", () => {
   assert.deepEqual(
     GROUPS.map((g) => [g.label, [...g.items]]),
     [
       [null, ["Overview"]],
       ["Results", ["AI visibility", "Google", "Who is named", "Cited pages"]],
-      ["Do", ["Actions", "Opportunities", "Your pages", PLACEMENTS_ITEM]],
+      ["Do", ["Actions", "Opportunities", "Links", "Your pages", PLACEMENTS_ITEM]],
       ["Manage", ["Clusters", "Reports", "Settings"]],
     ],
   );
@@ -213,6 +216,14 @@ test("DIY W2: Google, Opportunities and Your pages open their built pages", () =
   assert.equal(groupOf("Google"), "Results");
   assert.equal(groupOf("Opportunities"), "Do");
   assert.equal(groupOf("Your pages"), "Do");
+});
+
+// 13 Oct 2026, DIY P10 (spec 10 sections 3.1 and 4.8): Links opens its built page, in Do.
+test("DIY W3: Links opens its built page", () => {
+  assert.equal(NAV_TARGET.Links, "/links");
+  assert.ok(ROUTES.includes("/links"), "/links is not built");
+  assert.equal(groupOf("Links"), "Do");
+  assert.ok(!TABS.includes("Links"), "Links is not a phone tab: it is in More, under Do");
 });
 
 // 13 Oct 2026, DIY P9 (spec 10 section 3.2, final): the fact moved - Google takes Clusters' tab, and Clusters moves

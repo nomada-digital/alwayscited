@@ -157,6 +157,14 @@ const KEYS: Record<string, Record<string, string>> = {
     done: 'pagesToast(one("done"), one("why"),',
     why: 'pagesToast(one("done"), one("why"),',
   },
+  // 13 Oct 2026, DIY P10 (spec 10 sections 3.5 and 4.8): Links. view is a types.ts whitelist; done and why the links
+  // route's codes, drawn through toast.ts's fixed words (readDone, readWhy). The spec's page key is not read: the
+  // gap shows its top rows and a count, never a second page.
+  "/links": {
+    view: 'pickView(one("view"))',
+    done: 'linksToast(one("done"), one("why"),',
+    why: 'linksToast(one("done"), one("why"),',
+  },
   "/clusters": {
     filter: 'f === "named" || f === "never" ? f : "all"',
     // "moved" added 2 Oct 2026 (R170 part 2): the /group route's 303 after Move into a cluster.
@@ -279,6 +287,9 @@ const ROLE_READS: Record<string, string[]> = {
   "/opportunities/[id]": ["const canWrite = refuseRole(writeRole(client)) === null;"],
   "/pages": ["const canWrite = refuseRole(writeRole(client)) === null;"],
   "/pages/[page]": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  // 13 Oct 2026, DIY P10: Links draws Reveal, Pursue and Check a link disabled with the reason for a viewer and on an
+  // ended client (writeRole); the links route refuses them too.
+  "/links": ["const canWrite = refuseRole(writeRole(client)) === null;"],
 };
 
 /**
@@ -299,9 +310,10 @@ const ROLE_READS: Record<string, string[]> = {
  * /opportunities/[id] (P7), /pages and /pages/[page] (P8); 110 keys - the 74 registered before (the floor
  * had stayed at 64) and wave 2's 36: /google's 12, /opportunities' 8, /opportunities/[id]'s 3, /pages' 6,
  * /pages/[page]'s 4, /cited's type and leaves, and /clusters' src.
+ * Raised 13 Oct 2026 (DIY P10, wave 3 of the DIY platform): 18 pages - /links; 113 keys - /links' view, done and why.
  */
-const PAGE_FLOOR = 17;
-const KEY_FLOOR = 110;
+const PAGE_FLOOR = 18;
+const KEY_FLOOR = 113;
 
 /** The query keys a page reads by name, as written. */
 export function keysRead(src: string): string[] {

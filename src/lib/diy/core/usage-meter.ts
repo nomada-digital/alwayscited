@@ -16,7 +16,7 @@ import { loadDiyEnabled } from "./settings.ts";
  * |---|---|
  * | page checks | `diy_reads`, action `page_check`, status ok or partial, this month |
  * | drafted examples | `reopt_examples` (P8), status `ready`, requested this month |
- * | link checks | `diy_reads`, action `link_check` or `verify`, status ok or partial, this month |
+ * | link checks | `diy_reads`, action `link_check` or `verify`, status ok or partial, this month; and `opportunities` lens `logged` made this month |
  * | link targets | `opportunities` (P7), lens `link_page`, revealed this month (W3) |
  * | pursuing | `opportunities`, status pursuing or pitched, now |
  *
@@ -24,6 +24,17 @@ import { loadDiyEnabled } from "./settings.ts";
  * free fetch - writes no ledger row and is not counted (section 2.5 counts
  * ledger rows). And a page check that makes two paid reads must tag only one
  * of them with the action, or it counts twice: P8's to keep.
+ *
+ * **Link checks have one count, here** (13 Oct 2026, DIY P10's review,
+ * outside P10's 7.11 edit list: the one allowance was counted three ways -
+ * Links added its free checks, Opportunities' Log a site added logged sites
+ * to this count, and Settings and runOnDemand read this count alone - so
+ * Links could refuse at 30 of 30 while Settings said 2). Decided: free reads
+ * count nowhere, as section 2.5 says (the ledger rows of Check a link and
+ * Verify now, so a page our own fetch reads uses none); and each logged site
+ * counts one, paid or not, as section 4.7 row 6 says ("It uses one 'check a
+ * link' allowance"), so it is counted here rather than by its route. Links,
+ * Settings, runOnDemand and Log a site all read this.
  *
  * `reopt_examples` and `opportunities` arrive in wave 2. Until then their
  * counts read as unknown - never as zero ("a section error never reads as
@@ -73,14 +84,11 @@ export async function countUsage(db: SupabaseClient, client: Pick<DiyClient, "id
     case "page_checks":
     case "link_checks": {
       const actions = key === "page_checks" ? ["page_check"] : ["link_check", "verify"];
-      const { count, error } = await db
-        .from("diy_reads")
-        .select("id", { count: "exact", head: true })
-        .eq("client_domain_id", client.id)
-        .in("action", actions)
-        .in("status", COUNTED)
-        .gte("created_at", since);
-      return counted({ count, error }, key);
+      const ledger = db.from("diy_reads").select("id", { count: "exact", head: true }).eq("client_domain_id", client.id).in("action", actions).in("status", COUNTED).gte("created_at", since);
+      if (key === "page_checks") return counted(await ledger, key);
+      const logged = db.from("opportunities").select("id", { count: "exact", head: true }).eq("client_domain_id", client.id).eq("lens", "logged").gte("created_at", since);
+      const [a, b] = await Promise.all([ledger, logged]);
+      return counted(a, key) + counted(b, "logged sites");
     }
     case "examples": {
       const { count, error } = await db

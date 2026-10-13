@@ -28,11 +28,13 @@ export const PLACEMENTS_ITEM = "Placements";
  * in Results, after AI visibility; Opportunities follows Actions in Do, then
  * Your pages, then Placements, leaving Links' place (wave 3) between
  * Opportunities and Your pages.
+ * 13 Oct 2026, DIY P10 (spec 10 section 3.1, "after W3"): Links joins Do,
+ * between Opportunities and Your pages, now its page is built.
  */
 export const GROUPS: readonly { label: string | null; items: readonly string[] }[] = [
   { label: null, items: ["Overview"] },
   { label: "Results", items: ["AI visibility", "Google", "Who is named", "Cited pages"] },
-  { label: "Do", items: ["Actions", "Opportunities", "Your pages", PLACEMENTS_ITEM] },
+  { label: "Do", items: ["Actions", "Opportunities", "Links", "Your pages", PLACEMENTS_ITEM] },
   { label: "Manage", items: ["Clusters", "Reports", "Settings"] },
 ];
 
@@ -77,6 +79,8 @@ export const NAV_TARGET: Record<string, string | typeof SOON | undefined> = {
   Actions: "/plan",
   // 13 Oct 2026, DIY P9: Opportunities (P7, spec 10 section 4.7) and Your pages (P8, spec 10 section 4.9).
   Opportunities: "/opportunities",
+  // 13 Oct 2026, DIY P10: Links (spec 10 section 4.8).
+  Links: "/links",
   "Your pages": "/pages",
   Placements: "/placements",
   Clusters: "/clusters",

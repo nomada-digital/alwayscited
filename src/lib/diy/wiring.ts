@@ -5,6 +5,9 @@ import { opportunityCandidates } from "./opportunities/candidates.ts";
 import { classifyHandler } from "./opportunities/classify.job.ts";
 import { pageReadsHandler } from "./opportunities/page-reads.job.ts";
 import { opportunityRefreshHandler } from "./opportunities/refresh.job.ts";
+import { linksCandidates } from "./links/candidates.ts";
+import { backlinksMonthlyHandler } from "./links/monthly.job.ts";
+import { backlinksWeeklyHandler } from "./links/weekly.job.ts";
 import { watchHandler } from "./opportunities/watch.job.ts";
 import { pagesCandidates } from "./pages/candidates.ts";
 import { keyPagesMonthlyHandler } from "./pages/monthly.job.ts";
@@ -37,8 +40,12 @@ import type { CandidateSource } from "./plan/types.ts";
  * off or unreadable), P7's opportunities (Biggest gap, and Slipping when a
  * pursued page or won link was found removed), P8's pages (Blocking, Closest
  * win, and the schema Tidy-up). Each reads only stored rows; none spends.
+ *
+ * 13 Oct 2026, DIY P10 (spec 10 sections 6.1 and 6.3): wave 3's Reclaim, a
+ * Slipping card for a lost link that pointed at a live key page, read from
+ * the stored weekly Backlinks read; nothing while diy_enabled is off.
  */
-export const CANDIDATE_SOURCES: readonly CandidateSource[] = [trackingCandidates, keywordCandidates, opportunityCandidates, pagesCandidates];
+export const CANDIDATE_SOURCES: readonly CandidateSource[] = [trackingCandidates, keywordCandidates, opportunityCandidates, pagesCandidates, linksCandidates];
 
 /**
  * 13 Oct 2026, DIY P5: `plan_refresh` (P3), free and daily, over every
@@ -59,6 +66,13 @@ export const CANDIDATE_SOURCES: readonly CandidateSource[] = [trackingCandidates
  * P8's `key_pages_monthly` (monthly and onboarding: instant_pages, the
  * validator, top-3 structure reads). The default dependencies are the real
  * doors and our guarded fetch; the tests pass fakes.
+ *
+ * 13 Oct 2026, DIY P10 (spec 10 sections 5.2 and 5.7): wave 3's two, both
+ * paid, through P1's doors on the backlinks and content doors: P10's
+ * `backlinks_weekly` (weekly and onboarding: the profile summary, the week's
+ * new and lost referring domains) and `backlinks_monthly` (monthly: the
+ * comparison set, the 13-week series, bulk x 3, the domain and page gaps,
+ * and the mentions with our own reads to confirm them).
  */
 export const JOB_HANDLERS: JobHandler[] = [
   planRefreshHandler(CANDIDATE_SOURCES),
@@ -69,4 +83,6 @@ export const JOB_HANDLERS: JobHandler[] = [
   watchHandler(),
   keyPagesWeeklyHandler(),
   keyPagesMonthlyHandler(),
+  backlinksWeeklyHandler(),
+  backlinksMonthlyHandler(),
 ];

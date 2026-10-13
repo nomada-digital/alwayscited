@@ -10,7 +10,7 @@ import { type CoreFixture, countLedger, countUsage } from "@/lib/diy/core/usage-
 import { isFixtureCtx } from "@/lib/diy/core/ctx";
 import { diyFixtureWrites } from "@/lib/diy/core/fixture";
 import type { ReadCtx } from "@/lib/diy/core/jobs";
-import { countLoggedSince, factsOf, loggedSince, readKinds, readPageReads } from "@/lib/diy/opportunities/data";
+import { factsOf, loggedSince, readKinds, readPageReads } from "@/lib/diy/opportunities/data";
 import { PAGE_LENSES } from "@/lib/diy/opportunities/place";
 import { domainKey, pageKey } from "@/lib/diy/opportunities/classify-rules";
 import { readPlacedKeys } from "@/lib/diy/opportunities/derive";
@@ -374,8 +374,12 @@ function heldRow(rows: readonly Opportunity[], key: string): Opportunity | null 
 
 /**
  * This month's link checks, as a log counts them: the link checks and
- * verifications the ledger holds (usage-meter.ts) plus the pages logged since
- * the client's allowance month began. Throws when a count cannot be read.
+ * verifications the ledger holds plus the pages logged since the client's
+ * allowance month began. On Supabase that is usage-meter.ts's one count,
+ * which holds the logged pages itself (13 Oct 2026, DIY P10's review, outside
+ * P10's 7.11 edit list: this route added them to it, so Settings and Links
+ * counted the same allowance differently). Throws when a count cannot be
+ * read.
  */
 async function logAllowanceUsed(db: ReturnType<typeof supabaseAdmin> | null, client: DiyClient, rows: readonly Opportunity[], now: number): Promise<number> {
   const since = allowanceMonth(client.market, now).start;
@@ -383,8 +387,7 @@ async function logAllowanceUsed(db: ReturnType<typeof supabaseAdmin> | null, cli
     const fx = readDiyFixture<CoreFixture>("core");
     return countLedger(fx.reads, "link_checks") + loggedSince(rows, since);
   }
-  const [checks, logged] = await Promise.all([countUsage(db, client, "link_checks", now), countLoggedSince(db, client.id, since)]);
-  return checks + logged;
+  return countUsage(db, client, "link_checks", now);
 }
 
 /** A won page's last check is more than a week old, or it has none: Won checks it now (section 4.7). */

@@ -427,6 +427,21 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
       readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes("const offer = promptOfferAction(p.slug, p.id);"),
   },
   {
+    route: "/api/app/[client]/links",
+    method: "POST",
+    // 13 Oct 2026, DIY P10 (spec 10 section 3.6): Show the next 5, Pursue and Check a link on Links.
+    why: "Posted by the plain HTML Show the next 5, Pursue and Check a link forms on Links, which the fetch scanner does not read; paths.ts linksAction builds every one of their actions.",
+    earns: () => {
+      const links = readFileSync(join(ROOT, "src/components/app/links/Links.tsx"), "utf8");
+      return (
+        readFileSync(join(ROOT, "src/lib/diy/links/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/links${query({ view: keep.view })}`;") &&
+        links.includes("action={linksAction(slug, { view })}") &&
+        links.includes('action={linksAction(p.slug, { view: "targets" })}') &&
+        links.includes('action={linksAction(p.slug, { view: "check" })}')
+      );
+    },
+  },
+  {
     route: "/api/app/[client]/pages",
     method: "POST",
     // 13 Oct 2026, DIY P9 (P8's handoff, spec 10 section 3.6): add, remove, check, example and Add to Actions on Your pages.

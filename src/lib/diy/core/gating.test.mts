@@ -70,8 +70,10 @@ const FATGRID_ROOTS = ["src/app/app", "src/components/app", "src/lib/diy"];
  * keywords library, /google page and components, P7's opportunities library,
  * pages and components, P8's pages library, pages and components, and their
  * fixtures.
+ * Raised 13 Oct 2026 (DIY P10, wave 3): 199, measured - wave 2's and P10's
+ * /links page, its two components, the links library and fixtures/links.json.
  */
-const SOURCE_FLOOR = 174;
+const SOURCE_FLOOR = 199;
 /**
  * Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai.
  * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 11 on a built tree - P3's six Actions pages (board full and viewer,
@@ -81,8 +83,10 @@ const SOURCE_FLOOR = 174;
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 40 - wave 1's 11, P6's six Google pages, P7's eight Opportunities
  * pages, P8's eleven Your pages pages, and the wave 2 journey's Google, Opportunities, key page and Actions
  * (e2e/app/diy-wave2.spec.mts).
+ * Raised 13 Oct 2026 (DIY P10, wave 3): 51 - wave 2's 40 and P10's eleven Links pages (profile full, dark and
+ * nolinks; gap full and fewcompetitors; targets full, revealed and capped; mentions; check full and nolinks).
  */
-const SAVED_FLOOR = 40;
+const SAVED_FLOOR = 51;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);
@@ -280,8 +284,9 @@ test("no payload built under src/lib/diy puts a price beside a link or placement
  * and allowance checks with the census green. Floor: 416 such files on 13 Oct
  * 2026 (DIY P1); a walk that stops matching reports a clean tree.
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 569, measured on the merged tree.
+ * Raised 13 Oct 2026 (DIY P10, wave 3): 598, measured with the Links page, route, components and library.
  */
-const ALL_SOURCE_FLOOR = 569;
+const ALL_SOURCE_FLOOR = 598;
 const ALL_SOURCE = walk("src").filter((f) => /\.(tsx?|mts)$/.test(f) && !f.endsWith(".test.mts"));
 
 test("only the worker and runOnDemand mint a ReadCtx, anywhere in src", () => {

@@ -5,13 +5,15 @@ import { USAGE_EVENTS, dashPath, readUsage, usagePath, usageProps, usageSlug, we
 
 // 13 Oct 2026, DIY P5: twenty - the brief's sixteen and wave 1's plan_move, plan_task_added, plan_hidden and ai_filter.
 // 13 Oct 2026, DIY P9: thirty-one - wave 2's eleven, as P6, P7 and P8 handed them over (usage.ts says what each records).
-test("the event list is the brief's sixteen, T10 (30 Sep 2026), DIY wave 1's four and wave 2's eleven (13 Oct 2026)", () => {
-  assert.equal(USAGE_EVENTS.length, 31);
+// 13 Oct 2026, DIY P10: thirty-four - wave 3's three on Links: link_reveal, link_check and link_pursue.
+test("the event list is the brief's sixteen, T10 (30 Sep 2026), DIY wave 1's four, wave 2's eleven and wave 3's three (13 Oct 2026)", () => {
+  assert.equal(USAGE_EVENTS.length, 34);
   assert.deepEqual(USAGE_EVENTS.slice(16, 20), ["plan_move", "plan_task_added", "plan_hidden", "ai_filter"]);
-  assert.deepEqual(USAGE_EVENTS.slice(20), [
+  assert.deepEqual(USAGE_EVENTS.slice(20, 31), [
     "gaining_track", "gaining_dismiss", "opportunity_status", "opportunity_log", "prompt_offer", "brief_copy",
     "key_page_add", "page_check", "example_request", "fix_copy", "example_copy",
   ]);
+  assert.deepEqual(USAGE_EVENTS.slice(31), ["link_reveal", "link_check", "link_pursue"]);
   for (const e of USAGE_EVENTS) assert.ok(e.length >= 2 && e.length <= 60, `${e}: dashboard_events.event holds 2-60 characters`);
   assert.ok(!(USAGE_EVENTS as readonly string[]).includes("keyword_checked"), "the spend cap's row is not a usage event");
 });

@@ -2,6 +2,16 @@ import "server-only";
 
 import {
   readBacklinksFilters,
+  readDiyBacklinkList,
+  readDiyBacklinksCompetitors,
+  readDiyBacklinksSummary,
+  readDiyBulkNewLost,
+  readDiyBulkRanks,
+  readDiyBulkReferringDomains,
+  readDiyContentSearch,
+  readDiyDomainGap,
+  readDiyNewLostSeries,
+  readDiyPageGap,
   readDiyCompetitorsDomain,
   readDiyContentParsing,
   readDiyInstantPage,
@@ -11,6 +21,23 @@ import {
   readLabsStatus,
 } from "@/lib/scan/dataforseo";
 import {
+  type BacklinkCompetitor,
+  type BacklinksSummary,
+  backlinksCompetitorsRequest,
+  backlinksNewLostRequest,
+  backlinksSeriesRequest,
+  backlinksSummaryRequest,
+  bulkNewLostRequest,
+  bulkRanksRequest,
+  bulkReferringDomainsRequest,
+  contentSearchRequest,
+  domainGapRequest,
+  type GapDomain,
+  type GapPage,
+  type LinkRow,
+  type MentionCandidate,
+  pageGapRequest,
+  type SeriesWeek,
   type CompetitorDomain,
   competitorsDomainRequest,
   contentParsingRequest,
@@ -122,6 +149,67 @@ export function readPageDeep(ctx: ReadCtx, url: string): Promise<ReadResult<Deep
 /** A page's headings, links and text (cited-page reads, top-3 structure, the verify and link-check fallback). `markdown` only for the client's own page. */
 export function readContentParsing(ctx: ReadCtx, url: string, opts: { markdown?: boolean } = {}): Promise<ReadResult<ParsedPage | null>> {
   return diyRead(ctx, "onpage", contentParsingRequest(url, opts.markdown === true), readDiyContentParsing);
+}
+
+// ── Wave 3: Backlinks and Content Analysis (13 Oct 2026, DIY P10; spec 10 sections 5.2 and 6.3) ──
+//
+// Each through diyRead, on the backlinks or content door, reserved at the request's maximum (the request's
+// rows at $0.000036 on top of $0.024). The client's own domain is the target or the excluded site; the
+// comparison set is handed in by the links jobs, which derive it (links/comparison-set.ts).
+
+/** The client's link profile: rank, links, referring domains, follow split (Links, Your links). */
+export function readBacklinksSummary(ctx: ReadCtx): Promise<ReadResult<BacklinksSummary | null>> {
+  return diyRead(ctx, "backlinks", backlinksSummaryRequest(ctx.client.domain), readDiyBacklinksSummary);
+}
+
+/** The client's referring domains new since `since`, or lost since it, one link per domain. */
+export function readNewLostLinks(ctx: ReadCtx, which: "new" | "lost", since: string): Promise<ReadResult<{ total: number | null; rows: LinkRow[] }>> {
+  return diyRead(ctx, "backlinks", backlinksNewLostRequest({ target: ctx.client.domain, which, since }), readDiyBacklinkList);
+}
+
+/** New and lost referring domains per week (the 13-week bars). */
+export function readNewLostSeries(ctx: ReadCtx, from: string, to: string): Promise<ReadResult<SeriesWeek[]>> {
+  return diyRead(ctx, "backlinks", backlinksSeriesRequest({ target: ctx.client.domain, from, to }), readDiyNewLostSeries);
+}
+
+/** DataForSEO rank for the client and the comparison set. */
+export function readBulkRanks(ctx: ReadCtx, compared: readonly string[]): Promise<ReadResult<Record<string, number | null>>> {
+  return diyRead(ctx, "backlinks", bulkRanksRequest([ctx.client.domain, ...compared]), readDiyBulkRanks);
+}
+
+/** Referring domains for the client and the comparison set. */
+export function readBulkReferringDomains(ctx: ReadCtx, compared: readonly string[]): Promise<ReadResult<Record<string, number | null>>> {
+  return diyRead(ctx, "backlinks", bulkReferringDomainsRequest([ctx.client.domain, ...compared]), readDiyBulkReferringDomains);
+}
+
+/** New and lost referring domains since `from` for the client and the comparison set. */
+export function readBulkNewLost(ctx: ReadCtx, compared: readonly string[], from: string): Promise<ReadResult<Record<string, { newDomains: number | null; lostDomains: number | null }>>> {
+  return diyRead(ctx, "backlinks", bulkNewLostRequest({ targets: [ctx.client.domain, ...compared], from }), readDiyBulkNewLost);
+}
+
+/** The link gap by domain: the compared sites (or one pair of them), the client excluded. */
+export function readDomainGap(ctx: ReadCtx, p: { targets: readonly string[]; mode: "partial" | "all"; countFilter: boolean }): Promise<ReadResult<{ total: number | null; rows: GapDomain[] }>> {
+  return diyRead(ctx, "backlinks", domainGapRequest({ targets: p.targets, exclude: ctx.client.domain, mode: p.mode, countFilter: p.countFilter }), readDiyDomainGap);
+}
+
+/** Link targets by page: the compared sites, the client excluded. */
+export function readPageGap(ctx: ReadCtx, targets: readonly string[]): Promise<ReadResult<{ total: number | null; rows: GapPage[] }>> {
+  return diyRead(ctx, "backlinks", pageGapRequest({ targets, exclude: ctx.client.domain }), readDiyPageGap);
+}
+
+/** Sites sharing backlinks with the client (comparison-set fallback, second source). */
+export function readBacklinksCompetitors(ctx: ReadCtx): Promise<ReadResult<BacklinkCompetitor[]>> {
+  return diyRead(ctx, "backlinks", backlinksCompetitorsRequest(ctx.client.domain), readDiyBacklinksCompetitors);
+}
+
+/**
+ * Pages that mention the client, one per domain (mention candidates), for the
+ * phrase the links job worked out before its first paid read
+ * (dataforseo-request.ts brandPhrase), so a brand the search cannot take is
+ * known before anything is bought.
+ */
+export function readContentSearch(ctx: ReadCtx, phrase: string): Promise<ReadResult<{ total: number | null; rows: MentionCandidate[] }>> {
+  return diyRead(ctx, "content", contentSearchRequest({ phrase }), readDiyContentSearch);
 }
 
 export type FreeAnswer =

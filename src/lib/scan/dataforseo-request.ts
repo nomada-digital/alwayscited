@@ -438,7 +438,8 @@ export const DIY_PATHS = {
   microdata: "/v3/on_page/microdata",
   content_parsing: "/v3/on_page/content_parsing/live",
 } as const;
-export type DiyPathKey = keyof typeof DIY_PATHS;
+/** Every DIY paid path's key: the launch reads above and wave 3's Backlinks and Content Analysis reads (DIY_LINK_PATHS, below). */
+export type DiyPathKey = keyof typeof DIY_PATHS | DiyLinkPathKey;
 
 /**
  * Row ceilings (section 5.6 item 5): 100 by default, 1000 only for
@@ -856,4 +857,582 @@ export function parseBacklinksFilters(task: Task): { groups: Record<string, stri
     if (names.length) groups[group] = names.sort();
   }
   return { groups };
+}
+
+// ───────────────────────────── DIY wave 3: Backlinks and Content Analysis ─────────────────────────────
+
+/**
+ * The Links page's reads (13 Oct 2026, DIY P10; spec 10 sections 5.2, 6.3
+ * and 7.11): every `backlinks/*` live endpoint the page uses and Content
+ * Analysis `search`. Built and parsed here, sent from one door each in
+ * `dataforseo.ts`, and called only from `src/lib/diy/core/doors.ts` through
+ * the capped `diyRead` - so each is reserved in the DIY ledger before it goes
+ * out, on the `backlinks` or `content` door (`request-shape.test.mts` holds
+ * the path, the door and the caller). Nothing calls them while `diy_enabled`
+ * is off.
+ *
+ * **The shapes are DataForSEO's documented ones**, read from the v3
+ * documentation's `.md` pages on 13 Oct 2026 (each dated 2026-10-12 there):
+ * backlinks/summary, backlinks/backlinks, timeseries_new_lost_summary,
+ * bulk_ranks, bulk_referring_domains, bulk_new_lost_referring_domains,
+ * domain_intersection, page_intersection, backlinks/competitors,
+ * content_analysis/search, backlinks/filters and appendix/errors. The saved
+ * samples in `src/lib/diy/core/samples/backlinks_*.json` and
+ * `content_analysis_search.json` were built from each page's own example
+ * response with made-up hosts and text, and `src/lib/diy/links/requests.test.mts`
+ * runs every parser on them.
+ *
+ * **Parsers keep named fields only.** No `attributes`, no `sponsored` (the
+ * summary's attribute counts are folded into followed, not followed and
+ * other here, before anything is stored), no spam score of any kind (the
+ * domain gap uses one as a request filter only), no `keyword_difficulty`.
+ * DataForSEO's `rank` is kept, and every page that shows it says "DataForSEO
+ * estimate, 0-1000, read <date>"; `rank_scale` is asked for explicitly where
+ * a rank is read, so the scale is the one the words state.
+ *
+ * **The [VERIFY] items of spec 10 section 6.10, as the documentation read on
+ * 13 Oct 2026 answers them** (the first paid call of each still logs its
+ * `task.cost`, and the stored `available_filters` names decide at run time):
+ *
+ * - `domain_intersection` can filter and order on `intersections_count`: the
+ *   backlinks/filters page lists it among the domain_intersection filters
+ *   ("intersections_count": "num"). So the gap asks for `intersections_count
+ *   > 1` when the night's stored filter names carry it (`>` as the pages'
+ *   own examples write it; their operator lists name neither `>` nor `>=`),
+ *   ordered by it and then by rank, and falls back to the pairwise
+ *   `intersection_mode "all"` reads when they do not (links/gap.ts).
+ * - Every list read is capped at 100 rows, so its `total_count` is kept
+ *   beside the rows (13 Oct 2026, review of DIY P10: the "N more" counts were
+ *   counted from the 100 rows read and shown as exact). The page says a count
+ *   is exact only when every row was read, and otherwise words it as
+ *   DataForSEO's estimate (links/gap.ts gapCount, links/targets.ts).
+ * - `domain_intersection` does not return `domain_from_platform_type`: its
+ *   per-target object carries `referring_links_platform_types`, which counts
+ *   links per platform type, not the site's own type. So there is no
+ *   platform column (spec 10 section 4.8 row 3: "the column is dropped if
+ *   not"; 13 Oct 2026, review of DIY P10).
+ * - `page_intersection` neither returns nor filters on
+ *   `ranked_keywords_info.page_from_keywords_count_top_10` (absent from both
+ *   its response table and its filter list), so the "ranks in Google's top
+ *   10" column is not built and targets order on links and page rank.
+ * - backlinks/backlinks has no `lost_date` on a link: `last_seen` is kept.
+ * - The summary has no `backlinks_nofollow`: follow status comes from
+ *   `referring_links_attributes`, which counts each link once under every
+ *   attribute it carries - a `rel="nofollow ugc"` link is in both `nofollow`
+ *   and `ugc`. So only `nofollow` is read: not followed is the links marked
+ *   nofollow, followed is the rest, and no other attribute is summed (13 Oct
+ *   2026, review of DIY P10: subtracting `ugc` and `sponsored` as well took
+ *   overlapping links off twice, and showed 20% followed for 60%).
+ * - The access error: appendix/errors lists 40204 "access denied. visit plans
+ *   and subscriptions to activate your subscription and get access to this
+ *   api", the Backlinks commitment's code; the other access and payment
+ *   codes are read the same way (links/access.ts).
+ */
+export const DIY_LINK_PATHS = {
+  backlinks_summary: "/v3/backlinks/summary/live",
+  backlinks_links: "/v3/backlinks/backlinks/live",
+  backlinks_series: "/v3/backlinks/timeseries_new_lost_summary/live",
+  backlinks_bulk_ranks: "/v3/backlinks/bulk_ranks/live",
+  backlinks_bulk_domains: "/v3/backlinks/bulk_referring_domains/live",
+  backlinks_bulk_new_lost: "/v3/backlinks/bulk_new_lost_referring_domains/live",
+  backlinks_domain_gap: "/v3/backlinks/domain_intersection/live",
+  backlinks_page_gap: "/v3/backlinks/page_intersection/live",
+  backlinks_competitors: "/v3/backlinks/competitors/live",
+  content_search: "/v3/content_analysis/search/live",
+} as const;
+export type DiyLinkPathKey = keyof typeof DIY_LINK_PATHS;
+
+/** Which ledger door each wave 3 read goes through (`diy_reads.door`). */
+export const DIY_LINK_DOOR: Record<DiyLinkPathKey, "backlinks" | "content"> = {
+  backlinks_summary: "backlinks",
+  backlinks_links: "backlinks",
+  backlinks_series: "backlinks",
+  backlinks_bulk_ranks: "backlinks",
+  backlinks_bulk_domains: "backlinks",
+  backlinks_bulk_new_lost: "backlinks",
+  backlinks_domain_gap: "backlinks",
+  backlinks_page_gap: "backlinks",
+  backlinks_competitors: "backlinks",
+  content_search: "content",
+};
+
+/**
+ * Row ceilings (section 5.6 item 5): 100 at most on every wave 3 list, 20 for
+ * backlinks competitors; anything higher is refused here rather than sent. A
+ * Backlinks read bills $0.000036 a row on top of its $0.024 (section 5.1), so
+ * the limit is the bill's upper bound.
+ */
+export const DIY_LINK_LIMIT = { backlinks_links: 100, backlinks_domain_gap: 100, backlinks_page_gap: 100, backlinks_competitors: 20, content_search: 100 } as const;
+
+function linkLimit(endpoint: keyof typeof DIY_LINK_LIMIT, asked: number): number {
+  const ceiling = DIY_LINK_LIMIT[endpoint];
+  if (!Number.isInteger(asked) || asked < 1 || asked > ceiling) throw new Error(`${endpoint} limit ${asked} is outside 1-${ceiling}`);
+  return asked;
+}
+
+/** The comparison set and the client: at most 4 targets on a bulk read (the client and 3), at most 3 compared. */
+export const BULK_TARGETS_MAX = 4;
+export const GAP_TARGETS_MAX = 3;
+
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const isDay = (d: string) => DAY_ONLY.test(d) && !Number.isNaN(Date.parse(`${d}T00:00:00Z`));
+/** A Backlinks filter time: "yyyy-mm-dd hh:mm:ss +00:00" (backlinks/filters, the `time` type). */
+const filterTime = (d: string) => {
+  if (!isDay(d)) throw new Error(`not a day: ${d}`);
+  return `${d} 00:00:00 +00:00`;
+};
+
+function targetList(domains: readonly string[], max: number): string[] {
+  const out = domains.map(diyTarget);
+  if (out.length < 1 || out.length > max) throw new Error(`${out.length} targets: 1-${max} only`);
+  if (new Set(out).size !== out.length) throw new Error("a target is asked twice");
+  return out;
+}
+
+/** The intersection endpoints take their targets keyed "1", "2", "3" (domain_intersection and page_intersection, `targets` object). */
+function keyedTargets(domains: readonly string[], min: number): Record<string, string> {
+  const list = targetList(domains, GAP_TARGETS_MAX);
+  if (list.length < min) throw new Error(`${list.length} targets: at least ${min}`);
+  return Object.fromEntries(list.map((d, i) => [String(i + 1), d]));
+}
+
+/** The client's profile: one object, billed as one row ([VERIFY] on the first call's task.cost). $0.024036. */
+export function backlinksSummaryRequest(target: string): DiyRequest {
+  return {
+    endpoint: "backlinks_summary",
+    path: DIY_LINK_PATHS.backlinks_summary,
+    timeoutMs: 60_000,
+    rows: 1,
+    body: [{ target: diyTarget(target), include_subdomains: true, backlinks_status_type: "live", rank_scale: "one_thousand" }],
+  };
+}
+
+/**
+ * The week's new or lost referring domains, one link per domain, newest
+ * first (spec 10 section 5.2: two filtered calls, because one call returning
+ * both is not confirmed). New links are live ones first seen since `since`;
+ * lost ones are asked for with `backlinks_status_type: "lost"` - a lost link
+ * is not in the default `live` set (backlinks/backlinks, read 13 Oct 2026) -
+ * last seen since `since`. 100 rows: $0.0276.
+ */
+export function backlinksNewLostRequest(p: { target: string; which: "new" | "lost"; since: string; limit?: number }): DiyRequest {
+  const limit = linkLimit("backlinks_links", p.limit ?? 100);
+  const at = filterTime(p.since);
+  const isNew = p.which === "new";
+  return {
+    endpoint: "backlinks_links",
+    path: DIY_LINK_PATHS.backlinks_links,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [
+      {
+        target: diyTarget(p.target),
+        mode: "one_per_domain",
+        backlinks_status_type: isNew ? "live" : "lost",
+        filters: isNew ? [["is_new", "=", true], "and", ["first_seen", ">", at]] : [["is_lost", "=", true], "and", ["last_seen", ">", at]],
+        order_by: [isNew ? "first_seen,desc" : "last_seen,desc"],
+        limit,
+      },
+    ],
+  };
+}
+
+/** New and lost referring domains per week since `from` (the 13-week bars). About 14 rows: $0.0245. */
+export function backlinksSeriesRequest(p: { target: string; from: string; to: string }): DiyRequest {
+  if (!isDay(p.from) || !isDay(p.to) || p.from > p.to) throw new Error(`not a range: ${p.from} to ${p.to}`);
+  const weeks = Math.ceil((Date.parse(`${p.to}T00:00:00Z`) - Date.parse(`${p.from}T00:00:00Z`)) / (7 * 86_400_000)) + 1;
+  if (weeks > 27) throw new Error("the series is 26 weeks at most");
+  return {
+    endpoint: "backlinks_series",
+    path: DIY_LINK_PATHS.backlinks_series,
+    timeoutMs: 60_000,
+    rows: weeks,
+    body: [{ target: diyTarget(p.target), date_from: p.from, date_to: p.to, group_range: "week", include_subdomains: true }],
+  };
+}
+
+/** DataForSEO's rank for the client and its comparison set. 4 targets: $0.0241. */
+export function bulkRanksRequest(targets: readonly string[]): DiyRequest {
+  const list = targetList(targets, BULK_TARGETS_MAX);
+  return { endpoint: "backlinks_bulk_ranks", path: DIY_LINK_PATHS.backlinks_bulk_ranks, timeoutMs: 60_000, rows: list.length, body: [{ targets: list, rank_scale: "one_thousand" }] };
+}
+
+/** Referring domains for the client and its comparison set. 4 targets: $0.0241. */
+export function bulkReferringDomainsRequest(targets: readonly string[]): DiyRequest {
+  const list = targetList(targets, BULK_TARGETS_MAX);
+  return { endpoint: "backlinks_bulk_domains", path: DIY_LINK_PATHS.backlinks_bulk_domains, timeoutMs: 60_000, rows: list.length, body: [{ targets: list }] };
+}
+
+/** New and lost referring domains since `from` (30 days back) for the client and its comparison set. 4 targets: $0.0241. */
+export function bulkNewLostRequest(p: { targets: readonly string[]; from: string }): DiyRequest {
+  const list = targetList(p.targets, BULK_TARGETS_MAX);
+  if (!isDay(p.from)) throw new Error(`not a day: ${p.from}`);
+  return { endpoint: "backlinks_bulk_new_lost", path: DIY_LINK_PATHS.backlinks_bulk_new_lost, timeoutMs: 60_000, rows: list.length, body: [{ targets: list, date_from: p.from }] };
+}
+
+/**
+ * Rank keys for `order_by`, one per target key ("1.rank,desc"), at most
+ * `room` of them: the intersection endpoints sort on a target's own block
+ * (backlinks/filters lists `$key.rank` and `$key.page_from_rank`), and take
+ * three sorting rules at most.
+ */
+const rankKeys = (keys: readonly string[], field: "rank" | "page_from_rank", room: number): string[] => keys.slice(0, room).map((k) => `${k}.${field},desc`);
+
+/**
+ * The link gap by domain (spec 10 sections 5.2 and 6.3): referring domains
+ * linking to the comparison set and not to the client, followed links only,
+ * with a spam score under 30 as a request filter only (never stored or
+ * shown). Two forms:
+ *
+ * - `partial` over the 3, with `intersections_count > 1` when the stored
+ *   filter names carry it, so `total_count` is the n >= 2 count; ordered by
+ *   that count, then rank, so the 100 rows read are the head of the set;
+ * - `all` over one pair, the pairwise fallback: three of these, ordered by
+ *   rank. Their union is the n >= 2 set only while each pair's
+ *   `total_count` is within the rows read; past that it is the head of each
+ *   pair, and the page words its count as at least (links/gap.ts).
+ *
+ * 100 rows: $0.0276 each.
+ */
+export function domainGapRequest(p: { targets: readonly string[]; exclude: string; mode: "partial" | "all"; countFilter: boolean; limit?: number }): DiyRequest {
+  const limit = linkLimit("backlinks_domain_gap", p.limit ?? 100);
+  const targets = keyedTargets(p.targets, 2);
+  const keys = Object.keys(targets);
+  if (p.mode === "all" && keys.length !== 2) throw new Error("the pairwise read takes one pair");
+  const order = p.countFilter ? ["intersections_count,desc", ...rankKeys(keys, "rank", 2)] : rankKeys(keys, "rank", 3);
+  return {
+    endpoint: "backlinks_domain_gap",
+    path: DIY_LINK_PATHS.backlinks_domain_gap,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [
+      {
+        targets,
+        exclude_targets: [diyTarget(p.exclude)],
+        intersection_mode: p.mode,
+        include_subdomains: true,
+        backlinks_filters: [["dofollow", "=", true], "and", ["backlink_spam_score", "<", 30]],
+        ...(p.countFilter ? { filters: ["intersections_count", ">", 1] } : {}),
+        order_by: order,
+        rank_scale: "one_thousand",
+        limit,
+      },
+    ],
+  };
+}
+
+/**
+ * Link targets by page (spec 10 sections 5.2 and 6.3): pages linking to at
+ * least one of the comparison set and not to the client, from inside an
+ * article, followed - each target's link tested on its own key
+ * (`$key.dofollow`, `$key.semantic_location`), six conditions under the
+ * documented eight. Ordered by how many of the set a page links to, then by
+ * the page's rank, so the 100 rows read are the head of the list (13 Oct
+ * 2026, review of DIY P10: unordered, the 100 were an arbitrary 100).
+ * 100 rows: $0.0276.
+ */
+export function pageGapRequest(p: { targets: readonly string[]; exclude: string; limit?: number }): DiyRequest {
+  const limit = linkLimit("backlinks_page_gap", p.limit ?? 100);
+  const targets = keyedTargets(p.targets, 1);
+  const keys = Object.keys(targets);
+  const each = keys.map((k) => [[`${k}.dofollow`, "=", true], "and", [`${k}.semantic_location`, "=", "article"]]);
+  const filters = each.length === 1 ? each[0] : each.flatMap((f, i) => (i === 0 ? [f] : ["or", f]));
+  const order_by = keys.length > 1 ? ["intersections_count,desc", ...rankKeys(keys, "page_from_rank", 2)] : rankKeys(keys, "page_from_rank", 1);
+  return {
+    endpoint: "backlinks_page_gap",
+    path: DIY_LINK_PATHS.backlinks_page_gap,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [{ targets, exclude_targets: [diyTarget(p.exclude)], intersection_mode: "partial", include_subdomains: true, filters, order_by, rank_scale: "one_thousand", limit }],
+  };
+}
+
+/** Domains sharing backlinks with the client, the large generalists left out (comparison-set fallback, second source). 20 rows: $0.0247. */
+export function backlinksCompetitorsRequest(target: string): DiyRequest {
+  const limit = linkLimit("backlinks_competitors", 20);
+  return {
+    endpoint: "backlinks_competitors",
+    path: DIY_LINK_PATHS.backlinks_competitors,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [{ target: diyTarget(target), limit, main_domain: true, exclude_large_domains: true, rank_scale: "one_thousand" }],
+  };
+}
+
+const PHRASE = /^[\p{L}\p{N}][\p{L}\p{N} .&'-]{1,59}$/u;
+
+/** A brand as the content search asks for it: 2-60 letters, digits, spaces and . & ' -; nothing that could break the quoted phrase. Throws on anything else. */
+export function searchBrand(raw: string): string {
+  const b = raw.trim().replace(/\s+/g, " ");
+  if (!PHRASE.test(b)) throw new Error(`not a brand the content search can be asked for: ${JSON.stringify(raw.slice(0, 80))}`);
+  return b;
+}
+
+/**
+ * The phrase a client's mentions are searched for, worked out before any
+ * paid read (13 Oct 2026, review of DIY P10: an ordinary company name -
+ * "Smith, Jones & Co", "Yahoo!", "Brand (UK)" - threw in the request builder
+ * after the month's other reads were bought, and the job was retried and
+ * re-bought). The brand with a bracketed qualifier dropped and every
+ * character the quoted phrase cannot take turned to a space, cut at a word
+ * by 60 characters; when that leaves fewer than 3 letters or digits, the
+ * first label of the client's domain ("tallyroo" for tallyroo.com); and when
+ * neither can be asked, null - the job notes it and reads no mentions. Pure.
+ */
+export function brandPhrase(brand: string | null | undefined, domain: string): string | null {
+  const tidy = (raw: string): string | null => {
+    let b = raw
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/[^\p{L}\p{N} .&'-]+/gu, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[^\p{L}\p{N}]+/u, "")
+      .replace(/[\s.&'-]+$/u, "");
+    if (b.length > 60) b = b.slice(0, 61).replace(/\s+\S*$/u, "").trim();
+    return (b.match(/[\p{L}\p{N}]/gu) ?? []).length >= 3 && PHRASE.test(b) ? b : null;
+  };
+  const label = domain.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[./]/)[0] ?? "";
+  return (brand ? tidy(brand) : null) ?? tidy(label);
+}
+
+/**
+ * Pages that mention the brand, one per domain (mention candidates, confirmed
+ * by our own read before any is shown): English-language pages only, every
+ * market reading English (as the Labs reads' `language_code`), most
+ * prominent citation first (`score`, which the documentation describes as
+ * built from the page's and domain's rank and the phrase in its title, URL
+ * and snippet). Without an `order_by` the documented default is
+ * `content_info.sentiment_connotations.anger,desc` (13 Oct 2026, review of
+ * DIY P10). 100 rows: $0.0276.
+ */
+export function contentSearchRequest(p: { phrase: string; limit?: number }): DiyRequest {
+  const limit = linkLimit("content_search", p.limit ?? 100);
+  return {
+    endpoint: "content_search",
+    path: DIY_LINK_PATHS.content_search,
+    timeoutMs: 60_000,
+    rows: limit,
+    body: [{ keyword: `"${searchBrand(p.phrase)}"`, search_mode: "one_per_domain", filters: ["content_info.language", "=", "en"], order_by: ["score,desc"], limit }],
+  };
+}
+
+// ── wave 3 parsers: named fields only ──
+
+const host = (v: unknown): string | null => {
+  const t = text(v, 253);
+  return t ? t.toLowerCase().replace(/^www\./, "") : null;
+};
+const nonNeg = (v: unknown): number | null => {
+  const n = numOrNull(v);
+  return n !== null && n >= 0 ? n : null;
+};
+
+/**
+ * Follow status of the profile's links, from the attribute counts: the links
+ * marked `nofollow` are not followed, and the rest are followed. Nothing else
+ * is summed: the counts overlap (a link is counted under every attribute it
+ * carries), so `ugc` or `sponsored` subtracted as well would take a
+ * `rel="nofollow ugc"` link off twice (13 Oct 2026, review of DIY P10).
+ */
+export type FollowSplit = { followed: number; notFollowed: number };
+
+export function followSplit(total: number | null, attrs: unknown): FollowSplit | null {
+  if (total === null) return null;
+  const notFollowed = Math.min(total, nonNeg(obj(attrs).nofollow) ?? 0);
+  return { followed: total - notFollowed, notFollowed };
+}
+
+export type BacklinksSummary = {
+  /** DataForSEO's rank, 0-1000 (a vendor estimate). */
+  rank: number | null;
+  backlinks: number | null;
+  referringDomains: number | null;
+  referringMainDomains: number | null;
+  firstSeen: string | null;
+  follow: FollowSplit | null;
+};
+
+export function parseBacklinksSummary(task: Task): BacklinksSummary | null {
+  const r = firstResult(task);
+  if (!Object.keys(r).length) return null;
+  const backlinks = nonNeg(r.backlinks);
+  return {
+    rank: nonNeg(r.rank),
+    backlinks,
+    referringDomains: nonNeg(r.referring_domains),
+    referringMainDomains: nonNeg(r.referring_main_domains),
+    firstSeen: dayOrNull(r.first_seen),
+    follow: followSplit(backlinks, r.referring_links_attributes),
+  };
+}
+
+/** One link of the week's new or lost set: the domain, the page it is on, the page of the client's it points at. */
+export type LinkRow = { domain: string; urlFrom: string | null; urlTo: string | null; followed: boolean | null; firstSeen: string | null; lastSeen: string | null };
+
+export function parseBacklinkList(task: Task): { total: number | null; rows: LinkRow[] } {
+  const r = firstResult(task);
+  const rows: LinkRow[] = [];
+  for (const raw of arr(r.items)) {
+    const it = obj(raw);
+    const domain = host(it.domain_from);
+    if (!domain) continue;
+    rows.push({ domain, urlFrom: text(it.url_from, 500), urlTo: text(it.url_to, 500), followed: boolOrNull(it.dofollow), firstSeen: dayOrNull(it.first_seen), lastSeen: dayOrNull(it.last_seen) });
+  }
+  return { total: nonNeg(r.total_count), rows };
+}
+
+export type SeriesWeek = { week: string; newDomains: number; lostDomains: number };
+
+/** The weekly bars: each week's last day, its new and lost referring domains. */
+export function parseNewLostSeries(task: Task): SeriesWeek[] {
+  const out: SeriesWeek[] = [];
+  for (const raw of arr(firstResult(task).items)) {
+    const it = obj(raw);
+    const week = dayOrNull(it.date);
+    if (!week) continue;
+    out.push({ week, newDomains: nonNeg(it.new_referring_domains) ?? 0, lostDomains: nonNeg(it.lost_referring_domains) ?? 0 });
+  }
+  return out.sort((a, b) => a.week.localeCompare(b.week));
+}
+
+/** A bulk read, per target as DataForSEO echoes it (lower case, no `www.`). */
+export function parseBulkRanks(task: Task): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (const raw of arr(firstResult(task).items)) {
+    const it = obj(raw);
+    const t = host(it.target);
+    if (t) out[t] = nonNeg(it.rank);
+  }
+  return out;
+}
+
+export function parseBulkReferringDomains(task: Task): Record<string, number | null> {
+  const out: Record<string, number | null> = {};
+  for (const raw of arr(firstResult(task).items)) {
+    const it = obj(raw);
+    const t = host(it.target);
+    if (t) out[t] = nonNeg(it.referring_domains);
+  }
+  return out;
+}
+
+export function parseBulkNewLost(task: Task): Record<string, { newDomains: number | null; lostDomains: number | null }> {
+  const out: Record<string, { newDomains: number | null; lostDomains: number | null }> = {};
+  for (const raw of arr(firstResult(task).items)) {
+    const it = obj(raw);
+    const t = host(it.target);
+    if (t) out[t] = { newDomains: nonNeg(it.new_referring_domains), lostDomains: nonNeg(it.lost_referring_domains) };
+  }
+  return out;
+}
+
+/** One referring domain of the gap: which of the compared sites it links to, its best rank among them, its earliest first seen. */
+export type GapDomain = { domain: string; linksTo: string[]; rank: number | null; firstSeen: string | null };
+
+/**
+ * domain_intersection's rows. Each item's `domain_intersection` holds one
+ * object per target key ("1"-"3"), absent or null where the domain does not
+ * link to that target (which of the two is [VERIFY] on the first partial
+ * read; both read the same here); `linksTo` names the targets from the
+ * result's own `targets` echo.
+ */
+export function parseDomainIntersection(task: Task): { total: number | null; rows: GapDomain[] } {
+  const r = firstResult(task);
+  const names = obj(r.targets);
+  const rows: GapDomain[] = [];
+  for (const raw of arr(r.items)) {
+    const di = obj(obj(raw).domain_intersection);
+    let domain: string | null = null;
+    const linksTo: string[] = [];
+    let rank: number | null = null;
+    let firstSeen: string | null = null;
+    for (const key of Object.keys(di).sort()) {
+      const b = di[key];
+      if (!b || typeof b !== "object") continue;
+      const block = obj(b);
+      const target = host(names[key]);
+      const from = host(block.target);
+      if (!target || !from) continue;
+      domain ??= from;
+      linksTo.push(target);
+      const rk = nonNeg(block.rank);
+      if (rk !== null) rank = Math.max(rank ?? 0, rk);
+      const fs = dayOrNull(block.first_seen);
+      if (fs && (!firstSeen || fs < firstSeen)) firstSeen = fs;
+    }
+    if (!domain || !linksTo.length) continue;
+    rows.push({ domain, linksTo, rank, firstSeen });
+  }
+  return { total: nonNeg(r.total_count), rows };
+}
+
+/** One page of the link targets: the page, and its followed in-article link to each compared site it links to. */
+export type GapPage = {
+  urlFrom: string;
+  title: string | null;
+  domain: string;
+  links: { target: string; urlTo: string | null; anchor: string | null }[];
+  pageRank: number | null;
+  firstSeen: string | null;
+};
+
+/**
+ * page_intersection's rows. Each item's `page_intersection` holds, per target
+ * key, an array of that page's links to the target. Only links that are
+ * followed and inside an article are kept (the request filters on them too):
+ * a page with none is dropped.
+ */
+export function parsePageIntersection(task: Task): { total: number | null; rows: GapPage[] } {
+  const r = firstResult(task);
+  const names = obj(r.targets);
+  const rows: GapPage[] = [];
+  for (const raw of arr(r.items)) {
+    const pi = obj(obj(raw).page_intersection);
+    let page: Omit<GapPage, "links"> | null = null;
+    const links: GapPage["links"] = [];
+    for (const key of Object.keys(pi).sort()) {
+      const target = host(names[key]);
+      if (!target) continue;
+      const kept = arr(pi[key]).map(obj).find((l) => l.dofollow === true && l.semantic_location === "article");
+      if (!kept) continue;
+      const urlFrom = text(kept.url_from, 500);
+      const domain = host(kept.domain_from);
+      if (!urlFrom || !domain) continue;
+      const fs = dayOrNull(kept.first_seen);
+      page ??= { urlFrom, title: text(kept.page_from_title, 300), domain, pageRank: nonNeg(kept.page_from_rank), firstSeen: fs };
+      if (fs && page.firstSeen && fs < page.firstSeen) page.firstSeen = fs;
+      links.push({ target, urlTo: text(kept.url_to, 500), anchor: text(kept.anchor, 200) });
+    }
+    if (page && links.length) rows.push({ ...page, links });
+  }
+  return { total: nonNeg(r.total_count), rows };
+}
+
+export type BacklinkCompetitor = { domain: string; rank: number | null; intersections: number | null };
+
+export function parseBacklinksCompetitors(task: Task): BacklinkCompetitor[] {
+  const out: BacklinkCompetitor[] = [];
+  for (const raw of arr(firstResult(task).items)) {
+    const it = obj(raw);
+    const domain = host(it.target);
+    if (domain) out.push({ domain, rank: nonNeg(it.rank), intersections: nonNeg(it.intersections) });
+  }
+  return out;
+}
+
+/** A page that mentions the brand: a candidate only, until our own read confirms it names the client and does not link. */
+export type MentionCandidate = { url: string; domain: string; title: string | null; published: string | null; snippet: string | null };
+
+export function parseContentSearch(task: Task): { total: number | null; rows: MentionCandidate[] } {
+  const r = firstResult(task);
+  const rows: MentionCandidate[] = [];
+  for (const raw of arr(r.items)) {
+    const it = obj(raw);
+    const url = text(it.url, 500);
+    const domain = host(it.domain);
+    if (!url || !domain) continue;
+    const c = obj(it.content_info);
+    rows.push({ url, domain, title: text(c.main_title, 300) ?? text(c.title, 300), published: dayOrNull(c.date_published), snippet: text(c.snippet, 200) });
+  }
+  return { total: nonNeg(r.total_count), rows };
 }

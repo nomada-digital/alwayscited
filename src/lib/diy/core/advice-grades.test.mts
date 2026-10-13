@@ -38,8 +38,10 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
  * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 5 - P3's "Why this is first" line per severity (plan/why-first.advice.ts).
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 104 - P3's 5, P7's 43 playbook lines (opportunities/playbooks.advice.ts)
  * and P8's 56 schema lines (pages/schema.advice.ts).
+ * Raised 13 Oct 2026 (DIY P10, wave 3): 119 - wave 2's 104 and P10's 15 link playbook lines (links/links.advice.ts:
+ * Earn a link's 7, Ask for a link's 6, who to write to, and the Reclaim method line).
  */
-const ADVICE_FLOOR = 104;
+const ADVICE_FLOOR = 119;
 /**
  * Rendered (not internal) sources. 13 Oct 2026, DIY P1: 5 at seed - G1, G2, G3, G4 and S41 (core.sources.ts).
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 11 - the seed's 5 and P8's 6 crawler sources (pages.sources.ts), which

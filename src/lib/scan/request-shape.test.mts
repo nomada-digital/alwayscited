@@ -609,3 +609,109 @@ test("the endpoints the DIY build never calls appear nowhere", () => {
   const found = sourceFiles(ROOT).filter((f) => banned.test(code(readFileSync(join(ROOT, f), "utf8"))));
   assert.deepEqual(found, []);
 });
+
+// ───────────────────────────── the DIY wave 3 reads ─────────────────────────────
+
+/**
+ * 13 Oct 2026, DIY P10 (spec 10 sections 5.2, 5.6 and 7.11): the Links
+ * page's Backlinks and Content Analysis reads, each held as the launch reads
+ * above are - its path built in `dataforseo-request.ts` alone, its one door in
+ * `dataforseo.ts`, that door referenced from `src/lib/diy/core/doors.ts`
+ * alone, where `diyRead` reserves it in the DIY ledger on its own door before
+ * it is sent - plus their row ceilings. The fact moved with wave 3: ten more
+ * paid paths, ten more doors and ten more builders.
+ */
+const DIY_LINK_DOORS = [
+  "readDiyBacklinksSummary",
+  "readDiyBacklinkList",
+  "readDiyNewLostSeries",
+  "readDiyBulkRanks",
+  "readDiyBulkReferringDomains",
+  "readDiyBulkNewLost",
+  "readDiyDomainGap",
+  "readDiyPageGap",
+  "readDiyBacklinksCompetitors",
+  "readDiyContentSearch",
+];
+const DIY_LINK_BUILDERS = [
+  "backlinksSummaryRequest",
+  "backlinksNewLostRequest",
+  "backlinksSeriesRequest",
+  "bulkRanksRequest",
+  "bulkReferringDomainsRequest",
+  "bulkNewLostRequest",
+  "domainGapRequest",
+  "pageGapRequest",
+  "backlinksCompetitorsRequest",
+  "contentSearchRequest",
+];
+
+test("DIY wave 3: each Backlinks and Content Analysis path is built in one module", async () => {
+  const { DIY_LINK_PATHS } = await import("./dataforseo-request.ts");
+  const paths = Object.values(DIY_LINK_PATHS).map((p) => p.replace(/^\/v3\//, ""));
+  assert.equal(paths.length, 10, "nine Backlinks reads and the content search");
+  for (const p of paths) assert.match(p, /^(backlinks\/[a-z_]+\/live|content_analysis\/search\/live)$/, p);
+  const where: Record<string, string[]> = Object.fromEntries(paths.map((p) => [p, []]));
+  for (const file of sourceFiles(ROOT)) {
+    const src = code(readFileSync(join(ROOT, file), "utf8"));
+    for (const p of paths) if (src.includes(p)) where[p]!.push(file);
+  }
+  for (const p of paths) assert.deepEqual(where[p], ["src/lib/scan/dataforseo-request.ts"], p);
+});
+
+test("DIY wave 3: each door lives in dataforseo.ts and is referenced from doors.ts alone; each builder is called from doors.ts alone", () => {
+  const refs: Record<string, string[]> = Object.fromEntries([...DIY_LINK_DOORS, ...DIY_LINK_BUILDERS].map((n) => [n, []]));
+  for (const file of sourceFiles(ROOT)) {
+    const src = code(readFileSync(join(ROOT, file), "utf8"));
+    for (const name of DIY_LINK_DOORS) if (new RegExp(`(?<![\\w.])${name}\\b`).test(src.replace(new RegExp(`export async function ${name}\\b`, "g"), ""))) refs[name]!.push(file);
+    for (const name of DIY_LINK_BUILDERS) if (new RegExp(`(?<![\\w.])(?<!function\\s+)${name}\\(`).test(src)) refs[name]!.push(file);
+  }
+  const want = Object.fromEntries([...DIY_LINK_DOORS, ...DIY_LINK_BUILDERS].map((n) => [n, ["src/lib/diy/core/doors.ts"]]));
+  assert.deepEqual(refs, want);
+  const doors = readFileSync(join(ROOT, "src/lib/scan/dataforseo.ts"), "utf8");
+  for (const name of DIY_LINK_DOORS) assert.match(doors, new RegExp(`export async function ${name}\\(`), `${name} is a door in dataforseo.ts`);
+});
+
+test("DIY wave 3: every read goes through diyRead on the door its path is recorded under", async () => {
+  const { DIY_LINK_DOOR } = await import("./dataforseo-request.ts");
+  const doors = code(readFileSync(join(ROOT, "src/lib/diy/core/doors.ts"), "utf8"));
+  const builderDoor: Record<string, string> = {
+    backlinksSummaryRequest: DIY_LINK_DOOR.backlinks_summary,
+    backlinksNewLostRequest: DIY_LINK_DOOR.backlinks_links,
+    backlinksSeriesRequest: DIY_LINK_DOOR.backlinks_series,
+    bulkRanksRequest: DIY_LINK_DOOR.backlinks_bulk_ranks,
+    bulkReferringDomainsRequest: DIY_LINK_DOOR.backlinks_bulk_domains,
+    bulkNewLostRequest: DIY_LINK_DOOR.backlinks_bulk_new_lost,
+    domainGapRequest: DIY_LINK_DOOR.backlinks_domain_gap,
+    pageGapRequest: DIY_LINK_DOOR.backlinks_page_gap,
+    backlinksCompetitorsRequest: DIY_LINK_DOOR.backlinks_competitors,
+    contentSearchRequest: DIY_LINK_DOOR.content_search,
+  };
+  for (const [builder, door] of Object.entries(builderDoor)) {
+    assert.match(doors, new RegExp(`return diyRead\\(ctx, "${door}", ${builder}\\(`), `${builder} goes out through diyRead on the ${door} door`);
+  }
+  assert.equal(Object.values(DIY_LINK_DOOR).filter((d) => d === "content").length, 1, "the content search is the one content read");
+});
+
+test("DIY wave 3: the row ceilings - 100 a list, 20 for backlinks competitors, anything higher refused in code", async () => {
+  const m = await import("./dataforseo-request.ts");
+  assert.deepEqual(m.DIY_LINK_LIMIT, { backlinks_links: 100, backlinks_domain_gap: 100, backlinks_page_gap: 100, backlinks_competitors: 20, content_search: 100 });
+  const three = ["ledgerline.com", "brightbook.example", "countwise.example"];
+  const reqs = [
+    m.backlinksNewLostRequest({ target: "tallyroo.com", which: "new", since: "2026-10-06" }),
+    m.domainGapRequest({ targets: three, exclude: "tallyroo.com", mode: "partial", countFilter: true }),
+    m.pageGapRequest({ targets: three, exclude: "tallyroo.com" }),
+    m.backlinksCompetitorsRequest("tallyroo.com"),
+    m.contentSearchRequest({ phrase: "Tallyroo" }),
+  ];
+  for (const req of reqs) {
+    const limit = (req.body as { limit: number }[])[0]!.limit;
+    assert.ok(limit <= m.DIY_LIMIT_DEFAULT, `${req.endpoint} asks for ${limit} rows`);
+    assert.equal(limit, req.rows, `${req.endpoint}: the rows reserved are the rows asked for`);
+  }
+  assert.throws(() => m.backlinksNewLostRequest({ target: "tallyroo.com", which: "lost", since: "2026-10-06", limit: 101 }));
+  assert.throws(() => m.contentSearchRequest({ phrase: "Tallyroo", limit: 1000 }));
+  assert.equal(m.backlinksSummaryRequest("tallyroo.com").rows, 1, "the summary reserves one row");
+  assert.equal(m.bulkRanksRequest(["tallyroo.com", ...three]).rows, 4, "a bulk read reserves a row a target");
+  assert.throws(() => m.bulkRanksRequest(["tallyroo.com", ...three, "sumly.example"]), "the client and three at most");
+});

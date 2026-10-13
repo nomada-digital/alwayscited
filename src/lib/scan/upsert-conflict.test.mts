@@ -254,6 +254,12 @@ test("the upsert sites are the ones we think they are", () => {
   assert.deepEqual(
     sites.map((s) => `${s.table}:${key((s.onConflict ?? "").split(","))}`).sort(),
     [
+      // 13 Oct 2026, DIY P10 (spec 10 sections 5.8 and 6.3): the Backlinks jobs
+      // store one read per client, kind and night on backlink_reads' unique
+      // (client_domain_id, kind, read_on) in 20261014210000_links.sql, so the
+      // worker's stale reclaim running a job twice writes one row
+      // (links/write.ts writeLinkRead). Sorts first.
+      "backlink_reads:client_domain_id,kind,read_on",
       // 29 Sep 2026, T2 /admin/tracking: a client from a scan on client_domains'
       // original unique key (scan_phase1), and a member on dashboard_members'
       // (account_id, email) - once as the owner at create, once from the form.
@@ -261,6 +267,10 @@ test("the upsert sites are the ones we think they are", () => {
       // signup (checkout/signup.ts), the client and its owner on T2's keys.
       "client_domains:account_id,domain,market,topic",
       "client_domains:account_id,domain,market,topic",
+      // 13 Oct 2026, DIY P10 (spec 10 section 6.3): the month's comparison set,
+      // one per client and month on comparison_sets' primary key in
+      // 20261014210000_links.sql (links/write.ts writeSet).
+      "comparison_sets:client_domain_id,month",
       // 9 Oct 2026, AG-1: a member limited to one more client, or a removed scope row
       // brought back (scope.ts addScope), on the table's primary key in
       // 20261009010000_member_clients.sql. Sorts ahead of dashboard_members.

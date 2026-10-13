@@ -356,6 +356,22 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     evidence: /await runOnDemand\(\{ db, client: diy, member: email, action: "page_check", now: \(\) => nowMs \}/,
     where: "src/app/api/app/[client]/pages/route.ts",
   },
+  /**
+   * 13 October 2026, DIY P10 (spec 10 sections 3.6 and 4.8): Links' one
+   * on-demand door, Check a link. A member's button, not a visitor's scan, so
+   * checkCeilings is the wrong guard. Show the next 5 and Pursue read stored
+   * rows only and spend nothing.
+   */
+  "app/[client]/links": {
+    why:
+      "Check a link, for a signed-in owner or editor (writeRole). It reads the page with our own fetch first, which is " +
+      "free; only the content_parsing fallback is paid, and it goes through runOnDemand: refused for an inactive client, " +
+      "while a tracking run is reading, past the month's 30 link checks (10 in trial, shared with Verify now and Log a " +
+      "site and counted before anything is read) or past the DIY caps, and refused while diy_enabled is off. Reveal and " +
+      "Pursue read stored rows only.",
+    evidence: /await runOnDemand\(\{ db, client: diy, member: email!, action: "link_check" \}/,
+    where: "src/app/api/app/[client]/links/route.ts",
+  },
   "cron/purge-responses": {
     why:
       "DIY night pass 1 at 03:30 UTC, behind CRON_SECRET. Makes the two free vendor reads (cost 0) once a UTC day, " +
@@ -669,8 +685,14 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * no scan; runOnDemand and the DIY ledger hold them behind `diy_enabled`,
      * the allowances and the DIY caps, so `scans_enabled` has nothing to
      * refuse and the decision is not moved.
+     *
+     * Eighteen on 13 Oct 2026 (DIY P10, wave 3): `app/[client]/links`, Check
+     * a link. It starts no scan; runOnDemand and the DIY ledger hold its paid
+     * fallback behind `diy_enabled`, the link-check allowance and the DIY
+     * caps, so `scans_enabled` has nothing to refuse and the decision is not
+     * moved.
      */
-    17,
+    18,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });

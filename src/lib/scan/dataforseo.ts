@@ -1,8 +1,26 @@
 import "server-only";
 
 import {
+  type BacklinkCompetitor,
+  type BacklinksSummary,
   budgetFor,
   type CompetitorDomain,
+  DIY_LINK_PATHS,
+  type GapDomain,
+  type GapPage,
+  type LinkRow,
+  type MentionCandidate,
+  parseBacklinkList,
+  parseBacklinksCompetitors,
+  parseBacklinksSummary,
+  parseBulkNewLost,
+  parseBulkRanks,
+  parseBulkReferringDomains,
+  parseContentSearch,
+  parseDomainIntersection,
+  parseNewLostSeries,
+  parsePageIntersection,
+  type SeriesWeek,
   DIY_FREE_PATHS,
   DIY_PATHS,
   type DiyRequest,
@@ -309,4 +327,82 @@ export async function readLabsStatus(): Promise<LabsStatus> {
 /** Free: the Backlinks filter names. It answers whatever the account's access; it does not prove access (04 section 1). */
 export async function readBacklinksFilters(): Promise<{ groups: Record<string, string[]> }> {
   return parseBacklinksFilters(firstTask(await get(DIY_FREE_PATHS.backlinks_filters, 15_000)));
+}
+
+// ───────────────────────────── DIY wave 3 doors ─────────────────────────────
+
+/**
+ * One door per Backlinks and Content Analysis read (13 Oct 2026, DIY P10;
+ * spec 10 sections 5.2 and 7.11), as the launch doors above are: each takes
+ * its request built in `dataforseo-request.ts`, refuses one built for another
+ * path, posts it and answers the allow-listed parse with what the task
+ * billed and the rows that came back. Called only from
+ * `src/lib/diy/core/doors.ts`, inside the capped `diyRead`
+ * (`request-shape.test.mts`). A task DataForSEO refuses - 40204 for an
+ * account without Backlinks access - throws through `firstTask` with its
+ * code, the ledger records the code, and the Links page reads access from it
+ * (links/access.ts).
+ */
+
+/** The rows a result's items came to, or 1 for a one-object result (the summary). */
+const resultRows = (result: unknown): number => {
+  const first = Array.isArray(result) ? (result[0] as Record<string, unknown> | undefined) : undefined;
+  if (!first) return 0;
+  return Array.isArray(first.items) ? first.items.length : 1;
+};
+
+async function linkTask(req: DiyRequest, path: string, budgetMs: number) {
+  diyTask(req, path);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { task, cost: taskCost(task), rows: resultRows(task.result), partial: task.partial === true };
+}
+
+export async function readDiyBacklinksSummary(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<BacklinksSummary | null>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_summary, budgetMs);
+  return { value: parseBacklinksSummary(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyBacklinkList(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ total: number | null; rows: LinkRow[] }>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_links, budgetMs);
+  return { value: parseBacklinkList(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyNewLostSeries(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<SeriesWeek[]>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_series, budgetMs);
+  return { value: parseNewLostSeries(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyBulkRanks(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<Record<string, number | null>>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_bulk_ranks, budgetMs);
+  return { value: parseBulkRanks(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyBulkReferringDomains(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<Record<string, number | null>>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_bulk_domains, budgetMs);
+  return { value: parseBulkReferringDomains(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyBulkNewLost(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<Record<string, { newDomains: number | null; lostDomains: number | null }>>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_bulk_new_lost, budgetMs);
+  return { value: parseBulkNewLost(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyDomainGap(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ total: number | null; rows: GapDomain[] }>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_domain_gap, budgetMs);
+  return { value: parseDomainIntersection(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyPageGap(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ total: number | null; rows: GapPage[] }>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_page_gap, budgetMs);
+  return { value: parsePageIntersection(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyBacklinksCompetitors(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<BacklinkCompetitor[]>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.backlinks_competitors, budgetMs);
+  return { value: parseBacklinksCompetitors(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
+}
+
+export async function readDiyContentSearch(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ total: number | null; rows: MentionCandidate[] }>> {
+  const t = await linkTask(req, DIY_LINK_PATHS.content_search, budgetMs);
+  return { value: parseContentSearch(t.task), cost: t.cost, rows: t.rows, partial: t.partial };
 }

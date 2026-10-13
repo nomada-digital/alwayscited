@@ -164,7 +164,24 @@ export type OppEvidence = {
   /** `own` rows: the page type the cluster's cited and top-10 pages show, and how many of them. */
   own_type?: PageType | null;
   own_seen?: number;
+  /**
+   * A Links row's facts (13 Oct 2026, DIY P10's review, outside P10's 7.11
+   * edit list: a row pursued from Links opened on an empty "Why this page"
+   * and a Plan card reading "Pursued from Opportunities."). Written by Links
+   * when it makes the row; worded by links/evidence.ts.
+   */
+  link?: LinkEvidence;
 };
+
+/**
+ * Where a Links row came from: `gap`, a domain linking to `links_to` of the
+ * `of` sites compared and not to the client; `target`, a page linking to
+ * `links_to` from inside an article, its first link's `anchor`; both as
+ * DataForSEO's index had them on `read_on`, first seen `first_seen`.
+ * `mention`, a page we read ourselves on `read_on` and found naming the
+ * client with no link to it.
+ */
+export type LinkEvidence = { from: "gap" | "target" | "mention"; read_on: Day; links_to: string[]; of: number | null; anchor: string | null; first_seen: Day | null };
 
 export const EMPTY_EVIDENCE = (to: Day): OppEvidence => ({ to, answers: 0, leaves_out: 0, others_named: 0, prompts: [], prompt_count: 0, engines: [], competitors: [], days_14: 0, days_7: 0, last_cited: null, rank: null, keyword: null, open: null });
 

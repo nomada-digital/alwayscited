@@ -215,6 +215,9 @@ export const STATES: Record<string, State> = {
   // HTML e2e/app/diy-pages.spec.mts saves (spec 10 section 6.10 item 2).
   "/app/[client]/pages": { urls: ["/app/example/pages", "/app/example/pages?view=bots"] },
   "/app/[client]/pages/[page]": { urls: ["/app/example/pages/kp-1", "/app/example/pages/kp-8?tab=fit"] },
+  // 13 Oct 2026, DIY P10: Links, same session rule. The signed-in states are swept from the HTML
+  // e2e/app/diy-links.spec.mts saves (spec 10 section 6.10 item 2).
+  "/app/[client]/links": { urls: ["/app/example/links", "/app/example/links?view=gap"] },
   // 29 Sep 2026, T4: the overview drawn from the local parity fixture - the
   // only way the sweeps see the signed-in overview's markup at all. A 404 in
   // a checkout that has not run docs/parity/T4/make-fixture.py.

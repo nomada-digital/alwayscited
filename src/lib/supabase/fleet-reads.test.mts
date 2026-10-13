@@ -62,12 +62,17 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
  * source_kinds (a global cache of page and domain types, keyed by URL, which grows with every client's citations);
  * P8's key_pages, page_checks, bot_checks, reopt_examples and top_structures.
  */
+/**
+ * 13 Oct 2026, DIY P10 (spec 10 sections 5.8 and 7.11): the wave 3 tables join, each growing with every client -
+ * backlink_reads (a read per kind per night run), comparison_sets (a row a month) and link_checks (a row a check).
+ */
 const TABLES = [
   "tracked_questions", "tracked_keywords", "tracked_clusters", "tracking_runs", "tracking_answers", "tracking_serp", "tracking_notes",
   "diy_reads", "diy_jobs", "diy_vendor_status", "plan_items",
   "keyword_footprints", "diy_dismissals",
   "opportunities", "page_reads", "source_kinds",
   "key_pages", "page_checks", "bot_checks", "reopt_examples", "top_structures",
+  "backlink_reads", "comparison_sets", "link_checks",
 ];
 
 /** Reads across every client that may take one page, and why. Empty: a new entry is an argument, not a fix. */
@@ -146,9 +151,12 @@ test("the walk found the reads, so a clean sweep is not a blind one", () => {
   // (review of 348abbd), with tracked_clusters and tracking_notes walked too: 60 selects, 17 paged.
   // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 140 selects across the 21 tables, 39 of them paged, measured on the
   // merged tree; and every wave 2 table has a select the walk sees, so a renamed table is not a clean sweep.
-  assert.ok(READS.length >= 140, `only ${READS.length} tracking-table selects found - the walk has drifted`);
-  assert.ok(READS.filter((r) => r.bound === "paged").length >= 39, "the paged reads are not being seen");
-  for (const t of ["keyword_footprints", "diy_dismissals", "opportunities", "page_reads", "source_kinds", "key_pages", "page_checks", "bot_checks", "reopt_examples", "top_structures"]) {
+  // Raised 13 Oct 2026 (DIY P10, wave 3): 152 selects across the 24 tables, 41 of them paged, measured with Links'
+  // readers and jobs.
+  assert.ok(READS.length >= 152, `only ${READS.length} tracking-table selects found - the walk has drifted`);
+  assert.ok(READS.filter((r) => r.bound === "paged").length >= 41, "the paged reads are not being seen");
+  // 13 Oct 2026, DIY P10: and every wave 3 table, likewise.
+  for (const t of ["keyword_footprints", "diy_dismissals", "opportunities", "page_reads", "source_kinds", "key_pages", "page_checks", "bot_checks", "reopt_examples", "top_structures", "backlink_reads", "comparison_sets", "link_checks"]) {
     assert.ok(READS.some((r) => r.table === t), `${t} has no select the walk can see`);
   }
   assert.ok(READS.filter((r) => r.table === "tracked_clusters").length >= 12, "the cluster reads are not being seen");

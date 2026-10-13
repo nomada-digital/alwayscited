@@ -565,6 +565,26 @@ const EXEMPT: Record<string, Exemption> = {
     why: "Opportunities' search form's hidden engine. type=hidden, nobody types in it; the page keeps it only when it is one of this client's tier's engines.",
     holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'engines.find((e) => e === one("engine"))' }],
   },
+  // 13 Oct 2026, DIY P10 (wave 3): Links' hidden fields. Each type=hidden: nobody types in it, and the links route
+  // re-reads each against what the page lists rather than trusting it.
+  "lk-lens-${rowId}": {
+    why: "a Pursue form's hidden lens on Links. type=hidden, nobody types in it; the links route accepts only one of LINK_LENSES and otherwise answers gone.",
+    holds: [{ file: "app/api/app/[client]/links/route.ts", needs: "(LINK_LENSES as readonly string[]).includes(lens)" }],
+  },
+  "lk-key-${rowId}": {
+    why: "a Pursue form's hidden row key on Links. type=hidden, nobody types in it; the links route cuts it to 520 and pursues only a row the page itself lists, with Nomada's placements already subtracted.",
+    holds: [
+      { file: "app/api/app/[client]/links/route.ts", needs: 'String(form?.get("key") ?? "").slice(0, 520)' },
+      { file: "app/api/app/[client]/links/route.ts", needs: "const row = findRow(page, lens, key);" },
+    ],
+  },
+  "lk-seen": {
+    why: "the reveal form's hidden count of this month's revealed link targets on Links. type=hidden, nobody types in it; the route reads it as a whole number and reveals nothing unless it equals the month's own count.",
+    holds: [
+      { file: "app/api/app/[client]/links/route.ts", needs: 'const seenRaw = Number(form?.get("seen"));' },
+      { file: "lib/diy/links/targets.ts", needs: "p.seen !== p.usedThisMonth" },
+    ],
+  },
   "cc-coverage": {
     why: [
       "type=file, which maxLength does not apply to at all. It is bounded by bytes",
@@ -592,11 +612,12 @@ test("the census still sees every field - a shrinking count is a blind probe", (
   // 23 when the walk was widened to textarea: 22 <input> and 1 <textarea>.
   // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 185 fields across 36 files, measured on the merged tree - the
   // dashboard's forms through wave 2 (Google, Opportunities, Your pages). The floor had stayed at 23 and 11.
+  // Raised 13 Oct 2026 (DIY P10, wave 3): 189 fields across 37 files - Links' Pursue, reveal and Check a link fields.
   assert.ok(
-    found.length >= 185,
-    `only ${found.length} fields were found across the tree, and there were 185 on 13 Oct 2026 - a falling count means the scanner broke, not that fields were deleted`,
+    found.length >= 189,
+    `only ${found.length} fields were found across the tree, and there were 189 on 13 Oct 2026 - a falling count means the scanner broke, not that fields were deleted`,
   );
-  assert.ok(files.size >= 36, `only ${files.size} files carry a field, and 36 did on 13 Oct 2026`);
+  assert.ok(files.size >= 37, `only ${files.size} files carry a field, and 37 did on 13 Oct 2026`);
 });
 
 /**
