@@ -34,8 +34,12 @@ import { stop, undoStop } from "../../../lib/tracking/stop.ts";
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 const ROUTES = join(ROOT, "src", "app", "api", "app", "[client]");
 
-/** Routes that write what a client tracks, its plan, or its setup: each judges the role through writeRole(client). */
-const TRACKED_WRITES = ["check", "cluster", "edit", "group", "keyword", "note", "plan", "prompt", "setup", "stop"];
+/**
+ * Routes that write what a client tracks, its plan, or its setup: each judges the role through writeRole(client).
+ * 13 Oct 2026, DIY P6: `keywords` joins - gaining ground's Dismiss and Restore (spec 10 section 3.6), owner and
+ * editor only, refused through refuseRole(writeRole(client)) on the fixture and in Supabase alike.
+ */
+const TRACKED_WRITES = ["check", "cluster", "edit", "group", "keyword", "keywords", "note", "plan", "prompt", "setup", "stop"];
 
 /** Routes that read the member's own role, and why that is not writeRole's question. */
 const ACCOUNT_ROLE: Record<string, string> = {

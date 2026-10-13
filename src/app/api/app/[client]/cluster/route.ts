@@ -7,7 +7,7 @@ import { ADMIN_LIMITS, trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { fixtureAddCluster } from "@/lib/tracking/fixture-writes";
 import { clientsFor, sessionEmail, writeRole } from "@/lib/tracking/member";
-import { addCluster } from "@/lib/tracking/new-cluster";
+import { addCluster, momentumOrigin, tagMomentumFixture } from "@/lib/tracking/new-cluster";
 import { writeFixture } from "@/lib/tracking/repo";
 import { slotWhyOf } from "@/lib/tracking/slot";
 import { readKept } from "@/lib/tracking/stop";
@@ -26,6 +26,11 @@ export const dynamic = "force-dynamic";
  * is refused, so the check cannot be skipped. The writes are new-cluster.ts
  * through limits.ts. Session and membership as the stop route; the fixture
  * writes nothing unless TRACKING_FIXTURE_WRITE=1 (R168) holds it in memory.
+ *
+ * 13 Oct 2026, DIY P6 (spec 10 sections 3.5 and 6.6): a hidden `src` field
+ * of `gaining` - the add began at a gaining-ground keyword's Track - gives
+ * the five prompts `origin_kind` momentum (new-cluster.ts momentumOrigin).
+ * Nothing else here changes: the signed check is verified as before.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -44,9 +49,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   const volume = Number(field("vol"));
   const intent = field("intent");
   const prompts = [0, 1, 2, 3, 4].map((i) => field(`p-${i}`));
+  const origin = momentumOrigin(field("src"));
   if (fixtureMode()) {
     // R168: on the writable fixture the cluster is held in memory, verified against the fixture's own check signature.
-    const r = writeFixture((fx) => fixtureAddCluster(fx, { keyword, volume, intent, sig: field("sig") || null, prompts, role: fx.member.role }));
+    // DIY P6: a momentum add's prompts carry their origin on their own rows, as the database holds it.
+    const r = writeFixture((fx) => {
+      const added = fixtureAddCluster(fx, { keyword, volume, intent, sig: field("sig") || null, prompts, role: fx.member.role });
+      return added.ok && added.id && origin ? { ...added, fixture: tagMomentumFixture(added.fixture, added.id) } : added;
+    });
     if (r && !r.ok) console.warn(`[app] fixture add cluster refused: ${r.message}`);
     return r?.ok && r.id ? back({ done: "added", kind: "cluster", id: r.id, open: r.id }) : refused(r && !r.ok ? r.message : "");
   }
@@ -71,6 +81,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     today: day,
     by: email,
     role: writeRole(client),
+    origin,
   });
   if (!r.ok) {
     console.warn(`[app] add cluster refused: ${r.message}`);

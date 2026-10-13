@@ -6,6 +6,7 @@ import { isMarket } from "@/lib/scan/domain";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { type KeywordCheck, signCheck, verdictQuery } from "@/lib/tracking/add-cluster";
 import { checkClusterKeyword } from "@/lib/tracking/check-keyword";
+import { MOMENTUM_SRC, momentumOrigin } from "@/lib/tracking/new-cluster";
 import { ADMIN_LIMITS, trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { fixtureCheck } from "@/lib/tracking/fixture-writes";
@@ -32,6 +33,13 @@ export const dynamic = "force-dynamic";
  * the card's cluster id as `card` and its current keyword as `own`. Its 303
  * goes back to /app/[client]/setup at that card instead, and `own` is left
  * out of the tracked list so a card can check the keyword it already has.
+ *
+ * 13 Oct 2026, DIY P6 (spec 10 sections 3.5 and 6.6): the Add panel posts a
+ * hidden `src` of `gaining` when it was opened from a gaining-ground keyword,
+ * and `back()` carries it into the 303 beside `add`, `kw`, the verdict and
+ * `sig`, so the panel's second step posts it on and the cluster's prompts get
+ * the momentum origin. It is rebuilt from a fixed value, never echoed, and
+ * nothing else in the route changes.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -46,8 +54,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   const sp = new URL(req.url).searchParams;
   // DS15: the Add panel's return keeps it too; only a setup card's does not.
   const view = !card || onClusters ? readKept((k) => sp.get(k), APP_LIMITS.search) : {};
+  const src: Record<string, string> = !card && momentumOrigin(form?.get("src")) ? { src: MOMENTUM_SRC } : {};
   const back = (c: KeywordCheck | null, sig?: string) => {
-    const q = new URLSearchParams({ ...(onClusters ? { ...view, open: card, rk: card } : card ? { card } : { ...view, add: "1" }), ...(raw ? { kw: raw } : {}), ...(c ? verdictQuery(c) : {}), ...(sig ? { sig } : {}) });
+    const q = new URLSearchParams({ ...(onClusters ? { ...view, open: card, rk: card } : card ? { card } : { ...view, add: "1" }), ...(raw ? { kw: raw } : {}), ...(c ? verdictQuery(c) : {}), ...(sig ? { sig } : {}), ...src });
     // R151 (3 Oct 2026): a refusal lands without the #card fragment - a fragment target stops the browser running autofocus, and the refused field scrolls itself into view when it takes focus.
     const at = c?.ok === false ? "" : `#card-${encodeURIComponent(card)}`;
     const to = card && !onClusters ? appPath(`/${encodeURIComponent(slug)}/setup?${q}${at}`) : appPath(`/${encodeURIComponent(slug)}/clusters?${q}`);

@@ -23,6 +23,13 @@ import { BULK_ID, BULK_MAX, refuseRole } from "@/lib/tracking/stop";
 import { HIDE_DAYS, hiddenUntil } from "@/lib/tracking/upgrade-prompts";
 import { appPath } from "@/lib/app-host";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
+import { loadFootprint } from "@/lib/diy/keywords/data";
+import { trackedSet } from "@/lib/diy/keywords/momentum";
+import { footprintFacts, suggestedClusters } from "@/lib/diy/keywords/setup-suggestions";
+import { readOnlyReason } from "@/lib/diy/keywords/write";
+import { section } from "@/lib/diy/plan/data";
+import { trackingPackLine } from "@/config/pricing";
+import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +44,14 @@ export const runtime = "nodejs";
  * One client's Clusters page (BRIEF-3 T6, route 8: appPath(`/[client]/clusters`)),
  * for the range the URL states. Same membership rule as the overview: a slug
  * the session is not a member of is a 404.
+ *
+ * 13 Oct 2026, DIY P6 (spec 10 sections 3.5, 4.10 and 6.6): `src` is read,
+ * `gaining` only, and posted by the Add panel as a hidden field, so a cluster
+ * added from a gaining-ground keyword gets Momentum prompts. While a slot is
+ * free, Suggested clusters lists up to 5 keywords from the Google footprint
+ * (gaining ground first); at the limit, U7 offers the pack when one is
+ * waiting. Both read the stored footprint only, and both are hidden while
+ * diy_enabled is off (the dark rule).
  */
 export default async function ClientClusters({
   params,
@@ -58,7 +73,18 @@ export default async function ClientClusters({
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
   // 13 Oct 2026, DIY P2: each prompt's origin, for its chip and the "From placements" sub-list (loadOverview reads no origin column).
-  const [data, upgrade, typed, origins] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today), repo.orderKeyword(client.id), loadPromptOrigins(client.id)]);
+  const [data, upgrade, typed, origins, footprint, settings] = await Promise.all([
+    repo.loadOverview(client.id, range, compare),
+    repo.upgradeContext(client.id, email, today),
+    repo.orderKeyword(client.id),
+    loadPromptOrigins(client.id),
+    loadFootprint(client.id),
+    // DIY P6: the brand's aliases for the footprint's brand rule; the footprint read carries them in production.
+    fixtureMode() ? section("clusters aliases", () => repo.settings(client.id)) : Promise.resolve(null),
+  ]);
+  const subject = { brand: client.brand ?? null, domain: client.domain, aliases: settings?.ok ? settings.value.aliases : footprint.aliases };
+  const { latest, gaining } = footprintFacts(footprint, { tracked: data.keywords, subject, today });
+  const suggested = suggestedClusters({ latest, gaining, tracked: trackedSet(data.keywords, today), subject });
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const f = one("filter");
   const done = one("done");
@@ -122,6 +148,11 @@ export default async function ClientClusters({
           packPrice={packPrice}
           upgrade={{ tier, mode: upgrade.mode, hidden: upgrade.hidden, startedOn: client.started_on ?? today, domain: client.domain }}
           origins={origins}
+          src={one("src") === "gaining" ? "gaining" : null}
+          suggested={suggested}
+          gaining={gaining?.rows[0]?.keyword ?? null}
+          packLine={trackingPackLine(packPrice)}
+          readOnly={readOnlyReason(client)}
         />
       </div>
     </div>

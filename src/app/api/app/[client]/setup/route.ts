@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { enqueueOnboarding } from "@/lib/diy/core/dispatch";
+import { JOB_HANDLERS } from "@/lib/diy/wiring";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { verifyCheck } from "@/lib/tracking/add-cluster";
 import { ADMIN_LIMITS, trackingDay } from "@/lib/tracking/decide";
@@ -31,6 +33,14 @@ export const dynamic = "force-dynamic";
  * that pass into Confirm as hidden fields. It reaches the mail only when its
  * signature verifies for this client and today, and only if the card is one
  * of this client's clusters; nothing is written to the cluster.
+ *
+ * 13 Oct 2026, DIY P6 (spec 10 sections 4.12 and 5.7): once the row is
+ * written, the confirm also queues the client's onboarding jobs for the next
+ * night pass (P1's enqueueOnboarding, over the registered JOB_HANDLERS): the
+ * free kinds always, the paid ones - the Google footprint among them - only
+ * while diy_enabled is on. In its own try: a queue that cannot be written is
+ * logged and the confirm stands, and the night's dispatch queues onboarding
+ * anyway on its first pass after the confirm (jobs.ts dueFor).
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -82,6 +92,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   });
   // R159: the client's own setup_confirmed lifecycle mail, to the member who confirmed, once, behind its flag.
   await mailSetupConfirmed(client.id, email);
+  try {
+    await enqueueOnboarding(supabaseAdmin(), client.id, { handlers: JOB_HANDLERS });
+  } catch (err) {
+    console.warn(`[diy] onboarding not queued at confirm (the night pass queues it): ${err instanceof Error ? err.message : String(err)}`);
+  }
   return done;
 }
 

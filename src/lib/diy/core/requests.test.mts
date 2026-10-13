@@ -182,15 +182,20 @@ test("the free paths are exactly two, and nothing else passes the guard", () => 
 
 // ───────────────────────────── the parsers ─────────────────────────────
 
+// 13 Oct 2026, DIY P6 (review of the P6 handoff): the fact moved by two fields. `group` is rank_group, the
+// organic position our own daily read stores and the DIY pages show; `previousOn` is the day of DataForSEO's
+// previous reading (previous_updated_time), which its previous_rank_absolute is taken against. Both are named
+// in DataForSEO's v3 docs for ranked_keywords/live, read 13 Oct 2026, and both are in the saved sample.
 test("ranked_keywords keeps the named fields, lower-cases the keyword, and never reads keyword_difficulty", () => {
   const got = parseRankedKeywords(sample("ranked_keywords"));
   assert.equal(got.total, 1342);
   assert.equal(got.etv, 1840.5);
-  assert.deepEqual(got.rows[0], { keyword: "payroll software for sole traders", position: 7, url: "/payroll", volume: 880, intent: "commercial", etv: 41.2, previous: 14, isNew: false });
+  assert.deepEqual(got.rows[0], { keyword: "payroll software for sole traders", position: 7, group: 6, url: "/payroll", volume: 880, intent: "commercial", etv: 41.2, previous: 14, isNew: false, previousOn: "2026-09-09" });
   assert.equal(got.rows[1]!.keyword, "small business payroll uk");
   assert.equal(got.rows[1]!.previous, null);
   assert.equal(got.rows[1]!.isNew, true);
-  assert.deepEqual(Object.keys(got.rows[0]!).sort(), ["etv", "intent", "isNew", "keyword", "position", "previous", "url", "volume"]);
+  assert.equal(got.rows[1]!.group, 13);
+  assert.deepEqual(Object.keys(got.rows[0]!).sort(), ["etv", "group", "intent", "isNew", "keyword", "position", "previous", "previousOn", "url", "volume"]);
   assertClean(got, "ranked_keywords");
 });
 

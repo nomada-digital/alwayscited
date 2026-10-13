@@ -75,6 +75,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   // 1 Oct 2026, R145 (BRIEF-4 P5).
   "/app/[client]/reports": "one client's monthly figures and CSV downloads; private, same membership 404",
   "/app/[client]/placements": "one client's placements and where the cluster stood; private, same membership 404, and a 404 for a client with no placed tier and no placement",
+  // 13 Oct 2026, DIY P6: Google (spec 10 section 4.3), a new private page with the overview's rules.
+  "/app/[client]/google": "one client's Google positions, gaining ground and who holds page 1; private, same membership 404",
   // 13 Oct 2026, DIY P3: Actions (internally the Plan).
   "/app/[client]/plan": "one client's actions, what was done and what was read after; private, same membership 404",
   // 2 Oct 2026, R173 pass 3, DS36.

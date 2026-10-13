@@ -27,7 +27,7 @@ import { BULK_ID, type BulkCount } from "@/lib/tracking/stop";
 import type { TierKey } from "@/components/TierName";
 import type { UpsellMode } from "@/lib/tracking/ask";
 import { neverNamedFacts, offPageOneFacts } from "@/lib/tracking/upgrade-facts";
-import { type Facts, type PromptCta, pickPrompt, promptCopy } from "@/lib/tracking/upgrade-prompts";
+import { type Facts, type PromptCta, pickPrompt, promptCopy, rowFor } from "@/lib/tracking/upgrade-prompts";
 
 import { Chip, PositionChip, noChange } from "./Overview";
 import UpgradePrompt from "./UpgradePrompt";
@@ -37,6 +37,9 @@ import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins"
 import { includesLine, placementBasis, placementBasisLine } from "@/lib/diy/prompts/basis";
 
 import OriginChip from "./prompts/OriginChip";
+import PackPrompt from "./google/PackPrompt";
+import SuggestedClusters from "./google/SuggestedClusters";
+import type { Suggestion } from "@/lib/diy/keywords/setup-suggestions";
 
 /**
  * The Clusters page (BRIEF-3 T6 part 1, 30 Sep 2026; boards-3/Questions.dc.html):
@@ -104,8 +107,27 @@ export default function Clusters({
   upgrade = null,
   subject = null,
   origins = NO_ORIGINS,
+  src = null,
+  suggested = [],
+  gaining = null,
+  packLine = "",
+  readOnly = "",
 }: {
   brand: string;
+  /**
+   * 13 Oct 2026, DIY P6 (spec 10 sections 3.5, 4.10 and 6.6): `?src=gaining` - the Add panel was opened from a
+   * gaining-ground keyword (Google's Track, or Suggested clusters below) - rides through Check keyword as a hidden
+   * field and on to the add, so the new cluster's prompts carry the Momentum origin.
+   */
+  src?: "gaining" | null;
+  /** DIY P6: up to 5 keywords to track while a slot is free (setup-suggestions.ts suggestedClusters). */
+  suggested?: readonly Suggestion[];
+  /** DIY P6: the top gaining-ground keyword, for U7 when every cluster is in use. */
+  gaining?: string | null;
+  /** DIY P6: trackingPackLine(trackingPackPrice(market)), U7's words from pricing.ts. */
+  packLine?: string;
+  /** DIY P6: why a member who cannot write cannot (keywords/write.ts readOnlyReason), for Suggested clusters' disabled control. */
+  readOnly?: string;
   /** 13 Oct 2026, DIY P2: each prompt's origin (loadPromptOrigins), for its chip and the "From placements" sub-list. */
   origins?: ReadonlyMap<string, PromptOrigin>;
   /** R133: the client's brand and domain, so a prompt that names them carries the "Names the brand" chip. */
@@ -196,10 +218,12 @@ export default function Clusters({
     upgrade && filter === "never"
       ? { ...upgrade, today, state, neverNamed: neverNamedFacts({ cards, answers: data.answers, range, domain: upgrade.domain }) }
       : upgrade && filter === "all" && !q.trim()
-        ? { ...upgrade, today, state, offPageOne: offPageOneFacts(cards) }
+        ? { ...upgrade, today, state, offPageOne: offPageOneFacts(cards), ...(full && gaining ? { atLimit: true, gaining: { keyword: gaining, clusters: clusterLimit, packLine } } : {}) }
         : null;
   const cta = facts ? pickPrompt(facts) : null;
   const prompt = facts && (cta === "mentioned" || cta === "cited") ? promptCopy(cta, facts) : null;
+  // DIY P6 (spec 10 section 2.7): U7, at the limit with a gaining-ground keyword waiting - the pack, with "Ask us".
+  const pack = facts && cta === "pack" && rowFor("pack", facts) === "U7" ? promptCopy("pack", facts) : null;
   const items = cta === "mentioned" ? (facts?.neverNamed?.ids ?? []) : cta === "cited" ? (facts?.offPageOne?.ids ?? []) : [];
 
   return (
@@ -297,7 +321,9 @@ export default function Clusters({
         )
       ) : null}
 
-      {canWrite && adding ? <AddPanel slug={slug} adding={adding} full={full} clusterLimit={clusterLimit} packPrice={packPrice} packHref={siteHref(upgrade ? contactUrlFor(upgrade.tier) : CONTACT_URL)} close={href({})} keep={keep} /> : null}
+      {canWrite && adding ? <AddPanel slug={slug} adding={adding} full={full} clusterLimit={clusterLimit} packPrice={packPrice} packHref={siteHref(upgrade ? contactUrlFor(upgrade.tier) : CONTACT_URL)} close={href({})} keep={keep} src={src} /> : null}
+
+      {!full && suggested.length ? <SuggestedClusters items={suggested} canWrite={canWrite} reason={readOnly} free={clusterLimit - used} hrefFor={(s) => href({ add: "1", kw: s.keyword, ...(s.source === "gaining" ? { src: "gaining" } : {}) })} /> : null}
 
       <section aria-label="Clusters" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", overflow: "hidden" }}>
         <div className="app-cl-grid app-hide-sm" style={{ display: "grid", gridTemplateColumns: GRID, gap: "16px", padding: "14px 24px 12px" }}>
@@ -335,6 +361,7 @@ export default function Clusters({
           </div>
         ) : null}
         {prompt && cta ? <UpgradePrompt copy={prompt} cta={cta} slug={slug} items={items} keep={keep} /> : null}
+        {pack && upgrade ? <PackPrompt copy={pack} slug={slug} tier={upgrade.tier} agency={upgrade.mode === "agency"} keep={keep} surface="clusters" /> : null}
       </section>
       {ungrouped.length ? <Ungrouped rows={searchPrompts(ungrouped, q)} all={ungrouped} term={q.trim()} act={act} subject={subject} targets={moveTargets(cards, data.questions, origins)} clusters={cards.filter((c) => c.stoppedOn === null).length} today={today} market={market} origins={origins} mode={mode} slug={slug} /> : null}
       <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: T.soft, maxWidth: "820px" }}>
@@ -440,7 +467,7 @@ export type Rekeying = Adding & { card: string };
  * "Start tracking this cluster", a POST to /cluster. On a refusal that
  * allows it, "Ask us to pick one", a POST to T11's /ask (ask.ts).
  */
-function AddPanel({ slug, adding, full, clusterLimit, packPrice, packHref, close, keep }: { slug: string; adding: Adding; full: boolean; clusterLimit: number; packPrice: string; packHref: string; close: string; keep: Record<string, string> }) {
+function AddPanel({ slug, adding, full, clusterLimit, packPrice, packHref, close, keep, src = null }: { slug: string; adding: Adding; full: boolean; clusterLimit: number; packPrice: string; packHref: string; close: string; keep: Record<string, string>; src?: "gaining" | null }) {
   // The page's range, filter and search ride on the Check and Start actions, as the stop forms' do (DS15).
   const view = new URLSearchParams(keep).toString();
   const ck = adding.check;
@@ -472,6 +499,8 @@ function AddPanel({ slug, adding, full, clusterLimit, packPrice, packHref, close
         </div>
       ) : (
         <form method="post" action={`/api/app/${encodeURIComponent(slug)}/check${view ? `?${view}` : ""}`} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          {/* DIY P6: from a gaining-ground keyword, the check carries `src` back (check/route.ts back()). */}
+          {src ? <input id="kw-src" type="hidden" name="src" value={src} /> : null}
           <label htmlFor="kw-draft" style={{ fontSize: "13px", fontWeight: 600, color: T.ink }}>
             1. The keyword
           </label>
@@ -501,6 +530,8 @@ function AddPanel({ slug, adding, full, clusterLimit, packPrice, packHref, close
           <input id="nc-vol" type="hidden" name="vol" value={String(ck.volume)} />
           <input id="nc-intent" type="hidden" name="intent" value={ck.intent} />
           <input id="nc-sig" type="hidden" name="sig" value={adding.sig} />
+          {/* DIY P6: the add's prompts get the Momentum origin (cluster/route.ts, new-cluster.ts momentumOrigin). */}
+          {src ? <input id="nc-src" type="hidden" name="src" value={src} /> : null}
           <span style={{ fontSize: "13px", fontWeight: 600, color: T.ink, paddingTop: "16px" }}>2. Five prompts about it, one per angle</span>
           <span style={{ fontSize: "13px", color: T.soft }}>Each asks for a recommendation, the way a buyer would, so it shows whether engines name you. We’ve drafted them from the keyword. Edit any of them.</span>
           {draftPrompts(ck.keyword).map((text, i) => (
@@ -709,8 +740,18 @@ function PendingEditor({
   typed = null,
   next,
   firstAsk,
+  origins = NO_ORIGINS,
+  slug = "",
+  mode = "off",
 }: {
   c: ClusterCard;
+  /**
+   * 13 Oct 2026, DIY P6: each prompt's origin chip beside its angle, as the read rows draw it (P2's OriginChip,
+   * unchanged), so a cluster just added from gaining ground says Momentum before its first check.
+   */
+  origins?: ReadonlyMap<string, PromptOrigin>;
+  slug?: string;
+  mode?: UpsellMode;
   kw: string;
   lead: string;
   act: NonNullable<Act>;
@@ -819,6 +860,7 @@ function PendingEditor({
                   {p.angle ?? "Prompt"}
                 </label>
               )}
+              <OriginChip origin={origins.get(p.id)} slug={slug} mode={mode} />
               {subject && namesBrandIn(p.text, subject) ? <BrandedChip /> : null}
             </span>
             {p.fixed ? (
@@ -1048,7 +1090,7 @@ function ClusterRow({
 
       {/* ON-1 (9 Oct 2026, LB8): a cluster with no keyword and nothing read is edited as a pending one - its first keyword can be set at any time (rekey.ts keywordless). */}
       {open && (pending || (c.keyword === null && !c.prompts.some((p) => p.fixed))) && act && !stopped ? (
-        <PendingEditor c={c} kw={kw} lead={lead} act={act} subject={subject} rekey={rekey} redraft={redraft} rekeyed={rekeyed} typed={typed} next={next} firstAsk={firstAsk} />
+        <PendingEditor c={c} kw={kw} lead={lead} act={act} subject={subject} rekey={rekey} redraft={redraft} rekeyed={rekeyed} typed={typed} next={next} firstAsk={firstAsk} origins={origins} slug={slug} mode={mode} />
       ) : open ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "14px", padding: "4px 24px 22px" }}>
           {act && bare && c.keyword ? (
