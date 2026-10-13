@@ -5,6 +5,7 @@ import { type UpsellMode, upsellMode } from "../../tracking/ask.ts";
 import { marketZone } from "../../tracking/check-time.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import type { Fixture } from "../../tracking/fixture-mode.ts";
+import { trackingDay } from "../../tracking/decide.ts";
 import { placedTier } from "../../tracking/placement-figures.ts";
 import { SETUP_CONFIRMED_EVENT } from "../../tracking/setup-landing.ts";
 
@@ -88,6 +89,22 @@ export function modeOf(row: Pick<ClientRow, "id" | "accounts">): UpsellMode {
   return upsellMode(account.upsell_mode);
 }
 
+/**
+ * A client being tracked counts as set up from the day it started (13 Oct 2026,
+ * lead, wave 2 ship): clients set up by hand - before the setup page existed,
+ * or by Nomada after it (traced.life, 5 Oct) - have no setup_confirmed event,
+ * and P1's rule would never have queued their paid jobs. A setup confirm, when
+ * there is one, still wins; a client whose start is still to come waits, so a
+ * new trial that has not reached its first check spends nothing. Applied in
+ * the two production loaders only: the tracking fixture keeps its unconfirmed
+ * client, so the waiting states still draw.
+ */
+export function startedAsSetUp(startedOn: string | null, now: number): string | null {
+  if (!startedOn) return null;
+  const day = startedOn.slice(0, 10);
+  return day <= trackingDay(new Date(now)) ? `${day}T00:00:00Z` : null;
+}
+
 /** One client row, its first setup confirm and its account's mode, as a DiyClient at `now`. Pure. */
 export function diyClient(row: ClientRow, facts: { setupConfirmedAt: string | null; upsellMode: unknown }, now: number): DiyClient {
   const trialEnds = row.trial_ends_at ? Date.parse(row.trial_ends_at) : NaN;
@@ -142,7 +159,7 @@ export async function loadDiyClients(db: SupabaseClient, now: number): Promise<D
     throw new Error(`could not read the DIY clients: ${msg(err)}`);
   }
   const confirmed = confirmedAt(events);
-  return rows.filter((r) => r.slug).map((r) => diyClient(r, { setupConfirmedAt: confirmed.get(r.id) ?? null, upsellMode: modeOf(r) }, now));
+  return rows.filter((r) => r.slug).map((r) => diyClient(r, { setupConfirmedAt: confirmed.get(r.id) ?? startedAsSetUp(r.started_on, now), upsellMode: modeOf(r) }, now));
 }
 
 /** One client, whatever its status, or null when there is no such client. Throws on a failed read. */
@@ -156,7 +173,7 @@ export async function loadDiyClient(db: SupabaseClient, clientId: string, now: n
   if (!row) return null;
   const r = row as ClientRow;
   const first = confirmedAt((events ?? []) as ConfirmRow[]).get(clientId) ?? null;
-  return diyClient(r, { setupConfirmedAt: first, upsellMode: modeOf(r) }, now);
+  return diyClient(r, { setupConfirmedAt: first ?? startedAsSetUp(r.started_on, now), upsellMode: modeOf(r) }, now);
 }
 
 /**

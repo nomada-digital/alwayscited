@@ -132,7 +132,9 @@ test("the fleet read: active clients with a slug, each with its account's mode a
   assert.deepEqual(out.map((c) => [c.id, c.upsellMode, c.setupConfirmedAt]), [
     ["c-0000", "nomada", "2026-06-09T12:00:00Z"],
     ["c-0001", "agency", "2026-06-20T08:00:00Z"],
-    ["c-0002", "nomada", null],
+    // 13 Oct 2026, lead: a client with no confirm that has started counts as set up from its start
+    // (startedAsSetUp) - c-0002 started 10 Jun, so its paid jobs are no longer left waiting forever.
+    ["c-0002", "nomada", "2026-06-10T00:00:00Z"],
   ]);
   assert.ok(out.every((c) => Object.keys(c).length === KEYS.length));
 });
@@ -192,4 +194,13 @@ test("the tracking fixture's client, in its states", () => {
   assert.equal(fixtureDiyClient(trial.client, { setupConfirmed: true }, Date.now()).trial, true, "the trial state's end is real time, nine days on");
   const ended = fixtureState(expandFixture(raw), { TRACKING_FIXTURE_STATE: "ended" });
   assert.equal(fixtureDiyClient(ended.client, { setupConfirmed: true }, NOW).status, "ended");
+});
+
+test("a client being tracked counts as set up from its start; a confirm still wins; a future start waits (13 Oct 2026)", async () => {
+  const { startedAsSetUp } = await import("./client.ts");
+  const now = Date.parse("2026-10-13T12:00:00Z");
+  assert.equal(startedAsSetUp("2026-09-30", now), "2026-09-30T00:00:00Z", "set up by hand before the setup page");
+  assert.equal(startedAsSetUp("2026-10-05", now), "2026-10-05T00:00:00Z", "set up by Nomada after it");
+  assert.equal(startedAsSetUp("2026-10-14", now), null, "a trial whose first check is tomorrow waits");
+  assert.equal(startedAsSetUp(null, now), null);
 });
