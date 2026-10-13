@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import BrandMark from "@/components/BrandMark";
+import { firstRenderDone } from "@/components/app/FreshGuard";
 import { NAV, navHref } from "@/components/app/nav";
 import TierName from "@/components/TierName";
 import { CARD, MICRO, T } from "@/config/tokens";
@@ -24,9 +25,36 @@ import { appPath, siteHrefAt } from "@/lib/app-host";
  * from the slug in the URL alone.
  *
  * Swept on TRACKING_FIXTURE_STATE=unreadable (fixture-mode.ts).
+ *
+ * Speed review (13 Oct 2026, fresh.ts): the router now holds pages for 300 s,
+ * and a render that failed is held like one that did not - the sidebar's
+ * Full prefetch of it answers 200 with the error inside, and Next rejects a
+ * prefetch only when the response is not ok (segment-cache/cache.js
+ * 1981-1986). So this boundary calls router.refresh() as it is drawn, which
+ * empties the router's memory: the next click on any page asks the server
+ * again rather than drawing the same failure, as every click did before the
+ * window. It does not reset the boundary, so this stays on screen through the
+ * refresh and cannot draw itself again; it has no prefetched links, so the
+ * cost is one render of this page. Not when it is drawn in the document's
+ * first render (firstRenderDone): the router holds nothing yet, and a refresh
+ * answered not-ok makes Next reload the document (fetch-server-response.js
+ * 143-148), which would draw this and refresh again, round and round. And not
+ * when Try again drew it: retry() has just refreshed, and a page that fails
+ * again draws a new one of these (measured: two renders a click without
+ * this, one with it).
  */
+let retried = false;
+
 export default function DashboardError({ error, retry }: { error: Error & { digest?: string }; retry: () => void }) {
   const { client } = useParams<{ client: string }>();
+  const router = useRouter();
+  const [purge] = useState(() => firstRenderDone() && !retried);
+  useEffect(() => {
+    if (purge) router.refresh();
+    return () => {
+      retried = false;
+    };
+  }, [purge, router]);
   // Audit ia-2 (8 Oct 2026): /contact is the marketing site's. On the app host a relative
   // /contact is rewritten into the dashboard and 404s; this client component cannot read
   // APP_HOST, so the address it was served at decides, after hydration.
@@ -56,7 +84,14 @@ export default function DashboardError({ error, retry }: { error: Error & { dige
         </p>
 
         <div style={{ marginTop: "24px", display: "flex", gap: "10px", flexWrap: "wrap" }}>
-          <button type="button" onClick={() => retry()} style={{ fontSize: "15px", fontWeight: 600, color: "#ffffff", background: T.accent, border: "none", borderRadius: "10px", padding: "13px 26px", cursor: "pointer", fontFamily: "inherit" }}>
+          <button
+            type="button"
+            onClick={() => {
+              retried = true;
+              retry();
+            }}
+            style={{ fontSize: "15px", fontWeight: 600, color: "#ffffff", background: T.accent, border: "none", borderRadius: "10px", padding: "13px 26px", cursor: "pointer", fontFamily: "inherit" }}
+          >
             Try again
           </button>
           <Link href={overview} style={{ display: "inline-flex", alignItems: "center", fontSize: "15px", fontWeight: 600, color: T.ink, background: T.surface, border: `1px solid ${T.line}`, borderRadius: "10px", padding: "12px 25px", textDecoration: "none" }}>

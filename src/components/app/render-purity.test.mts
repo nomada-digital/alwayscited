@@ -11,6 +11,7 @@
  *
  * What is walked: the static import graph from every page and special file
  * under src/app/app/[client], src/app/app/layout.tsx and src/app/app/page.tsx,
+ * and the root layout, not-found and error above them (review, 13 Oct 2026),
  * resolving `@/` and relative specifiers (.ts, .tsx, .mts), following
  * `export ... from` and `import("...")`, skipping `import type`.
  *
@@ -99,6 +100,7 @@ const PACKAGES: Record<string, string> = {
   "node:crypto": "createHash and createHmac digests and randomBytes: no I/O",
   "node:fs": "readFileSync and existsSync of committed JSON (the fixture, origins); fs writes are a site here",
   "node:path": "join",
+  "next/font/google": "the root layout's face, resolved and self-hosted at build: no request at render (review, 13 Oct 2026)",
 };
 
 /**
@@ -530,6 +532,11 @@ const ROOTS = [
   ...walkFiles(join(APP, "[client]")).filter((f) => /[\\/](page|layout|template|not-found|error|default)\.tsx$/.test(f)),
   join(APP, "layout.tsx"),
   join(APP, "page.tsx"),
+  // Review, 13 Oct 2026: the root layout renders on every dashboard document, and the root not-found and error
+  // stand in for a dashboard page when one throws past [client]'s own. A write under them was not seen.
+  join(ROOT, "src", "app", "layout.tsx"),
+  join(ROOT, "src", "app", "not-found.tsx"),
+  join(ROOT, "src", "app", "error.tsx"),
 ].sort();
 
 function walkGraph() {
@@ -576,9 +583,15 @@ function observedWriters() {
  * not-found, the /app layout and the /app index - and 283 modules (.ts, .tsx,
  * .mts) walked from them. The investigation counted 282 files by its own
  * walk; FreshGuard and fresh.ts joined the graph the same day.
+ *
+ * Moved by the review the same day: 25 roots, with the root layout,
+ * not-found and error, and 296 modules - those three and 9 they reach (the
+ * site's header, footer, chrome and nav dropdown, the deployment guard and
+ * motion scripts, the schema graph), and NavLink.tsx. Every rule held on the
+ * wider walk; the one new fact was next/font/google in PACKAGES.
  */
-const ROOT_FLOOR = 22;
-const MODULE_FLOOR = 283;
+const ROOT_FLOOR = 25;
+const MODULE_FLOOR = 296;
 
 test("census floor: the walk still reaches the dashboard's graph", () => {
   assert.ok(ROOTS.length >= ROOT_FLOOR, `${ROOTS.length} roots, floor ${ROOT_FLOOR}`);

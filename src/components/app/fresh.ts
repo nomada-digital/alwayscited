@@ -10,8 +10,9 @@
  * page, FreshGuard via this constant):
  *
  *  - The sidebar's nav links (Sidebar.tsx: desktop nav, phone tabs, More's
- *    sheet) are `prefetch={true}`. As each comes into view its whole page is
- *    rendered and held complete, so the click makes no request at all
+ *    sheet) are NavLinks, `prefetch={true}` but for the page on screen. As
+ *    each comes into view its whole page is rendered and held complete, so
+ *    the click makes no request at all
  *    (segment-cache/cache.js 1955-1958; ppr-navigations.js 696-705). A Full
  *    prefetch lives for `experimental.staleTimes.static`, which next.config.ts
  *    states as this number (cache.js 2575-2597: a dynamic response carries no
@@ -37,7 +38,35 @@
  * server, Back and a revisit inside the window with none either. The cost to
  * know: nav hrefs carry the stated range (`keep`), and the in-page chips state
  * it even when it is the default, so the first chip clicked re-prefetches all
- * 12 under the range's URLs.
+ * 12 under the range's URLs. Review, same day: NavLink leaves out the page on
+ * screen - 11 on that load, 3 at 390 wide, and a FreshGuard purge is the
+ * page's own render and 11. The chip's 12 were its own navigation and 11,
+ * and still are; the chips stating the default range is the pages' to
+ * change, and is not changed here.
+ *
+ * When a read fails (review, 13 Oct 2026). A render that throws is held like
+ * one that did not: the Full prefetch of it answers 200 with the error inside
+ * the payload, and Next rejects a prefetch only on a response that is not ok
+ * (cache.js 1981-1986). Two shapes:
+ *
+ *  - The whole page failed, drawn by src/app/app/[client]/error.tsx. As it is
+ *    drawn it calls router.refresh(), which empties the router's memory, so
+ *    the next click on any page asks the server again. Not in the document's
+ *    first render (FreshGuard's firstRenderDone), when the memory is empty and
+ *    a refresh answered not-ok would reload the document round and round, and
+ *    not when Try again drew it, having just refreshed. Measured on the
+ *    unreadable fixture: a click on a failed tab draws the failure, then one
+ *    render; the same tab again asks again; Try again is one render.
+ *  - One section failed and says so ("We couldn't read this part just now",
+ *    or its own words). That page is held as drawn, so leaving it and coming
+ *    back inside the window shows the same notice without asking again, for
+ *    up to FRESH_SECONDS. A reload asks again, and so does any purge -
+ *    FreshGuard's, or the error boundary's. Left so on purpose: a refresh
+ *    from a page with the sidebar on it re-renders that page and prefetches
+ *    every other nav link in view again, 12 renders at 1280 wide, so
+ *    recovering a section by itself would multiply the reads during the very
+ *    incident that failed it. prefetch.test.mts holds this paragraph and
+ *    error.tsx's refresh.
  *
  * What it does not change: a member's own change is a native form POST that
  * ends in a 303 and a whole new document, which starts every client cache

@@ -9,6 +9,19 @@ import { FRESH_SECONDS } from "./fresh";
 
 const MAX_AGE = FRESH_SECONDS * 1000;
 
+let mounted = false;
+
+/**
+ * False until FreshGuard has mounted, so false while the document's first
+ * render is drawn and true for everything drawn after (13 Oct 2026, review of
+ * the speed work). FreshGuard sits beside the pages in the /app layout with
+ * no Suspense boundary between them (prefetch.test.mts), so that first render
+ * commits whole and its effects run after every component in it has drawn.
+ * src/app/app/[client]/error.tsx reads it: a failure drawn in the first render
+ * came from the server just now, with nothing in the router's memory to purge.
+ */
+export const firstRenderDone = () => mounted;
+
 /**
  * Caps how old a dashboard page drawn from memory can be (13 Oct 2026,
  * dashboard speed work; fresh.ts has the design). router.refresh() empties
@@ -42,6 +55,7 @@ export function FreshGuard() {
 
   useEffect(() => {
     purged.current = Date.now();
+    mounted = true;
   }, []);
 
   useEffect(() => {
