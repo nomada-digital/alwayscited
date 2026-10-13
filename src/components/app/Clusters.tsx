@@ -1092,9 +1092,10 @@ function ClusterRow({
         </span>
         <span className="app-hide-sm" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
           <span style={{ fontSize: "12px", color: T.soft }}>Google</span>
-          {/* 13 Oct 2026: the words on their own line when they and the chip do not fit the 132px column together. */}
-          <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "4px 8px" }}>
-            <PositionValue slot={slot} big={{ fontSize: "17px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }} words={{ ...POSITION_WORDS, color: T.ink, whiteSpace: "nowrap" }} />
+          {/* 13 Oct 2026: the words on their own line when they and the chip do not fit the 132px column together, and wrapping inside it,
+              right-aligned, as on the Overview card - held to one line, "Not measured in this range" (157px) ran 25px into the AI answers column (review, 13 Oct 2026). */}
+          <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "4px 8px", maxWidth: "100%" }}>
+            <PositionValue slot={slot} big={{ fontSize: "17px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }} words={{ ...POSITION_WORDS, color: T.ink, textAlign: "right", minWidth: 0 }} />
             <PositionChip c={c} vs={vs} />
           </span>
         </span>

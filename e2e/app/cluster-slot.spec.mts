@@ -15,7 +15,7 @@
  * the top 20; c10 starts the day after the fixture's today.
  *
  * Saves the screens to test-results/actions/<page>-<width>.png (1280x900 and
- * 390x844). Not committed.
+ * 390x844; the unread Clusters rows at 1024 and 1280). Not committed.
  *
  *   npm run build && E2E_PORT=3732 node --test e2e/app/cluster-slot.spec.mts
  */
@@ -146,6 +146,34 @@ test("a range with no reading says 'Not measured that day', never 'Not in top 20
   assert.ok(live.every((s) => s.kind === "unread" && s.shown === "Not measured that day" && /was not read on Google on 1 Aug\.$/.test(s.said)), JSON.stringify(live.slice(0, 2)));
   assert.equal(await page.locator('a:has-text("See who ranks")').count(), 0, "no page 1 to show for a day not read");
   await ctx.close();
+});
+
+// Review, 13 Oct 2026: held to one line in the row's 132px Google column, "Not measured in this range" (157px) ran 25px
+// into the AI answers column. The words now wrap inside their column, right-aligned; this holds every row's slot
+// inside its own cell, clear of the column before it, on a day and on a range with no reading.
+test("the Clusters rows: the Google slot's words stay inside their column at 1024 and 1280, on a day and a range not read", async () => {
+  for (const [route, words, name] of [
+    [`${APP}/clusters?from=2026-08-01&to=2026-08-01`, "Not measured that day", "clusters-day-unread"],
+    [`${APP}/clusters?from=2026-07-01&to=2026-08-01`, "Not measured in this range", "clusters-range-unread"],
+  ] as const) {
+    for (const width of [1024, 1280]) {
+      const { ctx, page, status } = await open(route, width);
+      assert.equal(status, 200);
+      const cells = await page.evaluate(() =>
+        [...document.querySelectorAll<HTMLElement>("a.app-cl-grid [data-position]")].map((e) => {
+          // The words' own box (an inline span, so it spans the text even where it overflows the slot), not the slot's.
+          const words = e.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+          const cell = e.closest<HTMLElement>("a.app-cl-grid > span")!;
+          const [r, c, p] = [words, cell, cell.previousElementSibling as HTMLElement].map((x) => x.getBoundingClientRect());
+          return { shown: (words.textContent ?? "").trim(), inside: r.left >= c.left - 0.5 && r.right <= c.right + 0.5, clear: r.left >= p!.right };
+        }),
+      );
+      assert.ok(cells.filter((c) => c.shown === words).length >= 8, `${route} at ${width}: ${JSON.stringify(cells.slice(0, 2))}`);
+      for (const c of cells) assert.ok(c.inside && c.clear, `${route} at ${width}: '${c.shown}' leaves its column`);
+      await page.screenshot({ path: path.join(OUT, `${name}-${width}.png`), fullPage: true });
+      await ctx.close();
+    }
+  }
 });
 
 test("Clusters and the one-cluster page: the same words in the row, the keyword card and the figure, with See who ranks", async () => {

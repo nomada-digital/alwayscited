@@ -5,7 +5,7 @@ import type { Source } from "../core/evidence.ts";
 import { SOURCES } from "../core/core.sources.ts";
 import { DONE_RECENT, arrange, drawnView, filterItems, listSections, pickCluster, pickGroup, pickStatus, pickView } from "./board.ts";
 import { noteLines, ownerName, stateLine } from "./card.ts";
-import { planAction, planPath } from "./paths.ts";
+import { itemPath, planAction, planPath } from "./paths.ts";
 import { AGENCY_OWNER, NOMADA_OWNER, ownerLabel, placementsGroup } from "./placements.ts";
 import { type PlanItem, actLabel, clip, clientPath } from "./types.ts";
 import { ADVICE } from "./why-first.advice.ts";
@@ -260,6 +260,33 @@ test("the list's sections: Suggested best first, In progress Doing then To do, D
   assert.deepEqual([dropped.suggested, dropped.progress, dropped.done], [null, null, null], "Dropped is drawn apart");
   const empty = listSections(arrange([], none, today), null);
   assert.deepEqual([empty.suggested, empty.progress, empty.done?.items], [[], [], []], "every section drawn, each with its empty line");
+});
+
+// Review, 13 Oct 2026: the list draws only the DONE_RECENT newest Done items, so a link to an older one (Your pages'
+// History, This week's "Open in Actions") carried no anchor that landed. itemPath adds the item's status when it is
+// done or dropped: the list under that status draws the item, so every link's #item- lands on a card.
+test("a link to one item lands on its card: done and dropped carry their status, the open ones the plain list", () => {
+  const today = "2026-10-13";
+  const none = { kind: null, cluster: null, status: null };
+  const all = [
+    item("t1", { status: "todo" }),
+    ...Array.from({ length: DONE_RECENT + 2 }, (_, i) => item(`d${i}`, { status: "done", doneOn: `2026-09-${String(10 + i).padStart(2, "0")}` })),
+    item("x1", { status: "dropped" }),
+  ];
+  assert.equal(itemPath("tallyroo", all[0]!), "/app/tallyroo/plan#item-t1");
+  assert.equal(itemPath("tallyroo", all[1]!, { view: "list" }), "/app/tallyroo/plan?view=list&status=done#item-d0");
+  assert.equal(itemPath("tallyroo", all.at(-1)!), "/app/tallyroo/plan?status=dropped#item-x1");
+  // Every item is drawn on the page its link opens: d0, the oldest Done, is not among the plain list's five.
+  const drawn = (st: "done" | "dropped" | null) => {
+    const a = arrange(all, { ...none, status: st }, today);
+    const s = listSections(a, st);
+    return new Set([...(s.suggested ?? []), ...(s.progress ?? []), ...(s.done?.items ?? []), ...(st === null || st === "dropped" ? a.dropped : [])].map((i) => i.id));
+  };
+  assert.equal(drawn(null).has("d0"), false, "the plain list stops at the five newest");
+  for (const i of all) {
+    const st = new URL(itemPath("tallyroo", i), "https://x.example").searchParams.get("status") as "done" | "dropped" | null;
+    assert.ok(drawn(st).has(i.id), i.id);
+  }
 });
 
 test("In progress says each card's state in words", () => {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { clusterCards } from "./cluster-figures.ts";
 import { marketOf, positionSlot } from "./position-slot.ts";
 
 /**
@@ -36,6 +37,35 @@ test("rule 2: a keyword read and out of the top 20 never shares words with one n
   }
 });
 
+// Review, 13 Oct 2026: ON-1 lets a live cluster with no keyword take one, checked from the next daily check
+// (rekey.ts). Until that check its slot said "Not measured in this range", worded as a reading missed.
+test("a keyword a live cluster took after it started is 'Not checked yet' until its first check, then measured as any other", () => {
+  const range = { from: "2026-09-16", to: "2026-10-13" };
+  const input = {
+    clusters: [{ id: "c1", name: "B2B SEO", keyword_id: "k1", started_on: "2026-09-01", stopped_on: null }],
+    questions: [],
+    keywords: [{ id: "k1", keyword: "b2b seo agency", added_on: "2026-10-14", search_volume: null, intent: null }],
+    answers: [],
+    serp: [],
+    range,
+    before: null,
+    today: "2026-10-13",
+    engines: [],
+  };
+  const [c] = clusterCards(input);
+  assert.equal(c!.status, "live");
+  assert.equal(c!.keywordAhead, true);
+  assert.equal(positionSlot(c!, "UK", range).kind, "pending");
+  assert.equal(positionSlot(c!, "UK", range).short, "Not checked yet");
+  // From its first check on, a day with no reading is a day not measured, and a reading out of the top 20 says so.
+  const day = { from: "2026-10-14", to: "2026-10-14" };
+  const [d] = clusterCards({ ...input, range: day, today: "2026-10-14" });
+  assert.equal(d!.keywordAhead, false);
+  assert.equal(positionSlot(d!, "UK", day).short, "Not measured that day");
+  const [e] = clusterCards({ ...input, range: day, today: "2026-10-14", serp: [{ keyword_id: "k1", run_date: "2026-10-14", position: null }] });
+  assert.equal(positionSlot(e!, "UK", day).short, "Not in top 20 (UK)");
+});
+
 test("the market is the runner's: UK or US, anything else read as the US, as the Clusters page reads it", () => {
   assert.equal(marketOf("UK"), "UK");
   assert.equal(marketOf("US"), "US");
@@ -45,7 +75,7 @@ test("the market is the runner's: UK or US, anything else read as the US, as the
 
 // The help line about our reading (help.ts, Google positions) says desktop, the market and no account: that is the
 // request the runner makes. If keywordRankRequest stops saying so, the help line is wrong and this fails first.
-test("the keyword read the help describes: desktop, the market's location, the top 20, and no account or cookie", async () => {
+test("the keyword read the help describes: desktop, the market's location, the top 20, organic only, and no account or cookie", async () => {
   const { keywordRankRequest, SERP_DEPTH } = await import("../scan/dataforseo-request.ts");
   const uk = keywordRankRequest("b2b seo agency", "UK").body as Record<string, unknown>[];
   assert.deepEqual(Object.keys(uk[0]!).sort(), ["depth", "device", "keyword", "language_code", "location_code"]);
@@ -54,6 +84,17 @@ test("the keyword read the help describes: desktop, the market's location, the t
   assert.equal(SERP_DEPTH, 20);
   assert.equal(uk[0]!.location_code, 2826);
   assert.equal((keywordRankRequest("b2b seo agency", "US").body as Record<string, unknown>[])[0]!.location_code, 2840);
-  const runner = readFileSync(join(fileURLToPath(import.meta.url), "..", "..", "scan", "dataforseo.ts"), "utf8");
-  assert.ok(runner.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market);"), "the tracking read is keywordRankRequest's");
+  // The daily tracking read is readKeywordPosition (runner.ts); the line is asserted in that function's own body,
+  // since readKeywordRank (the scan's read) holds the same line (review, 13 Oct 2026).
+  const src = readFileSync(join(fileURLToPath(import.meta.url), "..", "..", "scan", "dataforseo.ts"), "utf8");
+  const start = src.indexOf("export async function readKeywordPosition(");
+  assert.ok(start > 0, "readKeywordPosition is in dataforseo.ts");
+  const body = src.slice(start, src.indexOf("\n}\n", start));
+  assert.ok(body.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market);"), "the tracking read is keywordRankRequest's");
+  assert.ok(body.includes("post(path, body, "), "and posts that request as built");
+  const runner = readFileSync(join(fileURLToPath(import.meta.url), "..", "runner.ts"), "utf8");
+  assert.ok(runner.includes("await readKeywordPosition(k.keyword as string, domain, market, remainingMs())"), "the tracking runner reads each keyword through readKeywordPosition");
+  // Only organic results count: a map place, an ad or an AI Overview link is not a position (help.ts says so).
+  const engines = readFileSync(join(fileURLToPath(import.meta.url), "..", "..", "scan", "engines.ts"), "utf8");
+  assert.ok(engines.includes('if (i.type !== "organic") continue;'), "collectOrganic keeps organic results only");
 });

@@ -22,7 +22,8 @@ import type { Angle } from "./limits.ts";
 export type ClusterInput = {
   clusters: { id: string; name: string; keyword_id: string | null; started_on: Day; stopped_on: Day | null }[];
   questions: { id: string; text: string; cluster_id: string | null; angle: Angle | null; added_on: Day; stopped_on: Day | null }[];
-  keywords: { id: string; keyword: string; search_volume: number | null; intent: string | null }[];
+  /** `added_on` is the keyword's first check (tracked_keywords); every page reads it, a test's input may leave it out. */
+  keywords: { id: string; keyword: string; added_on?: Day; search_volume: number | null; intent: string | null }[];
   answers: AnswerRow[];
   serp: SerpRow[];
   range: Range;
@@ -76,6 +77,12 @@ export type ClusterCard = {
   positionRead: boolean;
   /** The day of that latest reading, null when it was not read in the range (13 Oct 2026: the slot's sentence dates it). */
   positionOn: Day | null;
+  /**
+   * The keyword's first Google check is still to come: its added_on is after today (review, 13 Oct 2026). A pending
+   * cluster's keyword starts with it; ON-1 also gives a live cluster with no keyword one, checked from the next daily
+   * check (rekey.ts) - until then its slot says "Not checked yet", not "Not measured" (position-slot.ts).
+   */
+  keywordAhead: boolean;
   positionBefore: number | null;
   /** Places gained: #7 to #4 is +3. */
   positionChange: number | null;
@@ -378,6 +385,7 @@ export function clusterCards(input: ClusterInput): ClusterCard[] {
         position,
         positionRead: reading.at !== null,
         positionOn: reading.at,
+        keywordAhead: kw?.added_on !== undefined && kw.added_on > today,
         positionBefore,
         positionChange: position !== null && positionBefore !== null ? positionBefore - position : null,
         positionEvent,

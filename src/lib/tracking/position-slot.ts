@@ -17,7 +17,9 @@ import { type Day, type Range, formatDay } from "./figures.ts";
  * - **ranked**: "#3";
  * - **out**: read, and not in Google's top 20 - "Not in top 20 (UK)", with
  *   the market the reading was made for, because a reading is one market's;
- * - **pending**: the cluster's first check is still to come - "Not checked yet";
+ * - **pending**: the keyword's first check is still to come - "Not checked yet":
+ *   the cluster's first check, or (review, 13 Oct 2026) a keyword a live cluster
+ *   took after it started (ON-1), checked from the next daily check;
  * - **unread**: a live keyword with no reading in the range - "Not measured
  *   that day" on a one-day range, "Not measured in this range" on a longer one;
  * - **none**: the cluster has no keyword.
@@ -41,7 +43,7 @@ const ordinal = (n: number) => {
 };
 
 export function positionSlot(
-  c: { keyword: string | null; position: number | null; positionRead: boolean; positionOn: Day | null; status: "live" | "added" | "pending" },
+  c: { keyword: string | null; position: number | null; positionRead: boolean; positionOn: Day | null; status: "live" | "added" | "pending"; keywordAhead?: boolean },
   market: string,
   range: Range | null = null,
 ): PositionSlot {
@@ -51,7 +53,7 @@ export function positionSlot(
   const on = c.positionOn ? `, ${formatDay(c.positionOn)}` : "";
   if (c.position !== null) return { kind: "ranked", short: `#${c.position}`, full: `'${kw}' is ${ordinal(c.position)} on Google in the ${m} at its latest reading${on}.` };
   if (c.positionRead) return { kind: "out", short: `Not in top ${SERP_DEPTH} (${m})`, full: `'${kw}' is not in Google's top ${SERP_DEPTH} in the ${m} at its latest reading${on}.` };
-  if (c.status === "pending") return { kind: "pending", short: "Not checked yet", full: `'${kw}' has not been checked on Google yet. Its first check is the next daily check.` };
+  if (c.status === "pending" || c.keywordAhead) return { kind: "pending", short: "Not checked yet", full: `'${kw}' has not been checked on Google yet. Its first check is the next daily check.` };
   if (range && range.from === range.to) return { kind: "unread", short: "Not measured that day", full: `'${kw}' was not read on Google on ${formatDay(range.from)}.` };
   return { kind: "unread", short: "Not measured in this range", full: range ? `'${kw}' was not read on Google between ${formatDay(range.from)} and ${formatDay(range.to)}.` : `'${kw}' was not read on Google in this range.` };
 }

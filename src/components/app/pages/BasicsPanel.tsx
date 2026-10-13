@@ -1,10 +1,10 @@
 import Link from "@/components/app/AppLink";
 import { T } from "@/config/tokens";
+import { itemPath } from "@/lib/diy/plan/paths";
 import { STATUS_LABEL, type PlanItem } from "@/lib/diy/plan/types";
 import type { BasicsTab, HistoryRow } from "@/lib/diy/pages/view";
 import { advice } from "@/lib/diy/pages/words";
 import { formatDay } from "@/lib/tracking/figures";
-import { appPath } from "@/lib/app-host";
 
 import { Advice, H2, SECTION, SMALL, StateChip } from "./parts";
 
@@ -87,7 +87,7 @@ export function HistoryPanel({ slug, history, items }: { slug: string; history: 
             {items.map((i) => (
               <li key={i.id} style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", alignItems: "center", fontSize: "14px", color: T.ink }}>
                 <StateChip label={STATUS_LABEL[i.status]} tone={i.status === "done" ? "good" : i.status === "dropped" ? "none" : "warn"} />
-                <Link href={appPath(`/${encodeURIComponent(slug)}/plan?view=list#item-${encodeURIComponent(i.id)}`)} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }} className="yp-break">
+                <Link href={itemPath(slug, i, { view: "list" })} style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }} className="yp-break">
                   {i.title}
                 </Link>
                 {i.verified ? <span style={SMALL}>{i.verified.text}</span> : null}

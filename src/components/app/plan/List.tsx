@@ -74,12 +74,16 @@ export default function List({ arranged, ctx, status, after, add, allDone }: { a
       ) : null}
       {dropped ? (
         <details id="dropped" className="plan-dropped" open={status === "dropped"} style={{ display: "block", minWidth: 0, scrollMarginTop: "16px" }}>
-          <summary id="col-dropped" style={{ ...HEAD, cursor: "pointer", minHeight: "36px", alignItems: "center", width: "fit-content" }}>
+          {/* The heading inside the summary (review, 13 Oct 2026): a summary styled as one was skipped by heading navigation, and
+              Dropped's cards fell under Done in the outline. */}
+          <summary style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minHeight: "36px", width: "fit-content" }}>
             <svg className="plan-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M9 6l6 6-6 6" />
             </svg>
-            Dropped
-            <span style={COUNT}>{arranged.dropped.length}</span>
+            <h2 id="col-dropped" style={HEAD}>
+              Dropped
+              <span style={COUNT}>{arranged.dropped.length}</span>
+            </h2>
           </summary>
           <div style={{ ...GROUP, paddingTop: "10px" }}>
             <p style={SMALL}>Dropped items stay here. Bring one back with the select on its card.</p>

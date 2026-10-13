@@ -283,6 +283,13 @@ test("Basics and History: the JS-only page says so with Google's dated line; the
   t = await text(page);
   assert.match(t, /Its text changed between our reads on 16 Sep/);
   assert.match(t, /Add Product schema to tallyroo\.com\/bookkeeping/, "the Actions item on this page");
+  // Review, 13 Oct 2026: the list draws only the five newest Done items, so a done item's link carries status=done and
+  // its #item- anchor lands on its card whatever its age (paths.ts itemPath).
+  const href = await page.locator('section[aria-labelledby="hist-items"] a').first().getAttribute("href");
+  assert.match(href!, /\/app\/tallyroo\/plan\?view=list&status=done#item-pi-05$/);
+  await ctx.close();
+  ({ ctx, page } = await open(href!));
+  assert.equal(await page.locator("#item-pi-05").count(), 1, "the done item's card is on the page its link opens");
   await ctx.close();
 });
 

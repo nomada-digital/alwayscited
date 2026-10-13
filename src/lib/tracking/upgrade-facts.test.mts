@@ -24,6 +24,7 @@ const card = (id: string, over: Partial<ClusterCard>): ClusterCard => ({
   position: null,
   positionRead: true,
   positionOn: "2026-09-30",
+  keywordAhead: false,
   positionBefore: null,
   positionChange: null,
   positionEvent: null,

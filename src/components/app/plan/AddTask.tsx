@@ -13,8 +13,8 @@ import { DARK, FIELD, H2, LABEL, OFF, SECTION, SMALL } from "./styles";
  *
  * `compact` (13 Oct 2026, Danny: "keep Add a task easy to find"): the list
  * draws it at the top of In progress, a row under a small heading rather
- * than its own card. The page draws one or the other, never both, so the
- * anchor and the field ids stay unique.
+ * than its own card, its heading an h3 under In progress's h2. The page draws
+ * one or the other, never both, so the anchor and the field ids stay unique.
  */
 export default function AddTask({ slug, keep, clusters, canWrite, reason, compact = false }: { slug: string; keep: PlanKeep; clusters: readonly { id: string; name: string }[]; canWrite: boolean; reason: string; compact?: boolean }) {
   const off = canWrite ? {} : { disabled: true, "aria-describedby": "new-task-ro" };
@@ -24,9 +24,16 @@ export default function AddTask({ slug, keep, clusters, canWrite, reason, compac
     : { ...SECTION, scrollMarginTop: "16px" };
   return (
     <section id="new-task" aria-labelledby="new-task-h" style={box as React.CSSProperties}>
-      <h2 id="new-task-h" style={compact ? { ...H2, fontSize: "14px" } : H2}>
-        Add a task
-      </h2>
+      {/* Compact, it sits inside In progress, so its heading is an h3 under that h2 (review, 13 Oct 2026: the outline read two h2s). */}
+      {compact ? (
+        <h3 id="new-task-h" style={{ ...H2, fontSize: "14px" }}>
+          Add a task
+        </h3>
+      ) : (
+        <h2 id="new-task-h" style={H2}>
+          Add a task
+        </h2>
+      )}
       <form method="post" action={planAction(slug, keep)} style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "10px" }}>
         <span style={{ display: "flex", flexDirection: "column", gap: "4px", flex: "3 1 240px", minWidth: 0 }}>
           <label htmlFor="new-task-title" style={LABEL}>

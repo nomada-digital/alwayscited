@@ -185,8 +185,15 @@ test("the list is the default at 1280: This week, Suggested, In progress with Ad
   assert.equal(await page.locator('nav[aria-label="View"] a[aria-current="page"]').innerText(), "List");
   assert.match((await page.locator('nav[aria-label="View"] a', { hasText: "Board" }).getAttribute("href"))!, /\/plan\?view=board$/, "the board is remembered by view=board");
   assert.doesNotMatch((await page.locator('nav[aria-label="View"] a', { hasText: "List" }).getAttribute("href"))!, /view=/, "the list is the page with no view");
-  const heads = await page.evaluate(() => [...document.querySelectorAll("#app-content h2, details.plan-filter > summary, details#dropped > summary")].map((h) => [...h.childNodes].map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ")));
+  const heads = await page.evaluate(() => [...document.querySelectorAll("#app-content h2, #app-content h3#new-task-h, details.plan-filter > summary")].map((h) => [...h.childNodes].map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ")));
   assert.deepEqual(heads.slice(0, 7), ["This week", "Filter", "Suggested 7", "In progress 9", "Add a task", "Done 3", "Dropped 3"]);
+  // The outline (review, 13 Oct 2026): Add a task an h3 inside In progress, Dropped an h2 of its own inside its summary,
+  // so heading navigation reaches it and its cards do not fall under Done.
+  const outline = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>("#app-content h2, #app-content h3")].filter((h) => !h.closest("article, .plan-week")).map((h) => `${h.tagName} ${[...h.childNodes].map((n) => (n.textContent ?? "").trim()).filter(Boolean).join(" ")}`));
+  assert.deepEqual(outline.slice(outline.indexOf("H2 In progress 9"), outline.indexOf("H2 Dropped 3") + 1), ["H2 In progress 9", "H3 Add a task", "H2 Done 3", "H2 Dropped 3"]);
+  assert.equal(await page.evaluate(() => document.querySelector("#col-dropped")?.parentElement?.tagName), "SUMMARY");
+  // The view switch comes before the filters in the DOM (WCAG 2.4.3): a keyboard reaches List and Board before any chip.
+  assert.equal(await page.evaluate(() => !!(document.querySelector('nav[aria-label="View"]')!.compareDocumentPosition(document.querySelector("details.plan-filter")!) & Node.DOCUMENT_POSITION_FOLLOWING)), true);
   // In progress is To do and Doing together, Doing first, each card saying its state in words.
   const states = await page.evaluate(() => [...document.querySelectorAll('section[aria-labelledby="col-progress"] article [data-plan-state]')].map((e) => e.textContent));
   assert.equal(states.length, 9);
@@ -220,6 +227,16 @@ test("a filter on opens the Filter disclosure; the board keeps its view through 
   const kinds = await board.page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>('nav[aria-label="Kind"] a')].map((a) => a.getAttribute("href")));
   assert.ok(kinds.every((h) => /view=board/.test(h!)), "each filter link keeps the board");
   await board.ctx.close();
+  // From a list filtered by status, Board opens the whole board: it draws no Status chips to undo one (review, 13 Oct 2026).
+  const todo = await open(`${PLAN}?status=todo&kind=pages`);
+  const toBoard = (await todo.page.locator('nav[aria-label="View"] a', { hasText: "Board" }).getAttribute("href"))!;
+  assert.match(toBoard, /\/plan\?kind=pages&view=board$|\/plan\?view=board&kind=pages$/, "the status is cleared, the kind kept");
+  await todo.ctx.close();
+  // With Filter open, Tab from the page's top reaches List and Board before the first filter chip.
+  const keys = await open(`${PLAN}?kind=pages`);
+  const order = await keys.page.evaluate(() => [...document.querySelectorAll<HTMLElement>('nav[aria-label="View"] a, details.plan-filter > summary, nav[aria-label="Kind"] a')].map((e) => e.textContent!.trim()));
+  assert.deepEqual(order.slice(0, 4), ["List", "Board", "Filter (1 on)", "All kinds"]);
+  await keys.ctx.close();
   const off = await open(PLAN, 1280, false);
   await off.page.locator("details.plan-filter > summary").click();
   assert.equal(await off.page.locator('nav[aria-label="Kind"]').isVisible(), true, "the disclosure opens with no script");

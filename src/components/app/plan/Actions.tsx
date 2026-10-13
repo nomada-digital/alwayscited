@@ -128,6 +128,17 @@ export default function Actions({
         <>
           {/* The Filter disclosure on the left, its chips opening full width under it; the view switch on the right of its row. */}
           <div className="plan-tools" style={{ position: "relative", minWidth: 0 }}>
+            {/* The view switch first in the DOM (review, 13 Oct 2026, WCAG 2.4.3): after the details, a keyboard reached List and
+                Board only past every open filter chip. Drawn top right, beside the Filter pill, as before. The Board link
+                clears the status: the board draws no Status chips, so a status kept there could be undone only by Clear filters. */}
+            <nav aria-label="View" style={{ position: "absolute", top: 0, right: 0, display: "flex", gap: "8px" }}>
+              <Link href={href({ view: null })} aria-current={list ? "page" : undefined} style={PILL(list)}>
+                List
+              </Link>
+              <Link href={href({ view: "board", status: null })} aria-current={list ? undefined : "page"} style={PILL(!list)}>
+                Board
+              </Link>
+            </nav>
             <details className="plan-filter" open={on > 0} style={{ minWidth: 0 }}>
               <summary style={{ ...PILL(on > 0), cursor: "pointer", listStyle: "none", width: "fit-content", gap: "6px" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -184,14 +195,6 @@ export default function Actions({
                 ) : null}
               </div>
             </details>
-            <nav aria-label="View" style={{ position: "absolute", top: 0, right: 0, display: "flex", gap: "8px" }}>
-              <Link href={href({ view: null })} aria-current={list ? "page" : undefined} style={PILL(list)}>
-                List
-              </Link>
-              <Link href={href({ view: "board", ...(filters.status === "dropped" ? { status: null } : {}) })} aria-current={list ? undefined : "page"} style={PILL(!list)}>
-                Board
-              </Link>
-            </nav>
           </div>
 
           {notice ? <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>{notice}</p> : null}
