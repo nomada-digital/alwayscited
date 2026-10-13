@@ -44,6 +44,10 @@ type Page = {
   waitForFunction(fn: () => unknown, a?: unknown, o?: object): Promise<unknown>;
   keyboard: { press(key: string): Promise<void> };
   on(ev: "response", fn: (r: { url(): string; request(): { resourceType(): string } }) => void): void;
+  route(
+    url: string,
+    fn: (route: { request(): { headers(): Record<string, string> }; abort(): Promise<void>; continue(): Promise<void> }) => Promise<void> | void,
+  ): Promise<void>;
 };
 type Context = { newPage(): Promise<Page>; close(): Promise<void> };
 type Browser = { newContext(o: object): Promise<Context>; close(): Promise<void> };
