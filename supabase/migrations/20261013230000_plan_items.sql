@@ -21,23 +21,18 @@
 -- takes the weekly pick's order. Written as add column if not exists below
 -- the create, so the file is right whether or not an earlier draft ran.
 --
--- The two foreign keys are the spec's DDL as written, with no on delete
--- action (13 Oct 2026, DIY P5: P1's diy_core no longer matches this - its
--- review gave diy_jobs on delete cascade and diy_reads on delete set null -
--- so the two files now differ, and the choice below is still open): a hand
--- delete of a client_domains or
--- tracked_clusters row that has items fails loudly instead of cascading the
--- client's action history away or orphaning it silently. The tracking tables
--- cascade (20260929000000); whether plan_items should follow them is Danny's
--- call before this is applied, and changing it after is a constraint
--- rewrite, not an additive change. No code deletes either row today.
+-- Foreign keys (13 Oct 2026, decided before apply): client_domain_id
+-- cascades, as diy_jobs and every tracking table do (20260929000000), so a
+-- hand delete of a client takes its action items with it rather than failing;
+-- cluster_id is set null, so an item outlives a deleted cluster and keeps its
+-- history. No code deletes either row today.
 --
 -- Service-role reads only, authorisation in the app, as every tracking table:
 -- row level security on, no policies.
 create table if not exists plan_items (
   id uuid primary key default gen_random_uuid(),
-  client_domain_id uuid not null references client_domains(id),
-  cluster_id uuid references tracked_clusters(id),
+  client_domain_id uuid not null references client_domains(id) on delete cascade,
+  cluster_id uuid references tracked_clusters(id) on delete set null,
   kind text not null check (kind in ('unblock_crawler','fix_page_status','add_schema','fix_schema','rework_page',
     'pick_target_page','resolve_split','get_onto_page','claim_profile','answer_thread','publish_own','refresh_own',
     'send_correction','earn_link','ask_for_link','reclaim_link','track_keyword','recover_keyword','recover_prompt','own_task')),
