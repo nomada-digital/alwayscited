@@ -11,7 +11,7 @@ import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
 import { loadDiyClient } from "@/lib/diy/core/client";
 import { diyDay } from "@/lib/diy/core/jobs";
-import { arrange, pickCluster, pickGroup, pickStatus, pickView } from "@/lib/diy/plan/board";
+import { arrange, drawnView, pickCluster, pickGroup, pickStatus, pickView } from "@/lib/diy/plan/board";
 import { readPlan, section } from "@/lib/diy/plan/data";
 import { ownerLabel, placementsGroup } from "@/lib/diy/plan/placements";
 import { type Readout, joinWindows, readout, readoutWindows } from "@/lib/diy/plan/readout";
@@ -46,7 +46,9 @@ export const runtime = "nodejs";
  * 1.1 row 33). Same membership rule as every /app/[client] page: no session
  * is the login page, a slug that is not one of the session's clients a 404.
  *
- * Query keys, each bounded here (section 3.5): `view` board or list; `status`
+ * Query keys, each bounded here (section 3.5): `view` board or list - none
+ * stated draws the list, the default at every width since 13 Oct 2026
+ * (Danny), and `view=board` the four columns; `status`
  * a plan status; `kind` a kind group; `cluster` one of this client's
  * clusters; `done` and `why` the plan route's toast codes, drawn through
  * planToast's fixed words.
@@ -115,28 +117,25 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
 
   // The placed tiers' Placements group, owned by nomada digital or, in agency mode, the account contact. The mode is read
   // where a failed read throws (client.ts), so a failure hides the group rather than naming Nomada to an agency's client.
+  // 13 Oct 2026 (Danny): the group belongs to the list, which is the default at every width now; the board has none.
   let group: React.ReactNode = null;
-  if (placed) {
+  if (placed && drawnView(view, filters.status) === "list") {
     const mode = await section("plan mode", async () => {
       if (fixtureMode()) return upgrade.mode;
       const c = await loadDiyClient(supabaseAdmin(), client.id, repo.now());
       if (!c) throw new Error("no client row");
       return c.upsellMode;
     });
-    const showList = view === "list" || filters.status === "dropped";
-    const cls = showList ? undefined : view === null ? "plan-only-sm" : null;
-    if (cls !== null) {
-      group =
-        mode.ok && placements.ok ? (
-          <PlacementsGroup rows={placementsGroup(placements.value, clusterNames)} owner={ownerLabel(mode.value)} className={cls} />
-        ) : (
-          <section aria-label="Placements" className={cls} style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", padding: "18px 20px" }}>
-            <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
-              {SECTION_ERROR}
-            </p>
-          </section>
-        );
-    }
+    group =
+      mode.ok && placements.ok ? (
+        <PlacementsGroup rows={placementsGroup(placements.value, clusterNames)} owner={ownerLabel(mode.value)} />
+      ) : (
+        <section aria-label="Placements" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", padding: "18px 20px" }}>
+          <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+            {SECTION_ERROR}
+          </p>
+        </section>
+      );
   }
 
   const utc = diyDay(repo.now());

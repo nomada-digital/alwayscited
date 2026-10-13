@@ -12,8 +12,9 @@ import { H2, SMALL } from "./styles";
 /**
  * The board (13 Oct 2026, DIY P3; spec 10 section 4.6): Suggested, To do,
  * Doing and Done, side by side above 1180px, two by two below it, and one
- * under another below 640px, where the board reads as the list does.
- * "Dropped (n)" is a link under it, drawn by the page.
+ * under another below 640px. "Dropped (n)" is a link under it, drawn by the
+ * page. Since Danny's call the same day the board is the option
+ * (`view=board`) and the list the default.
  */
 
 /** What every column needs to draw its cards. */
@@ -38,7 +39,8 @@ export const EMPTY: Record<Exclude<PlanStatus, "dropped">, string> = {
   done: "When you mark something done, we show what changed after it, here.",
 };
 
-export function Cards({ items, ctx }: { items: readonly PlanItem[]; ctx: CardContext }) {
+/** `state`: each card says its status in words - the list's In progress, where To do and Doing sit together. */
+export function Cards({ items, ctx, state = false }: { items: readonly PlanItem[]; ctx: CardContext; state?: boolean }) {
   return (
     <>
       {items.map((item) => (
@@ -55,6 +57,7 @@ export function Cards({ items, ctx }: { items: readonly PlanItem[]; ctx: CardCon
           readout={ctx.readouts.get(item.id) ?? null}
           first={item.status === "suggested"}
           monday={ctx.monday}
+          state={state}
         />
       ))}
     </>

@@ -12,9 +12,21 @@ import { byItemOrder } from "./week.ts";
 export const VIEWS = ["board", "list"] as const;
 export type PlanView = (typeof VIEWS)[number];
 
-/** `?view=`: board or list, else none stated (the board above 640px, the list below it). */
+/**
+ * `?view=`: board or list, else none stated. 13 Oct 2026 (Danny): with none
+ * stated the page draws the list at every width - most clients only need
+ * "do these three", what is in progress and what is done - and the board is
+ * the option, `view=board`. `view=list` still reads as the list, so every
+ * link that states it (the nav's Add a task, This week's footer, the work
+ * markers) lands where it did.
+ */
 export function pickView(v: string | null): PlanView | null {
   return v === "board" || v === "list" ? v : null;
+}
+
+/** The view the page draws for what the URL states: the board only when asked for, and never for Dropped, which is a list. */
+export function drawnView(view: PlanView | null, status: PlanStatus | null): PlanView {
+  return view === "board" && status !== "dropped" ? "board" : "list";
 }
 
 /** `?status=`: one of the statuses, else every status. */
@@ -64,6 +76,32 @@ export type Arranged = {
   /** True when nothing is open (Suggested, To do or Doing), before any filter. */
   nothingOpen: boolean;
 };
+
+/** How many Done items the list shows before "All n done" (13 Oct 2026, Danny: "Done (recent, with readouts)"). */
+export const DONE_RECENT = 5;
+
+/**
+ * The list's sections (13 Oct 2026, Danny), from the board's columns: Suggested
+ * best first, as the column is; In progress, To do and Doing together - Doing
+ * first, each newest change first - every card saying its state in words; Done,
+ * the DONE_RECENT newest unless `status=done` asks for every one; Dropped apart.
+ * A section is null when the status filter leaves it out, so it is not drawn.
+ */
+export type ListSections = {
+  suggested: PlanItem[] | null;
+  progress: PlanItem[] | null;
+  done: { items: PlanItem[]; of: number } | null;
+};
+
+export function listSections(a: Arranged, status: PlanStatus | null): ListSections {
+  const col = (s: Exclude<PlanStatus, "dropped">) => a.columns.find((c) => c.status === s)?.items ?? null;
+  const [suggested, todo, doing, done] = [col("suggested"), col("todo"), col("doing"), col("done")];
+  return {
+    suggested,
+    progress: todo === null && doing === null ? null : [...(doing ?? []), ...(todo ?? [])],
+    done: done === null ? null : { items: status === "done" ? done : done.slice(0, DONE_RECENT), of: done.length },
+  };
+}
 
 /** The board's columns for the filters, with Suggested's hidden items counted apart. */
 export function arrange(all: readonly PlanItem[], f: Filters, today: Day): Arranged {

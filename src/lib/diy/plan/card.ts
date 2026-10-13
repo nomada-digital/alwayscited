@@ -1,5 +1,6 @@
+import { formatDay } from "../../tracking/figures.ts";
 import { SYSTEM, isStaleNote, staleNote } from "./refresh.ts";
-import type { PlanItem } from "./types.ts";
+import { type PlanItem, STATUS_LABEL } from "./types.ts";
 
 /**
  * The card's rule-written lines that depend on who is looking (13 Oct 2026,
@@ -32,4 +33,15 @@ export function noteLines(item: Pick<PlanItem, "status" | "statusBy" | "statusAt
   const note = item.note && !isStaleNote(item.note) ? item.note : null;
   if (item.status !== "dropped" || item.statusBy !== SYSTEM) return { note, stale: null };
   return { note, stale: isStaleNote(item.note) ? item.note : staleNote(item.statusAt.slice(0, 10)) };
+}
+
+/**
+ * A card's status in words, first on the card in the list's In progress,
+ * where To do and Doing sit together (13 Oct 2026, Danny): "To do", or
+ * "Doing since 3 Oct" with the day it was started, "Doing" when that day is
+ * not known.
+ */
+export function stateLine(item: Pick<PlanItem, "status" | "startedOn">): string {
+  if (item.status === "doing") return item.startedOn ? `Doing since ${formatDay(item.startedOn)}` : STATUS_LABEL.doing;
+  return STATUS_LABEL[item.status];
 }

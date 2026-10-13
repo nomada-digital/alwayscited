@@ -1,40 +1,91 @@
 import type { ReactNode } from "react";
 
+import Link from "@/components/app/AppLink";
 import { T } from "@/config/tokens";
-import type { Arranged } from "@/lib/diy/plan/board";
+import { type Arranged, listSections } from "@/lib/diy/plan/board";
 import { type PlacementGroupRow } from "@/lib/diy/plan/placements";
-import { STATUS_LABEL } from "@/lib/diy/plan/types";
+import type { PlanStatus } from "@/lib/diy/plan/types";
 
 import { Cards, type CardContext, EMPTY, hiddenNote } from "./Board";
-import { H2, SECTION, SMALL } from "./styles";
+import { H2, LINK, SECTION, SMALL } from "./styles";
 
 /**
- * The list (13 Oct 2026, DIY P3; spec 10 section 4.6): the same items as the
- * board, grouped by status one under another - the default below 640px -
- * with Dropped listed when `?status=dropped` asks for it. On placed tiers it
- * ends with the read-only Placements group (`after`).
+ * The list (13 Oct 2026, DIY P3; spec 10 section 4.6), the page's default at
+ * every width since Danny's call the same day: most clients only need "do
+ * these three", what is in progress and what is done. Under This week, one
+ * section after another:
+ *
+ * - **Suggested**: what the checks found, best first (section 6.1's order);
+ * - **In progress**: To do and Doing together, Doing first, each card saying
+ *   its state in words, with Add a task at the top (`add`);
+ * - **Done**: the most recent, with their readouts, and "All n done";
+ * - **Dropped**: folded away in a `<details>`, open when `?status=dropped`
+ *   asks for it - a disclosure works with JS off.
+ *
+ * A status filter draws its own section only. On placed tiers it ends with
+ * the read-only Placements group (`after`).
  */
-export default function List({ arranged, ctx, dropped, after }: { arranged: Arranged; ctx: CardContext; dropped: boolean; after?: ReactNode }) {
+const COUNT = { fontSize: "13px", fontWeight: 600, color: T.soft } as const;
+const HEAD = { ...H2, display: "flex", alignItems: "baseline", gap: "8px", scrollMarginTop: "16px" } as const;
+const GROUP = { display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 } as const;
+
+export default function List({ arranged, ctx, status, after, add, allDone }: { arranged: Arranged; ctx: CardContext; status: PlanStatus | null; after?: ReactNode; add: ReactNode; allDone: string }) {
+  const s = listSections(arranged, status);
+  const dropped = status === null || status === "dropped";
   return (
-    <div className="plan-list" style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
-      {arranged.columns.map((c) => (
-        <section key={c.status} aria-labelledby={`col-${c.status}`} style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
-          <h2 id={`col-${c.status}`} style={{ ...H2, display: "flex", alignItems: "baseline", gap: "8px" }}>
-            {STATUS_LABEL[c.status]}
-            <span style={{ fontSize: "13px", fontWeight: 600, color: T.soft }}>{c.items.length}</span>
+    <div className="plan-list" style={{ display: "flex", flexDirection: "column", gap: "24px", minWidth: 0 }}>
+      {s.suggested ? (
+        <section aria-labelledby="col-suggested" style={GROUP}>
+          <h2 id="col-suggested" style={HEAD}>
+            Suggested
+            <span style={COUNT}>{s.suggested.length}</span>
           </h2>
-          {c.status === "suggested" ? hiddenNote(arranged.hidden) : null}
-          {c.items.length ? <Cards items={c.items} ctx={ctx} /> : <p style={SMALL}>{EMPTY[c.status]}</p>}
+          <p style={SMALL}>What your checks found, best first.</p>
+          {hiddenNote(arranged.hidden)}
+          {s.suggested.length ? <Cards items={s.suggested} ctx={ctx} /> : <p style={SMALL}>{EMPTY.suggested}</p>}
         </section>
-      ))}
+      ) : null}
+      {s.progress ? (
+        <section aria-labelledby="col-progress" style={GROUP}>
+          <h2 id="col-progress" style={HEAD}>
+            In progress
+            <span style={COUNT}>{s.progress.length}</span>
+          </h2>
+          {add}
+          {s.progress.length ? <Cards items={s.progress} ctx={ctx} state /> : <p style={SMALL}>Nothing in progress. Start a suggestion, or add a task of your own.</p>}
+        </section>
+      ) : null}
+      {s.done ? (
+        <section aria-labelledby="col-done" style={GROUP}>
+          <h2 id="col-done" style={HEAD}>
+            Done
+            <span style={COUNT}>{s.done.of}</span>
+          </h2>
+          {s.done.items.length ? <Cards items={s.done.items} ctx={ctx} /> : <p style={SMALL}>{EMPTY.done}</p>}
+          {s.done.of > s.done.items.length ? (
+            <p style={SMALL}>
+              {`The ${s.done.items.length} most recent. `}
+              <Link href={allDone} style={LINK}>
+                {`All ${s.done.of} done`}
+              </Link>
+            </p>
+          ) : null}
+        </section>
+      ) : null}
       {dropped ? (
-        <section aria-labelledby="col-dropped" style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: 0 }}>
-          <h2 id="col-dropped" style={{ ...H2, display: "flex", alignItems: "baseline", gap: "8px" }}>
+        <details id="dropped" className="plan-dropped" open={status === "dropped"} style={{ display: "block", minWidth: 0, scrollMarginTop: "16px" }}>
+          <summary id="col-dropped" style={{ ...HEAD, cursor: "pointer", minHeight: "36px", alignItems: "center", width: "fit-content" }}>
+            <svg className="plan-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" />
+            </svg>
             Dropped
-            <span style={{ fontSize: "13px", fontWeight: 600, color: T.soft }}>{arranged.dropped.length}</span>
-          </h2>
-          {arranged.dropped.length ? <Cards items={arranged.dropped} ctx={ctx} /> : <p style={SMALL}>Nothing dropped.</p>}
-        </section>
+            <span style={COUNT}>{arranged.dropped.length}</span>
+          </summary>
+          <div style={{ ...GROUP, paddingTop: "10px" }}>
+            <p style={SMALL}>Dropped items stay here. Bring one back with the select on its card.</p>
+            {arranged.dropped.length ? <Cards items={arranged.dropped} ctx={ctx} /> : <p style={SMALL}>Nothing dropped.</p>}
+          </div>
+        </details>
       ) : null}
       {after}
     </div>

@@ -81,6 +81,9 @@ const SOURCE_FLOOR = 174;
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 40 - wave 1's 11, P6's six Google pages, P7's eight Opportunities
  * pages, P8's eleven Your pages pages, and the wave 2 journey's Google, Opportunities, key page and Actions
  * (e2e/app/diy-wave2.spec.mts).
+ * 13 Oct 2026 (Danny, Actions simple by default): the list is Actions' default, so diy-plan.spec saves the viewer's
+ * list (plan-list-viewer) beside the viewer's board, and plan-list-full is the page with no view: seven Actions pages,
+ * one more than wave 1 counted. The floor stays 40 - a minimum, and this tree's other specs are unchanged.
  */
 const SAVED_FLOOR = 40;
 
