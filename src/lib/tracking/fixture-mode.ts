@@ -1,4 +1,5 @@
 import { brandKey, subjectKeys } from "../scan/brand-name.ts";
+import type { UpsellMode } from "./ask.ts";
 import { failureSummary } from "./decide.ts";
 import { addDays, type Day } from "./figures.ts";
 import { PROMPTS_PER_CLUSTER } from "./limits.ts";
@@ -73,7 +74,24 @@ export type Fixture = {
    * client. Absent is the table being there.
    */
   scoping?: false;
+  /**
+   * 13 Oct 2026, DIY P2: the account's upsell_mode, as upgradeContext reads it
+   * (repo.ts). Absent is nomada; only the placed-agency state sets agency.
+   */
+  mode?: UpsellMode;
 };
+
+/**
+ * A prompt row as the fixture can hold it (13 Oct 2026, DIY P2): the overview's
+ * columns, plus the origin columns tracked_questions has from 20261013010000.
+ * Only the placed states' placement prompts carry them; every other fixture
+ * prompt's origin is in src/lib/diy/fixtures/origins.json, because fixture.json
+ * is never edited. loadPromptOrigins reads both.
+ */
+export type FixtureQuestion = OverviewData["questions"][number] & { source?: string; origin_kind?: string | null; origin_ref?: string | null; allowance?: string | null };
+
+/** Whether a fixture prompt is in the placement allowance, outside the angle slots (limits.ts, DIY P2). */
+export const placementAllowance = (q: object): boolean => (q as FixtureQuestion).allowance === "placement";
 
 /** `clients` (AG-1, 9 Oct 2026): the client ids a member is limited to, as dashboard_member_clients lists them; absent is every client. */
 export type FixtureMember = { email: string; name: string | null; role: string; last_login_at: string | null; removed_at?: string | null; clients?: string[] };
@@ -122,8 +140,72 @@ export function fixtureUnreadable(env: Record<string, string | undefined> = proc
  * benchmark "lists over 10 rows have search/sort/filter with counts" can be
  * swept - the default names 5 brands, cites 6 pages and has 6 placements.
  */
-/** Every TRACKING_FIXTURE_STATE, unset being `default`. Anything else serves the default. */
-export const FIXTURE_STATES = ["default", "signup", "signup-typed", "new", "young", "partial", "failed", "unreadable", "stopped", "ungrouped", "pilot-mixed", "uncited", "long", "trial", "trial-ending", "trial-cancelled", "ended", "brands-unread", "two-clients", "past-due", "unpaid"] as const;
+/**
+ * Every TRACKING_FIXTURE_STATE, unset being `default`. Anything else serves the default.
+ *
+ * 13 Oct 2026, DIY P2 (spec 10 section 7.0 item 6): `placed` and
+ * `placed-agency` added. The tier and the mode are tracking-fixture facts, so
+ * the placed states are here, not in DIY_FIXTURE_STATE: `placed` is the client
+ * on alwaysmentioned with three placement prompts on c1 (placedState), and
+ * `placed-agency` is the same on an agency-mode account, so no page may name
+ * Nomada.
+ */
+export const FIXTURE_STATES = ["default", "signup", "signup-typed", "new", "young", "partial", "failed", "unreadable", "stopped", "ungrouped", "pilot-mixed", "uncited", "long", "trial", "trial-ending", "trial-cancelled", "ended", "brands-unread", "two-clients", "past-due", "unpaid", "placed", "placed-agency"] as const;
+
+/**
+ * The placed states' placement prompts (13 Oct 2026, DIY P2): each one the
+ * title rule's prompt from a made-up title of a fixture placement on c1
+ * (fixture-mode.test.mts holds each text equal to promptFromTitle of its
+ * title). The first two were added the morning after their placement went
+ * live and have been read since; the third is a link insertion the admin
+ * ticked and retried after the switch went on, so it is first asked tomorrow
+ * (spec 6.7: earlier live placements get their prompt through the retry, one
+ * at a time). `like` is the c1 prompt whose readings each one's copy, so the
+ * fixture stays one made-up world.
+ */
+export const PLACED_PROMPTS = [
+  { id: "q1-pl1", placement: "p1", like: "q1-2", title: "The 12 Best Accounting Apps for Small Businesses in 2026 | The Small Biz Stack", text: "best accounting apps for small businesses" },
+  { id: "q1-pl2", placement: "p4", like: "q1-4", title: "Best Bookkeeping Tools for Freelancers: Our Top Picks - Freelance Field Notes", text: "best bookkeeping tools for freelancers" },
+  { id: "q1-pl3", placement: "p3", like: null, title: "The Best Accounting Software to Switch To in 2026 - Owner Ledger", text: "best accounting software to switch to" },
+] as const;
+
+/** The placement prompt switch on the fixture: on in the placed states, which carry placement prompts; off in every other. */
+export function fixturePlacementPromptsOn(env: Record<string, string | undefined> = process.env): boolean {
+  return env.TRACKING_FIXTURE_STATE === "placed" || env.TRACKING_FIXTURE_STATE === "placed-agency";
+}
+
+/**
+ * `placed` and `placed-agency` (13 Oct 2026, DIY P2). The tier is mentioned,
+ * which reads five engines, so every answer the fixture has on Perplexity is
+ * also given to Claude, words and all: fixture.json predates the fifth engine
+ * and is never edited. Then the three placement prompts on c1, outside its
+ * five angle slots, each with allowance 'placement', source nomada and its
+ * placement's id as origin_ref, as addPlacementPrompt writes them.
+ */
+function placedState(f: Fixture, agency: boolean): Fixture {
+  const tomorrow = addDays(f.today, 1);
+  const withClaude = (answers: OverviewData["answers"]) => [...answers, ...answers.filter((a) => a.engine === "perplexity").map((a) => ({ ...a, engine: "claude" }))];
+  const rows: FixtureQuestion[] = [];
+  const answers: OverviewData["answers"] = [];
+  const texts: Record<string, string> = {};
+  for (const p of PLACED_PROMPTS) {
+    const placement = f.placements.find((x) => x.id === p.placement);
+    const added = p.like && placement?.live_on ? addDays(placement.live_on, 1) : tomorrow;
+    rows.push({ id: p.id, text: p.text, added_on: added, stopped_on: null, cluster_id: "c1", angle: null, source: "nomada", origin_kind: "placement", origin_ref: p.placement, allowance: "placement" });
+    if (!p.like) continue;
+    answers.push(...f.data.answers.filter((a) => a.question_id === p.like && a.run_date >= added).map((a) => ({ ...a, question_id: p.id })));
+    for (const [k, v] of Object.entries(f.texts)) if (k.startsWith(`${p.like} `)) texts[k.replace(`${p.like} `, `${p.id} `)] = v;
+  }
+  const all = { ...f.texts, ...texts };
+  const claude = Object.fromEntries(Object.entries(all).flatMap(([k, v]) => (k.endsWith(" perplexity") ? [[k.replace(/ perplexity$/, " claude"), v]] : [])));
+  return {
+    ...f,
+    client: { ...f.client, tier: "mentioned" },
+    ...(agency ? { mode: "agency" as const } : {}),
+    texts: { ...all, ...claude },
+    data: { ...f.data, questions: [...f.data.questions, ...rows], answers: withClaude([...f.data.answers, ...answers]) },
+  };
+}
 
 /**
  * AG-1 (audit security-2, 9 Oct 2026; also what M7's Home needs): an account
@@ -284,6 +366,7 @@ export function fixtureState(f: Fixture, env: Record<string, string | undefined>
   if (env.TRACKING_FIXTURE_STATE === "uncited") return { ...as, data: { ...as.data, answers: as.data.answers.map((a) => ({ ...a, citations: [] })) } };
   if (env.TRACKING_FIXTURE_STATE === "long") return longLists(as);
   if (env.TRACKING_FIXTURE_STATE === "brands-unread") return brandsUnread(as);
+  if (env.TRACKING_FIXTURE_STATE === "placed" || env.TRACKING_FIXTURE_STATE === "placed-agency") return placedState(as, env.TRACKING_FIXTURE_STATE === "placed-agency");
   const st = env.TRACKING_FIXTURE_STATE ?? "";
   if (st === "trial" || st === "trial-ending" || st === "trial-cancelled" || st === "ended") return trialState(as, st, Date.now());
   if (st === "past-due" || st === "unpaid") return paymentState(as, st, Date.now());

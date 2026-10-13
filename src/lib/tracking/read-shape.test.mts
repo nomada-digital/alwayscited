@@ -4,9 +4,10 @@ import { test } from "node:test";
 
 import { clusterCards, clusterChart, clusterDetail, promptBrands, promptStrip } from "./cluster-figures.ts";
 import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, resolveComparison } from "./figures.ts";
-import { type Fixture, expandFixture, fixtureState } from "./fixture-mode.ts";
+import { type Fixture, expandFixture, fixtureState, placementAllowance } from "./fixture-mode.ts";
 import type { OverviewData } from "./overview-data.ts";
 import { chartSeries, citeRows, placementsView } from "./placement-figures.ts";
+import { placementFirstCited } from "../diy/prompts/placement-lines.ts";
 import { urlKey } from "./placements.ts";
 import { presets } from "./date-range.ts";
 import { PAGE } from "../supabase/page.ts";
@@ -27,7 +28,9 @@ import { askedOnFor, runNote } from "./run-note.ts";
 const base = expandFixture(JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8")));
 // young and brands-unread added 8 Oct 2026 (merge of audit packages A, B and C): the first-week comparison
 // (audit data-10) must sit inside the read, and an unread brand answer must read the same on a narrow read.
-const STATES = ["default", "long", "partial", "failed", "stopped", "uncited", "pilot-mixed", "ungrouped", "new", "young", "brands-unread"];
+// placed added 13 Oct 2026, DIY P2 review: its placement prompts are left out of the Placements screen's named figures
+// (placements-screen.ts), and the narrow read must leave out the same ones.
+const STATES = ["default", "long", "partial", "failed", "stopped", "uncited", "pilot-mixed", "ungrouped", "new", "young", "brands-unread", "placed"];
 const fixtures: [string, Fixture][] = STATES.map((s) => [s, fixtureState(base, { TRACKING_FIXTURE_STATE: s })]);
 const engines = [...new Set(base.data.answers.map((a) => a.engine))];
 
@@ -493,11 +496,15 @@ test("the one-cluster page draws the same from its own prompts' answers as from 
 /** The placements screen's view, as placements-screen.ts builds it. */
 function placements(data: OverviewData, f: Fixture, range: Range, id: string) {
   const clusters = data.clusters.filter((c) => c.stopped_on === null || c.stopped_on > range.from);
-  const chart = clusterChart({ clusters, questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id);
+  // 13 Oct 2026, DIY P2 review: the named figures leave out the prompts added from placements (the fixture's rows carry
+  // the allowance, as loadPromptOrigins reads it); the citations below still read every prompt's answers.
+  const named = data.questions.filter((q) => !placementAllowance(q));
+  const chart = clusterChart({ clusters, questions: named, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id);
   if (!chart) return null;
   const questionIds = data.questions.filter((q) => q.cluster_id === id && (q.stopped_on === null || q.stopped_on > range.from)).map((q) => q.id);
   const rows = f.placements.filter((p) => p.cluster_id === id).map((p) => ({ ...p, url_key: urlKey(p.url) ?? "" }));
-  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart) };
+  // 13 Oct 2026, DIY P2: each live placement's first citation per engine, from the same cites (spec 10 section 4.11).
+  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart), firstCited: placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines) };
 }
 
 test("Placements draws the same from its cluster's prompts, without brands, as from the whole read", () => {
@@ -555,8 +562,11 @@ const USES: { what: string; path: string; use: RegExp; binds: number; lines: [pa
     use: WHOLE,
     binds: 0,
     lines: [
-      ["answers: data.answers, serp: data.serp, range, before: null", "answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id)"],
+      // 13 Oct 2026, DIY P2 review: the chart now reads the cluster's prompts less those added from placements (`named`).
+      ["questions: named, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null", "questions: named, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id)"],
       ["cites: citeRows(data.answers)", "cites: citeRows(data.answers), engines"],
+      // 13 Oct 2026, DIY P2: the first-cited line on each live placement (spec 10 section 4.11), from the same cluster's cites.
+      ["placementFirstCited(rows, cluster.id, citeRows(data.answers)", "placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines)"],
     ],
   },
   {

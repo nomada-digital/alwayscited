@@ -17,6 +17,9 @@ import { NOTE_SAID, type NoteState } from "@/lib/tracking/note";
 import type { ClusterNote, Compare, OverviewData } from "@/lib/tracking/overview-data";
 import { askedOnFor, latestAnswersNote, lostReads, runNote, todayRun } from "@/lib/tracking/run-note";
 import { answerAnchor, answerHref } from "@/lib/tracking/evidence";
+import { type PromptOrigin, isPlacementPrompt } from "@/lib/diy/prompts/origins";
+import { placementBasis, placementBasisLine } from "@/lib/diy/prompts/basis";
+import type { UpsellMode } from "@/lib/tracking/ask";
 
 import AnswerFocus from "./AnswerFocus";
 import ClusterChart from "./ClusterChart";
@@ -25,6 +28,7 @@ import Fig from "./Fig";
 import ScrollCue from "./ScrollCue";
 import { PagePath } from "./PagePath";
 import { Chip, PositionChip, noChange } from "./Overview";
+import OriginChip from "./prompts/OriginChip";
 
 /**
  * One cluster (T7 part 2b, 30 Sep 2026; BRIEF-3 T7 against
@@ -53,6 +57,7 @@ const WORDS = ["no", "one", "two", "three", "four", "five"];
 /** The board's tab labels; the full name stays in the tab's title and the answer's line. */
 const SHORT: Partial<Record<Engine, string>> = { google_aio: "Google AIO" };
 
+const NO_ORIGINS: ReadonlyMap<string, PromptOrigin> = new Map();
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const pct = (r: Rate) => (r.pct === null ? "-" : `${r.pct}%`);
 const span = (r: Range) => `${formatDay(r.from)} - ${formatDay(r.to)}`;
@@ -79,6 +84,10 @@ export default function OneCluster({
   noteState,
   noteAction,
   clustersPath,
+  origins = NO_ORIGINS,
+  mode = "off",
+  slug = "",
+  placementsPath = null,
 }: {
   brand: string;
   domain: string;
@@ -110,6 +119,13 @@ export default function OneCluster({
   /** POST /api/app/[client]/note for this client. */
   noteAction: string;
   clustersPath: string;
+  /** 13 Oct 2026, DIY P2: each prompt's origin (loadPromptOrigins), for its chip and the "From placements" sub-list. */
+  origins?: ReadonlyMap<string, PromptOrigin>;
+  /** accounts.upsell_mode: the chips name Nomada only in nomada mode. */
+  mode?: UpsellMode;
+  slug?: string;
+  /** The client's /placements, which the "From placements" sub-list links to. */
+  placementsPath?: string | null;
 }) {
   const c = detail.card;
   // 8 Oct 2026 (audit data-10): the comparison the Overview reads - the first week for a young client.
@@ -168,7 +184,15 @@ export default function OneCluster({
   const posLine = c.position === null ? (!c.keyword ? "No keyword yet" : pending ? "Not checked yet" : c.positionRead ? "Not in the top 20" : "No Google reading in this range") : domain;
   // 8 Oct 2026 (audit data-7): never "same as" for a keyword that left or entered the top 20 (cluster-figures.ts positionMove).
   const upFrom = positionMove(c, detail.positionBeforeOn);
-  const mid = (c.prompts.length * PITCH - 4) / 2;
+  // 13 Oct 2026, DIY P2: the angle prompts beside the keyword, the placement prompts under them (spec 4.10). Each keeps its
+  // index in c.prompts, which `?prompt=` picks by, so a placement prompt opens its checks as any prompt does.
+  const indexed = c.prompts.map((p, i) => ({ p, i }));
+  const angle = indexed.filter(({ p }) => !isPlacementPrompt(origins, p.id));
+  const placed = indexed.filter(({ p }) => isPlacementPrompt(origins, p.id));
+  const mid = (angle.length * PITCH - 4) / 2;
+  // 13 Oct 2026 review (spec 6.7, "Honesty"): the summary counts every prompt, as the Overview does; when some were added
+  // from placements it says so under the figures, with the figure over the chosen prompts alone (basis.ts).
+  const placedBasis = pending ? null : placementBasis(c.prompts, origins);
 
   const fig = (label: string, figure: string, big: React.ReactNode, extra: React.ReactNode, sub: string, first = false) => (
     <div style={{ flex: "1 1 0", padding: "22px 24px", display: "flex", flexDirection: "column", gap: "8px", minWidth: 0, borderLeft: first ? undefined : `1px solid ${T.line}` }}>
@@ -184,6 +208,50 @@ export default function OneCluster({
   );
   const big = (t: string) => <span style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{t}</span>;
   const rel = detail.reliable;
+  /** One prompt's row, a link that picks it (`?prompt=`), with its origin chip as text: an anchor cannot hold another. */
+  const promptRow = (p: (typeof c.prompts)[number], i: number) => {
+    const on = i === prompt;
+    return (
+      <Link
+        key={p.id}
+        href={promptHref(i)}
+        scroll={false}
+        aria-current={on ? "true" : undefined}
+        className="app-cl-prow"
+        style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 52px 80px", alignItems: "center", gap: "12px", height: `${ROW_H}px`, boxSizing: "border-box", padding: "0 14px", borderRadius: "12px", border: `1px solid ${on ? T.accent : T.hair}`, background: on ? T.surface : T.bg, boxShadow: on ? `0 0 0 3px ${T.wash}` : "none", color: T.ink, textDecoration: "none" }}
+      >
+        <span style={{ display: "flex", flexDirection: "column", gap: "7px", minWidth: 0 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
+            {p.angle || !isPlacementPrompt(origins, p.id) ? <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: "6px", background: on ? T.wash : T.chip, color: on ? T.accent : T.soft, fontSize: "11px", fontWeight: 700, letterSpacing: ".02em", textTransform: "uppercase" }}>{p.angle ?? "prompt"}</span> : null}
+            <OriginChip origin={origins.get(p.id)} slug={slug} mode={mode} plain />
+            {/* DS42 (2 Oct 2026): the prompt is cut at the row, as on Clusters, so hover reads it whole. */}
+            <span title={p.text} style={{ fontSize: "14px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.text}</span>
+          </span>
+          {p.stoppedOn !== null && c.stoppedOn === null ? (
+            <span style={{ fontSize: "12px", color: T.soft, fontWeight: 600 }}>{`Stopped from ${formatDay(p.stoppedOn)}. Its history stays in your reports.`}</span>
+          ) : (
+          <span style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {p.daysNamed.map((e) => (
+              <span key={e.engine} title={`${ENGINE_SPECS[e.engine as Engine].label}: named on ${e.days} of ${e.of} days`} style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ display: "inline-flex", opacity: e.days ? 1 : 0.25 }}>
+                  <EngineLogo engine={e.engine as Engine} size={16} />
+                </span>
+                {p.daysChecked ? <span style={{ fontSize: "12px", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{e.days}</span> : null}
+              </span>
+            ))}
+            <span style={{ fontSize: "12px", color: T.soft }}>{p.daysChecked ? daysOfLine(p) : "Not checked yet"}</span>
+          </span>
+          )}
+        </span>
+        <span style={{ fontSize: "16px", fontWeight: 700, textAlign: "right", fontVariantNumeric: "tabular-nums" }} title={basisLine(p.now, "answers")}>
+          {pct(p.now)}
+        </span>
+        <span style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Chip value={pointsDelta(p.now, p.before)} unit=" pts" none={pending ? "Tomorrow" : before ? "New" : ""} vs={vs} />
+        </span>
+      </Link>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px", color: T.ink }}>
@@ -247,6 +315,11 @@ export default function OneCluster({
           rel ? `Named you in ${rel.rate.num} of ${rel.rate.den} answers` : pending ? "No answers yet" : "No engine named you this period",
         )}
       </section>
+      {placedBasis ? (
+        <p data-basis="placements" style={{ margin: "-12px 0 0", fontSize: "13px", lineHeight: 1.5, color: T.soft, maxWidth: "820px" }}>
+          {placementBasisLine(placedBasis)}
+        </p>
+      ) : null}
 
       {chart ? (
         <ClusterChart
@@ -279,7 +352,7 @@ export default function OneCluster({
         <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
             <h2 id="lk-h" style={H2}>
-              {`The ${c.prompts.length} prompts behind this keyword`}
+              {`The ${angle.length} prompts behind this keyword`}
             </h2>
             <p style={LEDE}>One per angle, each asking for a recommendation. Pick one to see every check and what each engine said.</p>
           </div>
@@ -290,52 +363,11 @@ export default function OneCluster({
         </div>
         <div className="app-pair" style={{ display: "flex", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", flex: "1 1 360px", minWidth: 0 }}>
-            {c.prompts.map((p, i) => {
-              const on = i === prompt;
-              return (
-                <Link
-                  key={p.id}
-                  href={promptHref(i)}
-                  scroll={false}
-                  aria-current={on ? "true" : undefined}
-                  className="app-cl-prow"
-                  style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 52px 80px", alignItems: "center", gap: "12px", height: `${ROW_H}px`, boxSizing: "border-box", padding: "0 14px", borderRadius: "12px", border: `1px solid ${on ? T.accent : T.hair}`, background: on ? T.surface : T.bg, boxShadow: on ? `0 0 0 3px ${T.wash}` : "none", color: T.ink, textDecoration: "none" }}
-                >
-                  <span style={{ display: "flex", flexDirection: "column", gap: "7px", minWidth: 0 }}>
-                    <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
-                      <span style={{ flexShrink: 0, padding: "2px 8px", borderRadius: "6px", background: on ? T.wash : T.chip, color: on ? T.accent : T.soft, fontSize: "11px", fontWeight: 700, letterSpacing: ".02em", textTransform: "uppercase" }}>{p.angle ?? "prompt"}</span>
-                      {/* DS42 (2 Oct 2026): the prompt is cut at the row, as on Clusters, so hover reads it whole. */}
-                      <span title={p.text} style={{ fontSize: "14px", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.text}</span>
-                    </span>
-                    {p.stoppedOn !== null && c.stoppedOn === null ? (
-                      <span style={{ fontSize: "12px", color: T.soft, fontWeight: 600 }}>{`Stopped from ${formatDay(p.stoppedOn)}. Its history stays in your reports.`}</span>
-                    ) : (
-                    <span style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      {p.daysNamed.map((e) => (
-                        <span key={e.engine} title={`${ENGINE_SPECS[e.engine as Engine].label}: named on ${e.days} of ${e.of} days`} style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                          <span style={{ display: "inline-flex", opacity: e.days ? 1 : 0.25 }}>
-                            <EngineLogo engine={e.engine as Engine} size={16} />
-                          </span>
-                          {p.daysChecked ? <span style={{ fontSize: "12px", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{e.days}</span> : null}
-                        </span>
-                      ))}
-                      <span style={{ fontSize: "12px", color: T.soft }}>{p.daysChecked ? daysOfLine(p) : "Not checked yet"}</span>
-                    </span>
-                    )}
-                  </span>
-                  <span style={{ fontSize: "16px", fontWeight: 700, textAlign: "right", fontVariantNumeric: "tabular-nums" }} title={basisLine(p.now, "answers")}>
-                    {pct(p.now)}
-                  </span>
-                  <span style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <Chip value={pointsDelta(p.now, p.before)} unit=" pts" none={pending ? "Tomorrow" : before ? "New" : ""} vs={vs} />
-                  </span>
-                </Link>
-              );
-            })}
+            {angle.map(({ p, i }) => promptRow(p, i))}
           </div>
-          <svg className="app-hide-sm" width={CONN_W} height={c.prompts.length * PITCH - 4} viewBox={`0 0 ${CONN_W} ${c.prompts.length * PITCH - 4}`} aria-hidden="true" style={{ flexShrink: 0 }}>
-            {c.prompts.map((p, i) => {
-              const y = ROW_H / 2 + i * PITCH;
+          <svg className="app-hide-sm" width={CONN_W} height={angle.length * PITCH - 4} viewBox={`0 0 ${CONN_W} ${angle.length * PITCH - 4}`} aria-hidden="true" style={{ flexShrink: 0 }}>
+            {angle.map(({ p, i }, k) => {
+              const y = ROW_H / 2 + k * PITCH;
               const on = i === prompt;
               return <path key={p.id} d={`M0,${y} C${CONN_W * 0.55},${y} ${CONN_W * 0.45},${mid} ${CONN_W},${mid}`} fill="none" stroke={on ? T.accent : p.now.num ? T.washLine : T.line} strokeWidth={on ? 2.6 : 1.6} strokeLinecap="round" />;
             })}
@@ -361,6 +393,24 @@ export default function OneCluster({
             </span>
           </div>
         </div>
+        {placed.length ? (
+          <div aria-labelledby="fp-h" role="group" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px 16px", flexWrap: "wrap" }}>
+              <span style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
+                <span id="fp-h" style={{ fontSize: "14px", fontWeight: 700 }}>
+                  From placements
+                </span>
+                <span style={{ fontSize: "12px", color: T.soft }}>These don&apos;t use your 5 prompt slots.</span>
+              </span>
+              {placementsPath ? (
+                <Link href={placementsPath} style={{ fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none", flexShrink: 0 }}>
+                  See placements
+                </Link>
+              ) : null}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>{placed.map(({ p, i }) => promptRow(p, i))}</div>
+          </div>
+        ) : null}
       </section>
 
       {P ? (

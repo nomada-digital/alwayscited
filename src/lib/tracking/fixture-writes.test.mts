@@ -251,3 +251,16 @@ test("R170 part 2: an ungrouped prompt moves into a live cluster with room, at t
   assert.ok(stopped.ok);
   assert.equal(fixtureGroup(stopped.fixture, { clusterId: c, id: other.id, role: "owner" }).ok, false, "a stopped cluster is refused");
 });
+
+test("13 Oct 2026, DIY P2: on the placed state a stopped angle prompt's slot fills beside c1's three placement prompts, as limits.ts counts", () => {
+  const placed = fixtureState(fx, { TRACKING_FIXTURE_STATE: "placed" });
+  const angle = placed.data.questions.find((q) => q.cluster_id === "c1" && q.angle === "category")!;
+  const full = fixtureFillSlot(placed, { clusterId: "c1", angle: "category", text: "A sixth angle prompt for c1", today: placed.today, role: "owner" });
+  assert.equal(full.ok, false, "five angle prompts live: no slot, whatever the placement prompts");
+  const stopped = fixtureStop(placed, { kind: "prompt", id: angle.id, today: placed.today, role: "owner", undo: false });
+  assert.ok(stopped.ok);
+  const filled = fixtureFillSlot(stopped.fixture, { clusterId: "c1", angle: "category", text: "Which accounting app do freelance writers use?", today: placed.today, role: "owner" });
+  assert.equal(filled.ok, true, "four angle prompts and three placement prompts live: one slot free");
+  const twin = fixtureFillSlot(stopped.fixture, { clusterId: "c1", angle: "category", text: "best accounting apps for small businesses", today: placed.today, role: "owner" });
+  assert.equal(twin.ok, false, "a placement prompt's text is still a live prompt in the cluster");
+});

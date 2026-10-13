@@ -13,6 +13,8 @@ import { placementsScreen } from "@/lib/tracking/placements-screen";
 import { rangeQuery } from "@/lib/tracking/overview-data";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { appPath } from "@/lib/app-host";
+import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
+import { loadPlacementPromptsOn } from "@/lib/diy/prompts/placement-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,10 @@ export default async function ClientPlacements({
   const engines = enginesFor(tier);
   const today = repo.today();
   const sp = await searchParams;
-  const [screen, upgrade] = await Promise.all([placementsScreen(repo, client, sp, today), repo.upgradeContext(client.id, email, today)]);
+  // 13 Oct 2026, DIY P2: the origins say which prompt each placement added; the switch says whether a client sees that line.
+  // 13 Oct 2026 review: the screen leaves the placement prompts out of its named figures, so it takes the same origins.
+  const reading = loadPromptOrigins(client.id);
+  const [screen, upgrade, origins, promptLines] = await Promise.all([placementsScreen(repo, client, sp, today, reading), repo.upgradeContext(client.id, email, today), reading, loadPlacementPromptsOn()]);
   if (!screen) notFound();
   const { range } = screen;
   const keep: Record<string, string> = screen.stated ? { from: range.from, to: range.to } : {};
@@ -69,6 +74,7 @@ export default async function ClientPlacements({
           cluster={screen.cluster}
           keyword={screen.keyword}
           prompts={screen.prompts}
+          placementPrompts={screen.placementPrompts}
           view={screen.view}
           series={screen.series}
           kind={pickKind(typeof sp.type === "string" ? sp.type : null)}
@@ -76,6 +82,10 @@ export default async function ClientPlacements({
           query={{ cluster: screen.cluster.id, ...keep }}
           path={appPath(`/${slug}/placements`)}
           csvHref={csvHref}
+          origins={origins}
+          promptLines={promptLines}
+          firstCited={screen.firstCited}
+          promptRows={screen.promptRows}
         />
       </div>
     </div>
