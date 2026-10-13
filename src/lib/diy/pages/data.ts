@@ -5,7 +5,7 @@ import { type Day, addDays } from "../../tracking/figures.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, readDiyFixture } from "../core/fixture.ts";
 import type { SchemaFound, SchemaResults } from "./own-parse.ts";
 import { KEY_PAGE_COLUMNS, keyPageOf } from "./key-pages.ts";
-import type { Basics, BotCheck, CrawlerVerdict, JobState, KeyPage, KeywordSerp, PageCheck, ReoptExample, SerpReading, TopResult, TopStructure } from "./types.ts";
+import type { Basics, BotCheck, CrawlerVerdict, HostRobots, JobState, KeyPage, KeywordSerp, PageCheck, ReoptExample, SerpReading, TopResult, TopStructure } from "./types.ts";
 
 /**
  * Your pages' reads (13 Oct 2026, DIY P8): Supabase through `db`, or the DIY
@@ -20,6 +20,13 @@ import type { Basics, BotCheck, CrawlerVerdict, JobState, KeyPage, KeywordSerp, 
  * parallel with this package, so until the shell (P9) points this one line
  * at it the count is null and the copy reads "(see Opportunities)" - which is
  * what the reader itself answers while the opportunities table is absent.
+ *
+ * One read crosses clients, and only to subtract: `readPlacedElsewhere`, the
+ * url_key of every placement of every other client, whatever its status
+ * (spec 10 sections 2.3 and 6.2 step 2). Your pages takes those pages out of
+ * the top 3 and the typed results before anything is drawn, counted or handed
+ * to the drafted example, with no label. No other column of another client is
+ * read, and nothing of it reaches a page.
  */
 
 type Env = Record<string, string | undefined>;
@@ -77,11 +84,18 @@ export function checkOf(r: Record<string, unknown>): PageCheck | null {
 export function botOf(r: Record<string, unknown>): BotCheck | null {
   if ((typeof r.id !== "string" && typeof r.id !== "number") || typeof r.checked_at !== "string") return null;
   const robots = obj(r.robots);
+  const hosts: HostRobots[] = Array.isArray(robots?.hosts)
+    ? (robots!.hosts as unknown[])
+        .map((h) => obj(h))
+        .filter((h): h is Record<string, unknown> => h !== null && typeof h.host === "string")
+        .map((h) => ({ host: String(h.host), robotsStatus: num(h.robots_status), crawlers: Array.isArray(h.crawlers) ? (h.crawlers as CrawlerVerdict[]) : [] }))
+    : [];
   return {
     id: String(r.id),
     checkedAt: r.checked_at,
     robotsStatus: num(r.robots_status),
     crawlers: Array.isArray(robots?.crawlers) ? (robots!.crawlers as CrawlerVerdict[]) : [],
+    hosts,
     llmsTxtStatus: num(r.llms_txt_status),
     pages: Array.isArray(r.pages) ? (r.pages as BotCheck["pages"]) : [],
   };
@@ -103,7 +117,7 @@ export function exampleOf(r: Record<string, unknown>): ReoptExample | null {
     requestedAt: r.requested_at,
     finishedAt: str(r.finished_at),
     example: (obj(r.example) as ReoptExample["example"]) ?? null,
-    now: now ? { title: str(now.title), h1: str(now.h1), opening: str(now.opening) } : null,
+    now: now ? { title: str(now.title), h1: str(now.h1) } : null,
     guardHits: Array.isArray(r.guard_hits) ? (r.guard_hits as ReoptExample["guardHits"]) : [],
     error: str(r.error),
   };
@@ -195,6 +209,16 @@ export async function readSerp(db: SupabaseClient, clientId: string, keywordIds:
   return out;
 }
 
+/**
+ * The url_key of every page where Nomada has placed any other client, any
+ * status (spec 10 section 2.3), paged: placements grows with the fleet. Only
+ * the url_key column is read, and the set is used only to subtract.
+ */
+export async function readPlacedElsewhere(db: SupabaseClient, clientId: string): Promise<Set<string>> {
+  const all = await selectAll<{ url_key: string | null }>((lo, hi) => db.from("placements").select("url_key").neq("client_domain_id", clientId).order("id").range(lo, hi));
+  return new Set(all.map((r) => r.url_key).filter((k): k is string => typeof k === "string" && k.length > 0));
+}
+
 export async function readJobs(db: SupabaseClient, clientId: string): Promise<JobState[]> {
   const { data, error } = await db.from("diy_jobs").select("kind, outcome, due_on, done_at").eq("client_domain_id", clientId).in("kind", [WEEKLY_KIND, MONTHLY_KIND]).order("due_on", { ascending: false }).limit(10);
   if (error) throw new Error(`could not read the night's jobs: ${error.message}`);
@@ -218,6 +242,8 @@ export type PagesFixture = {
   /** Per keyword id: [day, position, url] readings and [rank, domain, url] results. */
   serp: Record<string, { readings: [Day, number | null, string | null][]; top: [number, string, string][]; topOn: Day | null }>;
   jobs: Record<string, unknown>[];
+  /** The url_keys the fixture's other clients have placements on (readPlacedElsewhere's answer). */
+  placed?: string[];
 };
 
 type Held = { state: string; data: PagesFixture };
@@ -263,6 +289,7 @@ export type PagesRead = {
   examples: ReoptExample[];
   top: TopStructure[];
   jobs: JobState[];
+  placed: Set<string>;
 };
 
 /** One section's read, on the fixture or on Supabase. */
@@ -277,6 +304,7 @@ export async function readPagesPart<K extends keyof PagesRead>(part: K, db: (() 
       examples: () => f.examples.filter(own).map(exampleOf).filter((e): e is ReoptExample => e !== null).sort((a, b) => (a.requestedAt < b.requestedAt ? 1 : -1)),
       top: () => latestTop(f.top.filter(own).map(topOf).filter((t): t is TopStructure => t !== null)),
       jobs: () => f.jobs.filter(own).map((r) => ({ kind: String(r.kind), outcome: str(r.outcome), dueOn: String(r.due_on), doneAt: str(r.done_at) })),
+      placed: () => new Set(f.placed ?? []),
     };
     return map[part]();
   }
@@ -293,6 +321,7 @@ export async function readPagesPart<K extends keyof PagesRead>(part: K, db: (() 
     examples: () => readExamples(d, clientId),
     top: () => readTop(d, clientId),
     jobs: () => readJobs(d, clientId),
+    placed: () => readPlacedElsewhere(d, clientId),
   };
   return read[part]();
 }

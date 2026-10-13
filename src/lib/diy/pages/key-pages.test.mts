@@ -76,3 +76,12 @@ test("the cited own pages: Cited pages' count, the client's host only, most cite
     ["https://tallyroo.com/cloud", 1],
   ]);
 });
+
+test("a candidate longer than key_pages allows is left out and counted, never handed to the insert", () => {
+  // 13 Oct 2026, DIY P8 review: one long ranking URL (faceted or tracking query strings) failed the whole weekly job every week.
+  const long = `https://tallyroo.com/cloud?${"utm_source=x&".repeat(60)}`;
+  const pick = pickKeyPages({ rows: [], candidates: [{ url: long, origin: "ranking", clusterIds: ["c8"] }, { url: "https://tallyroo.com/", origin: "homepage", clusterIds: [] }], domain: D });
+  assert.deepEqual(pick.add.map((a) => a.urlKey), ["tallyroo.com"]);
+  assert.equal(pick.tooLong, 1);
+  assert.ok(long.length > 500);
+});

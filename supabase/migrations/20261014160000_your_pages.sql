@@ -47,11 +47,16 @@ alter table key_pages enable row level security;
 
 -- page_checks: one row per read of one key page - our own weekly fetch
 -- (via own, free) or the monthly or on-demand read with JavaScript and the
--- validator (via instant_pages, paid). Summaries only, never HTML. The two
--- schema payloads hold types, property names, and per-result a level and a
--- message of at most 160 characters (at most 40 results), never a value;
--- the writer (src/lib/diy/pages/own-parse.ts capSchemaPayload) trims them to
--- that before insert, and the checks are the backstop.
+-- validator (via instant_pages, paid). Summaries only, never HTML. basics
+-- is the own read's summary of the client's own page: its title, meta
+-- description, headings, the facts it shows, and its opening paragraph (at
+-- most 300 characters, for the drafted example's "Now" column; decided 13 Oct
+-- 2026 in the P8 review, so reopt_examples need keep none of the page's
+-- text). The two schema payloads hold types, property names, and per-result a
+-- level and a message of at most 160 characters (at most 40 results), never
+-- a value; the writer (src/lib/diy/pages/own-parse.ts capSchemaPayload) trims
+-- each to an upper bound of its jsonb size before insert, and the checks are
+-- the backstop.
 create table if not exists page_checks (
   id uuid primary key default gen_random_uuid(),
   client_domain_id uuid not null references client_domains(id) on delete cascade,
@@ -96,8 +101,9 @@ alter table bot_checks enable row level security;
 -- after requested_at is read as failed (the function that was writing it
 -- died) and is not counted. Only ready rows count against the allowance
 -- (usage-meter.ts). inputs holds what the example was built from by name
--- (the keyword, the prompts, the top 3 URLs, the diagnostics): never the
--- client page's text and never a third party's.
+-- (the keyword, the prompts, the top 3 URLs, the diagnostics) and the page's
+-- title and H1 as asked about: never the client page's text (its markdown is
+-- read for the call and dropped) and never a third party's.
 create table if not exists reopt_examples (
   id uuid primary key default gen_random_uuid(),
   client_domain_id uuid not null references client_domains(id) on delete cascade,

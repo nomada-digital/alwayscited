@@ -1,6 +1,6 @@
 import { ROBOTS_AGENTS } from "../../../config/robots-agents.ts";
 import { robotsVerdict } from "../core/fetch.ts";
-import type { BotPage, CrawlerVerdict } from "./types.ts";
+import type { BotCheck, BotPage, CrawlerVerdict } from "./types.ts";
 import { sourceRenders } from "./words.ts";
 
 /**
@@ -24,6 +24,11 @@ import { sourceRenders } from "./words.ts";
  *   item.
  * - A Blocking item fires only for a crawler whose source says it serves
  *   search or answers, and is verified.
+ * - Each key page is judged by its own host's robots.txt (13 Oct 2026, DIY
+ *   P8 review): the client's domain (apex or www) is the main read, and a key
+ *   page on a subdomain (blog.<domain>) is judged by that subdomain's own
+ *   file, read and stored beside it (BotCheck.hosts). A page whose host's
+ *   file was not read has no verdict, never the apex's.
  */
 
 /** The crawlers shown, from the one list robots.txt names (config/robots-agents.ts), less `*` and `anthropic-ai`. */
@@ -90,21 +95,78 @@ export function purposeLine(name: string): "pages.bots.googlebot" | null {
  * under, the line to take out, and an Allow for each blocked key page. Our
  * own reading of the file, so it is "Seen in your data": a suggested edit,
  * never a claim about what a crawler then does.
+ *
+ * A rule inherited from `*` is shared (13 Oct 2026, DIY P8 review): taking
+ * the line out, or adding an Allow beside it, opens those paths to every
+ * crawler that reads the `*` group, not only this one, and the edit says so.
+ * The narrower route - a group of the crawler's own - is offered with its
+ * trade-off stated: a crawler with a group of its own reads only that group
+ * (RFC 9309), so none of the `*` group's other lines apply to it any more.
  */
-export function robotsEdit(v: CrawlerVerdict): string | null {
+export function robotsEdit(v: CrawlerVerdict, host: string | null = null): string | null {
   if (v.state === "allowed" || !v.line) return null;
-  // Into the same group, never a new one: a new group naming the crawler would take it out of `*`'s other rules (RFC 9309).
   const group = v.inherited ? "*" : v.name;
   const allows = v.blocked.slice(0, 10).map((p) => `Allow: ${p}`);
-  return [`# In the User-agent: ${group} group, remove this line:`, v.line, `# or keep it, and add these lines in the same group:`, ...allows].join("\n");
+  const where = host ? ` of ${host}/robots.txt` : "";
+  const lines = [`# In the User-agent: ${group} group${where}, remove this line:`, v.line, `# or keep it, and add these lines in the same group:`, ...allows];
+  if (!v.inherited) return lines.join("\n");
+  return [
+    ...lines,
+    `# Either change applies to every crawler that reads the User-agent: * group, not only ${v.name}.`,
+    `# To change it for ${v.name} alone, add a group of its own instead:`,
+    `User-agent: ${v.name}`,
+    ...allows,
+    `# A crawler with its own group reads only that group, so none of the * group's other lines apply to ${v.name} any more: copy across any you want it to keep.`,
+  ].join("\n");
 }
 
-/** A key page's own state from its latest own read: its status, noindex and a canonical pointing elsewhere. */
-export function botPage(p: { urlKey: string; httpStatus: number | null; noindex: boolean; canonical: string | null; selfKey: string | null; canonicalKey: string | null }): BotPage {
+/** A key page's own state from its latest own read: its status, noindex and a canonical pointing elsewhere; null for what an unread page cannot say. */
+export function botPage(p: { urlKey: string; httpStatus: number | null; read: boolean; noindex: boolean; canonical: string | null; selfKey: string | null; canonicalKey: string | null }): BotPage {
   return {
     urlKey: p.urlKey,
     status: p.httpStatus,
-    noindex: p.noindex,
-    canonicalElsewhere: p.canonical !== null && p.canonicalKey !== null && p.selfKey !== null && p.canonicalKey !== p.selfKey,
+    noindex: p.read ? p.noindex : null,
+    canonicalElsewhere: p.read ? p.canonical !== null && p.canonicalKey !== null && p.selfKey !== null && p.canonicalKey !== p.selfKey : null,
   };
+}
+
+const bareHost = (h: string) => h.toLowerCase().replace(/^www\./, "");
+
+/** A URL's host, bare of www; null for one that does not parse. */
+export function hostOf(url: string): string | null {
+  try {
+    return bareHost(new URL(url).hostname);
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a URL is on the client's own domain itself (apex or www), not a subdomain: the main robots.txt read judges it. */
+export function onMainHost(url: string, domain: string): boolean {
+  return hostOf(url) === bareHost(domain);
+}
+
+/** The verdicts a key page is judged by: its own host's robots.txt read; null when that host's file was not read. */
+export function verdictsFor(bot: Pick<BotCheck, "crawlers" | "hosts">, url: string, domain: string): CrawlerVerdict[] | null {
+  const host = hostOf(url);
+  if (host === null) return null;
+  if (host === bareHost(domain)) return bot.crawlers;
+  return (bot.hosts ?? []).find((h) => h.host === host)?.crawlers ?? null;
+}
+
+/** One crawler's verdict on one key page: blocked from it, by which line, and whether from `*`; null when not blocked or not read. */
+export function blockOn(bot: Pick<BotCheck, "crawlers" | "hosts">, name: string, url: string, domain: string): CrawlerVerdict | null {
+  let path = "/";
+  try {
+    path = new URL(url).pathname || "/";
+  } catch {
+    return null;
+  }
+  const v = verdictsFor(bot, url, domain)?.find((c) => c.name === name) ?? null;
+  return v && v.state !== "allowed" && v.blocked.includes(path) ? v : null;
+}
+
+/** Every crawler's verdicts, the main host's and each other host's, with the host they were read on (null for the main one). */
+export function everyVerdict(bot: Pick<BotCheck, "crawlers" | "hosts">): { host: string | null; v: CrawlerVerdict }[] {
+  return [...bot.crawlers.map((v) => ({ host: null, v })), ...(bot.hosts ?? []).flatMap((h) => h.crawlers.map((v) => ({ host: h.host, v })))];
 }

@@ -10,13 +10,13 @@ import { runOnDemand } from "@/lib/diy/core/runondemand";
 import { engineSentence } from "@/lib/diy/pages/answers";
 import { deepRow, insertCheck, ownCheck } from "@/lib/diy/pages/check";
 import { pagesFixture, readPagesPart, readPagesSerp } from "@/lib/diy/pages/data";
-import { type CallResult, EXAMPLE_SCHEMA, EXAMPLE_SYSTEM, draftExample, exampleMessage, exampleState, openingOf } from "@/lib/diy/pages/example";
+import { type CallResult, EXAMPLE_SCHEMA, EXAMPLE_SYSTEM, draftExample, exampleMessage, exampleState } from "@/lib/diy/pages/example";
 import { ADD_ANCHOR, pagePath, pagesPath, readBack, readTarget } from "@/lib/diy/pages/paths";
 import { PAGES_WHY, type PagesDone, type PagesWhy, isPagesDo } from "@/lib/diy/pages/toast";
 import { addChecksFixture, addPage, addPageFixture, examplePending, finishExample, finishExampleFixture, insertExample, insertExampleFixture, removePageFixture } from "@/lib/diy/pages/write";
 import { removeKeyPage } from "@/lib/diy/pages/key-pages";
 import { actCandidate } from "@/lib/diy/pages/act";
-import { type PagesInput, fitTab, pageState, servedClusters } from "@/lib/diy/pages/view";
+import { type PagesInput, clusterFits, fitTab, pageState, servedClusters } from "@/lib/diy/pages/view";
 import type { ExampleBody, KeyPage } from "@/lib/diy/pages/types";
 import { planFixture } from "@/lib/diy/plan/data";
 import { insertRow } from "@/lib/diy/plan/refresh";
@@ -55,10 +55,14 @@ export const maxDuration = 180;
  * - `check`: "Check this page now" - our own fetch, then one instant_pages
  *   read with the validator, through `runOnDemand` (30 a month, 10 in the
  *   trial; refused while a tracking run is running, while DIY is off, or at a
- *   cap, with its words).
+ *   cap, with its words). A JavaScript read that fails is said as that
+ *   (`checked_own`): our own read is stored, and a failed read is not counted.
  * - `example`: "Show me an example" - a pending row now, then the drafted
  *   example written in `after()` through `runOnDemand` (10 a month, 3 in the
- *   trial). Only a ready one counts.
+ *   trial). Only a ready one counts. Refused for a cluster another of the
+ *   client's pages ranks for (fit's "Another page ranks"). reopt_examples
+ *   keeps what it was built from by name and the page's title and H1, never
+ *   the page's text.
  * - `act`: "Add to Actions" - the fix or the example as an Actions item, in
  *   To do, through P3's upsertPlanItemFor (the same dedupe key the nightly
  *   candidates use, so it is never added twice).
@@ -187,11 +191,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         const deep = await readPageDeep(rctx, page.url);
         if (deep.kind === "read") await insertCheck(db!, deepRow({ clientId: client.id, page, trigger: "on_demand", now: Date.now(), page_: deep.value.page, microdata: deep.value.microdata, readId: deep.readId }));
         else if (deep.kind === "failed") await insertCheck(db!, deepRow({ clientId: client.id, page, trigger: "on_demand", now: Date.now(), page_: null, microdata: null, readId: deep.readId }));
-        // Our own read is stored either way; a refused JavaScript read is said as its refusal, never as "up to date".
-        return deep.kind === "refused" ? deep.refusal.code : "checked";
+        // Our own read is stored either way; a refused JavaScript read is said as its refusal and a failed one as that, never as "up to date".
+        return deep.kind === "refused" ? deep.refusal.code : deep.kind === "failed" ? "own_only" : "checked";
       });
       if (!ans.ok) return back("refused", ans.code === "allowance" ? "checks_out" : ans.code, page.id);
       if (ans.deferred) return back("refused", "failed", page.id);
+      // The ledger counts only a read that answered (usage-meter.ts), so a failed JavaScript read used no check.
+      if (ans.value === "own_only") return back("checked_own", null, page.id);
       if (ans.value !== "checked") {
         const code = ans.value;
         return back("refused", code === "allowance" ? "checks_out" : (PAGES_WHY as readonly string[]).includes(code) ? (code as PagesWhy) : "failed", page.id);
@@ -205,20 +211,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const clusters = structure.clusters.map((c) => ({ id: c.id, name: c.name, keywordId: c.keyword_id ?? null, stoppedOn: c.stopped_on }));
     const keywords = structure.keywords.map((k) => ({ id: k.id, keyword: k.keyword, volume: typeof k.search_volume === "number" ? k.search_volume : null }));
     const prompts = structure.questions.map((q) => ({ id: q.id, text: q.text, clusterId: q.cluster_id ?? null, stoppedOn: q.stopped_on }));
-    const [checks, bots, examples, top] = await Promise.all([
+    const [checks, bots, examples, top, placed] = await Promise.all([
       readPagesPart("checks", fixture ? null : dbGet, client.id, today),
       readPagesPart("bots", fixture ? null : dbGet, client.id, today),
       readPagesPart("examples", fixture ? null : dbGet, client.id, today),
       readPagesPart("top", fixture ? null : dbGet, client.id, today),
+      readPagesPart("placed", fixture ? null : dbGet, client.id, today),
     ]);
     const keywordIds = clusters.filter((c) => c.stoppedOn === null && c.keywordId).map((c) => c.keywordId!);
     const serp = await readPagesSerp(fixture ? null : dbGet, client.id, keywordIds, today);
-    const input: PagesInput = { domain: client.domain, keyPages: pages, checks, bots, examples, top, serp, clusters, keywords, prompts, cited: new Map(), items: [], today };
+    const input: PagesInput = { domain: client.domain, keyPages: pages, checks, bots, examples, top, serp, clusters, keywords, prompts, cited: new Map(), items: [], today, placed };
     const state = pageState(page, input);
 
     // ---- act ----
     if (d === "act") {
-      const candidate = actCandidate({ page, state, item, served: servedClusters(page, input), keywords, domain: client.domain });
+      const verdicts = new Map(clusterFits(state, input).map((f) => [f.cluster.id, f.verdict] as const));
+      const candidate = actCandidate({ page, state, item, served: servedClusters(page, input), keywords, domain: client.domain, verdicts });
       if (!candidate) return back("refused", "item", page.id);
       if (fixture) {
         const fx = planFixture();
@@ -241,12 +249,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const fits = fitTab(state, input);
     const fit = fits.find((f) => f.cluster.id === clusterField) ?? null;
     if (!fit || !fit.keyword) return back("refused", "cluster", page.id);
+    // Another of the client's pages is the one that ranks: an example of this page for it would rework the wrong page.
+    if (fit.verdict.kind === "elsewhere") return back("refused", "elsewhere", page.id);
     if (state.own?.status !== "ok") return back("refused", "unreadable", page.id);
     if (examples.some((e) => e.urlKey === page.urlKey && e.clusterId === fit.cluster.id && exampleState(e, nowMs) === "pending")) return back("refused", "pending", page.id);
 
     const exampleId = fixture ? `ex-fx-${Date.now().toString(36)}` : crypto.randomUUID();
     const tier = (client.tier as TierKey) ?? "tracked";
     const engines = enginesFor(tier);
+    // The client's other live key pages: the only places the drafted link sentence may go (example.ts guardExample).
     const otherPages = pages.filter((k) => k.id !== page.id).map((k) => k.url);
     const ans = await runOnDemand({ db, client: diy, member: email, action: "example", defer: true, after, now: () => nowMs }, async (rctx: ReadCtx) => {
       const at = () => new Date().toISOString();
@@ -256,7 +267,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         const canned = (pagesFixture().get() as unknown as { canned?: ExampleBody }).canned;
         // The canned body's `{keyword}` blanks take this cluster's keyword.
         const filled = canned ? (JSON.parse(JSON.stringify(canned).replaceAll("{keyword}", fit.keyword!.keyword.replace(/["\\]/g, ""))) as ExampleBody) : null;
-        if (filled) finishExampleFixture(exampleId, { status: "ready", example: filled, hits: [], inputs: { keyword: fit.keyword!.keyword, now: { title: state.own?.basics?.title ?? null, h1: state.own?.basics?.h1[0] ?? null, opening: null } }, readId: null, at: at() });
+        if (filled) finishExampleFixture(exampleId, { status: "ready", example: filled, hits: [], inputs: { keyword: fit.keyword!.keyword, now: { title: state.own?.basics?.title ?? null, h1: state.own?.basics?.h1[0] ?? null } }, readId: null, at: at() });
         else finishExampleFixture(exampleId, { status: "failed", error: "no canned example", inputs: null, readId: null, at: at() });
         return;
       }
@@ -280,14 +291,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
           }
         }
         const user = exampleMessage({ brand: client.brand ?? client.domain, pageUrl: page.url, pageText: text, keyword: fit.keyword!.keyword, prompts: fit.prompts, top: fit.top, answer, diagnostics: fit.diagnostics ?? [], otherPages });
-        inputs.now = { title: state.own?.basics?.title ?? null, h1: state.own?.basics?.h1[0] ?? null, opening: openingOf(text) };
+        // The page's title and H1 as asked about; never its text (the "Now" opening is drawn from the latest own read).
+        inputs.now = { title: state.own?.basics?.title ?? null, h1: state.own?.basics?.h1[0] ?? null };
         const call = async (): Promise<CallResult> => {
           const r = await writeReoptExample(rctx, { system: EXAMPLE_SYSTEM, user, schema: EXAMPLE_SCHEMA });
           if (r.kind === "read") return { kind: "read", value: r.value, readId: r.readId };
           if (r.kind === "refused") return { kind: "refused", reason: r.refusal.reason };
           return { kind: "failed", reason: r.reason, readId: r.readId };
         };
-        const drafted = await draftExample(call, text);
+        const drafted = await draftExample(call, text, otherPages);
         if (drafted.status === "ready") await finishExample(db!, client.id, exampleId, { status: "ready", example: drafted.example, hits: drafted.hits, inputs, readId: drafted.readId, at: at() });
         else await finishExample(db!, client.id, exampleId, { status: "failed", error: drafted.error, inputs, readId: drafted.readId, at: at() });
       } catch (err) {

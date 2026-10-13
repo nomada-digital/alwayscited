@@ -13,8 +13,10 @@ import type { BotCheck, KeyPage, PageCheck, ReoptExample } from "./types.ts";
  * | Kind | Verified by |
  * |---|---|
  * | add_schema, fix_schema | the next weekly own read shows the type with its required properties, and the monthly validator, when it has read since, shows 0 errors for that type |
+ * | fix_schema, "Fix the schema errors" (`pages:schema:errors:<page>`) | the validator has read the page since, and found 0 errors |
  * | rework_page | the content hash changed since the item was started, and the example's title or H1 (or a 75% core-word match) is there: "We saw the page change on 4 Nov." After 14 days with no change: "This page looks unchanged since you started this." |
  * | unblock_crawler, fix_page_status | the next bot or page read shows allowed and 200 |
+ * | unblock_crawler over several key pages (no page ref) | by its key, `pages:crawler:<name>`: the next bot read shows it allowed on the domain and every subdomain read |
  *
  * Anything else is "Marked done by you", which P3 draws when there is no
  * verified line. Nothing here is written as "Verified" unless a re-read
@@ -41,9 +43,19 @@ const after = (checks: readonly PageCheck[], keyPageId: string, since: Day, via?
 
 export type Verdict = { text: string; at: Day } | null;
 
+/** The validator's errors item, `pages:schema:errors:<page>` (candidates.ts): no one type, every error. */
+const ERRORS_KEY = /^pages:schema:errors:/;
+
 export function verifySchema(item: Pick<PlanItem, "dedupeKey" | "title" | "doneOn" | "startedOn">, page: KeyPage, checks: readonly PageCheck[]): Verdict {
-  const type = itemType(item);
   const since = item.doneOn ?? item.startedOn;
+  if (since && ERRORS_KEY.test(item.dedupeKey)) {
+    // Only the validator can say its errors are gone: our own read does not run it.
+    const deep = after(checks, page.id, since, "instant_pages").find((c) => c.status === "ok" && c.schemaResults);
+    if (!deep || validatorErrors(deep.schemaResults).total > 0) return null;
+    const day = deep.checkedAt.slice(0, 10);
+    return { text: `Verified: the validator found 0 errors, ${formatDay(day)}`, at: day };
+  }
+  const type = itemType(item);
   if (!type || !since || !REQUIRED[type]) return null;
   const own = after(checks, page.id, since, "own").find((c) => c.status === "ok");
   if (!own) return null;
@@ -87,6 +99,8 @@ export function verifyCrawler(item: Pick<PlanItem, "dedupeKey" | "title" | "done
   const read = bots.filter((b) => b.checkedAt.slice(0, 10) > since).sort((a, b) => (a.checkedAt < b.checkedAt ? 1 : -1))[0];
   const v = read?.crawlers.find((c) => c.name.toLowerCase() === name.toLowerCase());
   if (!read || !v || v.state !== "allowed") return null;
+  // Allowed on every subdomain read too: a page there is judged by its own host's file.
+  for (const h of read.hosts ?? []) if (h.crawlers.some((c) => c.name.toLowerCase() === name.toLowerCase() && c.state !== "allowed")) return null;
   const day = read.checkedAt.slice(0, 10);
   return { text: `Verified: ${v.name} allowed, ${formatDay(day)}`, at: day };
 }
@@ -98,6 +112,17 @@ export function verifyStatus(item: Pick<PlanItem, "doneOn" | "startedOn">, page:
   if (!own || own.status !== "ok" || own.httpStatus !== 200 || own.basics?.noindex) return null;
   const day = own.checkedAt.slice(0, 10);
   return { text: `Verified: the page answers 200 and can be indexed, ${formatDay(day)}`, at: day };
+}
+
+/**
+ * The line for one done item that names no key page: a crawler item covering
+ * several key pages (candidates.ts gives it no ref), found by its dedupe key.
+ * Anything else with no page is P3's or another package's to verify.
+ */
+export function verifyClientItem(item: PlanItem, read: { bots: readonly BotCheck[] }): Verdict {
+  if (item.status !== "done" || item.verified) return null;
+  if (item.kind !== "unblock_crawler" || !/^pages:crawler:/.test(item.dedupeKey)) return null;
+  return verifyCrawler(item, read.bots);
 }
 
 /** The line for one done item on one key page, or null when nothing was read that verifies it. */

@@ -3,9 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { type Day, formatDay } from "../../tracking/figures.ts";
 import type { DiyClient } from "../core/client.ts";
 import type { Candidate, CandidateSource } from "../plan/types.ts";
-import { readBots, readChecks, readSerp, readTop } from "./data.ts";
+import { readBots, readChecks, readPlacedElsewhere, readSerp, readTop } from "./data.ts";
 import { readKeyPages } from "./key-pages.ts";
-import { raisesBlocking } from "./robots.ts";
+import { CRAWLERS, blockOn, hostOf, raisesBlocking } from "./robots.ts";
 import { type Cluster, type Keyword, type PagesInput, checksOf, clusterFits, pageState, pathOf } from "./view.ts";
 import type { BotCheck, KeyPage, PageCheck } from "./types.ts";
 
@@ -21,18 +21,23 @@ import type { BotCheck, KeyPage, PageCheck } from "./types.ts";
  *   reading; the volume breaks a tie (Actions orders by it). The route follows
  *   the page's fit: Fits sends the client to the best-of lists ranking for the
  *   keyword (Opportunities' lists lens); a different page type reworks the
- *   page; no page picks one; two pages taking turns resolves the split.
+ *   page; no page picks one; two pages taking turns resolves the split. A page
+ *   that is not the one ranking (fit's "Another page ranks") raises nothing:
+ *   it is not judged against another page's readings.
  * - **Tidy-up.** A schema error, or Organization missing from the homepage.
  *
  * Each candidate's dedupe key is stable across runs (`pages:<what>:<id>`), so
- * the weekly pick and the route's "Add to Actions" write the same item.
+ * the weekly pick and the route's "Add to Actions" write the same item: one
+ * Closest win per cluster, `pages:closest:<clusterId>`, whichever route it
+ * takes (act.ts writes the same key for a rework).
  * Hrefs are client paths, resolved with appPath when drawn (plan/types.ts).
  */
 
 export type GatherInput = Omit<PagesInput, "examples" | "items" | "cited" | "prompts"> & { prompts?: PagesInput["prompts"] };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-const pathLabel = (domain: string, url: string) => `${domain.replace(/^www\./, "")}${pathOf(url) === "/" ? "" : pathOf(url)}`;
+/** A page as an item names it: its host (the domain, or the subdomain it is on) and its path. */
+export const pathLabel = (domain: string, url: string) => `${hostOf(url) ?? domain.replace(/^www\./, "")}${pathOf(url) === "/" ? "" : pathOf(url)}`;
 
 /** Two weekly reads in a row that agree a page is not fit to index (held, not glimpsed). */
 function heldStatus(own: readonly PageCheck[], page: KeyPage): { line: string } | null {
@@ -65,18 +70,20 @@ export function pageCandidates(input: GatherInput, today: Day): Candidate[] {
   const bot: BotCheck | undefined = input.bots[0];
   const domain = input.domain;
 
-  // Blocking: crawlers whose block raises one (raisesBlocking), one item per crawler.
-  for (const v of bot?.crawlers ?? []) {
-    if (v.state === "allowed" || !raisesBlocking(v.name)) continue;
-    const pages = live.filter((p) => v.blocked.includes(pathOf(p.url)));
-    if (!pages.length) continue;
+  // Blocking: crawlers whose block raises one (raisesBlocking), one item per crawler, each page judged by its own host's robots.txt.
+  for (const name of bot ? CRAWLERS : []) {
+    if (!raisesBlocking(name)) continue;
+    const hits = live.map((p) => ({ p, v: blockOn(bot!, name, p.url, domain) })).filter((x): x is { p: KeyPage; v: NonNullable<typeof x.v> } => x.v !== null);
+    if (!hits.length) continue;
+    const pages = hits.map((x) => x.p);
+    const v = hits[0]!.v;
     out.push({
-      dedupeKey: `pages:crawler:${v.name.toLowerCase()}`,
+      dedupeKey: `pages:crawler:${name.toLowerCase()}`,
       kind: "unblock_crawler",
       severity: "blocking",
       clusterId: null,
-      title: pages.length === 1 ? `Let ${v.name} crawl ${pathLabel(domain, pages[0]!.url)}` : `Let ${v.name} crawl ${pages.length} of your key pages`,
-      why: [{ text: `robots.txt ${v.line ? `line '${v.line}' ` : ""}blocks ${v.name} from ${plural(pages.length, "key page", "key pages")} of ${live.length} (checked ${formatDay(bot!.checkedAt.slice(0, 10))}).`, href: "/pages?view=bots" }],
+      title: pages.length === 1 ? `Let ${name} crawl ${pathLabel(domain, pages[0]!.url)}` : `Let ${name} crawl ${pages.length} of your key pages`,
+      why: [{ text: `robots.txt ${v.line ? `line '${v.line}' ` : ""}blocks ${name} from ${plural(pages.length, "key page", "key pages")} of ${live.length} (checked ${formatDay(bot!.checkedAt.slice(0, 10))}).`, href: "/pages?view=bots" }],
       grade: "documented",
       sourceId: "S41",
       effort: "minutes",
@@ -113,13 +120,13 @@ export function pageCandidates(input: GatherInput, today: Day): Candidate[] {
       const base = { severity: "closest" as const, clusterId: f.cluster.id, grade: "your_data" as const, volume: f.keyword.volume ?? undefined, evidenceOn: last.day, ref: { table: "key_pages", id: page.id } };
       const v = f.verdict;
       if (v.kind === "fits") {
-        out.push({ ...base, dedupeKey: `pages:closest:${f.cluster.id}`, kind: "get_onto_page", title: `Get onto the best-of lists ranking for '${kw}'`, why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }, { text: "Your page matches what ranks for it.", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "days", href: `/opportunities?lens=lists&cluster=${f.cluster.id}` });
+        out.push({ ...base, dedupeKey: closestKey(f.cluster.id), kind: "get_onto_page", title: `Get onto the best-of lists ranking for '${kw}'`, why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }, { text: "Your page matches what ranks for it.", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "days", href: `/opportunities?lens=lists&cluster=${f.cluster.id}` });
       } else if (v.kind === "no_page" || v.kind === "out") {
-        out.push({ ...base, dedupeKey: `pages:closest:${f.cluster.id}`, kind: "pick_target_page", title: `Pick the page you want to rank for '${kw}'`, why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "hour", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
+        out.push({ ...base, dedupeKey: closestKey(f.cluster.id), kind: "pick_target_page", title: `Pick the page you want to rank for '${kw}'`, why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "hour", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
       } else if (v.kind === "split") {
-        out.push({ ...base, dedupeKey: `pages:closest:${f.cluster.id}`, kind: "resolve_split", title: `Pick one page for '${kw}'`, why: [{ text: at }, { text: `${v.held.length} of your pages took turns at it in its last ${v.readings} readings.`, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "hour", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
-      } else if (v.kind !== "none_read") {
-        out.push({ ...base, dedupeKey: `pages:closest:${f.cluster.id}`, kind: "rework_page", title: `Rework ${pathLabel(domain, page.url)} for '${kw}'`, why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "days", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
+        out.push({ ...base, dedupeKey: closestKey(f.cluster.id), kind: "resolve_split", title: `Pick one page for '${kw}'`, why: [{ text: at }, { text: `${v.held.length} of your pages took turns at it in its last ${v.readings} readings.`, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "hour", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
+      } else if (v.kind === "different" || v.kind === "fix_first") {
+        out.push({ ...base, dedupeKey: closestKey(f.cluster.id), kind: "rework_page", title: reworkTitle(domain, page, kw), why: [{ text: at, href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` }], effort: "days", href: `/pages/${page.id}?tab=fit&cluster=${f.cluster.id}` });
       }
     }
     const tidy = s.findings.filter((x) => x.id === "pages.schema.validator" || (x.id === "pages.schema.organization" && s.homepage));
@@ -144,6 +151,10 @@ export function pageCandidates(input: GatherInput, today: Day): Candidate[] {
   return out;
 }
 
+/** One Closest win per cluster: the nightly pick and "Add to Actions" on a drafted example write this one key (act.ts). */
+export const closestKey = (clusterId: string) => `pages:closest:${clusterId}`;
+export const reworkTitle = (domain: string, page: Pick<KeyPage, "url">, keyword: string) => `Rework ${pathLabel(domain, page.url)} for '${keyword}'`;
+
 type Structure = { clusters: Cluster[]; keywords: Keyword[] };
 
 /** The live clusters and their keywords, read narrowly for the candidates. */
@@ -162,10 +173,10 @@ async function readStructure(db: SupabaseClient, clientId: string): Promise<Stru
 
 /** Everything the candidates read, for one client. */
 export async function gatherInput(db: SupabaseClient, client: Pick<DiyClient, "id" | "domain">, today: Day): Promise<GatherInput> {
-  const [keyPages, checks, bots, top, structure] = await Promise.all([readKeyPages(db, client.id), readChecks(db, client.id, today), readBots(db, client.id), readTop(db, client.id), readStructure(db, client.id)]);
+  const [keyPages, checks, bots, top, structure, placed] = await Promise.all([readKeyPages(db, client.id), readChecks(db, client.id, today), readBots(db, client.id), readTop(db, client.id), readStructure(db, client.id), readPlacedElsewhere(db, client.id)]);
   const keywordIds = structure.clusters.filter((c) => c.stoppedOn === null && c.keywordId).map((c) => c.keywordId!);
   const serp = await readSerp(db, client.id, keywordIds, today);
-  return { domain: client.domain, keyPages, checks, bots, top, serp, clusters: structure.clusters, keywords: structure.keywords, today };
+  return { domain: client.domain, keyPages, checks, bots, top, serp, clusters: structure.clusters, keywords: structure.keywords, today, placed };
 }
 
 /** The `pages` candidate source, for wiring.ts CANDIDATE_SOURCES (the shell registers it). */

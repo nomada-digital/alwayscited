@@ -23,7 +23,10 @@ export type KeyPage = {
 };
 
 /** What page_checks.basics holds: the own read's summary, less the schema (schema_found) and the hash and word count (their own columns). */
-export type Basics = Omit<OwnParse, "jsonLd" | "jsonLdErrors" | "conflicts" | "microdata" | "contentHash" | "wordCount">;
+export type Basics = Omit<OwnParse, "jsonLd" | "jsonLdErrors" | "conflicts" | "microdata" | "microdataTypes" | "contentHash" | "wordCount" | "opening"> & {
+  /** The page's first paragraph of prose, at most 300 characters (own-parse.ts openingIn); absent on a read stored before 13 Oct 2026's review. */
+  opening?: string | null;
+};
 
 export type CheckVia = "own" | "instant_pages";
 export type CheckTrigger = "scheduled" | "on_demand" | "onboarding";
@@ -61,14 +64,21 @@ export type CrawlerVerdict = {
   blocked: string[];
 };
 
-export type BotPage = { urlKey: string; status: number | null; noindex: boolean; canonicalElsewhere: boolean };
+/** A key page's state from its latest own read; noindex and canonical are null when that read could not read the page (13 Oct 2026, DIY P8 review: an unread page is "Not read", never "No"). */
+export type BotPage = { urlKey: string; status: number | null; noindex: boolean | null; canonicalElsewhere: boolean | null };
+
+/** Another host's robots.txt, for key pages on a subdomain of the client's domain: each page is judged by its own host's file. */
+export type HostRobots = { host: string; robotsStatus: number | null; crawlers: CrawlerVerdict[] };
 
 export type BotCheck = {
   id: string;
   checkedAt: string;
-  /** robots.txt's HTTP status, or null when it could not be read at all (a network failure). */
+  /** robots.txt's HTTP status on the client's own domain, or null when it could not be read at all (a network failure). */
   robotsStatus: number | null;
+  /** Each crawler's verdict over the key pages on the client's own domain (its apex or www). */
   crawlers: CrawlerVerdict[];
+  /** The same for each other host a key page is on (a subdomain), read from that host's own robots.txt. */
+  hosts: HostRobots[];
   llmsTxtStatus: number | null;
   pages: BotPage[];
 };
@@ -93,8 +103,8 @@ export type ReoptExample = {
   requestedAt: string;
   finishedAt: string | null;
   example: ExampleBody | null;
-  /** What the drafted words were read against: the client's own page as it stood (its title, H1 and opening, at most 600 characters). Never a third party's. */
-  now: { title: string | null; h1: string | null; opening: string | null } | null;
+  /** The client's own page's title and H1 when the example was asked for. Never a third party's; the opening is read from the page's latest own read, not kept here. */
+  now: { title: string | null; h1: string | null } | null;
   guardHits: { field: string; token: string }[];
   error: string | null;
 };

@@ -50,7 +50,7 @@ type Page = {
   locator(sel: string): Locator;
   waitForURL(url: RegExp, o?: object): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
-  evaluate<R>(fn: () => R | Promise<R>): Promise<R>;
+  evaluate<R, A = void>(fn: (arg: A) => R | Promise<R>, arg?: A): Promise<R>;
   addScriptTag(o: { content: string }): Promise<unknown>;
   screenshot(o: { path: string; fullPage?: boolean }): Promise<unknown>;
   content(): Promise<string>;
@@ -226,6 +226,7 @@ test("the Fit tab with an example: Fits at #14 with U6, the diagnostics, what th
   assert.match(t, /An example to edit, not finished copy\. Example written from your page on 25 Sep/);
   assert.match(t, /Check every fact before you publish\. Nothing is published for you\./);
   assert.match(t, /Cloud accounting software for small teams \| Tallyroo/);
+  assert.match(t, /Now\s+Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud\./, "the Now opening is the page's own latest read");
   assert.equal(await page.locator('[role="note"][aria-label="Upgrade"]').count(), 1, "one upgrade slot");
   assert.deepEqual(await axe(page), []);
   // Every evidence link on the tab resolves.
@@ -237,6 +238,21 @@ test("the Fit tab with an example: Fits at #14 with U6, the diagnostics, what th
   }
   await ctx.close();
   await save(`${PAGES}/kp-8?tab=fit`, "pages-fit", "full");
+});
+
+test("the homepage's Fit tab: a cluster another page ranks for is not judged against it - no Fits, no U6, no example", async () => {
+  as("default");
+  const { ctx, page } = await open(`${PAGES}/kp-1?tab=fit`);
+  const c10 = await page.locator("#fit-c10").innerText();
+  assert.match(c10, /Another page ranks/);
+  assert.match(c10, /Another of your pages is the one that ranks for 'payroll and accounting software', so this page's fit isn't read for it\./);
+  assert.match(c10, /tallyroo\.com\/blog\/payroll-guide held 'payroll and accounting software' at #14 at the latest reading\./);
+  assert.doesNotMatch(c10, /probably not the problem|Shown because|You against the top 3|top 3's structure/, "no verdict, no U6, and no diagnostics of this page against another page's keyword");
+  assert.equal(await page.locator('#fit-c10 button[value="example"]').count(), 0, "no example of the homepage for another page's keyword");
+  assert.equal(await page.locator('#fit-c9 button[value="example"]').count(), 1, "the cluster it is judged on still offers one");
+  assert.deepEqual(await axe(page), []);
+  await ctx.close();
+  await save(`${PAGES}/kp-1?tab=fit`, "pages-fithome", "full");
 });
 
 test("the other examples: pending two minutes, a stale pending read as failed, and a failed one, none of them counted", async () => {
@@ -281,6 +297,11 @@ test("the crawlers view: GPTBot blocked, Googlebot blocked from /pricing with th
   assert.match(t, /Blocking Google-Extended is a choice, not an error\./);
   assert.match(await page.locator("#robots-googlebot").innerText(), /Disallow: \/pricing[\s\S]*Allow: \/pricing/);
   assert.match(t, /Optional\. Google says no AI text files are needed/);
+  // A key page we could not read says nothing of its noindex or canonical.
+  const row = async (key: string) => page.evaluate((k) => [...document.querySelectorAll("section[aria-labelledby='bots-pages'] tbody tr")].find((tr) => tr.textContent!.includes(k))?.textContent ?? "", key);
+  assert.match(await row("tallyroo.com/expenses"), /404\s*Not read\s*Not read/);
+  assert.match(await row("tallyroo.com/contractors"), /403\s*Not read\s*Not read/);
+  assert.match(await row("tallyroo.com/cloud"), /200\s*No\s*Its own/);
   assert.deepEqual(await axe(page), []);
   await ctx.close();
   await save(`${PAGES}?view=bots`, "pages-bots", "full");
@@ -401,7 +422,7 @@ test("day 0: the first check is overnight; capped: the month's examples and chec
 
 test("no sideways scroll at 390 and 320; the key pages stack into cards at 390", async () => {
   as("default");
-  for (const route of [PAGES, `${PAGES}?view=bots`, `${PAGES}?view=examples`, `${PAGES}/kp-1`, `${PAGES}/kp-8?tab=fit`, `${PAGES}/kp-10?tab=basics`, `${PAGES}/kp-4?tab=history`]) {
+  for (const route of [PAGES, `${PAGES}?view=bots`, `${PAGES}?view=examples`, `${PAGES}/kp-1`, `${PAGES}/kp-8?tab=fit`, `${PAGES}/kp-1?tab=fit`, `${PAGES}/kp-10?tab=basics`, `${PAGES}/kp-4?tab=history`]) {
     for (const width of [390, 320]) {
       const { ctx, page } = await open(route, width);
       assert.equal(await sideways(page), 0, `${route} at ${width}`);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SCHEMA_PAYLOAD_BYTES, capSchemaPayload, factsIn, jsonLdNodes, parseOwnPage, schemaFoundOf } from "./own-parse.ts";
+import { SCHEMA_PAYLOAD_BYTES, capSchemaPayload, factsIn, jsonLdNodes, jsonbBound, microdataTypesIn, openingIn, parseOwnPage, schemaFoundOf } from "./own-parse.ts";
 
 /**
  * Our own read of a client page (13 Oct 2026, DIY P8; spec 10 section 6.4),
@@ -54,6 +54,26 @@ test("the visible facts: a price nearest the H1, a phone, an address block, open
   assert.equal(f.hours, true);
   const none = factsIn("Invoicing for freelancers. Send your first invoice today.", null, null);
   assert.deepEqual([none.price, none.phone, none.address, none.hours], [false, false, false, false]);
+  // The price right after the H1 is the page's own; one far down the text is mentioned in passing.
+  assert.equal(f.priceNearH1, true);
+  const article = factsIn(`How much does bookkeeping cost? ${"Small teams spend time on their books every week. ".repeat(12)}A bookkeeper costs about $1,200 a year.`, "How much does bookkeeping cost?", null);
+  assert.equal(article.price, true);
+  assert.equal(article.priceNearH1, false);
+});
+
+test("microdata: the schema.org types its itemtypes name, http or https, several to an itemtype; the opening: the first paragraph of prose", () => {
+  const html = page("", `<div itemscope itemtype="https://schema.org/Product"><h1 itemprop="name">Tallyroo Pro</h1><div itemprop="offers" itemscope itemtype='http://schema.org/Offer'><span itemprop="price">29</span></div></div><nav itemscope itemtype="https://schema.org/BreadcrumbList https://schema.org/ItemList"></nav><div itemtype="https://example.com/NotSchema"></div>`);
+  assert.deepEqual(microdataTypesIn(html), ["Product", "Offer", "BreadcrumbList", "ItemList"]);
+  const p = parseOwnPage(html, "https://tallyroo.com/pricing");
+  assert.equal(p.microdata, true);
+  assert.deepEqual(p.microdataTypes, ["Product", "Offer", "BreadcrumbList", "ItemList"]);
+  assert.deepEqual(schemaFoundOf(p).microdataTypes, ["Product", "Offer", "BreadcrumbList", "ItemList"]);
+  const body = `<header><p>Free trial for every new account, no card needed to start it today</p></header><p>Short one.</p><p>Tallyroo keeps the books for small teams, so the month closes on time and every invoice is where you left it.</p>`;
+  assert.equal(openingIn(body), "Tallyroo keeps the books for small teams, so the month closes on time and every invoice is where you left it.", "the header's words are not the opening");
+  const long = openingIn(`<p>${"Tallyroo keeps the books for small teams every month. ".repeat(20)}</p>`)!;
+  assert.ok(long.length <= 300 && long.length > 250, "cut at a word, within 300 characters");
+  assert.ok(`${"Tallyroo keeps the books for small teams every month. ".repeat(20)}`.startsWith(`${long} `), "at a word: what is kept is the paragraph's start, whole words only");
+  assert.equal(openingIn("<p>Too short to be one.</p>"), null);
 });
 
 test("breadcrumbs: a nav named breadcrumb, or an ordered list of links above the H1", () => {
@@ -100,8 +120,23 @@ test("capSchemaPayload: names only, never a value; at most 40 results; at most 1
   assert.equal(results!.items.flatMap((i) => i.results).length <= 40, true);
   assert.ok(results!.items.flatMap((i) => i.results).every((r) => r.message.length <= 160));
   assert.ok(Buffer.byteLength(json, "utf8") <= SCHEMA_PAYLOAD_BYTES, `${Buffer.byteLength(json)} bytes`);
+  assert.ok(jsonbBound(results) <= SCHEMA_PAYLOAD_BYTES, `${jsonbBound(results)} bytes as jsonb`);
   assert.equal(results!.summary.error, 250);
   const found = capSchemaPayload(schemaFoundOf({ jsonLd: [{ types: ["Organization"], props: ["name", "url"], name: "Tallyroo" }], jsonLdErrors: 0, conflicts: [], microdata: false }), null).found;
-  assert.deepEqual(found, { blocks: [{ types: ["Organization"], props: ["name", "url"], via: "static" }], errors: 0, conflicts: [], microdata: false });
+  assert.deepEqual(found, { blocks: [{ types: ["Organization"], props: ["name", "url"], via: "static" }], errors: 0, conflicts: [], microdata: false, microdataTypes: [] });
   assert.ok(!JSON.stringify(found).includes("Tallyroo"), "the block's name value is not kept");
+});
+
+test("capSchemaPayload holds the jsonb size, not the text's: a category page of many microdata Products with short property names stays under page_checks' check", () => {
+  // 13 Oct 2026, DIY P8 review: jsonb gives every string, element and key a 4-byte entry, so short names cost more as jsonb than as text.
+  const items = Array.from({ length: 36 }, (_, i) => ({ types: ["Product"], fields: Array.from({ length: 60 }, (_, j) => ({ name: `p${j}`, value: String(i) })), results: [{ level: "warning", message: "w" }] }));
+  const text = JSON.stringify({ summary: { fatal: 0, error: 0, warning: 36, info: 0 }, items: items.map((it) => ({ types: it.types, props: it.fields.map((f) => f.name), results: it.results })) });
+  // Under 16 KB as text - the old trim kept it whole - and over it as jsonb, which page_checks' check measures.
+  assert.ok(Buffer.byteLength(text) <= SCHEMA_PAYLOAD_BYTES, `${Buffer.byteLength(text)} bytes of text`);
+  assert.ok(jsonbBound(JSON.parse(text)) > SCHEMA_PAYLOAD_BYTES, `${jsonbBound(JSON.parse(text))} bytes as jsonb`);
+  const { results } = capSchemaPayload(null, { summary: { warning: 36 }, items });
+  assert.ok(jsonbBound(results) <= SCHEMA_PAYLOAD_BYTES, `${jsonbBound(results)} bytes as jsonb`);
+  assert.ok(results!.items.length < 36 && results!.items.length > 0, "items dropped from the end until it fits");
+  // The bound never reads under the text: every value is at least its own bytes.
+  for (const v of [{ a: 1 }, ["x", "y"], { types: ["Organization"], props: ["name"] }, "plain"]) assert.ok(jsonbBound(v) >= Buffer.byteLength(JSON.stringify(v)) - 2, JSON.stringify(v));
 });

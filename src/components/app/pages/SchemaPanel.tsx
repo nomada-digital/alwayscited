@@ -18,6 +18,8 @@ import { Advice, BUTTON, H2, H3, OFF, SECTION, SMALL } from "./parts";
  * schema Google sees".
  */
 
+const list = (xs: readonly string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : (xs[0] ?? ""));
+
 const HOWTO = ["pages.howto.wordpress", "pages.howto.shopify", "pages.howto.webflow", "pages.howto.squarespace", "pages.howto.wix", "pages.howto.other", "pages.howto.tag_manager"];
 const EVIDENCE = ["pages.evidence.eligible", "pages.evidence.ai_features", "pages.evidence.faq"];
 
@@ -35,7 +37,7 @@ export default function SchemaPanel({ slug, pageId, pageUrl, tab, canWrite, reas
             {tab.found.length ? (
               <ul style={{ margin: 0, paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "14px", color: T.ink }}>
                 {tab.found.map((f) => (
-                  <li key={f.type}>{`${f.type}: ${f.where === "static" ? "in the page's HTML" : "only after JavaScript runs"}`}</li>
+                  <li key={f.type}>{`${f.type}: ${f.where === "static" ? (f.microdata ? "in the page's HTML, as microdata" : "in the page's HTML") : "only after JavaScript runs"}`}</li>
                 ))}
               </ul>
             ) : (
@@ -76,7 +78,12 @@ export default function SchemaPanel({ slug, pageId, pageUrl, tab, canWrite, reas
               <Advice said={advice("pages.fix.found")} id="fix-found" />
               {tab.fix.map((b) => (
                 <div key={b.type} id={`fix-${b.type}`} style={{ display: "flex", flexDirection: "column", gap: "10px", paddingTop: "8px", borderTop: `1px solid ${T.line}` }}>
-                  <h3 style={H3}>{`${b.type} (${b.status === "new" ? "new" : "adds to the block on your page"})`}</h3>
+                  <h3 style={H3}>{`${b.type} (${b.status === "new" ? "new" : `replaces the ${b.type} block on your page`})`}</h3>
+                  {b.status === "update" ? (
+                    <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: T.ink }}>
+                      {`Replace your ${b.type} block with this one, rather than adding it beside it: two ${b.type} blocks on one page conflict.${b.kept.length ? ` Like your block, it has ${list(b.kept)}.` : ""}${b.extra.length ? ` Your block also has ${list(b.extra)}, which this one doesn't: copy ${b.extra.length === 1 ? "it" : "them"} across before you replace it.` : ""}`}
+                    </p>
+                  ) : null}
                   <ul aria-label={`What the ${b.type} block has`} style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "3px", fontSize: "13px", color: T.ink }}>
                     {diffLines(b).map((l, i) => (
                       <li key={i} className="yp-break">

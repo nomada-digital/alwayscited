@@ -26,13 +26,18 @@ import { Advice, BUTTON, DARK, H2, H3, Notice, OFF, SECTION, SMALL, StateChip } 
  * fires; and the drafted example - an example to edit, not finished copy -
  * with Now and Example side by side, each element to copy, and Add to
  * Actions. Pending, failed and used-up each say so in their own words.
+ *
+ * A cluster another of the client's pages ranks for (fit's "Another page
+ * ranks") is not judged here, and offers no example: the example would
+ * rework a page that is not the one ranking. The "Now" opening is this page's
+ * latest own read, never kept with the example.
  */
 
 export type ExampleState =
   | { kind: "none" }
   | { kind: "pending" }
   | { kind: "failed" }
-  | { kind: "ready"; day: string; example: ExampleBody; now: { title: string | null; h1: string | null; opening: string | null } | null };
+  | { kind: "ready"; day: string; example: ExampleBody; now: { title: string | null; h1: string | null } | null };
 
 export type FitView = FitTab & {
   sentence: { text: string; engine: string; href: string | null } | null;
@@ -56,6 +61,7 @@ export default function FitPanel({
   examplesOut,
   cited,
   agency,
+  opening,
 }: {
   slug: string;
   pageId: string;
@@ -68,6 +74,8 @@ export default function FitPanel({
   /** On the alwayscited plan: schema and on-page work is in the plan, so the example says to ask the account lead. */
   cited: boolean;
   agency: boolean;
+  /** This page's opening paragraph, from its latest own read; null when it has none or was not read. */
+  opening: string | null;
 }) {
   if (!fits.length) {
     return (
@@ -103,7 +111,7 @@ export default function FitPanel({
             {words ? <Advice said={advice(words.id, words.vars)} id={`fit-adv-${f.cluster.id}`} /> : <p style={{ margin: 0, fontSize: "14px", color: T.ink }}>This keyword hasn't been read yet, so its fit can't be read.</p>}
             {evidence ? <p style={SMALL}>{evidence}</p> : null}
 
-            {f.diagnostics && f.top.length ? (
+            {f.verdict.kind === "elsewhere" ? null : f.diagnostics && f.top.length ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <h3 style={H3}>You against the top 3</h3>
                 <Advice said={advice("pages.diag.table", { keyword: kw })} id={`diag-${f.cluster.id}`} />
@@ -164,10 +172,10 @@ export default function FitPanel({
 
             {f.upgrade}
 
-            {enabled ? (
+            {enabled && f.verdict.kind !== "elsewhere" ? (
               <div id={`example-${f.cluster.id}`} style={{ display: "flex", flexDirection: "column", gap: "10px", paddingTop: "10px", borderTop: `1px solid ${T.line}` }}>
                 <h3 style={H3}>An example to edit</h3>
-                {f.example.kind === "ready" ? <Ready slug={slug} pageId={pageId} clusterId={f.cluster.id} ex={f.example} off={off} action={pageAction(slug, pageId, "fit", f.cluster.id, { item: `rework:${f.cluster.id}` })} /> : null}
+                {f.example.kind === "ready" ? <Ready slug={slug} pageId={pageId} clusterId={f.cluster.id} ex={f.example} opening={opening} off={off} action={pageAction(slug, pageId, "fit", f.cluster.id, { item: `rework:${f.cluster.id}` })} /> : null}
                 {f.example.kind === "pending" ? (
                   <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
                     {"Writing your example. It's usually ready in a minute; refresh to see it. "}
@@ -214,12 +222,12 @@ export default function FitPanel({
   );
 }
 
-function Ready({ ex, off, action, pageId, clusterId }: { slug: string; pageId: string; clusterId: string; ex: Extract<ExampleState, { kind: "ready" }>; off: boolean; action: string }) {
+function Ready({ ex, off, action, pageId, clusterId, opening }: { slug: string; pageId: string; clusterId: string; ex: Extract<ExampleState, { kind: "ready" }>; off: boolean; action: string; opening: string | null }) {
   const e = ex.example;
   const rows: { label: string; now: string; example: string; id: string }[] = [
     { label: "Title", now: ex.now?.title ?? "Not read", example: e.title, id: "title" },
     { label: "H1", now: ex.now?.h1 ?? "Not read", example: e.h1, id: "h1" },
-    { label: "Opening", now: ex.now?.opening ?? "Not kept", example: e.opening, id: "opening" },
+    { label: "Opening", now: opening ?? "No opening paragraph in our latest read", example: e.opening, id: "opening" },
     { label: "A missing section", now: "Not on your page", example: `${e.missing_section.heading}\n${e.missing_section.bullets.map((b) => `- ${b}`).join("\n")}`, id: "section" },
     { label: "An internal link sentence", now: "None yet", example: `${e.link_sentence.sentence} (on ${e.link_sentence.from_url}, linking "${e.link_sentence.anchor}" to this page)`, id: "link" },
   ];

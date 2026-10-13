@@ -22,7 +22,9 @@ export async function addPage(db: SupabaseClient, client: { id: string; domain: 
   const d = memberAdd(rows, url, client.domain);
   if (!d.ok) return d;
   if (d.replace && !(await removeKeyPage(db, client.id, d.replace.id, p))) throw new Error("the page it replaces has changed");
-  if (!(await insertKeyPage(db, client.id, { url: d.add.url, urlKey: d.add.urlKey, origin: "member", clusterIds: [], by: p.by, today: p.today }))) return { ok: false, why: "already" };
+  const put = await insertKeyPage(db, client.id, { url: d.add.url, urlKey: d.add.urlKey, origin: "member", clusterIds: [], by: p.by, today: p.today });
+  if (put === "duplicate") return { ok: false, why: "already" };
+  if (put === "refused") return { ok: false, why: "bad_url" };
   const added = (await readKeyPages(db, client.id)).find((k) => k.removedOn === null && k.urlKey === d.add.urlKey);
   if (!added) throw new Error("the page was added and not found");
   return { ok: true, done: d.replace ? "replaced" : "added", id: added.id, replaced: d.replace };

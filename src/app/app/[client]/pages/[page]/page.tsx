@@ -25,7 +25,7 @@ import { answerHref } from "@/lib/tracking/evidence";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { CLUSTER_BASE, PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
 import { writeRole } from "@/lib/tracking/member";
-import { rangeQuery } from "@/lib/tracking/overview-data";
+import { rangeFrom, rangeQuery } from "@/lib/tracking/overview-data";
 import { placedTier } from "@/lib/tracking/placement-figures";
 import { dayPlan } from "@/lib/tracking/read-shape";
 import { trackingRepo } from "@/lib/tracking/repo";
@@ -122,17 +122,22 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
     const tabs = fitTab(state, input).filter((f) => !cluster || f.cluster.id === cluster);
     const facts = (keyword: string, fits: boolean, offPage1: number, readings: number): Facts => ({ tier, mode: load.upgrade.mode, state: "ok", startedOn: client.started_on ?? today, today, hidden: load.upgrade.hidden, fit: { keyword, fits, offPage1, readings } });
     let prompted = false;
+    // The cluster page lists its prompts with the default range's rule (cluster-figures.ts clusterCards: live, or stopped within the range) in the
+    // same order, and `?prompt=` is an index into that list, so the index is counted over the same list (13 Oct 2026, DIY P8 review).
+    const clusterRangeFrom = rangeFrom({}, today, client.started_on ?? null).range.from;
     const fits: FitView[] = await Promise.all(
       tabs.map(async (f) => {
         // What the engines say: the first stored answer to one of the cluster's live prompts that names a competitor and cites a page.
+        const listed = input.prompts.filter((p) => p.clusterId === f.cluster.id && (p.stoppedOn === null || p.stoppedOn > clusterRangeFrom));
         const prompts = input.prompts.filter((p) => p.clusterId === f.cluster.id && p.stoppedOn === null);
         let sentence: FitView["sentence"] = null;
-        for (const [index, p] of prompts.slice(0, PROMPTS_PER_CLUSTER).entries()) {
+        for (const p of prompts.slice(0, PROMPTS_PER_CLUSTER)) {
           try {
             const day = await repo.answerDay(client.id, dayPlan(p.id, today, null));
             const s = engineSentence(day.rows, client.brand ?? client.domain, engines);
+            const index = listed.findIndex((x) => x.id === p.id);
             if (s && day.day) {
-              sentence = { text: s.sentence, engine: s.engine, href: answerHref(appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(f.cluster.id)}`), { prompt: String(index) }, { day: day.day, engine: s.engine }) };
+              sentence = { text: s.sentence, engine: s.engine, href: index >= 0 ? answerHref(appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(f.cluster.id)}`), { prompt: String(index) }, { day: day.day, engine: s.engine }) : null };
               break;
             }
           } catch (err) {
@@ -166,7 +171,7 @@ export default async function ClientPage({ params, searchParams }: { params: Pro
         return { ...f, sentence, example, upgrade, count };
       }),
     );
-    body = <FitPanel slug={slug} pageId={page.id} fits={fits} enabled={load.enabled} canWrite={canWrite} reason={reason} examplesOut={examplesOut} cited={tier === "cited"} agency={load.upgrade.mode === "agency"} />;
+    body = <FitPanel slug={slug} pageId={page.id} fits={fits} enabled={load.enabled} canWrite={canWrite} reason={reason} examplesOut={examplesOut} cited={tier === "cited"} agency={load.upgrade.mode === "agency"} opening={state.own?.status === "ok" ? (state.own.basics?.opening ?? null) : null} />;
   } else if (tab === "basics") {
     body = <BasicsPanel b={basicsTab(state)} />;
   } else {

@@ -22,7 +22,11 @@ import { urlKey } from "../../tracking/placements.ts";
  *   hours - each found or not, with the price nearest the H1 and the address
  *   block kept for the fix (they are the client's own visible words);
  * - images and how many carry alt text; a table of 3 or more rows; a date
- *   near "updated" or "published"; breadcrumbs; microdata (`itemscope`);
+ *   near "updated" or "published"; breadcrumbs; microdata (`itemscope`), and
+ *   the schema.org types its `itemtype`s name, so a type marked up as static
+ *   microdata is never called missing (13 Oct 2026, DIY P8 review);
+ * - the opening: the first paragraph of prose, at most 300 characters, the
+ *   client's own words, for the drafted example's "Now" column;
  * - JSON-LD: every `<script type="application/ld+json">` block parsed, a
  *   malformed one counted rather than thrown, `@graph` flattened, each node's
  *   types and property names; two nodes of one type with different names
@@ -48,6 +52,8 @@ export type Facts = {
   hours: boolean;
   /** The currency amount nearest the H1, as the page writes it ("$29"), or null. */
   priceText: string | null;
+  /** That amount follows the H1 within PRICE_NEAR characters of text: the page's own price, not one mentioned in passing. */
+  priceNearH1?: boolean;
   /** The visible address block, at most 200 characters, or null. */
   addressText: string | null;
   /** The phone number as written, or null. */
@@ -77,6 +83,10 @@ export type OwnParse = {
   dateShown: boolean;
   breadcrumbs: { name: string; url: string }[] | null;
   microdata: boolean;
+  /** The schema.org types named by the page's static microdata (`itemtype`), at most 20. */
+  microdataTypes: string[];
+  /** The first paragraph of prose, at most OPENING_CHARS: the client's own words, as the page reads now. */
+  opening: string | null;
   jsonLd: JsonLdNode[];
   /** JSON-LD blocks that did not parse. */
   jsonLdErrors: number;
@@ -96,6 +106,10 @@ export type OwnParse = {
 const HEADING_MAX = 40;
 const HEADING_CHARS = 120;
 const LINKS_MAX = 200;
+/** The opening kept, in characters. */
+export const OPENING_CHARS = 300;
+/** A price this close after the H1, in characters of text, is the page's own. */
+export const PRICE_NEAR = 300;
 
 const clean = (s: string | null | undefined, max: number): string | null => {
   if (s == null) return null;
@@ -174,11 +188,14 @@ function phoneIn(text: string): string | null {
 export function factsIn(text: string, h1: string | null, addressHtml: string | null): Facts {
   const prices = [...text.matchAll(PRICE)];
   let priceText: string | null = null;
+  let priceNearH1 = false;
   if (prices.length) {
     // The first amount after the H1, else the last before it: a price belongs to the heading above it.
     const at = h1 ? text.indexOf(h1) : -1;
-    const near = at < 0 ? prices[0]! : (prices.find((m) => m.index! >= at) ?? prices[prices.length - 1]!);
+    const after = at < 0 ? undefined : prices.find((m) => m.index! >= at);
+    const near = at < 0 ? prices[0]! : (after ?? prices[prices.length - 1]!);
     priceText = near[0].replace(/\s+/g, "");
+    priceNearH1 = after !== undefined && after.index! - (at + h1!.length) <= PRICE_NEAR;
   }
   const phoneText = phoneIn(text);
   const block = addressHtml ? clean(toProse(addressHtml), 200) : null;
@@ -193,6 +210,7 @@ export function factsIn(text: string, h1: string | null, addressHtml: string | n
     address: line !== null,
     hours: HOURS.test(text),
     priceText,
+    priceNearH1,
     addressText: line,
     phoneText,
   };
@@ -257,6 +275,32 @@ function markupFacts(nodes: Record<string, unknown>[]): { price: string[]; addre
 }
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The schema.org types the page's microdata names: every `itemtype`, each of its space-separated URLs, the type after schema.org/. */
+export function microdataTypesIn(html: string): string[] {
+  const out = new Set<string>();
+  for (const m of html.matchAll(/\bitemtype\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
+    for (const u of (m[2] ?? m[3] ?? m[4] ?? "").trim().split(/\s+/)) {
+      const t = /^(?:https?:)?\/\/(?:www\.)?schema\.org\/([A-Za-z][A-Za-z0-9]{0,79})\/?$/i.exec(u);
+      if (t) out.add(t[1]!);
+    }
+  }
+  return [...out].slice(0, 20);
+}
+
+/** The first paragraph of prose with 12 words or more, outside the header, nav, footer and asides, cut at a word within OPENING_CHARS. */
+export function openingIn(body: string): string | null {
+  const main = body.replace(/<(header|nav|footer|aside|script|style|template|noscript)\b[\s\S]*?<\/\1>/gi, " ");
+  for (const p of inner(main, "p")) {
+    const t = clean(toProse(p), 2000);
+    if (!t || t.split(" ").length < 12) continue;
+    if (t.length <= OPENING_CHARS) return t;
+    const head = t.slice(0, OPENING_CHARS);
+    const at = head.lastIndexOf(" ");
+    return (at > OPENING_CHARS * 0.6 ? head.slice(0, at) : head).replace(/[\s,;:-]+$/, "");
+  }
+  return null;
+}
 
 // ---- The page. ----
 
@@ -400,7 +444,9 @@ export function parseOwnPage(html: string, url: string, headers: Record<string, 
     hasTable: rows.some((n) => n >= 3),
     dateShown: DATE_NEAR.test(text),
     breadcrumbs: breadcrumbs && breadcrumbs.length >= 2 ? breadcrumbs : null,
-    microdata: /\bitemscope\b/i.test(body),
+    microdata: /\bitemscope\b/i.test(html),
+    microdataTypes: microdataTypesIn(html),
+    opening: openingIn(body),
     jsonLd,
     jsonLdErrors: errors,
     conflicts,
@@ -421,6 +467,8 @@ export type SchemaFound = {
   errors: number;
   conflicts: string[];
   microdata: boolean;
+  /** The types the page's static microdata names (absent on a read stored before 13 Oct 2026's review). */
+  microdataTypes?: string[];
 };
 
 /** The validator's findings, as page_checks.schema_results holds them. */
@@ -430,6 +478,29 @@ export type SchemaResults = {
 };
 
 export const SCHEMA_PAYLOAD_BYTES = 16_384;
+
+/**
+ * An upper bound on a value's size as Postgres stores it in jsonb, before any
+ * compression - what page_checks' `pg_column_size(...) <= 16384` checks
+ * measure. The JSON text can be smaller than the jsonb: every string, array
+ * element and object key carries a 4-byte entry, every container a header
+ * and up to 3 bytes of alignment, and a number is a numeric of its own
+ * (13 Oct 2026, DIY P8 review: a payload trimmed to just under 16 KB of text,
+ * many short property names, could still fail the check after the paid read
+ * was made). Each part is counted at its largest, so the bound is never under.
+ */
+export function jsonbBound(v: unknown): number {
+  const node = (x: unknown): number => {
+    if (x === null || x === undefined || typeof x === "boolean") return 4;
+    if (typeof x === "number") return 4 + 3 + 4 + 2 + 2 * Math.ceil(String(Math.abs(x)).replace(/\D/g, "").length / 4) + 4;
+    if (typeof x === "string") return 4 + Buffer.byteLength(x, "utf8");
+    if (Array.isArray(x)) return 4 + 3 + 4 + x.reduce((n: number, y) => n + node(y), 0);
+    if (typeof x === "object") return 4 + 3 + 4 + Object.entries(x as Record<string, unknown>).reduce((n, [k, y]) => n + node(k) + node(y), 0);
+    return 4 + Buffer.byteLength(String(x), "utf8");
+  };
+  // The datum's own 4-byte header, on top of the root's.
+  return 4 + node(v);
+}
 export const SCHEMA_RESULTS_MAX = 40;
 export const SCHEMA_MESSAGE_CHARS = 160;
 
@@ -440,8 +511,8 @@ const LEVELS = ["fatal", "error", "warning", "info"] as const;
  * and property names only - a field that arrives with a value keeps its name
  * and loses the value - a level and a message of at most 160 characters per
  * result, at most 40 results across the items, and each payload at most 16 KB
- * as JSON (items dropped from the end until it fits). The database's own
- * checks are the backstop, never the first line.
+ * as jsonb stores it (jsonbBound; items dropped from the end until it fits).
+ * The database's own checks are the backstop, never the first line.
  */
 export function capSchemaPayload(
   found: SchemaFound | null,
@@ -450,7 +521,7 @@ export function capSchemaPayload(
   const name = (v: unknown, max: number) => (typeof v === "string" ? v.slice(0, max) : null);
   const fit = <T>(value: T, shrink: (v: T) => T | null): T | null => {
     let v: T | null = value;
-    while (v !== null && Buffer.byteLength(JSON.stringify(v), "utf8") > SCHEMA_PAYLOAD_BYTES) v = shrink(v);
+    while (v !== null && (jsonbBound(v) > SCHEMA_PAYLOAD_BYTES || Buffer.byteLength(JSON.stringify(v), "utf8") > SCHEMA_PAYLOAD_BYTES)) v = shrink(v);
     return v;
   };
   let outFound: SchemaFound | null = null;
@@ -460,7 +531,8 @@ export function capSchemaPayload(
       props: b.props.map((p) => name(p, 80)).filter((p): p is string => p !== null).slice(0, 60),
       via: b.via === "rendered" ? ("rendered" as const) : ("static" as const),
     }));
-    outFound = fit({ blocks, errors: Math.max(0, Math.floor(found.errors)), conflicts: found.conflicts.map((c) => name(c, 80)).filter((c): c is string => c !== null).slice(0, 10), microdata: found.microdata === true }, (v) =>
+    const microdataTypes = (found.microdataTypes ?? []).map((t) => name(t, 80)).filter((t): t is string => t !== null).slice(0, 20);
+    outFound = fit({ blocks, errors: Math.max(0, Math.floor(found.errors)), conflicts: found.conflicts.map((c) => name(c, 80)).filter((c): c is string => c !== null).slice(0, 10), microdata: found.microdata === true, microdataTypes }, (v) =>
       v.blocks.length ? { ...v, blocks: v.blocks.slice(0, -1) } : null,
     );
   }
@@ -490,6 +562,6 @@ export function capSchemaPayload(
 }
 
 /** The schema an own read found, before capping. */
-export function schemaFoundOf(p: Pick<OwnParse, "jsonLd" | "jsonLdErrors" | "conflicts" | "microdata">, via: "static" | "rendered" = "static"): SchemaFound {
-  return { blocks: p.jsonLd.map((n) => ({ types: n.types, props: n.props, via })), errors: p.jsonLdErrors, conflicts: p.conflicts, microdata: p.microdata };
+export function schemaFoundOf(p: Pick<OwnParse, "jsonLd" | "jsonLdErrors" | "conflicts" | "microdata"> & { microdataTypes?: string[] }, via: "static" | "rendered" = "static"): SchemaFound {
+  return { blocks: p.jsonLd.map((n) => ({ types: n.types, props: n.props, via })), errors: p.jsonLdErrors, conflicts: p.conflicts, microdata: p.microdata, microdataTypes: p.microdataTypes ?? [] };
 }

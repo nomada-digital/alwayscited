@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CRAWLERS, crawlerAccess, purposeLine, raisesBlocking, robotsEdit, robotsState } from "./robots.ts";
+import { CRAWLERS, blockOn, botPage, crawlerAccess, everyVerdict, purposeLine, raisesBlocking, robotsEdit, robotsState, verdictsFor } from "./robots.ts";
 
 /**
  * Crawler access (13 Oct 2026, DIY P8; spec 10 section 6.4): a crawler's own
@@ -49,9 +49,30 @@ test("only a crawler whose verified source says it serves search or answers rais
   assert.equal(purposeLine("GPTBot"), null, "no purpose shown without a verified source");
 });
 
-test("the lines to change: the deciding line out of its group, or Allows beside it, never a new group", () => {
+test("the lines to change: the deciding line out of its group, or Allows beside it; a rule from * says it opens the path to every crawler under *, and offers the crawler's own group with its trade-off", () => {
   const v = verdict("User-agent: Googlebot\nDisallow: /pricing\n", ["/", "/pricing"], "Googlebot");
   assert.equal(robotsEdit(v), "# In the User-agent: Googlebot group, remove this line:\nDisallow: /pricing\n# or keep it, and add these lines in the same group:\nAllow: /pricing");
-  assert.equal(robotsEdit(verdict("User-agent: *\nDisallow: /p\n", ["/p"], "Googlebot")), "# In the User-agent: * group, remove this line:\nDisallow: /p\n# or keep it, and add these lines in the same group:\nAllow: /p");
+  const inherited = robotsEdit(verdict("User-agent: *\nDisallow: /p\n", ["/p"], "Googlebot"))!;
+  assert.ok(inherited.startsWith("# In the User-agent: * group, remove this line:\nDisallow: /p\n# or keep it, and add these lines in the same group:\nAllow: /p\n"));
+  assert.match(inherited, /# Either change applies to every crawler that reads the User-agent: \* group, not only Googlebot\./);
+  assert.match(inherited, /\nUser-agent: Googlebot\nAllow: \/p\n/);
+  assert.match(inherited, /reads only that group, so none of the \* group's other lines apply to Googlebot any more/);
+  assert.match(robotsEdit(v, "blog.tallyroo.example")!, /^# In the User-agent: Googlebot group of blog\.tallyroo\.example\/robots\.txt, remove this line:/);
   assert.equal(robotsEdit(verdict("", ["/"], "Googlebot")), null);
+});
+
+test("each key page is judged by its own host's robots.txt: the domain's for the apex and www, a subdomain's own for a page on it, none when it was not read", () => {
+  const main = crawlerAccess({ status: 200, txt: "User-agent: *\nAllow: /\n" }, ["/", "/guide"])!;
+  const blog = crawlerAccess({ status: 200, txt: "User-agent: Googlebot\nDisallow: /\n" }, ["/guide"])!;
+  const bot = { crawlers: main, hosts: [{ host: "blog.tallyroo.example", robotsStatus: 200, crawlers: blog }] };
+  assert.equal(blockOn(bot, "Googlebot", "https://tallyroo.example/guide", "tallyroo.example"), null, "the apex's file allows it");
+  assert.equal(blockOn(bot, "Googlebot", "https://www.tallyroo.example/guide", "tallyroo.example"), null, "www is the domain's own");
+  assert.equal(blockOn(bot, "Googlebot", "https://blog.tallyroo.example/guide", "tallyroo.example")?.line, "Disallow: /", "the subdomain's own file blocks it");
+  assert.equal(verdictsFor(bot, "https://help.tallyroo.example/x", "tallyroo.example"), null, "a host whose file was not read has no verdict, never the apex's");
+  assert.deepEqual(everyVerdict(bot).filter((x) => x.v.state !== "allowed").map((x) => [x.host, x.v.name]), [["blog.tallyroo.example", "Googlebot"]]);
+});
+
+test("a key page we could not read says nothing about its noindex or canonical", () => {
+  assert.deepEqual(botPage({ urlKey: "tallyroo.com/expenses", httpStatus: 404, read: false, noindex: false, canonical: null, selfKey: "tallyroo.com/expenses", canonicalKey: null }), { urlKey: "tallyroo.com/expenses", status: 404, noindex: null, canonicalElsewhere: null });
+  assert.deepEqual(botPage({ urlKey: "tallyroo.com/a", httpStatus: 200, read: true, noindex: false, canonical: "https://tallyroo.com/b", selfKey: "tallyroo.com/a", canonicalKey: "tallyroo.com/b" }), { urlKey: "tallyroo.com/a", status: 200, noindex: false, canonicalElsewhere: true });
 });

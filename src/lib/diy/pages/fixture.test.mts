@@ -94,10 +94,14 @@ test("dark: our own reads only - no validator, no JavaScript read, no example, n
   assert.equal(lastNightFailed(inputOf(file.full!).keyPages.length ? [{ kind: "key_pages_weekly", outcome: "ok", dueOn: "2026-09-23", doneAt: null }] : []), false);
 });
 
-test("the homepage serves the clusters no other key page holds", () => {
+test("the homepage serves the clusters no other key page holds, and is judged only where it is the page that ranks", () => {
   const input = inputOf(file.full!);
   const home = input.keyPages.find((k) => k.origin === "homepage")!;
   assert.deepEqual(servedClusters(home, input).map((c) => c.id), ["c9", "c10"]);
+  // c10 ranks with /blog/payroll-guide, which a member removed: the homepage is not read against it (13 Oct 2026, DIY P8 review).
+  const fits = fitTab(pageState(home, input), input);
+  assert.deepEqual(fits.map((f) => [f.cluster.id, f.verdict.kind]), [["c9", "out"], ["c10", "elsewhere"]]);
+  assert.equal(listRows(input).find((r) => r.page.id === "kp-1")!.fit.label, "Not in the top 20");
 });
 
 test("Add to Actions: the fix as add_schema or fix_schema by whether a block is there; the example as rework_page; anything else refused", () => {
@@ -115,6 +119,35 @@ test("Add to Actions: the fix as add_schema or fix_schema by whether a block is 
   assert.equal(actCandidate({ page: home, state: s, item: "drop table", served: [], keywords: [], domain: "tallyroo.com" }), null);
 });
 
+test("the site strip says 'search' only for a crawler with a verified source; any other blocked crawler is a crawler, nothing more", () => {
+  const input = inputOf(file.full!);
+  const rows = listRows(input);
+  const gptOnly = { ...input, bots: [{ ...input.bots[0]!, crawlers: input.bots[0]!.crawlers.map((c) => (c.name === "Googlebot" ? { ...c, state: "allowed" as const, line: null, blocked: [] } : c)) }] };
+  assert.deepEqual(siteStrip(gptOnly, rows, raisesBlocking).access, { line: "1 crawler blocked", tone: "warn" }, "GPTBot: no verified source says what it is for");
+  const bingToo = { ...gptOnly, bots: [{ ...gptOnly.bots[0]!, crawlers: gptOnly.bots[0]!.crawlers.map((c) => (c.name === "Bingbot" ? { ...c, state: "blocked" as const } : c)) }] };
+  assert.deepEqual(siteStrip(bingToo, rows, raisesBlocking).access, { line: "2 crawlers blocked", tone: "warn" }, "Bingbot is not called an AI crawler, or a search one, without its source");
+});
+
+test("another client's placement is taken out of the top 3 before it is drawn, counted or handed to the example", () => {
+  const input = inputOf(file.full!);
+  const cloud = input.keyPages.find((k) => k.id === "kp-8")!;
+  const before = fitTab(pageState(cloud, input), input)[0]!;
+  const placedKey = before.top[0]!.urlKey;
+  const placed = { ...input, placed: new Set([placedKey]) };
+  const after = fitTab(pageState(cloud, placed), placed)[0]!;
+  assert.ok(!after.top.some((t) => t.urlKey === placedKey));
+  assert.equal(after.top.length, 2, "nothing stands in for it: the next result was not read as one of the 3");
+  assert.ok(after.diagnostics!.every((d) => d.top.length === 2), "nor is it a column of the diagnostics");
+});
+
+test("a key page we could not read: the crawlers view says Not read for its noindex and canonical", () => {
+  const input = inputOf(file.full!);
+  const pages = input.bots[0]!.pages;
+  assert.deepEqual(pages.find((p) => p.urlKey === "tallyroo.com/expenses"), { urlKey: "tallyroo.com/expenses", status: 404, noindex: null, canonicalElsewhere: null });
+  assert.deepEqual(pages.find((p) => p.urlKey === "tallyroo.com/contractors"), { urlKey: "tallyroo.com/contractors", status: 403, noindex: null, canonicalElsewhere: null });
+  assert.equal(pages.find((p) => p.urlKey === "tallyroo.com/cloud")!.noindex, false);
+});
+
 test("the route's words: fixed per code, a refusal's words from caps.ts, and nothing for an unknown code", () => {
   const p = { resets: "1 Oct", examplesLine: "You've used this month's 10 examples. They reset on 1 Oct.", checksLine: null };
   assert.equal(pagesToast("added", null, p), "Added. We read it now and again with your other key pages each week.");
@@ -122,6 +155,8 @@ test("the route's words: fixed per code, a refusal's words from caps.ts, and not
   assert.equal(pagesToast("refused", "examples_out", p), "You've used this month's 10 examples. They reset on 1 Oct.");
   assert.equal(pagesToast("refused", "checks_out", p), "This month's research is used. It resets on 1 Oct.", "an uncounted allowance still says when it resets, never a number");
   assert.equal(pagesToast("refused", "tracking_running", p), "Your daily check is running. Try again in a few minutes.");
+  assert.equal(pagesToast("checked_own", null, p), "We read your page; the JavaScript read didn't finish. It didn't use a check.", "a failed JavaScript read is never 'up to date'");
+  assert.equal(pagesToast("refused", "elsewhere", p), "Another of your pages is the one that ranks for this keyword. Ask for the example on that page.");
   assert.equal(pagesToast("refused", "<script>", p), null);
   assert.equal(pagesToast("hacked", null, p), null);
 });

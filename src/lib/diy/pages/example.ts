@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import { PROMPTS_PER_CLUSTER } from "../../tracking/limits.ts";
 
+import { urlKey } from "../../tracking/placements.ts";
+
 import type { DiagRow } from "./diagnostics.ts";
 import type { ExampleBody, ReoptExample, TopStructure } from "./types.ts";
 
@@ -19,13 +21,18 @@ import type { ExampleBody, ReoptExample, TopStructure } from "./types.ts";
  *
  * **Out, then guarded** (`guardExample`, pure):
  *
- * 1. the number guard: every amount, count or percentage must be in the
- *    client's page text, or it is replaced with `[ADD: check this figure]`
- *    and recorded in `guard_hits`;
+ * 1. the number guard: every amount, count or percentage must be a figure of
+ *    the client's page text - the same figure, whole, as a token (13 Oct
+ *    2026, DIY P8 review: by substring, "$5" passed against "$59", and "3"
+ *    or "40" against a year or a phone number) - or it is replaced with
+ *    `[ADD: check this figure]` and recorded in `guard_hits`;
  * 2. the claim guard: a ranking, guarantee, "will be cited" or engine claim,
  *    or a causal word, rejects the draft;
  * 3. the length limits: title 60 characters, H1 80, opening 100 words, cut
- *    at the limit; an empty element rejects.
+ *    at the limit; an empty element rejects;
+ * 4. the link guard: the internal link sentence's page must be one of the
+ *    client's other key pages it was given (section 6.5); any other address
+ *    becomes `[ADD: one of your other pages]`.
  *
  * A reject is written again once (`draftExample`); a second reject, or a
  * failed or refused call, fails the example. A failed example is not counted
@@ -41,6 +48,7 @@ export const OPENING_WORDS = 100;
 export const PAGE_CHARS = 18_000;
 export const STALE_PENDING_MS = 10 * 60_000;
 export const CHECK_FIGURE = "[ADD: check this figure]";
+export const PICK_PAGE = "[ADD: one of your other pages]";
 
 export const EXAMPLE_SCHEMA = z.object({
   title: z.string(),
@@ -69,7 +77,7 @@ export const EXAMPLE_SYSTEM = [
 export type ExampleInput = {
   brand: string;
   pageUrl: string;
-  /** The client's page as markdown, cut to PAGE_CHARS. Never stored. */
+  /** The client's page as markdown, cut to PAGE_CHARS. Never stored: reopt_examples.inputs keeps the title and H1 only, and the "Now" opening is the latest own read's. */
   pageText: string;
   keyword: string;
   prompts: readonly string[];
@@ -109,7 +117,31 @@ export function exampleMessage(i: ExampleInput): string {
 
 // ---- The guards. ----
 
-const NUMBER = /[$£€]\s?\d[\d,.]*\d|[$£€]\s?\d|\d[\d,.]*%?/g;
+/**
+ * A figure, as a whole token: an optional currency sign, a run of digits with
+ * its separators, an optional %. It never starts inside another number, so
+ * "2023" is one token and not "023" or "3", and the same rule reads the
+ * output and the page.
+ */
+const FIGURE = /(?<![\d.,])(?:[$£€]\s?)?\d+(?:[.,]\d+)*%?/g;
+
+/** A figure as compared: no spaces or thousands commas, two decimal places' trailing zeros dropped ("$1,299.00" is "$1299", "4.50" is "4.5"), its sign and % kept. */
+export function figureKey(tok: string): string {
+  let t = tok.replace(/\s+/g, "");
+  const sign = /^[$£€]/.exec(t)?.[0] ?? "";
+  const pct = t.endsWith("%") ? "%" : "";
+  t = t.slice(sign.length, t.length - pct.length);
+  // A comma before exactly three digits groups thousands; any other comma is a decimal point ("4,5").
+  t = t.replace(/,(?=\d{3}(?!\d))/g, "").replace(/,/g, ".");
+  t = t.replace(/\.(\d)0$/, ".$1").replace(/\.0$/, "");
+  return `${sign}${t}${pct}`;
+}
+
+/** Every figure in the page's text, as compared. A link's address is not text: "page-2023" in a URL is no figure of the page. */
+export function figuresIn(text: string): Set<string> {
+  const prose = text.replace(/\]\([^)]*\)/g, "]").replace(/<?https?:\/\/[^\s>)]+>?/g, " ");
+  return new Set((prose.match(FIGURE) ?? []).map(figureKey));
+}
 
 /**
  * The claim guard's patterns (section 6.5). The six causal words are written
@@ -137,19 +169,19 @@ function outsidePlaceholders(text: string, fn: (part: string) => string): string
     .join("");
 }
 
-const digits = (s: string) => s.replace(/[^\d.]/g, "").replace(/\.$/, "");
-
-/** Replace every figure not in the page text with CHECK_FIGURE, recording each. */
-export function numberGuard(text: string, pageText: string, field: string, hits: GuardHit[]): string {
-  const page = pageText.replace(/\s+/g, " ");
-  const pageFigures = new Set((page.match(NUMBER) ?? []).map(digits));
+/**
+ * Replace every figure that is not one of the page text's own figures with
+ * CHECK_FIGURE, recording each. Whole tokens against whole tokens, never a
+ * substring: a figure inside a larger number, a year, a phone number or a
+ * link's address is that token, not this one.
+ */
+export function numberGuard(text: string, pageText: string | ReadonlySet<string>, field: string, hits: GuardHit[]): string {
+  const pageFigures = typeof pageText === "string" ? figuresIn(pageText) : pageText;
   return outsidePlaceholders(text, (part) =>
-    part.replace(NUMBER, (tok) => {
-      const bare = tok.replace(/[.,]+$/, "");
-      const tail = tok.slice(bare.length);
-      if (!bare || page.includes(bare) || pageFigures.has(digits(bare))) return tok;
-      hits.push({ field, token: bare });
-      return `${CHECK_FIGURE}${tail}`;
+    part.replace(FIGURE, (tok) => {
+      if (pageFigures.has(figureKey(tok))) return tok;
+      hits.push({ field, token: tok });
+      return CHECK_FIGURE;
     }),
   );
 }
@@ -181,8 +213,14 @@ function fields(e: ExampleBody): [string, string][] {
   ];
 }
 
-/** The three guards over one draft, in order: claims (reject), length (cut; reject when empty), numbers (replace). */
-export function guardExample(raw: ExampleBody, pageText: string): Guarded {
+/** Whether the link sentence's page is one of the client's other key pages, by url_key. */
+function isOtherPage(fromUrl: string, otherPages: readonly string[]): boolean {
+  const key = urlKey(fromUrl.trim()) ?? urlKey(`https://${fromUrl.trim().replace(/^\/\//, "")}`);
+  return key !== null && otherPages.some((p) => urlKey(p) === key);
+}
+
+/** The guards over one draft, in order: claims (reject), length (cut; reject when empty), numbers (replace), and the link sentence's page (replace). */
+export function guardExample(raw: ExampleBody, pageText: string, otherPages: readonly string[] = []): Guarded {
   for (const [field, text] of fields(raw)) {
     for (const re of CLAIMS) if (re.test(text)) return { ok: false, reason: `claim in ${field}` };
   }
@@ -199,14 +237,19 @@ export function guardExample(raw: ExampleBody, pageText: string): Guarded {
   for (const [field, text] of fields(trimmed)) if (!text) return { ok: false, reason: `empty ${field}` };
   if (trimmed.missing_section.bullets.length < 3) return { ok: false, reason: "the missing section needs 3 bullets" };
   const hits: GuardHit[] = [];
-  const g = (field: string, s: string) => numberGuard(s, pageText, field, hits);
+  const figures = figuresIn(pageText);
+  const g = (field: string, s: string) => numberGuard(s, figures, field, hits);
+  // The link goes on one of the client's other key pages, the ones it was given (section 6.5): any other address is never shown as given.
+  const fromOk = isOtherPage(trimmed.link_sentence.from_url, otherPages);
+  if (!fromOk) hits.push({ field: "link_sentence.from_url", token: trimmed.link_sentence.from_url.slice(0, 120) });
   const example: ExampleBody = {
     ...trimmed,
     title: g("title", trimmed.title),
     h1: g("h1", trimmed.h1),
     opening: g("opening", trimmed.opening),
     missing_section: { heading: g("missing_section.heading", trimmed.missing_section.heading), bullets: trimmed.missing_section.bullets.map((b, n) => g(`missing_section.bullets.${n}`, b)) },
-    link_sentence: { ...trimmed.link_sentence, sentence: g("link_sentence.sentence", trimmed.link_sentence.sentence), anchor: g("link_sentence.anchor", trimmed.link_sentence.anchor) },
+    link_sentence: { from_url: fromOk ? trimmed.link_sentence.from_url : PICK_PAGE, sentence: g("link_sentence.sentence", trimmed.link_sentence.sentence), anchor: g("link_sentence.anchor", trimmed.link_sentence.anchor) },
+    placeholders: fromOk ? trimmed.placeholders : [...trimmed.placeholders, PICK_PAGE].slice(0, 21),
   };
   return { ok: true, example, hits };
 }
@@ -223,7 +266,7 @@ export type Drafted =
  * not retried here: the ledger has its own retries, and a refusal (a cap)
  * will not have changed a second later.
  */
-export async function draftExample(call: () => Promise<CallResult>, pageText: string): Promise<Drafted> {
+export async function draftExample(call: () => Promise<CallResult>, pageText: string, otherPages: readonly string[] = []): Promise<Drafted> {
   let readId: string | null = null;
   let last = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -231,7 +274,7 @@ export async function draftExample(call: () => Promise<CallResult>, pageText: st
     if (got.kind === "refused") return { status: "failed", error: `refused: ${got.reason}`, attempts: attempt, readId };
     if (got.kind === "failed") return { status: "failed", error: got.reason, attempts: attempt, readId: got.readId ?? readId };
     readId = got.readId;
-    const g = guardExample(got.value, pageText);
+    const g = guardExample(got.value, pageText, otherPages);
     if (g.ok) return { status: "ready", example: g.example, hits: g.hits, attempts: attempt, readId };
     last = g.reason;
   }
@@ -247,16 +290,6 @@ export function exampleState(row: Pick<ReoptExample, "status" | "requestedAt">, 
 /** The rows this month that count against the allowance: ready only (a stale pending row never does). */
 export function countedExamples(rows: readonly Pick<ReoptExample, "status" | "requestedAt">[], monthStart: string): number {
   return rows.filter((r) => r.status === "ready" && r.requestedAt >= monthStart).length;
-}
-
-/** The opening as it reads now, from the page's own markdown: its first paragraph of prose, at most 600 characters. */
-export function openingOf(markdown: string | null): string | null {
-  if (!markdown) return null;
-  const para = markdown
-    .split(/\n{2,}/)
-    .map((p) => p.replace(/[#*_>`[\]]|\(http[^)]*\)/g, "").replace(/\s+/g, " ").trim())
-    .find((p) => p.split(" ").length >= 12);
-  return para ? cut(para, 600) : null;
 }
 
 /** The labels on every example (section 6.5). */

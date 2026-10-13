@@ -86,3 +86,35 @@ test("page types by rule: by path, and by title for the top 3; one the rules can
   assert.equal(typeByRule("https://a.example/pricing"), "product");
   assert.equal(typeByRule("https://a.example/cloud"), null);
 });
+
+test("Another page ranks: the homepage serving a cluster that another URL ranks for is not judged against that URL's readings - no Fits, no U6 count", () => {
+  // The review's case (13 Oct 2026): 28 readings at #14, held by a URL that is not a key page; the homepage serves the cluster because no key page holds it.
+  const guide = "https://tallyroo.com/blog/payroll-guide";
+  const home = input({ pageKey: "tallyroo.com", pageUrl: HOME, pageTitle: "Tallyroo | Accounting", serp: serp("k9", readings("2026-09-29", days(28, 14, guide)), mixed) });
+  const v = fitVerdict(home);
+  assert.deepEqual(v, { kind: "elsewhere", urlKey: "tallyroo.com/blog/payroll-guide", position: 14, day: "2026-09-29" });
+  assert.deepEqual(fitChip(v), { label: "Another page ranks", tone: "none" });
+  assert.equal(fitEvidence(v, "payroll software"), "tallyroo.com/blog/payroll-guide held 'payroll software' at #14 at the latest reading.");
+  const w = fitWords(v, "payroll software", null)!;
+  assert.equal(advice(w.id, w.vars)!.text, "Another of your pages is the one that ranks for 'payroll software', so this page's fit isn't read for it. Open that page's fit, or add it as a key page.");
+  // Any key page, not only the homepage: a ranking page the ranking URL has since moved away from.
+  assert.equal(fitVerdict(input({ serp: serp("k8", readings("2026-09-29", days(28, 9, "https://tallyroo.com/features/cloud")), mixed) })).kind, "elsewhere");
+  // Two URLs taking turns, neither of them this page: still another page's, not a split of this one.
+  const twoOthers = readings("2026-09-29", days(28, 12, guide).map((d, i) => (i % 2 ? [12, "https://tallyroo.com/payroll"] : d)));
+  assert.equal(fitVerdict({ ...home, serp: serp("k9", twoOthers) }).kind, "elsewhere");
+  // It is judged when it is the ranking URL, or when none of the client's pages ranks.
+  assert.equal(fitVerdict(input({ serp: serp("k8", readings("2026-09-29", days(28, 14, PAGE)), mixed) })).kind, "fits");
+  assert.equal(fitVerdict({ ...home, serp: serp("k9", readings("2026-09-29", days(28, null, null))) }).kind, "no_page");
+});
+
+test("a page where Nomada has placed another client is neither typed nor counted", () => {
+  const top = [...lists.slice(0, 7), PAGE, "https://ledgerline.com/cloud", "https://ownerledger.co/blog/cloud"];
+  const rs = readings("2026-09-29", days(28, 8, PAGE));
+  assert.equal(fitVerdict(input({ serp: serp("k8", rs, top) })).kind, "different");
+  // One of the seven lists is another client's placement: six of one type is not enough, and it is not in the denominator either.
+  const placed = new Set(["list-0.example/best-cloud-accounting-software"]);
+  const v = fitVerdict(input({ placed, serp: serp("k8", rs, top) }));
+  assert.equal(v.kind, "fits");
+  const two = fitVerdict(input({ placed: new Set(["ownerledger.co/blog/cloud"]), serp: serp("k8", rs, top) }));
+  assert.deepEqual(two, { kind: "different", dominant: "best_of", n: 7, typed: 7, yours: null }, "the denominator drops the placed page");
+});

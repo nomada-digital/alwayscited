@@ -16,7 +16,7 @@ export const PAGES_DO = ["add", "remove", "check", "example", "act"] as const;
 export type PagesDo = (typeof PAGES_DO)[number];
 export const isPagesDo = (v: unknown): v is PagesDo => typeof v === "string" && (PAGES_DO as readonly string[]).includes(v);
 
-export const PAGES_DONE = ["added", "replaced", "removed", "checked", "requested", "acted", "refused"] as const;
+export const PAGES_DONE = ["added", "replaced", "removed", "checked", "checked_own", "requested", "acted", "refused"] as const;
 export type PagesDone = (typeof PAGES_DONE)[number];
 
 /** Refusals of the route's own, beside runOnDemand's refusal codes. */
@@ -33,6 +33,7 @@ export const PAGES_WHY = [
   "cluster",
   "item",
   "unreadable",
+  "elsewhere",
   "examples_out",
   "checks_out",
   "tracking_running",
@@ -54,6 +55,7 @@ const DONE_WORDS: Record<Exclude<PagesDone, "refused">, string> = {
   replaced: "Added, in place of your oldest automatic key page.",
   removed: "Removed. We won't add it back on our own.",
   checked: "Checked. This page's reads are up to date.",
+  checked_own: "We read your page; the JavaScript read didn't finish. It didn't use a check.",
   requested: "Writing your example. It's usually ready in a minute; refresh to see it.",
   acted: "Added to Actions.",
 };
@@ -71,6 +73,7 @@ const OWN_WHY: Partial<Record<PagesWhy, string>> = {
   cluster: "This page doesn't serve that cluster.",
   item: "That can't be added to Actions from here.",
   unreadable: "We couldn't read this page, so there is nothing to draft from yet.",
+  elsewhere: "Another of your pages is the one that ranks for this keyword. Ask for the example on that page.",
 };
 
 const isWhy = (v: string | null): v is PagesWhy => v !== null && (PAGES_WHY as readonly string[]).includes(v);

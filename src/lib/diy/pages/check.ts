@@ -30,7 +30,7 @@ export type CheckRow = Record<string, unknown>;
 
 /** The basics an own read keeps (page_checks.basics): the summary without the schema, the hash or the word count, which have their own columns. */
 export function basicsOf(p: OwnParse): Basics {
-  const { jsonLd: _j, jsonLdErrors: _e, conflicts: _c, microdata: _m, contentHash: _h, wordCount: _w, ...rest } = p;
+  const { jsonLd: _j, jsonLdErrors: _e, conflicts: _c, microdata: _m, microdataTypes: _t, contentHash: _h, wordCount: _w, ...rest } = p;
   return { ...rest, internal: rest.internal.slice(0, 150) };
 }
 

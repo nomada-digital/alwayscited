@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { diagnostics, hasKeyword, promptHeadings, sharedMissing } from "./diagnostics.ts";
-import { CHECK_FIGURE, type CallResult, countedExamples, draftExample, exampleMessage, exampleState, guardExample, numberGuard } from "./example.ts";
+import { CHECK_FIGURE, type CallResult, PICK_PAGE, countedExamples, draftExample, exampleMessage, exampleState, figureKey, guardExample, numberGuard } from "./example.ts";
 import { basics } from "./fake-pages.mts";
 import type { ExampleBody, TopStructure } from "./types.ts";
 
@@ -65,6 +65,7 @@ const body = (over: Partial<ExampleBody> = {}): ExampleBody => ({
   ...over,
 });
 const PAGE = "Tallyroo keeps your books in the cloud. Plans from $29 a month. Used by 4,000 teams.";
+const OTHERS = ["https://tallyroo.com/pricing", "https://tallyroo.com/freelancers"];
 
 test("the number guard: a figure not in the page text becomes [ADD: check this figure] and is recorded; one in it, or in a placeholder, stays", () => {
   const hits: { field: string; token: string }[] = [];
@@ -74,10 +75,42 @@ test("the number guard: a figure not in the page text becomes [ADD: check this f
     { field: "opening", token: "99%" },
   ]);
   assert.equal(numberGuard("Used by 4000 teams. [ADD: 3 customer quotes]", PAGE, "x", []), "Used by 4000 teams. [ADD: 3 customer quotes]", "4,000 is 4000, and a placeholder's own number is left");
-  const g = guardExample(body({ opening: "Join 50,000 teams. Plans from $29 a month." }), PAGE);
+  const g = guardExample(body({ opening: "Join 50,000 teams. Plans from $29 a month." }), PAGE, OTHERS);
   assert.ok(g.ok);
   assert.equal(g.ok && g.example.opening, `Join ${CHECK_FIGURE} teams. Plans from $29 a month.`);
   assert.deepEqual(g.ok && g.hits, [{ field: "opening", token: "50,000" }]);
+});
+
+test("the number guard compares whole figures, never a substring: '$5' is not '$59', and a small number inside a year, a phone number or a link's address is not on the page", () => {
+  // The review's cases (13 Oct 2026): every one of these passed when the guard read the page by substring.
+  let hits: { field: string; token: string }[] = [];
+  const footer = "Bookkeeping for small teams. © 2023. Call 0140 555 9912. Pricing from $12. [Our guide](https://tallyroo.com/blog/guide-40-tips-3)";
+  assert.equal(numberGuard("Save 3 hours a week, trusted by 40 firms, 99% uptime", footer, "opening", hits), `Save ${CHECK_FIGURE} hours a week, trusted by ${CHECK_FIGURE} firms, ${CHECK_FIGURE} uptime`);
+  assert.deepEqual(hits.map((h) => h.token), ["3", "40", "99%"]);
+  hits = [];
+  assert.equal(numberGuard("Plans from $5 a month", "Plans from $59 a month", "title", hits), `Plans from ${CHECK_FIGURE} a month`, "a wrong price that begins a real one");
+  assert.deepEqual(hits, [{ field: "title", token: "$5" }]);
+  assert.equal(numberGuard("Plans from $59 a month, since 2023", "Plans from $59 a month. © 2023.", "title", []), "Plans from $59 a month, since 2023", "the page's own figures stay");
+  assert.equal(numberGuard("Plans from 59 a month", "Plans from $59 a month", "x", []), `Plans from ${CHECK_FIGURE} a month`, "a price is its sign and its number: 59 is not $59");
+  assert.equal(numberGuard("From $1,299 a year", "From $1299.00 a year", "x", []), "From $1,299 a year", "the same figure written two ways");
+  // How figures are compared.
+  assert.deepEqual(["$1,299.00", "$ 29", "4.50", "3,000,000", "4,5", "99%", "3.000"].map(figureKey), ["$1299", "$29", "4.5", "3000000", "4.5", "99%", "3.000"]);
+});
+
+test("the link sentence's page must be one of the client's other key pages: any other address is never shown as given", () => {
+  const ok = guardExample(body(), PAGE, OTHERS);
+  assert.ok(ok.ok);
+  assert.equal(ok.ok && ok.example.link_sentence.from_url, "https://tallyroo.com/pricing");
+  assert.deepEqual(ok.ok && ok.hits, []);
+  for (const from of ["https://ledgerline.com/pricing", "https://tallyroo.com/made-up-page", "not a url"]) {
+    const g = guardExample(body({ link_sentence: { from_url: from, sentence: "See Tallyroo's cloud accounting.", anchor: "Tallyroo's cloud accounting" } }), PAGE, OTHERS);
+    assert.ok(g.ok, from);
+    assert.equal(g.ok && g.example.link_sentence.from_url, PICK_PAGE, from);
+    assert.ok(g.ok && g.example.placeholders.includes(PICK_PAGE), "the placeholder is listed with the others");
+    assert.deepEqual(g.ok && g.hits.map((h) => h.field), ["link_sentence.from_url"]);
+  }
+  const www = guardExample(body({ link_sentence: { from_url: "https://www.tallyroo.com/freelancers/", sentence: "See Tallyroo for freelancers.", anchor: "Tallyroo for freelancers" } }), PAGE, OTHERS);
+  assert.equal(www.ok && www.example.link_sentence.from_url, "https://www.tallyroo.com/freelancers/", "the same page by its url_key");
 });
 
 test("the claim guard rejects a ranking, a guarantee, a will-be-cited, an engine claim and each causal word", () => {

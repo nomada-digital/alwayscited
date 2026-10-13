@@ -27,6 +27,11 @@ import type { Cluster, Keyword, PagesInput, Prompt } from "./view";
  * results' structure, the drafted examples - is left out, so the page shows
  * what our own free reads found and never promises a read that will not
  * happen.
+ *
+ * Other clients' placements (spec 10 section 2.3) are read with the rest and
+ * are part of the core: without them the top 3 and the typed results could
+ * list a page where Nomada has placed another client, so a failed read says
+ * the page could not be read rather than drawing the lists unsubtracted.
  */
 
 export type PagesLoad = {
@@ -52,7 +57,7 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
     { setupConfirmedAt: null, upsellMode: upgrade.mode },
     p.now,
   );
-  const [enabled, structure, keyPages, checks, bots, examples, top, jobs, items] = await Promise.all([
+  const [enabled, structure, keyPages, checks, bots, examples, top, jobs, items, placed] = await Promise.all([
     loadDiyEnabled(fixture ? null : supabaseAdmin()),
     section("pages structure", () => repo.structure(client.id)),
     section("pages key pages", () => readPagesPart("keyPages", db, client.id, today)),
@@ -62,6 +67,7 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
     section("pages top", () => readPagesPart("top", db, client.id, today)),
     section("pages jobs", () => readPagesPart("jobs", db, client.id, today)),
     section("pages plan", () => readPlan(() => supabaseAdmin(), client.id)),
+    section("pages placed", () => readPagesPart("placed", db, client.id, today)),
   ]);
   const usage = await section("pages usage", () => loadDiyUsage(fixture ? null : supabaseAdmin(), diy, p.now));
 
@@ -78,7 +84,7 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
     return new Map(citedPageRows(data.answers, range, client.domain).filter((r) => r.yours).map((r) => [r.page, r.count] as const));
   });
 
-  const core = structure.ok && keyPages.ok && checks.ok && bots.ok && serp.ok;
+  const core = structure.ok && keyPages.ok && checks.ok && bots.ok && serp.ok && placed.ok;
   // Dark: what only a paid read made is left out.
   const paid = <T,>(s: Section<T[]>): T[] => (enabled && s.ok ? s.value : []);
   const input: PagesInput | null = core
@@ -96,6 +102,7 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
         cited: cited.ok ? cited.value : new Map(),
         items: items.ok ? items.value : [],
         today,
+        placed: placed.ok ? placed.value : new Set(),
       }
     : null;
   return { input, enabled, usage: usage.ok ? usage.value : null, upgrade, diy, failedNight: jobs.ok && lastNightFailed(jobs.value), citedRead: cited.ok, items };

@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { SOURCES as CORE } from "../core/core.sources.ts";
 import { ADVICE } from "./schema.advice.ts";
-import { schemaChip, schemaFindings } from "./schema.ts";
+import { foundTypes, looksLikeProduct, schemaChip, schemaFindings } from "./schema.ts";
 import { basics, found } from "./fake-pages.mts";
 import { advice } from "./words.ts";
 
@@ -35,11 +35,55 @@ test("BreadcrumbList applies only where breadcrumbs show; Product only where a p
   assert.deepEqual(ids(schemaFindings({ ...inner, basics: priced, found: found([["Product"], ["name", "offers"]]) })), []);
 });
 
-test("a marked-up price the page does not show, and a rating with no visible reviews, both say remove", () => {
-  const f = schemaFindings({ ...inner, basics: basics({ markupOnly: ["price"] }), found: found([["Product"], ["name", "offers", "aggregateRating"]]) });
+test("a marked-up price the page does not show, and a rating with no visible reviews, both say remove - the rating only once the JavaScript read shows the HTML is the whole page", () => {
+  const whole = { static: 800, rendered: 812 };
+  const f = schemaFindings({ ...inner, words: whole, basics: basics({ markupOnly: ["price"] }), found: found([["Product"], ["name", "offers", "aggregateRating"]]) });
   assert.deepEqual(ids(f), ["pages.schema.product_hidden", "pages.schema.rating_hidden"]);
   assert.ok(f.every((x) => x.level === "remove"));
   assert.deepEqual(ids(schemaFindings({ ...inner, basics: basics({ reviewsVisible: true }), found: found([["Product"], ["name", "aggregateRating"]]) })), [], "visible reviews keep the rating");
+});
+
+test("a rating with no reviews in the HTML, where a script could draw them (no JavaScript read, or one that found more text): info, worded as what we didn't see", () => {
+  // 13 Oct 2026, DIY P8 review: review widgets (Trustpilot, Yotpo, Judge.me and the like) draw with JavaScript, so the static HTML cannot say they are not shown.
+  for (const words of [undefined, { static: 800, rendered: null }, { static: 300, rendered: 1400 }]) {
+    const f = schemaFindings({ ...inner, words, basics: basics(), found: found([["Product"], ["name", "offers", "aggregateRating"]]) });
+    assert.deepEqual(f.map((x) => [x.id, x.level]), [["pages.schema.rating_unseen", "info"]], JSON.stringify(words));
+  }
+  assert.match(advice("pages.schema.rating_unseen")!.text, /we didn't see any in the page's HTML/);
+});
+
+test("Product only on a product or pricing page by its own signs: never an article or the homepage that mentions a price, and a suggestion that does not hold the fit", () => {
+  const priced = (over = {}) => basics({ facts: { ...basics().facts, price: true, priceText: "$1,200", ...over } });
+  // The review's case: a blog post with valid BlogPosting markup that says "about $1,200 a year".
+  const post = { url: "https://tallyroo.com/blog/bookkeeping-cost", homepage: false, results: null, basics: basics({ publishedTime: "2026-09-01T00:00:00Z", byline: "Sam Doe" }), found: found([["BlogPosting"], ["headline", "author", "datePublished"]]) };
+  assert.deepEqual(ids(schemaFindings({ ...post, basics: { ...post.basics, facts: { ...post.basics.facts, price: true, priceText: "$1,200" } } })), [], "an article that mentions a price");
+  assert.equal(looksLikeProduct({ ...home, basics: priced({ priceNearH1: true }), found: found() }), false, "never the homepage");
+  assert.ok(!ids(schemaFindings({ ...home, basics: priced({ priceNearH1: true }), found: found() })).includes("pages.schema.product"));
+  const generic = { url: "https://tallyroo.com/small-business", homepage: false, results: null };
+  assert.deepEqual(ids(schemaFindings({ ...generic, basics: priced(), found: found() })), [], "a price far from the H1 on a page with no product signs");
+  assert.deepEqual(ids(schemaFindings({ ...generic, basics: priced({ priceNearH1: true }), found: found() })), ["pages.schema.product"], "a price shown right under the H1");
+  assert.deepEqual(ids(schemaFindings({ ...generic, basics: priced(), found: found([["Offer"], ["price"]]) })), ["pages.schema.product"], "an Offer already marked up");
+  const pricing = schemaFindings({ ...inner, basics: priced(), found: found() });
+  assert.deepEqual(pricing.map((x) => [x.id, x.level]), [["pages.schema.product", "suggest"]], "a product path by rule; a suggestion, not a fix");
+  assert.deepEqual(schemaChip({ ...inner, basics: priced(), found: found(), checked: true, readable: true }), { label: "Missing Product", tone: "warn" });
+});
+
+test("static microdata is found: never called missing, never handed a duplicate, never 'only after JavaScript'", () => {
+  // The review's case: a /pricing page with static itemscope Product/Offer markup, and a validator item of type Product.
+  const micro = { blocks: [], errors: 0, conflicts: [], microdata: true, microdataTypes: ["Product", "Offer"] };
+  const results = { summary: { fatal: 0, error: 0, warning: 0, info: 0 }, items: [{ types: ["Product"], props: ["name", "offers"], results: [] }] };
+  const priced = basics({ facts: { ...basics().facts, price: true, priceText: "$29", priceNearH1: true } });
+  assert.deepEqual(ids(schemaFindings({ ...inner, results, basics: priced, found: micro })), []);
+  assert.deepEqual(foundTypes(micro, results), [
+    { type: "Product", where: "static", microdata: true },
+    { type: "Offer", where: "static", microdata: true },
+  ]);
+  const homeMicro = { blocks: [], errors: 0, conflicts: [], microdata: true, microdataTypes: ["Organization", "WebSite"] };
+  assert.deepEqual(ids(schemaFindings({ ...home, basics: basics(), found: homeMicro })), [], "Organization and WebSite as microdata: found, and their properties not read, so nothing said");
+  const blogMicro = { blocks: [], errors: 0, conflicts: [], microdata: true, microdataTypes: ["BlogPosting"] };
+  assert.deepEqual(ids(schemaFindings({ url: "https://tallyroo.com/blog/x", homepage: false, results: null, basics: basics(), found: blogMicro })), []);
+  // JSON-LD a script injects is still said: it is in no static read.
+  assert.deepEqual(ids(schemaFindings({ ...inner, results: { ...results, items: [{ types: ["FAQPage"], props: [], results: [] }] }, basics: priced, found: micro })), ["pages.schema.js_only"]);
 });
 
 test("LocalBusiness where an address shows on the homepage or a contact page, not on every page with a footer address", () => {

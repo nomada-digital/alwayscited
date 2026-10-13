@@ -51,7 +51,8 @@ test("a required property with no source is an [ADD] placeholder, and the block 
 });
 
 test("never a rating, even on a Product with visible reviews; the price and currency from the amount nearest the H1", () => {
-  const b = basics({ canonical: "https://tallyroo.com/pro", facts: { ...basics().facts, price: true, priceText: "$1,299.00" }, reviewsVisible: true, h1: ["Tallyroo Pro"] });
+  // A price shown just under the H1: the page's own price, so the page is a product page by its own signs (schema.ts looksLikeProduct).
+  const b = basics({ canonical: "https://tallyroo.com/pro", facts: { ...basics().facts, price: true, priceText: "$1,299.00", priceNearH1: true }, reviewsVisible: true, h1: ["Tallyroo Pro"] });
   const [product] = fixFor("https://tallyroo.com/pro", false, b);
   assert.equal(product!.type, "Product");
   assert.deepEqual(product!.block.offers, { "@type": "Offer", price: "1299.00", priceCurrency: "USD", url: "https://tallyroo.com/pro" });
@@ -76,6 +77,19 @@ test("the diff: against the block on the page, what is there and what the fix ad
     diffLines(org!).map((l) => `${l.mark} ${l.text}`),
     ["= name - from your og:site_name tag (already on your page)", "= url - from your canonical address (already on your page)", "+ logo - from the header image", "+ sameAs - from your footer links", "+ description - from your meta description"],
   );
+  assert.deepEqual([org!.kept, org!.extra], [["name", "url"], []]);
+  assert.deepEqual(fixFor("https://tallyroo.com/", true, basics(), found()).map((x) => [x.kept, x.extra]), [
+    [[], []],
+    [[], []],
+  ], "a new block keeps and carries nothing");
+});
+
+test("an update is a whole block that replaces the page's own: it names what the page's block has that this one doesn't, to carry across", () => {
+  const f = found([["Organization"], ["name", "url", "address", "foundingDate"]], [["WebSite"], ["name", "url"]]);
+  const [org] = fixFor("https://tallyroo.com/", true, basics(), f);
+  assert.equal(org!.status, "update");
+  assert.deepEqual(org!.kept, ["name", "url"]);
+  assert.deepEqual(org!.extra, ["address", "foundingDate"], "pasted as given, these would be lost");
 });
 
 test("the other templates: WebSite, BreadcrumbList from the visible crumbs, LocalBusiness from the address block, Article with a Person", () => {

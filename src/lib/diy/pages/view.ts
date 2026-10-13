@@ -4,6 +4,7 @@ import type { PlanItem } from "../plan/types.ts";
 import { type DiagRow, diagnostics, sharedMissing } from "./diagnostics.ts";
 import { type FitVerdict, fitChip, fitVerdict } from "./fit.ts";
 import { type FixBlock, buildFix } from "./fix.ts";
+import { blockOn, everyVerdict } from "./robots.ts";
 import { type Finding, type SchemaChip, foundTypes, schemaChip, schemaFindings, validatorErrors } from "./schema.ts";
 import type { BotCheck, KeyPage, KeywordSerp, PageCheck, ReoptExample, TopStructure } from "./types.ts";
 
@@ -57,6 +58,12 @@ export type PagesInput = {
   cited: ReadonlyMap<string, number>;
   items: readonly PlanItem[];
   today: Day;
+  /**
+   * url_keys of every page where Nomada has placed any other client (spec 10
+   * section 2.3): subtracted from the top 3 and the typed results, silently.
+   * Only the URL is read, and only to subtract (data.ts readPlacedElsewhere).
+   */
+  placed?: ReadonlySet<string>;
 };
 
 const byNewest = (a: PageCheck, b: PageCheck) => (a.checkedAt < b.checkedAt ? 1 : a.checkedAt > b.checkedAt ? -1 : 0);
@@ -98,7 +105,7 @@ export function pageState(page: KeyPage, input: Pick<PagesInput, "checks" | "dom
   const latest = own[0] ?? null;
   const homepage = isHomepage(page, input.domain);
   const readable = latest?.status === "ok";
-  const sIn = { url: page.url, homepage, basics: readable ? latest!.basics : null, found: readable ? latest!.schemaFound : null, results: deep?.schemaResults ?? null };
+  const sIn = { url: page.url, homepage, basics: readable ? latest!.basics : null, found: readable ? latest!.schemaFound : null, results: deep?.schemaResults ?? null, words: { static: latest?.wordCount ?? null, rendered: deep?.renderedWordCount ?? null } };
   const findings = readable ? schemaFindings(sIn) : [];
   return {
     page,
@@ -108,20 +115,20 @@ export function pageState(page: KeyPage, input: Pick<PagesInput, "checks" | "dom
     homepage,
     findings,
     schema: schemaChip({ ...sIn, checked: latest !== null, readable }),
-    schemaOk: readable && !findings.some((f) => f.level !== "info"),
+    // A suggestion (a Product block a product page could carry) is drafted, but does not hold the fit at "fix first".
+    schemaOk: readable && !findings.some((f) => f.level === "fix" || f.level === "remove"),
     basicsOk: basicsPass(latest, page),
   };
 }
 
-/** Access (section 4.9): Allowed · Blocked for Googlebot · noindex · HTTP 404 · Canonical elsewhere · Not checked. The worst first. */
-export function accessChip(s: PageState, bots: readonly BotCheck[]): Chip {
+/** Access (section 4.9): Allowed · Blocked for Googlebot · noindex · HTTP 404 · Canonical elsewhere · Not checked. The worst first. Judged by the page's own host's robots.txt. */
+export function accessChip(s: PageState, bots: readonly BotCheck[], domain: string): Chip {
   const c = s.own;
   if (!c) return { label: "Not checked", tone: "none" };
   if (c.httpStatus !== null && (c.httpStatus < 200 || c.httpStatus >= 300)) return { label: `HTTP ${c.httpStatus}`, tone: "bad" };
   if (c.status !== "ok") return { label: "Could not read", tone: "none" };
   const bot = bots[0];
-  const path = pathOf(s.page.url);
-  if (bot?.crawlers.some((v) => v.name === "Googlebot" && v.blocked.includes(path))) return { label: "Blocked for Googlebot", tone: "bad" };
+  if (bot && blockOn(bot, "Googlebot", s.page.url, domain)) return { label: "Blocked for Googlebot", tone: "bad" };
   if (c.basics?.noindex) return { label: "noindex", tone: "bad" };
   const canon = c.basics?.canonical ? urlKey(c.basics.canonical) : null;
   if (canon && canon !== s.page.urlKey) return { label: "Canonical elsewhere", tone: "warn" };
@@ -148,7 +155,7 @@ export function servedClusters(page: KeyPage, input: Pick<PagesInput, "keyPages"
 
 export type ClusterFit = { cluster: Cluster; keyword: Keyword | null; serp: KeywordSerp | null; verdict: FitVerdict };
 
-const FIT_ORDER: FitVerdict["kind"][] = ["no_page", "split", "different", "out", "fix_first", "fits", "none_read"];
+const FIT_ORDER: FitVerdict["kind"][] = ["no_page", "split", "different", "out", "fix_first", "fits", "elsewhere", "none_read"];
 
 export function clusterFits(s: PageState, input: PagesInput): ClusterFit[] {
   const home = homeKeyOf(input.domain);
@@ -157,7 +164,7 @@ export function clusterFits(s: PageState, input: PagesInput): ClusterFit[] {
     const serp = input.serp.find((x) => x.keywordId === cluster.keywordId) ?? null;
     const titles = new Map(input.top.filter((t) => t.keywordId === cluster.keywordId || t.clusterId === cluster.id).map((t) => [t.urlKey, t.title] as const));
     const verdict: FitVerdict = serp
-      ? fitVerdict({ pageKey: s.page.urlKey, pageUrl: s.page.url, pageTitle: s.own?.basics?.title ?? null, homeKey: home, serp, titles, basicsPass: s.basicsOk, schemaOk: s.schemaOk })
+      ? fitVerdict({ pageKey: s.page.urlKey, pageUrl: s.page.url, pageTitle: s.own?.basics?.title ?? null, homeKey: home, serp, titles, basicsPass: s.basicsOk, schemaOk: s.schemaOk, placed: input.placed })
       : { kind: "none_read" };
     return { cluster, keyword, serp, verdict };
   });
@@ -214,7 +221,7 @@ export function listRows(input: PagesInput): ListRow[] {
       const s = pageState(page, input);
       const fits = clusterFits(s, input);
       const fit = pageFitChip(fits);
-      const access = accessChip(s, input.bots);
+      const access = accessChip(s, input.bots, input.domain);
       const issues: Issue[] = [];
       if (s.schema.tone === "warn" || s.schema.tone === "bad") issues.push("schema");
       if (fit.tone === "warn" || fit.tone === "bad") issues.push("fit");
@@ -260,13 +267,15 @@ export function siteStrip(input: PagesInput, rows: readonly ListRow[], searchCra
   if (bot) {
     if (bot.robotsStatus === null || bot.robotsStatus >= 500) access = { line: "robots.txt could not be read", tone: "none" };
     else {
-      const blocked = bot.crawlers.filter((c) => c.state !== "allowed" && c.name !== "Google-Extended");
-      const search = blocked.filter((c) => searchCrawlers(c.name));
+      // A crawler counts once, blocked on the domain or on any key page's own host.
+      const blocked = [...new Set(everyVerdict(bot).filter(({ v }) => v.state !== "allowed" && v.name !== "Google-Extended").map(({ v }) => v.name))];
+      const search = blocked.filter((name) => searchCrawlers(name));
+      // "search" only for a crawler whose verified, dated source says so (robots.ts raisesBlocking); any other is a crawler, nothing more (section 4.9).
       access = !blocked.length
         ? { line: "Allowed", tone: "good" }
         : search.length
           ? { line: `${search.length} search ${search.length === 1 ? "crawler" : "crawlers"} blocked`, tone: "bad" }
-          : { line: `${blocked.length} AI ${blocked.length === 1 ? "crawler" : "crawlers"} blocked`, tone: "warn" };
+          : { line: `${blocked.length} ${blocked.length === 1 ? "crawler" : "crawlers"} blocked`, tone: "warn" };
     }
   }
   const home = input.keyPages.find((p) => p.removedOn === null && isHomepage(p, input.domain));
@@ -288,7 +297,7 @@ export function siteStrip(input: PagesInput, rows: readonly ListRow[], searchCra
 // ---- One page's detail. ----
 
 export type SchemaTab = {
-  found: { type: string; where: "static" | "rendered" }[];
+  found: { type: string; where: "static" | "rendered"; microdata: boolean }[];
   validator: { errors: number; warnings: number; notes: string[] } | null;
   findings: Finding[];
   fix: FixBlock[];
@@ -319,9 +328,11 @@ export function internalLinksTo(page: KeyPage, input: Pick<PagesInput, "keyPages
 }
 
 export function fitTab(s: PageState, input: PagesInput): FitTab[] {
+  const placed = input.placed ?? new Set<string>();
   return clusterFits(s, input).map((f) => {
     const prompts = input.prompts.filter((p) => p.clusterId === f.cluster.id && p.stoppedOn === null).map((p) => p.text);
-    const top = input.top.filter((t) => t.keywordId === f.cluster.keywordId || t.clusterId === f.cluster.id).sort((a, b) => a.rank - b.rank).slice(0, 3);
+    // Another client's placement is never listed or counted (section 2.3): taken out of the top 3 before they are drawn or handed to the example.
+    const top = input.top.filter((t) => (t.keywordId === f.cluster.keywordId || t.clusterId === f.cluster.id) && !placed.has(t.urlKey)).sort((a, b) => a.rank - b.rank).slice(0, 3);
     const b = s.own?.status === "ok" ? s.own.basics : null;
     return {
       ...f,

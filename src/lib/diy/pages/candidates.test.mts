@@ -5,11 +5,13 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { cleanCandidate } from "../plan/refresh.ts";
-import { type GatherInput, pageCandidates } from "./candidates.ts";
+import { actCandidate } from "./act.ts";
+import { type GatherInput, closestKey, pageCandidates } from "./candidates.ts";
 import { found, keyPage, ownCheck, readings, serp } from "./fake-pages.mts";
 import { type PagesFixture, botOf, checkOf, fixtureSerp, latestTop, topOf } from "./data.ts";
 import { keyPageOf } from "./key-pages.ts";
 import type { BotCheck } from "./types.ts";
+import { type PagesInput, clusterFits, pageState, servedClusters } from "./view.ts";
 
 /**
  * Your pages' Actions candidates (13 Oct 2026, DIY P8; spec 10 section 6.1):
@@ -22,7 +24,7 @@ import type { BotCheck } from "./types.ts";
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 const PAGE = "https://tallyroo.com/cloud";
 const days = (n: number, pos: number | null, url: string | null) => Array.from({ length: n }, () => [pos, url] as [number | null, string | null]);
-const bot = (crawlers: BotCheck["crawlers"]): BotCheck => ({ id: "b", checkedAt: "2026-09-23T03:41:00Z", robotsStatus: 200, crawlers, llmsTxtStatus: 404, pages: [] });
+const bot = (crawlers: BotCheck["crawlers"]): BotCheck => ({ id: "b", checkedAt: "2026-09-23T03:41:00Z", robotsStatus: 200, crawlers, hosts: [], llmsTxtStatus: 404, pages: [] });
 const cloud = keyPage({ id: "kp-8", url: PAGE, clusterIds: ["c8"] });
 const base = (over: Partial<GatherInput> = {}): GatherInput => ({
   domain: "tallyroo.com",
@@ -71,6 +73,50 @@ test("Closest win, routed by fit: Fits sends to the best-of lists; a different p
   const split = pageCandidates(base({ serp: [serp("k8", readings("2026-09-29", days(28, 14, PAGE).map((d, i) => (i % 2 ? [14, "https://tallyroo.com/features/cloud"] : d))))] }), "2026-09-29").find((x) => x.severity === "closest")!;
   assert.equal(split.kind, "resolve_split");
   assert.equal(pageCandidates(base({ serp: [serp("k8", readings("2026-09-29", days(28, 2, PAGE)))] }), "2026-09-29").filter((x) => x.severity === "closest").length, 0);
+});
+
+test("Closest win: a page that is not the one ranking raises none - the homepage is never sent to the best-of lists for another URL's keyword", () => {
+  // The review's case (13 Oct 2026): the cluster's ranking URL is not a key page, so the homepage serves it.
+  const home = keyPage({ id: "kp-1", url: "https://tallyroo.com/", origin: "homepage" });
+  const elsewhere = base({ keyPages: [home], checks: [ownCheck(home, "2026-09-16", { schemaFound: found([["Organization"], ["name", "url", "logo", "sameAs"]], [["WebSite"], ["name", "url"]]) }), ownCheck(home, "2026-09-23", { schemaFound: found([["Organization"], ["name", "url", "logo", "sameAs"]], [["WebSite"], ["name", "url"]]) })], serp: [serp("k8", readings("2026-09-29", days(28, 14, "https://tallyroo.com/blog/payroll-guide")), ["https://ledgerline.com/cloud"])] });
+  assert.deepEqual(pageCandidates(elsewhere, "2026-09-29"), []);
+});
+
+test("one Closest win per cluster: 'Add to Actions' on a drafted example writes the nightly pick's own key and title, and is refused on a page that is not the one ranking", () => {
+  const lists = Array.from({ length: 8 }, (_, i) => `https://list-${i}.example/best-cloud-accounting-software`);
+  const g = base({ serp: [serp("k8", readings("2026-09-29", days(28, 14, PAGE)), lists)] });
+  const night = pageCandidates(g, "2026-09-29").find((x) => x.kind === "rework_page")!;
+  const input: PagesInput = { ...g, prompts: [], examples: [], items: [], cited: new Map() };
+  const s = pageState(cloud, input);
+  const verdicts = new Map(clusterFits(s, input).map((f) => [f.cluster.id, f.verdict] as const));
+  const pressed = actCandidate({ page: cloud, state: s, item: "rework:c8", served: servedClusters(cloud, input), keywords: input.keywords, domain: "tallyroo.com", verdicts })!;
+  assert.equal(pressed.dedupeKey, night.dedupeKey);
+  assert.equal(pressed.dedupeKey, closestKey("c8"));
+  assert.deepEqual([pressed.kind, pressed.title], [night.kind, night.title]);
+  const moved = base({ serp: [serp("k8", readings("2026-09-29", days(28, 14, "https://tallyroo.com/features/cloud")), lists)] });
+  const mi: PagesInput = { ...moved, prompts: [], examples: [], items: [], cited: new Map() };
+  const ms = pageState(cloud, mi);
+  const mv = new Map(clusterFits(ms, mi).map((f) => [f.cluster.id, f.verdict] as const));
+  assert.equal(actCandidate({ page: cloud, state: ms, item: "rework:c8", served: servedClusters(cloud, mi), keywords: mi.keywords, domain: "tallyroo.com", verdicts: mv }), null);
+});
+
+test("Blocking, judged by each page's own host: a key page on a subdomain is read against that subdomain's robots.txt, never the domain's", () => {
+  // A made-up client on a .example domain, so its subdomain is one too (privacy.test.mts).
+  const domain = "tallyroo.example";
+  const apexPage = keyPage({ id: "kp-8", url: "https://tallyroo.example/cloud" });
+  const guide = keyPage({ id: "kp-12", url: "https://blog.tallyroo.example/guide" });
+  const g = base({
+    domain,
+    keyPages: [apexPage, guide],
+    checks: [ownCheck(apexPage, "2026-09-23"), ownCheck(guide, "2026-09-23")],
+    serp: [],
+    bots: [{ ...bot([{ name: "Googlebot", state: "allowed", inherited: false, line: null, blocked: [] }]), hosts: [{ host: "blog.tallyroo.example", robotsStatus: 200, crawlers: [{ name: "Googlebot", state: "blocked", inherited: true, line: "Disallow: /guide", blocked: ["/guide"] }] }] }],
+  });
+  const blocking = pageCandidates(g, "2026-09-29").filter((x) => x.severity === "blocking");
+  assert.deepEqual(blocking.map((x) => [x.title, x.ref?.id]), [["Let Googlebot crawl blog.tallyroo.example/guide", "kp-12"]]);
+  // The domain's file blocking /guide says nothing about blog.tallyroo.example/guide.
+  const apex = base({ domain, serp: [], keyPages: [apexPage, guide], checks: [ownCheck(apexPage, "2026-09-23"), ownCheck(guide, "2026-09-23")], bots: [bot([{ name: "Googlebot", state: "partial", inherited: false, line: "Disallow: /guide", blocked: ["/guide"] }])] });
+  assert.equal(pageCandidates(apex, "2026-09-29").filter((x) => x.severity === "blocking").length, 0);
 });
 
 test("Tidy-up: a homepage with no Organization, and a page the validator found errors on", () => {

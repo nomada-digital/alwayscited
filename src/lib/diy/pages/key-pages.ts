@@ -74,7 +74,12 @@ export function keyPageOf(r: Record<string, unknown>): KeyPage | null {
 
 export type Candidate = { url: string; origin: Exclude<KeyPageOrigin, "member">; clusterIds: string[] };
 
-export type Pick = { add: { url: string; urlKey: string; origin: KeyPageOrigin; clusterIds: string[] }[]; clusters: { id: string; clusterIds: string[] }[] };
+export type Pick = {
+  add: { url: string; urlKey: string; origin: KeyPageOrigin; clusterIds: string[] }[];
+  clusters: { id: string; clusterIds: string[] }[];
+  /** Candidates left out because their address is longer than key_pages allows (KEY_PAGE_URL_MAX). */
+  tooLong: number;
+};
 
 const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
@@ -83,7 +88,10 @@ const sameSet = (a: readonly string[], b: readonly string[]) => a.length === b.l
  * each live page's clusters brought up to date from the same candidates (a
  * page serves the clusters whose keyword it ranks for). Every candidate must
  * be on the client's domain; a page removed by a member (any row of it with
- * removed_on) is never picked again.
+ * removed_on) is never picked again. A candidate longer than KEY_PAGE_URL_MAX
+ * (a ranking URL with faceted or tracking query strings) is left out and
+ * counted: key_pages.url's own check would refuse it, and one such address
+ * must not fail the week's job (13 Oct 2026, DIY P8 review).
  */
 export function pickKeyPages(p: { rows: readonly KeyPage[]; candidates: readonly Candidate[]; domain: string; limit?: number }): Pick {
   const limit = p.limit ?? KEY_PAGES_MAX;
@@ -91,8 +99,13 @@ export function pickKeyPages(p: { rows: readonly KeyPage[]; candidates: readonly
   const removed = new Set(p.rows.filter((r) => r.removedOn !== null && !live.some((l) => l.urlKey === r.urlKey)).map((r) => r.urlKey));
   const served = new Map<string, Set<string>>();
   const add: Pick["add"] = [];
+  const long = new Set<string>();
   for (const c of p.candidates) {
     if (!isOwnUrl(c.url, p.domain)) continue;
+    if (c.url.length > KEY_PAGE_URL_MAX) {
+      long.add(c.url);
+      continue;
+    }
     const key = urlKey(c.url);
     if (!key) continue;
     const s = served.get(key) ?? served.set(key, new Set()).get(key)!;
@@ -105,7 +118,7 @@ export function pickKeyPages(p: { rows: readonly KeyPage[]; candidates: readonly
   const clusters = live
     .map((l) => ({ id: l.id, clusterIds: [...(served.get(l.urlKey) ?? [])].sort() }))
     .filter((c) => !sameSet(c.clusterIds, live.find((l) => l.id === c.id)!.clusterIds));
-  return { add, clusters };
+  return { add, clusters, tooLong: long.size };
 }
 
 export type MemberAdd =
@@ -135,12 +148,20 @@ export async function readKeyPages(db: SupabaseClient, clientId: string): Promis
 }
 
 const DUPLICATE = "23505";
+const CHECK_VIOLATION = "23514";
 
-/** One key page in. A page live already (the unique index) is not an error: it is there. */
-export async function insertKeyPage(db: SupabaseClient, clientId: string, row: { url: string; urlKey: string; origin: KeyPageOrigin; clusterIds: string[]; by: string; today: Day }): Promise<boolean> {
+/**
+ * One key page in: "added"; "duplicate" for a page live already (the unique
+ * index), which is not an error - it is there; "refused" for a row the
+ * table's own checks turn away, which the jobs count in their note rather
+ * than fail on. Anything else throws.
+ */
+export async function insertKeyPage(db: SupabaseClient, clientId: string, row: { url: string; urlKey: string; origin: KeyPageOrigin; clusterIds: string[]; by: string; today: Day }): Promise<"added" | "duplicate" | "refused"> {
+  if (row.url.length > KEY_PAGE_URL_MAX) return "refused";
   const { error } = await db.from("key_pages").insert({ client_domain_id: clientId, url: row.url, url_key: row.urlKey, origin: row.origin, cluster_ids: row.clusterIds, added_by: row.by, added_on: row.today });
-  if (!error) return true;
-  if (error.code === DUPLICATE) return false;
+  if (!error) return "added";
+  if (error.code === DUPLICATE) return "duplicate";
+  if (error.code === CHECK_VIOLATION) return "refused";
   throw new Error(`could not add the key page: ${error.message}`);
 }
 

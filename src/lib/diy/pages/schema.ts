@@ -1,3 +1,4 @@
+import { typeByRule } from "./fit.ts";
 import type { SchemaFound, SchemaResults } from "./own-parse.ts";
 import type { Basics } from "./types.ts";
 
@@ -18,6 +19,23 @@ import type { Basics } from "./types.ts";
  *   "add LocalBusiness" on each of them would be noise, not a check.
  * - SoftwareApplication is not checked at all until Google's requirements are
  *   read from its own page (pages.sources.ts V-SOFTWAREAPP, [VERIFY]).
+ *
+ * Three more, from the review of 13 Oct 2026:
+ *
+ * - Product is checked only on a page that is a product or pricing page by
+ *   its own signs (looksLikeProduct): never the homepage or an article, which
+ *   mention prices in passing, and a Product named after a headline would
+ *   mark a page up as something it is not - against G2, the line's own
+ *   source. Its absence is a suggestion (level `suggest`): the fix drafts it,
+ *   and it does not hold the page's fit at "fix first".
+ * - A type the page carries as static microdata (`itemtype`) is found: it is
+ *   never called missing, never handed a duplicate block, and never "only
+ *   after JavaScript". Its properties are not read, so no "missing
+ *   properties" line is drawn for it either.
+ * - Hidden ratings are said as "remove it" only when the JavaScript read shows
+ *   the page's HTML is the whole page (its word count no more than the
+ *   static one's, give or take). A review widget drawn by script is not in
+ *   the HTML, so otherwise the line says only what we didn't see, as info.
  */
 
 /** The types each check looks for, any of which counts. */
@@ -35,7 +53,8 @@ export const REQUIRED: Record<string, readonly string[]> = {
   Article: ["headline", "author", "datePublished"],
 };
 
-export type FindingLevel = "fix" | "remove" | "info";
+/** fix and remove hold a page's fit at "fix first"; suggest is drafted by the fix but does not; info is said only. */
+export type FindingLevel = "fix" | "remove" | "suggest" | "info";
 
 export type Finding = {
   /** The advice line, schema.advice.ts. */
@@ -57,9 +76,14 @@ export type SchemaInput = {
   found: SchemaFound | null;
   /** The JavaScript read's validator, when one has run. */
   results: SchemaResults | null;
+  /** Word counts: our static read's, and the JavaScript read's when one has run. */
+  words?: { static: number | null; rendered: number | null };
 };
 
-const hasType = (found: SchemaFound | null, types: readonly string[]) => (found?.blocks ?? []).some((b) => b.types.some((t) => types.includes(t)));
+/** A type is on the page as static microdata. */
+const inMicrodata = (found: SchemaFound | null, types: readonly string[]) => (found?.microdataTypes ?? []).some((t) => types.includes(t));
+/** A type is on the page: a JSON-LD block, or static microdata. */
+const hasType = (found: SchemaFound | null, types: readonly string[]) => (found?.blocks ?? []).some((b) => b.types.some((t) => types.includes(t))) || inMicrodata(found, types);
 const blockOf = (found: SchemaFound | null, types: readonly string[]) => (found?.blocks ?? []).find((b) => b.types.some((t) => types.includes(t))) ?? null;
 const and = (xs: string[]) => (xs.length > 1 ? `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}` : (xs[0] ?? ""));
 
@@ -77,6 +101,25 @@ export function looksLikeArticle(url: string, basics: Basics | null): boolean {
 }
 
 const LOCATION_PATH = /\/(contact|contact-us|locations?|stores?|find-us|visit|branches)(\/|$)/;
+
+/**
+ * A product or pricing page by its own signs: a product path by rule
+ * (fit.ts typeByRule), a Product or Offer already marked up, or a price
+ * shown just after the H1. Never the homepage or an article.
+ */
+export function looksLikeProduct(p: Pick<SchemaInput, "url" | "homepage" | "basics" | "found">): boolean {
+  if (p.homepage || looksLikeArticle(p.url, p.basics)) return false;
+  if (typeByRule(p.url) === "product") return true;
+  if (hasType(p.found, ["Product", "Offer", "AggregateOffer"])) return true;
+  return p.basics?.facts.priceNearH1 === true;
+}
+
+/** The JavaScript read found no more text than our static read: the HTML is the whole page. */
+export function htmlIsWholePage(words: SchemaInput["words"]): boolean {
+  const s = words?.static ?? null;
+  const r = words?.rendered ?? null;
+  return s !== null && r !== null && r <= s * 1.05 + 25;
+}
 
 /** Errors (fatal and error) the validator found, per type. */
 export function validatorErrors(results: SchemaResults | null): { total: number; byType: Map<string, number>; messages: string[] } {
@@ -100,23 +143,27 @@ export function schemaFindings(p: SchemaInput): Finding[] {
   const f = p.found;
   if (p.homepage) {
     const org = blockOf(f, ORG_TYPES);
-    if (!org) out.push({ id: "pages.schema.organization", type: "Organization", level: "fix", vars: {} });
-    else {
+    if (!org) {
+      if (!inMicrodata(f, ORG_TYPES)) out.push({ id: "pages.schema.organization", type: "Organization", level: "fix", vars: {} });
+    } else {
       const missing = REQUIRED.Organization!.filter((k) => !org.props.includes(k));
       if (missing.length) out.push({ id: "pages.schema.organization_props", type: "Organization", level: "fix", vars: { props: and(missing) }, missing });
     }
     if (!hasType(f, ["WebSite"])) out.push({ id: "pages.schema.website", type: "WebSite", level: "fix", vars: {} });
   }
   if (b?.breadcrumbs && !hasType(f, ["BreadcrumbList"])) out.push({ id: "pages.schema.breadcrumbs", type: "BreadcrumbList", level: "fix", vars: {} });
-  if (b?.facts.price && !hasType(f, ["Product"])) out.push({ id: "pages.schema.product", type: "Product", level: "fix", vars: {} });
+  if (b?.facts.price && looksLikeProduct(p) && !hasType(f, ["Product"])) out.push({ id: "pages.schema.product", type: "Product", level: "suggest", vars: {} });
   if (hasType(f, ["Product"]) && b?.markupOnly.includes("price")) out.push({ id: "pages.schema.product_hidden", type: "Product", level: "remove", vars: {} });
   const rated = (f?.blocks ?? []).some((x) => x.types.some((t) => t === "AggregateRating" || t === "Review") || x.props.includes("aggregateRating") || x.props.includes("review"));
-  if (rated && b && !b.reviewsVisible) out.push({ id: "pages.schema.rating_hidden", type: "AggregateRating", level: "remove", vars: {} });
+  if (rated && b && !b.reviewsVisible) {
+    out.push(htmlIsWholePage(p.words) ? { id: "pages.schema.rating_hidden", type: "AggregateRating", level: "remove", vars: {} } : { id: "pages.schema.rating_unseen", type: "AggregateRating", level: "info", vars: {} });
+  }
   if (b?.facts.address && (p.homepage || LOCATION_PATH.test(pathOf(p.url))) && !hasType(f, LOCAL_TYPES)) out.push({ id: "pages.schema.local", type: "LocalBusiness", level: "fix", vars: {} });
   if (looksLikeArticle(p.url, b)) {
     const art = blockOf(f, ARTICLE_TYPES);
-    if (!art) out.push({ id: "pages.schema.article", type: "Article", level: "fix", vars: {} });
-    else {
+    if (!art) {
+      if (!inMicrodata(f, ARTICLE_TYPES)) out.push({ id: "pages.schema.article", type: "Article", level: "fix", vars: {} });
+    } else {
       const missing = REQUIRED.Article!.filter((k) => !art.props.includes(k));
       if (missing.length) out.push({ id: "pages.schema.article_props", type: "Article", level: "fix", vars: { props: and(missing) }, missing });
     }
@@ -124,7 +171,8 @@ export function schemaFindings(p: SchemaInput): Finding[] {
   const v = validatorErrors(p.results);
   if (v.total > 0) out.push({ id: "pages.schema.validator", type: null, level: "fix", vars: { n: `${v.total} ${v.total === 1 ? "error" : "errors"}` } });
   for (const t of f?.conflicts ?? []) out.push({ id: "pages.schema.conflict", type: t, level: "fix", vars: { type: t } });
-  const staticTypes = new Set((f?.blocks ?? []).filter((x) => x.via === "static").flatMap((x) => x.types));
+  // Static means our own read of the HTML: its JSON-LD blocks and its microdata both.
+  const staticTypes = new Set([...(f?.blocks ?? []).filter((x) => x.via === "static").flatMap((x) => x.types), ...(f?.microdataTypes ?? [])]);
   const renderedOnly = [...new Set((p.results?.items ?? []).flatMap((it) => it.types))].filter((t) => !staticTypes.has(t));
   for (const t of renderedOnly) out.push({ id: "pages.schema.js_only", type: t, level: "info", vars: {} });
   for (const fact of b?.markupOnly ?? []) {
@@ -154,10 +202,11 @@ export function schemaChip(p: SchemaInput & { checked: boolean; readable: boolea
   return { label: "OK", tone: "good" };
 }
 
-/** The types found, and where: static HTML, or only after JavaScript (the Schema tab's Found). */
-export function foundTypes(found: SchemaFound | null, results: SchemaResults | null): { type: string; where: "static" | "rendered" }[] {
-  const out = new Map<string, "static" | "rendered">();
-  for (const b of found?.blocks ?? []) for (const t of b.types) out.set(t, "static");
-  for (const it of results?.items ?? []) for (const t of it.types) if (!out.has(t)) out.set(t, "rendered");
-  return [...out].map(([type, where]) => ({ type, where }));
+/** The types found, and where: static HTML (JSON-LD or microdata), or only after JavaScript (the Schema tab's Found). */
+export function foundTypes(found: SchemaFound | null, results: SchemaResults | null): { type: string; where: "static" | "rendered"; microdata: boolean }[] {
+  const out = new Map<string, { where: "static" | "rendered"; microdata: boolean }>();
+  for (const b of found?.blocks ?? []) for (const t of b.types) out.set(t, { where: "static", microdata: false });
+  for (const t of found?.microdataTypes ?? []) if (!out.has(t)) out.set(t, { where: "static", microdata: true });
+  for (const it of results?.items ?? []) for (const t of it.types) if (!out.has(t)) out.set(t, { where: "rendered", microdata: false });
+  return [...out].map(([type, v]) => ({ type, ...v }));
 }

@@ -21,7 +21,11 @@ import type { Basics } from "./types.ts";
  * - **The diff.** Against the block already on the page, property by
  *   property: what is there already, and what the fix adds (or "new" when the
  *   page has no block of that type). Property names only, as schema_found
- *   holds them: no current value is stored to compare.
+ *   holds them: no current value is stored to compare. An update is a whole
+ *   block that replaces the page's own, so it also names what the page's block
+ *   has that the template does not (`extra`), to carry across before
+ *   replacing it - pasted beside the old one, it would be a second block of
+ *   the type, which the conflict check then flags (13 Oct 2026, DIY P8 review).
  * - **Never invented.** No rating at all (a rating is only ever kept when
  *   reviews are visible, and the fix never writes one), no value from another
  *   page, no model.
@@ -38,6 +42,10 @@ export type FixBlock = {
   props: FixProp[];
   /** True when no required property is an [ADD] placeholder. */
   validates: boolean;
+  /** For an update: the properties of the page's own block this one also carries. */
+  kept: string[];
+  /** For an update: the properties of the page's own block this one does not carry, to copy across before replacing it. */
+  extra: string[];
 };
 
 export type FixInput = { url: string; homepage: boolean; basics: Basics; found: SchemaFound | null };
@@ -151,7 +159,7 @@ const FAMILY: Record<string, readonly string[]> = { Organization: ORG_TYPES, Loc
 export function fixTypes(findings: readonly Finding[]): string[] {
   const out: string[] = [];
   for (const f of findings) {
-    if (f.level !== "fix" || !f.type || !REQUIRED[f.type]) continue;
+    if ((f.level !== "fix" && f.level !== "suggest") || !f.type || !REQUIRED[f.type]) continue;
     if (!out.includes(f.type)) out.push(f.type);
   }
   return out;
@@ -171,6 +179,7 @@ export function buildFix(i: FixInput, findings: readonly Finding[]): FixBlock[] 
       list.push({ name: k, from: p.from, placeholder: isPlaceholder(p.value), added: !current || !current.props.includes(k) });
     }
     const required = REQUIRED[type] ?? [];
+    const names = list.map((p) => p.name);
     out.push({
       type,
       status: current ? "update" : "new",
@@ -178,6 +187,8 @@ export function buildFix(i: FixInput, findings: readonly Finding[]): FixBlock[] 
       json: JSON.stringify(block, null, 2),
       props: list,
       validates: !list.some((p) => p.placeholder && required.includes(p.name)),
+      kept: current ? names.filter((n) => current.props.includes(n)) : [],
+      extra: current ? current.props.filter((n) => !names.includes(n)).slice(0, 20) : [],
     });
   }
   return out;

@@ -11,9 +11,20 @@ import type { KeywordSerp, SerpReading, TopResult } from "./types.ts";
  * | Verdict | Rule |
  * |---|---|
  * | No page | the ranking URL is the homepage, or none of the client's pages is in the top 20 on at least 20 of the keyword's last 28 readings |
- * | Two pages take turns | 2 or more of the client's URLs held the position on different days in the last 28 readings, with the days each held |
+ * | Two pages take turns | 2 or more of the client's URLs held the position on different days in the last 28 readings, with the days each held, this page among them |
+ * | Another page ranks | the latest ranking URL is another of the client's pages, not this one: this page is not judged against that page's readings |
  * | Different page type | of the top 10 we can type by rule (the top 3 by their titles too), at least 7 are of one type, and the rules do not give the client's page that type |
  * | Fits | none of the above, the basics pass, and the schema is valid or not needed |
+ *
+ * Another page ranks (13 Oct 2026, DIY P8 review): the homepage serves every
+ * cluster no other key page holds, and a cluster's ranking URL need not be a
+ * key page (ten clusters can rank ten URLs, and the homepage takes one of the
+ * ten slots; a member can remove a ranking page). Judged against another
+ * URL's readings, the homepage read "Fits" at #14 and fired U6 for a page
+ * that is not the one ranking. So a page is read as Fits or Different only
+ * when it is the ranking URL, or when none of the client's pages ranks; and
+ * Another page ranks gates U6, the Closest-win candidate and the drafted
+ * example.
  *
  * A page whose basics or schema do not pass reads "fix first", not Fits:
  * Fits says the page is probably not the problem, which a 404, a noindex or
@@ -89,6 +100,7 @@ export type FitVerdict =
   | { kind: "none_read" }
   | { kind: "no_page"; homepage: boolean; out: number; readings: number }
   | { kind: "split"; held: { urlKey: string; days: number }[]; readings: number }
+  | { kind: "elsewhere"; urlKey: string | null; position: number; day: string }
   | { kind: "different"; dominant: PageType; n: number; typed: number; yours: PageType | null }
   | { kind: "out"; out: number; readings: number }
   | { kind: "fix_first"; what: "basics" | "schema" }
@@ -106,6 +118,12 @@ export type FitInput = {
   titles: ReadonlyMap<string, string | null>;
   basicsPass: boolean;
   schemaOk: boolean;
+  /**
+   * url_keys of pages where Nomada has placed any other client (spec 10
+   * section 2.3): left out of the typed results, numerator and denominator,
+   * silently. Only the URL is read, only to subtract.
+   */
+  placed?: ReadonlySet<string>;
 };
 
 /** The keyword's last FIT_READINGS readings: the days it was read. A day it was not read is not a reading. */
@@ -113,11 +131,16 @@ export function lastReadings(readings: readonly SerpReading[], n = FIT_READINGS)
   return [...readings].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0)).slice(-n);
 }
 
-/** The latest page of results' top 10, typed where the rules can (the top 3 by title too). */
-export function typedTop(top: readonly TopResult[], titles: ReadonlyMap<string, string | null>): { url: string; type: PageType | null }[] {
+/**
+ * The latest page of results' top 10, typed where the rules can (the top 3 by
+ * title too). A page where Nomada has placed another client is taken out of
+ * the ten, so it is neither typed nor counted.
+ */
+export function typedTop(top: readonly TopResult[], titles: ReadonlyMap<string, string | null>, placed: ReadonlySet<string> = new Set()): { url: string; type: PageType | null }[] {
   return [...top]
     .sort((a, b) => a.rank - b.rank)
     .slice(0, TOP_TYPED)
+    .filter((r) => !placed.has(urlKey(r.url) ?? ""))
     .map((r, i) => ({ url: r.url, type: typeByRule(r.url, i < 3 ? (titles.get(urlKey(r.url) ?? "") ?? null) : null) }));
 }
 
@@ -138,11 +161,13 @@ export function fitVerdict(p: FitInput): FitVerdict {
     const k = urlKey(r.url);
     if (k) held.set(k, (held.get(k) ?? 0) + 1);
   }
-  if (held.size >= 2) return { kind: "split", held: [...held].map(([urlKey, days]) => ({ urlKey, days })).sort((a, b) => b.days - a.days), readings: last.length };
+  if (held.size >= 2 && held.has(p.pageKey)) return { kind: "split", held: [...held].map(([urlKey, days]) => ({ urlKey, days })).sort((a, b) => b.days - a.days), readings: last.length };
+  // Another of the client's pages ranks now: this page is not judged against its readings.
+  if (latestKey !== p.pageKey) return { kind: "elsewhere", urlKey: latestKey, position: latest.position, day: latest.day };
   const yours = typeByRule(p.pageUrl, p.pageTitle);
   // The client's own results are not "what Google answers with" against its own page.
   const ownHost = p.homeKey.split("/")[0]!;
-  const typed = typedTop(p.serp.top, p.titles).filter((x): x is { url: string; type: PageType } => {
+  const typed = typedTop(p.serp.top, p.titles, p.placed).filter((x): x is { url: string; type: PageType } => {
     const host = (urlKey(x.url) ?? "").split("/")[0]!;
     return x.type !== null && host !== ownHost && !host.endsWith(`.${ownHost}`);
   });
@@ -163,6 +188,8 @@ export function fitChip(v: FitVerdict | null): { label: string; tone: "good" | "
       return { label: "No page", tone: "bad" };
     case "split":
       return { label: "Two pages take turns", tone: "warn" };
+    case "elsewhere":
+      return { label: "Another page ranks", tone: "none" };
     case "different":
       return { label: "Different page type", tone: "warn" };
     case "out":
@@ -191,6 +218,8 @@ export function fitWords(v: FitVerdict, keyword: string, count: number | null): 
       return v.homepage ? { id: "pages.fit.homepage", vars: { keyword } } : { id: "pages.fit.no_page", vars: { keyword } };
     case "split":
       return { id: "pages.fit.split", vars: {} };
+    case "elsewhere":
+      return { id: "pages.fit.elsewhere", vars: { keyword } };
     case "different":
       return {
         id: "pages.fit.different",
@@ -220,6 +249,8 @@ export function fitEvidence(v: FitVerdict, keyword: string): string | null {
       return v.homepage ? `Your homepage held '${keyword}' at the latest reading.` : `None of your pages was in the top 20 for '${keyword}' on ${v.out} of its last ${v.readings} readings.`;
     case "split":
       return `${v.held.map((h) => `${h.urlKey} held it on ${h.days} ${h.days === 1 ? "reading" : "readings"}`).join("; ")}, of the last ${v.readings}.`;
+    case "elsewhere":
+      return v.urlKey ? `${v.urlKey} held '${keyword}' at #${v.position} at the latest reading.` : `Another of your pages held '${keyword}' at #${v.position} at the latest reading.`;
     case "different":
       return `${v.n} of the ${v.typed} results we could type in Google's top 10 are ${TYPE_PLURAL[v.dominant]}.`;
     case "out":

@@ -104,6 +104,49 @@ test("weekly: a done item on a key page is verified by the read, through P3's ma
   assert.equal((tables.bot_checks![0]!.robots as { state: string }).state, "none", "a 404 robots.txt is no robots.txt");
 });
 
+test("weekly: a key page on a subdomain is judged by that subdomain's own robots.txt; a page we could not read says nothing of its noindex or canonical; a too-long candidate is a note, not a failure", async () => {
+  // A made-up client on a .example domain, so its subdomain is one too (privacy.test.mts).
+  const client = testClient({ domain: "tallyroo.example" });
+  const ctx = (db: JobContext["db"]): JobContext => ({ db, client, today: DAY, deadlineMs: NOW + 270_000, onboarding: false });
+  const long = `https://tallyroo.example/cloud?${"utm_source=x&".repeat(60)}`;
+  const tables: Record<string, Row[]> = {
+    key_pages: [],
+    tracked_clusters: [
+      { id: "c1", client_domain_id: client.id, keyword_id: "k1", stopped_on: null },
+      { id: "c2", client_domain_id: client.id, keyword_id: "k2", stopped_on: null },
+      { id: "c3", client_domain_id: client.id, keyword_id: "k3", stopped_on: null },
+    ],
+    tracking_serp: [
+      { id: "s1", client_domain_id: client.id, run_date: "2026-10-13", keyword_id: "k1", position: 9, url: "https://blog.tallyroo.example/guide" },
+      { id: "s2", client_domain_id: client.id, run_date: "2026-10-13", keyword_id: "k2", position: 12, url: "https://tallyroo.example/gone" },
+      { id: "s3", client_domain_id: client.id, run_date: "2026-10-13", keyword_id: "k3", position: 15, url: long },
+    ],
+    tracking_answers: [],
+    page_checks: [],
+    bot_checks: [],
+    plan_items: [],
+    reopt_examples: [],
+    diy_reads: [],
+  };
+  const { db } = fakeDiyDb(tables);
+  const get = fakeGet({
+    "https://tallyroo.example/": { status: 200, html: html("Tallyroo", "<p>Hi</p>") },
+    "https://blog.tallyroo.example/guide": { status: 200, html: html("A guide", "<p>Guide.</p>") },
+    "https://tallyroo.example/robots.txt": { status: 200, html: "User-agent: Googlebot\nDisallow: /guide\n" },
+    "https://blog.tallyroo.example/robots.txt": { status: 200, html: "User-agent: *\nAllow: /\n" },
+  });
+  const r = await keyPagesWeeklyHandler({ get, now: () => NOW }).run(ctx(db));
+  assert.equal(r.outcome, "ok");
+  assert.match(r.note!, /3 added, 1 left out \(address too long\); robots\.txt read \(and 1 subdomain\)/);
+  const bot = tables.bot_checks![0]!;
+  const robots = bot.robots as { crawlers: { name: string; state: string; blocked: string[] }[]; hosts: { host: string; robots_status: number; crawlers: { name: string; state: string }[] }[] };
+  assert.equal(robots.crawlers.find((c) => c.name === "Googlebot")!.state, "allowed", "the domain's /guide rule is not read against blog.tallyroo.example/guide");
+  assert.deepEqual(robots.hosts.map((h) => [h.host, h.robots_status, h.crawlers.find((c) => c.name === "Googlebot")!.state]), [["blog.tallyroo.example", 200, "allowed"]]);
+  const pages = bot.pages as { urlKey: string; status: number | null; noindex: boolean | null; canonicalElsewhere: boolean | null }[];
+  assert.deepEqual(pages.find((p) => p.urlKey === "tallyroo.example/gone"), { urlKey: "tallyroo.example/gone", status: 404, noindex: null, canonicalElsewhere: null });
+  assert.deepEqual(pages.find((p) => p.urlKey === "tallyroo.example"), { urlKey: "tallyroo.example", status: 200, noindex: false, canonicalElsewhere: false });
+});
+
 const readResult = <T,>(value: T, readId = "r") => ({ kind: "read" as const, value, cost: 0.0015, partial: false, readId });
 
 test("monthly: relevant pages fill the key pages, each is read with JavaScript and the validator, and the top 3 others' structure is stored", async () => {
@@ -114,6 +157,8 @@ test("monthly: relevant pages fill the key pages, each is read with JavaScript a
     page_checks: [],
     top_structures: [],
     diy_reads: [],
+    // Another client's placement in the results: never read for this client, never stored.
+    placements: [{ id: "pl-9", client_domain_id: "another-client", url: "https://rival-b.example/y", url_key: "rival-b.example/y", status: "live" }],
   };
   const { db, clock } = fakeDiyDb(tables);
   const read = testCtx(db, clock);
@@ -131,11 +176,11 @@ test("monthly: relevant pages fill the key pages, each is read with JavaScript a
   assert.equal(deep.length, 2);
   assert.equal(deep[0]!.rendered_word_count, 1200);
   assert.ok(!JSON.stringify(deep[0]!.schema_results).includes("a value never stored"));
-  assert.deepEqual(parsed, ["https://ledgerline.com/cloud", "https://rival-a.example/x", "https://rival-b.example/y"], "the top 3 others: the client's own result is skipped");
+  assert.deepEqual(parsed, ["https://ledgerline.com/cloud", "https://rival-a.example/x", "https://rival-c.example/z"], "the top 3 others: the client's own result and another client's placement are skipped");
   assert.deepEqual(tables.top_structures!.map((t) => [t.rank, t.status, t.date_shown, t.word_count]), [
     [1, "ok", true, 1800],
     [3, "ok", true, 1800],
-    [4, "ok", true, 1800],
+    [5, "ok", true, 1800],
   ]);
   assert.ok(!("text" in tables.top_structures![0]!) && !("markdown" in tables.top_structures![0]!), "no body text is stored");
 });

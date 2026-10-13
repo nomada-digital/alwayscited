@@ -5,15 +5,16 @@ import { pool } from "../core/ctx.ts";
 import type { GuardedGet } from "../core/fetch.ts";
 import { FETCH_TIMEOUT_MS, ROBOTS_CAP_BYTES } from "../core/fetch.ts";
 import type { JobContext, JobHandler, JobResult } from "../core/jobs.ts";
-import { itemsByRef, markVerified } from "../plan/write.ts";
+import { loadPlanItems } from "../plan/data.ts";
+import { markVerified } from "../plan/write.ts";
 import { LINK_CHECK_UA } from "../../tracking/placements.ts";
 import { urlKey } from "../../tracking/placements.ts";
 import { insertCheck, ownCheck } from "./check.ts";
 import { WEEKLY_KIND, readBots, readChecks, readExamples } from "./data.ts";
 import { type Candidate as PageCandidate, citedOwnPages, homepageOf, insertKeyPage, pickKeyPages, readKeyPages, setKeyPageClusters } from "./key-pages.ts";
-import { botPage, crawlerAccess, robotsState } from "./robots.ts";
+import { botPage, crawlerAccess, hostOf, onMainHost, robotsState } from "./robots.ts";
 import type { BotCheck, KeyPage, PageCheck } from "./types.ts";
-import { verifyItem } from "./verify.ts";
+import { verifyClientItem, verifyItem } from "./verify.ts";
 
 /**
  * `key_pages_weekly` (13 Oct 2026, DIY P8; spec 10 sections 5.7 and 6.4):
@@ -28,9 +29,15 @@ import { verifyItem } from "./verify.ts";
  *    page_checks (`via = 'own'`).
  * 3. Reads robots.txt and llms.txt, and writes bot_checks: each crawler's
  *    verdict over the key page paths, and each page's status, noindex and
- *    canonical.
- * 4. Verifies the Actions items done on a key page (verify.ts), through P3's
- *    markVerified.
+ *    canonical. Each page is judged by its own host's robots.txt: the
+ *    client's domain is read as before, and each subdomain a key page is on
+ *    has its own file read and its own verdicts (at most HOSTS_MAX).
+ * 4. Verifies the Actions items done on a key page, and the crawler items that
+ *    cover several (verify.ts), through P3's markVerified.
+ *
+ * A candidate page whose address is longer than key_pages allows is left out
+ * by the pick, and one the database refuses all the same (its check) is a
+ * note in the result, never the job's failure (13 Oct 2026, DIY P8 review).
  *
  * A factory, so the shell registers it in wiring.ts without this file
  * importing the crawler: the live fetch (`guardedRead` in scan/crawl.ts,
@@ -78,27 +85,64 @@ async function rankingUrls(db: SupabaseClient, clientId: string, clusters: Struc
   });
 }
 
-/** robots.txt and llms.txt, read as our own fetch of the client's own site. */
-async function readRobots(domain: string, get: GuardedGet): Promise<{ robots: { status: number | null; txt: string | null }; llms: number | null }> {
-  const origin = homepageOf(domain).replace(/\/$/, "");
-  const opts = { capBytes: ROBOTS_CAP_BYTES, ua: LINK_CHECK_UA, timeoutMs: FETCH_TIMEOUT_MS };
-  const [r, l] = await Promise.all([get(`${origin}/robots.txt`, opts), get(`${origin}/llms.txt`, { ...opts, capBytes: 4096 })]);
-  return { robots: r.ok ? { status: r.status, txt: r.html } : { status: null, txt: null }, llms: l.ok ? l.status : null };
+type RobotsRead = { status: number | null; txt: string | null };
+
+/** Other hosts' robots.txt read in one weekly run, at most: key pages are at most 10, so this is every subdomain they could be on. */
+export const HOSTS_MAX = 5;
+
+const ROBOTS_OPTS = { capBytes: ROBOTS_CAP_BYTES, ua: LINK_CHECK_UA, timeoutMs: FETCH_TIMEOUT_MS };
+
+async function readRobotsAt(origin: string, get: GuardedGet): Promise<RobotsRead> {
+  const r = await get(`${origin}/robots.txt`, ROBOTS_OPTS);
+  return r.ok ? { status: r.status, txt: r.html } : { status: null, txt: null };
 }
 
-export function botRow(p: { clientId: string; now: number; robots: { status: number | null; txt: string | null }; llms: number | null; pages: readonly KeyPage[]; reads: ReadonlyMap<string, Record<string, unknown>> }): Record<string, unknown> {
-  const crawlers = crawlerAccess(p.robots, p.pages.map((k) => pathFor(k.url)));
+/** robots.txt and llms.txt on the client's own domain, read as our own fetch of the client's own site. */
+async function readRobots(domain: string, get: GuardedGet): Promise<{ robots: RobotsRead; llms: number | null }> {
+  const origin = homepageOf(domain).replace(/\/$/, "");
+  const [robots, l] = await Promise.all([readRobotsAt(origin, get), get(`${origin}/llms.txt`, { ...ROBOTS_OPTS, capBytes: 4096 })]);
+  return { robots, llms: l.ok ? l.status : null };
+}
+
+/** Each other host a key page is on (a subdomain), with the origin to read its robots.txt from, at most HOSTS_MAX. */
+export function otherHosts(pages: readonly KeyPage[], domain: string): { host: string; origin: string }[] {
+  const out = new Map<string, string>();
+  for (const k of pages) {
+    if (onMainHost(k.url, domain)) continue;
+    const host = hostOf(k.url);
+    if (!host || out.has(host)) continue;
+    try {
+      const u = new URL(k.url);
+      out.set(host, `https://${u.hostname.toLowerCase()}`);
+    } catch {
+      continue;
+    }
+  }
+  return [...out].slice(0, HOSTS_MAX).map(([host, origin]) => ({ host, origin }));
+}
+
+export function botRow(p: { clientId: string; now: number; domain: string; robots: RobotsRead; llms: number | null; hosts?: readonly { host: string; robots: RobotsRead }[]; pages: readonly KeyPage[]; reads: ReadonlyMap<string, Record<string, unknown>> }): Record<string, unknown> {
+  // Each page against its own host's file: the domain's pages here, each subdomain's below.
+  const crawlers = crawlerAccess(p.robots, p.pages.filter((k) => onMainHost(k.url, p.domain)).map((k) => pathFor(k.url)));
   const state = robotsState(p.robots);
+  const hosts = (p.hosts ?? []).map((h) => ({
+    host: h.host,
+    robots_status: h.robots.status,
+    state: robotsState(h.robots).kind,
+    crawlers: crawlerAccess(h.robots, p.pages.filter((k) => hostOf(k.url) === h.host).map((k) => pathFor(k.url))) ?? [],
+  }));
   return {
     client_domain_id: p.clientId,
     checked_at: new Date(p.now).toISOString(),
     robots_status: p.robots.status,
-    robots: { state: state.kind, crawlers: crawlers ?? [] },
+    robots: { state: state.kind, crawlers: crawlers ?? [], hosts },
     llms_txt_status: p.llms,
     pages: p.pages.map((k) => {
       const r = p.reads.get(k.id);
-      const basics = (r?.basics ?? null) as { noindex?: boolean; canonical?: string | null } | null;
-      return botPage({ urlKey: k.urlKey, httpStatus: (r?.http_status as number | null) ?? null, noindex: basics?.noindex === true, canonical: basics?.canonical ?? null, selfKey: k.urlKey, canonicalKey: basics?.canonical ? urlKey(basics.canonical) : null });
+      // What a page we could not read cannot say is null, drawn "Not read": never "No" for a page unread.
+      const read = r?.status === "ok";
+      const basics = (read ? (r?.basics ?? null) : null) as { noindex?: boolean; canonical?: string | null } | null;
+      return botPage({ urlKey: k.urlKey, httpStatus: (r?.http_status as number | null) ?? null, read, noindex: basics?.noindex === true, canonical: basics?.canonical ?? null, selfKey: k.urlKey, canonicalKey: basics?.canonical ? urlKey(basics.canonical) : null });
     }),
   };
 }
@@ -111,16 +155,22 @@ function pathFor(url: string): string {
   }
 }
 
-/** Write each verification the latest reads support, through P3's markVerified. Answers how many items were verified. */
+/**
+ * Write each verification the latest reads support, through P3's
+ * markVerified. Answers how many items were verified. The client's items are
+ * read once: an item on one key page (its ref) is verified against that page,
+ * and a crawler item that covers several key pages, which has no ref, by its
+ * dedupe key (13 Oct 2026, DIY P8 review: it was never looked at).
+ */
 export async function verifyDone(db: SupabaseClient, clientId: string, pages: readonly KeyPage[], read: { checks: readonly PageCheck[]; bots: readonly BotCheck[]; today: Day }): Promise<number> {
-  const examples = await readExamples(db, clientId);
+  const [examples, items] = await Promise.all([readExamples(db, clientId), loadPlanItems(db, clientId)]);
   let n = 0;
-  for (const page of pages) {
-    for (const item of await itemsByRef(db, clientId, "key_pages", page.id)) {
-      const v = verifyItem(item, page, { ...read, examples });
-      if (!v) continue;
-      if (await markVerified(db, item.id, { by: "system", at: v.at, text: v.text })) n++;
-    }
+  for (const item of items) {
+    if (item.status !== "done") continue;
+    const page = item.refTable === "key_pages" ? (pages.find((p) => p.id === item.refId) ?? null) : null;
+    const v = page ? verifyItem(item, page, { ...read, examples }) : item.refTable === null ? verifyClientItem(item, read) : null;
+    if (!v) continue;
+    if (await markVerified(db, item.id, { by: "system", at: v.at, text: v.text })) n++;
   }
   return n;
 }
@@ -150,7 +200,13 @@ export function keyPagesWeeklyHandler(deps: WeeklyDeps = {}): JobHandler {
         citedNote = "; cited pages not read";
       }
       const pick = pickKeyPages({ rows, candidates, domain: client.domain });
-      for (const a of pick.add) await insertKeyPage(db, client.id, { ...a, by: "system", today });
+      let added = 0;
+      let refused = pick.tooLong;
+      for (const a of pick.add) {
+        const r = await insertKeyPage(db, client.id, { ...a, by: "system", today });
+        if (r === "added") added++;
+        else if (r === "refused") refused++;
+      }
       for (const c of pick.clusters) await setKeyPageClusters(db, client.id, c.id, c.clusterIds);
       const live = (await readKeyPages(db, client.id)).filter((k) => k.removedOn === null);
 
@@ -177,9 +233,10 @@ export function keyPagesWeeklyHandler(deps: WeeklyDeps = {}): JobHandler {
         if (row) await insertCheck(db, row);
       }
 
-      // 3. Crawlers.
+      // 3. Crawlers: the domain's robots.txt, and each subdomain's a key page is on.
       const robots = await readRobots(client.domain, get);
-      const bot = botRow({ clientId: client.id, now: now(), robots: robots.robots, llms: robots.llms, pages: live, reads });
+      const hosts = await Promise.all(otherHosts(live, client.domain).map(async (h) => ({ host: h.host, robots: await readRobotsAt(h.origin, get) })));
+      const bot = botRow({ clientId: client.id, now: now(), domain: client.domain, robots: robots.robots, llms: robots.llms, hosts, pages: live, reads });
       const { error } = await db.from("bot_checks").insert(bot);
       if (error) throw new Error(`could not store the crawler check: ${error.message}`);
 
@@ -190,7 +247,7 @@ export function keyPagesWeeklyHandler(deps: WeeklyDeps = {}): JobHandler {
       const read = reads.size;
       return {
         outcome: "ok",
-        note: `${read} of ${live.length} key pages read${unreadable ? `, ${unreadable} unreadable` : ""}${skipped ? `, ${skipped} left for next week (out of time)` : ""}; ${pick.add.length} added; robots.txt ${robotsState(robots.robots).kind}; ${verified} verified${citedNote}`,
+        note: `${read} of ${live.length} key pages read${unreadable ? `, ${unreadable} unreadable` : ""}${skipped ? `, ${skipped} left for next week (out of time)` : ""}; ${added} added${refused ? `, ${refused} left out (address too long)` : ""}; robots.txt ${robotsState(robots.robots).kind}${hosts.length ? ` (and ${hosts.length} ${hosts.length === 1 ? "subdomain" : "subdomains"})` : ""}; ${verified} verified${citedNote}`,
       };
     },
   };

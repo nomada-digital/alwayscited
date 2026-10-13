@@ -1,5 +1,5 @@
 {
- "_note": "DIY P8 (13 Oct 2026): Your pages' fixture, built by running the package's own parser, schema rules, fix builder and robots reader over small made-up pages of tallyroo.com (the tracking fixture's client). Illustrative. Tallyroo and every brand shown are made up. full: 10 key pages with mixed schema, one unreadable (HTTP 403), one 404, one JS-only, one Fits at #14 (U6), Googlebot blocked from /pricing and GPTBot and Google-Extended blocked; examples ready, pending (2 minutes old), stale pending (20 minutes, read as failed) and failed. dark: own reads only, no validator, no examples, no top results' structure. day0: nothing read yet. Every other state reads full.",
+ "_note": "DIY P8 (13 Oct 2026): Your pages' fixture, built by running the package's own parser, schema rules, fix builder and robots reader over small made-up pages of tallyroo.com (the tracking fixture's client). Illustrative. Tallyroo and every brand shown are made up. full: 10 key pages with mixed schema, one unreadable (HTTP 403), one 404, one JS-only, one Fits at #14 (U6), Googlebot blocked from /pricing and GPTBot and Google-Extended blocked; examples ready, pending (2 minutes old), stale pending (20 minutes, read as failed) and failed. dark: own reads only, no validator, no examples, no top results' structure. day0: nothing read yet. Every other state reads full. Revised 13 Oct 2026 (P8 review): /small-business shows its $29 just under its H1, so it reads as a product page; /cloud carries its opening paragraph in its own read (the Now column), and no example keeps the page text; a key page that was not read says Not read for noindex and canonical. payroll and accounting software (c10) ranks with /blog/payroll-guide, the page a member removed: the homepage serves c10 and reads it as Another page ranks, never Fits.",
  "full": {
   "keyPages": [
    {
@@ -1077,7 +1077,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -1169,7 +1170,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -1261,7 +1263,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -1353,7 +1356,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -2857,7 +2861,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -2939,7 +2944,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -3021,7 +3027,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -3103,7 +3110,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -3672,7 +3680,8 @@
        "line": null,
        "blocked": []
       }
-     ]
+     ],
+     "hosts": []
     },
     "llms_txt_status": 404,
     "pages": [
@@ -3703,8 +3712,8 @@
      {
       "urlKey": "tallyroo.com/expenses",
       "status": 404,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/freelancers",
@@ -3727,8 +3736,8 @@
      {
       "urlKey": "tallyroo.com/contractors",
       "status": 403,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/compare/ledgerline",
@@ -3812,7 +3821,8 @@
        "line": null,
        "blocked": []
       }
-     ]
+     ],
+     "hosts": []
     },
     "llms_txt_status": 404,
     "pages": [
@@ -3843,8 +3853,8 @@
      {
       "urlKey": "tallyroo.com/expenses",
       "status": 404,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/freelancers",
@@ -3867,8 +3877,8 @@
      {
       "urlKey": "tallyroo.com/contractors",
       "status": 403,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/compare/ledgerline",
@@ -3894,8 +3904,7 @@
      "keyword": "cloud accounting software",
      "now": {
       "title": "Cloud accounting software | Tallyroo",
-      "h1": "Cloud accounting software",
-      "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
+      "h1": "Cloud accounting software"
      }
     },
     "example": {
@@ -7292,6 +7301,152 @@
      ]
     ],
     "topOn": "2026-09-29"
+   },
+   "k10": {
+    "readings": [
+     [
+      "2026-09-02",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-03",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-04",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-05",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-06",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-07",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-08",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-09",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-10",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-11",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-12",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-13",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-14",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-15",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-16",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-17",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-18",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-19",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-20",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-21",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-22",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-23",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-24",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-25",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-26",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-27",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-28",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-29",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ]
+    ],
+    "top": [],
+    "topOn": "2026-09-29"
    }
   },
   "jobs": [
@@ -8335,7 +8490,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -8427,7 +8583,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -8519,7 +8676,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -8611,7 +8769,8 @@
       "hours": false,
       "priceText": "$29",
       "addressText": null,
-      "phoneText": null
+      "phoneText": null,
+      "priceNearH1": true
      },
      "internal": [
       "tallyroo.com",
@@ -9959,7 +10118,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -10041,7 +10201,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -10123,7 +10284,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -10205,7 +10367,8 @@
       "tallyroo.com/bookkeeping",
       "tallyroo.com/expenses",
       "tallyroo.com/compare/ledgerline"
-     ]
+     ],
+     "opening": "Tallyroo keeps your books tidy every month with invoices, expenses and reports in one place for the cloud."
     },
     "fix": [],
     "schema_found": {
@@ -10683,7 +10846,8 @@
        "line": null,
        "blocked": []
       }
-     ]
+     ],
+     "hosts": []
     },
     "llms_txt_status": 404,
     "pages": [
@@ -10714,8 +10878,8 @@
      {
       "urlKey": "tallyroo.com/expenses",
       "status": 404,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/freelancers",
@@ -10738,8 +10902,8 @@
      {
       "urlKey": "tallyroo.com/contractors",
       "status": 403,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/compare/ledgerline",
@@ -10823,7 +10987,8 @@
        "line": null,
        "blocked": []
       }
-     ]
+     ],
+     "hosts": []
     },
     "llms_txt_status": 404,
     "pages": [
@@ -10854,8 +11019,8 @@
      {
       "urlKey": "tallyroo.com/expenses",
       "status": 404,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/freelancers",
@@ -10878,8 +11043,8 @@
      {
       "urlKey": "tallyroo.com/contractors",
       "status": 403,
-      "noindex": false,
-      "canonicalElsewhere": false
+      "noindex": null,
+      "canonicalElsewhere": null
      },
      {
       "urlKey": "tallyroo.com/compare/ledgerline",
@@ -13524,6 +13689,152 @@
       "https://result-20.example/k9"
      ]
     ],
+    "topOn": "2026-09-29"
+   },
+   "k10": {
+    "readings": [
+     [
+      "2026-09-02",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-03",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-04",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-05",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-06",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-07",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-08",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-09",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-10",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-11",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-12",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-13",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-14",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-15",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-16",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-17",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-18",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-19",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-20",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-21",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-22",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-23",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-24",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-25",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-26",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-27",
+      15,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-28",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ],
+     [
+      "2026-09-29",
+      14,
+      "https://tallyroo.com/blog/payroll-guide"
+     ]
+    ],
+    "top": [],
     "topOn": "2026-09-29"
    }
   },

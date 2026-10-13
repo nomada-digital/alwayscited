@@ -7,7 +7,7 @@ import { jobOutcomeFor } from "../core/caps.ts";
 import type { DeepPage, ReadResult } from "../core/doors.ts";
 import type { JobContext, JobHandler, JobResult, ReadCtx } from "../core/jobs.ts";
 import { deepRow, insertCheck } from "./check.ts";
-import { MONTHLY_KIND, topResults } from "./data.ts";
+import { MONTHLY_KIND, readPlacedElsewhere, topResults } from "./data.ts";
 import { type Candidate as PageCandidate, insertKeyPage, isOwnUrl, pickKeyPages, readKeyPages } from "./key-pages.ts";
 
 /**
@@ -113,8 +113,8 @@ export function keyPagesMonthlyHandler(deps: MonthlyDeps = {}): JobHandler {
       const now = deps.now ?? Date.now;
       const { db, client, today } = ctx;
       const trigger = ctx.onboarding ? "onboarding" : "scheduled";
-      const done = { relevant: 0, deep: 0, top: 0, failed: 0 };
-      const note = () => `${done.deep} key pages read with JavaScript, ${done.top} top results read${done.relevant ? `, ${done.relevant} pages added from traffic` : ""}${done.failed ? `, ${done.failed} reads failed` : ""}`;
+      const done = { relevant: 0, deep: 0, top: 0, failed: 0, refused: 0 };
+      const note = () => `${done.deep} key pages read with JavaScript, ${done.top} top results read${done.relevant ? `, ${done.relevant} pages added from traffic` : ""}${done.refused ? `, ${done.refused} pages left out (address too long)` : ""}${done.failed ? `, ${done.failed} reads failed` : ""}`;
       try {
         // 1. Relevant pages fill the key pages.
         const rows = await readKeyPages(db, client.id);
@@ -124,7 +124,12 @@ export function keyPagesMonthlyHandler(deps: MonthlyDeps = {}): JobHandler {
           if (rel.kind === "read") {
             const candidates: PageCandidate[] = [...rel.value].sort((a, b) => (b.etv ?? 0) - (a.etv ?? 0)).map((r) => ({ url: r.url, origin: "relevant", clusterIds: [] }));
             const pick = pickKeyPages({ rows, candidates, domain: client.domain });
-            for (const a of pick.add) if (await insertKeyPage(db, client.id, { ...a, by: "system", today })) done.relevant++;
+            done.refused += pick.tooLong;
+            for (const a of pick.add) {
+              const put = await insertKeyPage(db, client.id, { ...a, by: "system", today });
+              if (put === "added") done.relevant++;
+              else if (put === "refused") done.refused++;
+            }
           } else done.failed++;
         }
         // 2. Each key page with JavaScript and the validator.
@@ -140,9 +145,11 @@ export function keyPagesMonthlyHandler(deps: MonthlyDeps = {}): JobHandler {
           }
         }
         // 3. The top 3 for each cluster keyword, structure only.
+        // A page where Nomada has placed another client is never read for a client, listed or counted (spec 10 section 2.3).
+        const placed = await readPlacedElsewhere(db, client.id);
         for (const k of await liveKeywords(db, client.id)) {
-          // The top 3 other than the client's own pages: it is read against them.
-          const top = (await latestTop(db, client.id, k.keywordId, today)).filter((t) => !isOwnUrl(t.url, client.domain)).slice(0, TOP_READ);
+          // The top 3 other than the client's own pages and other clients' placements: it is read against them.
+          const top = (await latestTop(db, client.id, k.keywordId, today)).filter((t) => !isOwnUrl(t.url, client.domain) && !placed.has(urlKey(t.url) ?? "")).slice(0, TOP_READ);
           for (const t of top) {
             const r = await live.parse(read, t.url);
             stopOn(r);
