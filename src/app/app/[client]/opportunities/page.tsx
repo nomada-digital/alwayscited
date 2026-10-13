@@ -15,7 +15,7 @@ import { citedEmpty, headerCounts, headerLine, listRow, listed, pursuing, pursui
 import { type OppKeep } from "@/lib/diy/opportunities/paths";
 import { ENDED_REASON, VIEWER_REASON, oppToast, pursuitCap } from "@/lib/diy/opportunities/status";
 import { ACTIVE, TAB_LENSES, type TabLens } from "@/lib/diy/opportunities/types";
-import { linkCheckWords, loadCitedSummary, loadOppWorld, trackingWorld } from "@/lib/diy/opportunities/world";
+import { citedWorld, linkCheckWords, loadCitedSummary, loadOppWorld } from "@/lib/diy/opportunities/world";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 import { ENGINE_SPECS } from "@/lib/scan/engines";
 import { clusterSearch } from "@/lib/tracking/cluster-figures";
@@ -83,8 +83,11 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   const lens = pickLens(one("lens"));
   // 13 Oct 2026 (dashboard speed work): on the cited tab, the answers its empty state is summarised from are read with
   // the first reads, on the same structure read, rather than after them; used only when the tab turns out empty.
+  // Review, same day: that is the default tab, so once the refresh job fills the table the read is thrown away on most
+  // views - 28 days of answers. Kept, since while the tab is empty it saves a round trip after the others, and cut to
+  // their citations (world.ts citedWorld): the brands are no part of the summary.
   const structureP = repo.structure(client.id);
-  const citedP = lens === "cited" ? trackingWorld(repo, client, structureP) : undefined;
+  const citedP = lens === "cited" ? citedWorld(repo, client, structureP) : undefined;
   citedP?.catch(() => {});
   const [structure, upgrade, world, origins] = await Promise.all([structureP, repo.upgradeContext(client.id, email, today), section("opportunities", () => loadOppWorld(repo, client)), loadPromptOrigins(client.id)]);
   const view = pickView(one("view"));
@@ -112,7 +115,7 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   const shown = all.slice((Math.min(page, pages) - 1) * PER_PAGE, Math.min(page, pages) * PER_PAGE);
   const usedClusters = new Set(listed(rows, lens).map((o) => o.clusterId).filter((c): c is string => c !== null));
   // The cited tab's empty states (section 4.7), said only as far as the reads show (payload.ts citedEmpty). The
-  // summary needs the window's answers, so it is read only when the tab is empty.
+  // summary needs the window's answers, so it is drawn only when the tab is empty, from the read begun above.
   let empty: string | null = null;
   if (world.ok && lens === "cited" && !listed(rows, "cited").length) {
     const cited = await section("cited pages", () => loadCitedSummary(repo, client, world.value, citedP));

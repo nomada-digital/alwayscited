@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { addDays } from "../../tracking/figures.ts";
+import { ANSWER_SELECT, answerRow, selectColumns } from "../../tracking/read-shape.ts";
 
 import { citedFacts } from "./cited.ts";
-import { type DeriveAnswer, type DeriveInput, COMPETITOR_MIN, competitorBrands, derive, excludeNomadaPlacements, firstCitedAfter, isCompetitorDomain, withoutPlaced } from "./derive.ts";
+import { type DeriveAnswer, type DeriveInput, COMPETITOR_MIN, citedSummary, competitorBrands, derive, excludeNomadaPlacements, firstCitedAfter, isCompetitorDomain, withoutPlaced } from "./derive.ts";
 import { compareOrder, orderKey } from "./order.ts";
 import { headerCounts, listRow, tabCounts } from "./payload.ts";
 import { opportunityOf } from "./status.ts";
@@ -306,4 +308,31 @@ test("a cited URL that is not a web address is never kept as one", async () => {
   assert.equal(citationKey({ source_domain: "lists.example", url: "javascript:alert(1)" })?.url, "https://lists.example/");
   assert.equal(citationKey({ source_domain: "lists.example", url: "https://lists.example/best" })?.url, "https://lists.example/best");
   assert.equal(citationKey({ source_domain: "", url: "https://lists.example/best" })?.host, "lists.example", "a URL alone gives its host");
+});
+
+/**
+ * The cited tab's empty state on its narrow read (13 Oct 2026, review of the dashboard speed work). The page begins
+ * that read on every view of the cited tab, the default one, and throws it away whenever the tab has rows, so it reads
+ * the answers' citations without their brands (world.ts citedWorld, read-shape.ts "cites"). Held here to summarise
+ * exactly what the whole read does - an unread brand answer, the client's own page and an engine's property among
+ * them - and the read held to that shape, as read-shape.test.mts holds the dashboard's narrow reads.
+ */
+test("the cited tab's empty-state summary is the same on its citations-only read as on the whole read", () => {
+  const whole = answers([
+    { url: "https://lists.example/best-invoicing-apps", named: 3 },
+    { url: "https://forum.example/thread/1", prompts: ["q1", "q3"], brands: ["Brightly"] },
+    { url: "https://tallyroo.com/pricing", prompts: ["q3"] },
+    { url: "https://perplexity.ai/page/best-invoicing" },
+  ]).map((a, i): DeriveAnswer => (i % 7 === 0 ? { ...a, brands_ok: false } : a));
+  const narrow: DeriveAnswer[] = whole.map((a) => answerRow(selectColumns(a, ANSWER_SELECT.cites)));
+  assert.ok(whole.some((a) => a.brands.length > 0) && narrow.every((a) => a.brands.length === 0 && a.brands_ok === undefined), "the narrow read kept a brand");
+  const reads = new Map([["lists.example/best-invoicing-apps", read("lists.example/best-invoicing-apps", { namesClient: true })]]);
+  const at = { questions: input([]).questions, today: TODAY, domain: "tallyroo.com", engines: ENGINES };
+  const summary = citedSummary({ ...at, answers: whole }, reads);
+  assert.deepEqual(summary, { pages: 2, readNamingYou: 1, own: 1 }, "the whole read's summary is not the one this test was written for, so it compares less than it says");
+  assert.deepEqual(citedSummary({ ...at, answers: narrow }, reads), summary);
+  const world = readFileSync(new URL("./world.ts", import.meta.url), "utf8");
+  assert.match(world, /return trackingWorld\(repo, client, \{ structure, answers: "cites" \}\);/, "citedWorld no longer reads the narrow shape");
+  assert.match(world, /answers: opts\.answers \?\? "full"/, "the derivation's read is no longer whole by default");
+  assert.match(readFileSync(new URL("../../../app/app/[client]/opportunities/page.tsx", import.meta.url), "utf8"), /lens === "cited" \? citedWorld\(repo, client, structureP\)/);
 });

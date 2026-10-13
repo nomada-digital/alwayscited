@@ -43,15 +43,22 @@ export async function fixtureState(): Promise<OppFixtureState | null> {
 /**
  * The tracking fixture as the derivation reads it: 28 days of answers to its today, its structure, the client's domain.
  * `structure` (13 Oct 2026, dashboard speed work): the page's own structure read, when it has one in flight, so it is
- * not read a second time.
+ * not read a second time. `answers` (13 Oct 2026, review of the dashboard speed work): "cites" leaves out the brands
+ * (read-shape.ts), for a reader that counts no brand - citedSummary's pages, reads and own pages; the derivation
+ * names competitors from them, so it reads "full", the default.
  */
-export async function trackingWorld(repo: TrackingRepo, client: Client, structure?: PromiseLike<Structure>) {
+async function trackingWorld(repo: TrackingRepo, client: Client, opts: { structure?: PromiseLike<Structure>; answers?: "full" | "cites" } = {}) {
   const today = repo.today();
-  const [s, data] = await Promise.all([structure ?? repo.structure(client.id), repo.loadOverview(client.id, { from: addDays(today, -27), to: today }, "none", { answers: "full" })]);
+  const [s, data] = await Promise.all([opts.structure ?? repo.structure(client.id), repo.loadOverview(client.id, { from: addDays(today, -27), to: today }, "none", { answers: opts.answers ?? "full" })]);
   return { today, engines: ENGINE_ORDER, answers: data.answers, questions: s.questions, clusters: s.clusters, keywords: s.keywords, domain: client.domain };
 }
 
 export type TrackingWorld = Awaited<ReturnType<typeof trackingWorld>>;
+
+/** The world the cited tab's empty state is summarised from: the answers' citations, no brands (loadCitedSummary). */
+export function citedWorld(repo: TrackingRepo, client: Client, structure?: PromiseLike<Structure>): Promise<TrackingWorld> {
+  return trackingWorld(repo, client, { structure, answers: "cites" });
+}
 
 /** Everything the pages draw, and whether DIY is switched on. A failed read throws: the caller's section says so. */
 export async function loadOppWorld(repo: TrackingRepo, client: Client): Promise<OppWorld & { enabled: boolean; entry: OppFixtureState | null }> {
@@ -69,17 +76,19 @@ export async function loadOppWorld(repo: TrackingRepo, client: Client): Promise<
 /**
  * What the cited pages in the window say about naming the client, for the
  * cited tab's empty state: the fixture's from its world, Supabase's from the
- * last 28 days of answers. Read only when that tab is empty, so the list's
- * usual load reads no answers. A failed read throws: the caller's section
- * then shows the plain line, never a claim.
+ * last 28 days of answers, their citations without their brands (citedSummary
+ * counts none). Used only when that tab is empty. A failed read throws: the
+ * caller's section then shows the plain line, never a claim.
  *
  * `started` (13 Oct 2026, dashboard speed work): the answers read, when the
- * page began it with its first reads because the cited tab was asked for -
- * one round trip beside the rest instead of one after them.
+ * page began it with its first reads because it was on the cited tab - one
+ * round trip beside the rest instead of one after them, and a read thrown
+ * away whenever the tab has rows (opportunities/page.tsx says why it is
+ * kept).
  */
 export async function loadCitedSummary(repo: TrackingRepo, client: Client, world: OppWorld, started?: Promise<TrackingWorld>): Promise<CitedSummary> {
   if (world.cited) return world.cited;
-  const t = await (started ?? trackingWorld(repo, client));
+  const t = await (started ?? citedWorld(repo, client));
   return citedSummary({ answers: t.answers, questions: t.questions, today: t.today, domain: t.domain, engines: t.engines }, world.reads);
 }
 
