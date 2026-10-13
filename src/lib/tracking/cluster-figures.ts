@@ -74,6 +74,8 @@ export type ClusterCard = {
   position: number | null;
   /** The keyword had a Google reading in the range - so a null position is "outside the top 20", not "not read". */
   positionRead: boolean;
+  /** The day of that latest reading, null when it was not read in the range (13 Oct 2026: the slot's sentence dates it). */
+  positionOn: Day | null;
   positionBefore: number | null;
   /** Places gained: #7 to #4 is +3. */
   positionChange: number | null;
@@ -375,6 +377,7 @@ export function clusterCards(input: ClusterInput): ClusterCard[] {
         promptsNamed: rate(byPrompt.size, prompts.filter((q) => q.added_on <= range.to).length),
         position,
         positionRead: reading.at !== null,
+        positionOn: reading.at,
         positionBefore,
         positionChange: position !== null && positionBefore !== null ? positionBefore - position : null,
         positionEvent,

@@ -30,6 +30,8 @@ import { neverNamedFacts, offPageOneFacts } from "@/lib/tracking/upgrade-facts";
 import { type Facts, type PromptCta, pickPrompt, promptCopy, rowFor } from "@/lib/tracking/upgrade-prompts";
 
 import { Chip, PositionChip, noChange } from "./Overview";
+import PositionValue, { POSITION_WORDS, WhoRanks } from "./PositionValue";
+import { type PositionSlot, positionSlot } from "@/lib/tracking/position-slot";
 import UpgradePrompt from "./UpgradePrompt";
 import { ClearSearch } from "./ClearLinks";
 import { appPath, siteHref } from "@/lib/app-host";
@@ -83,6 +85,7 @@ const GRID = "28px minmax(0, 1fr) 168px 132px 132px";
 export default function Clusters({
   brand,
   market,
+  whoRanks,
   engines,
   today,
   range,
@@ -132,8 +135,10 @@ export default function Clusters({
   origins?: ReadonlyMap<string, PromptOrigin>;
   /** R133: the client's brand and domain, so a prompt that names them carries the "Names the brand" chip. */
   subject?: Subject | null;
-  /** client_domains.market: the check times are said in its zone (check-time.ts, 9 Oct 2026). */
+  /** client_domains.market: the check times are said in its zone (check-time.ts, 9 Oct 2026), and each Google slot names it (position-slot.ts). */
   market: string;
+  /** 13 Oct 2026 (Danny): the keywords whose page 1 the Google page has stored (keywords/data.ts loadWhoRanks), for "See who ranks". */
+  whoRanks?: ReadonlySet<string>;
   engines: readonly Engine[];
   today: string;
   range: Range;
@@ -334,7 +339,7 @@ export default function Clusters({
           <span style={{ ...HEAD, textAlign: "right" }}>{since ? `Position, vs ${since}` : "Position"}</span>
         </div>
         {shown.map((c) => (
-          <ClusterRow key={c.id} c={c} origins={origins} mode={mode} slug={slug} brand={brand} subject={subject} open={c.id === openId} toggle={href({ open: c.id === openId ? "" : c.id })} since={since} act={act} refill={toast?.done === "stopped" && toast.kind === "prompt" ? toast.id : null} rekey={rekey?.card === c.id ? rekey : null} redraft={redraft === c.id} rekeyed={toast?.done === "rekeyed" && toast.id === c.id} typed={prefill === c.id ? typed : null} next={next} openHref={appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(c.id)}?${new URLSearchParams(base)}`)} vs={vs} firstAsk={firstAsk} />
+          <ClusterRow key={c.id} c={c} slot={positionSlot(c, market, range)} whoRanks={c.keywordId && c.positionRead && whoRanks?.has(c.keywordId) ? appPath(`/${encodeURIComponent(slug)}/google?${new URLSearchParams({ ...base, row: c.keywordId })}#kw-h`) : null} origins={origins} mode={mode} slug={slug} brand={brand} subject={subject} open={c.id === openId} toggle={href({ open: c.id === openId ? "" : c.id })} since={since} act={act} refill={toast?.done === "stopped" && toast.kind === "prompt" ? toast.id : null} rekey={rekey?.card === c.id ? rekey : null} redraft={redraft === c.id} rekeyed={toast?.done === "rekeyed" && toast.id === c.id} typed={prefill === c.id ? typed : null} next={next} openHref={appPath(`/${encodeURIComponent(slug)}/clusters/${encodeURIComponent(c.id)}?${new URLSearchParams(base)}`)} vs={vs} firstAsk={firstAsk} />
         ))}
         {shown.length === 0 ? (
           <div style={{ padding: "32px 24px", borderTop: `1px solid ${T.line}`, fontSize: "14px", color: T.soft }}>
@@ -979,6 +984,8 @@ function FromPlacements({ prompts, origins, mode, slug, brand, pending, next, si
  */
 function ClusterRow({
   c: card,
+  slot,
+  whoRanks,
   origins,
   mode,
   slug,
@@ -999,6 +1006,10 @@ function ClusterRow({
   firstAsk,
 }: {
   c: ClusterCard;
+  /** 13 Oct 2026 (Danny): the Google slot in words (position-slot.ts), never a bare "-". */
+  slot: PositionSlot;
+  /** "See who ranks" on the Google page, or null where it has no page 1 stored for this keyword. */
+  whoRanks: string | null;
   /** DIY P2: each prompt's origin; placement prompts are drawn under the angle slots, not in them. */
   origins: ReadonlyMap<string, PromptOrigin>;
   mode: UpsellMode;
@@ -1081,8 +1092,9 @@ function ClusterRow({
         </span>
         <span className="app-hide-sm" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
           <span style={{ fontSize: "12px", color: T.soft }}>Google</span>
-          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "17px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{c.position === null ? "-" : `#${c.position}`}</span>
+          {/* 13 Oct 2026: the words on their own line when they and the chip do not fit the 132px column together. */}
+          <span style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: "4px 8px" }}>
+            <PositionValue slot={slot} big={{ fontSize: "17px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }} words={{ ...POSITION_WORDS, color: T.ink, whiteSpace: "nowrap" }} />
             <PositionChip c={c} vs={vs} />
           </span>
         </span>
@@ -1177,9 +1189,10 @@ function ClusterRow({
               <span style={{ fontSize: "12px", fontWeight: 600, color: T.soft }}>Google keyword</span>
               <span style={{ fontSize: "16px", fontWeight: 700, lineHeight: 1.3 }}>{c.keyword ?? "Needs a keyword"}</span>
               <span style={{ display: "flex", alignItems: "baseline", gap: "10px" }}>
-                <span style={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}>{c.position === null ? "-" : `#${c.position}`}</span>
+                <PositionValue slot={slot} big={{ fontSize: "36px", fontWeight: 700, letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }} words={{ fontSize: "18px", fontWeight: 700, lineHeight: 1.25, letterSpacing: "-0.01em", color: T.ink }} />
                 <PositionChip c={c} vs={vs} />
               </span>
+              {whoRanks && c.keyword ? <WhoRanks href={whoRanks} keyword={c.keyword} /> : null}
               <span style={{ fontSize: "13px", color: T.soft }}>
                 {/* R148 pass 9 (1 Oct 2026): a signup whose scan chose no keyword left "-" with no next step; nomada picks it (signup.ts order email). */}
                 {/* ON-1 (9 Oct 2026): "We add its Google keyword for you" promised a person. */}
@@ -1205,7 +1218,7 @@ function ClusterRow({
               {!pending && subject ? (
                 <span style={{ display: "flex", flexDirection: "column", gap: "2px", borderTop: `1px solid ${T.line}` }}>
                   <span style={{ fontSize: "12px", color: T.soft, paddingTop: "10px" }}>Your ranking page</span>
-                  <span style={{ fontSize: "13px", fontWeight: 500 }}>{c.keyword === null ? "Once its keyword is added" : c.position === null ? "None in the top 20" : subject.domain}</span>
+                  <span style={{ fontSize: "13px", fontWeight: 500 }}>{c.keyword === null ? "Once its keyword is added" : c.position !== null ? subject.domain : slot.kind === "out" ? "None in the top 20" : slot.short}</span>
                 </span>
               ) : null}
             </div>

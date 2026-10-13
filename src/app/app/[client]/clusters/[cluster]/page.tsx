@@ -19,6 +19,7 @@ import { writeRole } from "@/lib/tracking/member";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { appPath } from "@/lib/app-host";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
+import { loadWhoRanks } from "@/lib/diy/keywords/data";
 
 export const dynamic = "force-dynamic";
 
@@ -66,11 +67,13 @@ export default async function ClientCluster({
   // URL: the client is the session's member client above, the prompt one of this cluster's own (read-shape.ts dayPlan).
   const day = pickedDay(sp.day, today);
   // 13 Oct 2026, DIY P2: each prompt's origin, and the account's mode for the chips' words (loadOverview reads no origin column).
-  const [latest, notes, upgrade, origins] = await Promise.all([
+  // 13 Oct 2026 (Danny): whether the Google page has this keyword's page 1 stored, for the slot's "See who ranks".
+  const [latest, notes, upgrade, origins, whoRanks] = await Promise.all([
     picked && detail.card.status !== "pending" ? repo.answerDay(client.id, dayPlan(picked.id, range.to, day)) : null,
     repo.clusterNotes(client.id, detail.card.prompts.map((p) => p.id)),
     repo.upgradeContext(client.id, email, today),
     loadPromptOrigins(client.id),
+    loadWhoRanks(client.id, range.to, data.serp),
   ]);
 
   return (
@@ -103,6 +106,7 @@ export default async function ClientCluster({
           mode={upgrade.mode}
           slug={slug}
           placementsPath={appPath(`/${slug}/placements`)}
+          whoRanks={whoRanks}
         />
       </div>
     </div>

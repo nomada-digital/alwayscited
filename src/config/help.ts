@@ -309,6 +309,13 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           blocks: [
             `Each cluster keyword is checked in Google's organic results for your market, down to position ${SERP_DEPTH}. The position is where your site's best-ranking page sits, and the dashboard shows which page that is.`,
             `Outside the top ${SERP_DEPTH} is a reading, not a gap: the Keywords CSV leaves the position blank, and an average position counts it as #${UNRANKED_AS}, so dropping out makes the average worse rather than better.`,
+            // 13 Oct 2026 (Danny: a keyword we read outside the top 20 showed 3rd in a signed-in browser). The
+            // request, read in dataforseo-request.ts keywordRankRequest that day: Google organic results, location_code
+            // by the client's market, desktop, depth SERP_DEPTH, and nothing else - no account, cookie or history.
+            // Google's side is Google's own page, "Why your Google Search results differ from others"
+            // (support.google.com/websearch/answer/12412910, no updated date shown, read 13 Oct 2026): personalisation
+            // from account activity applies to signed-in users with it turned on; location and device change results too.
+            "Each reading is a Google search for your market, the UK or the US, made on desktop with no Google account or search history behind it, so it is not personalised. A search you make yourself can show you in a different place: Google says a signed-in person's results can be personalised from their own activity, and that location and device change results too.",
           ],
         },
       ],

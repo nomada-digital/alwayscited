@@ -23,6 +23,7 @@ const card = (id: string, over: Partial<ClusterCard>): ClusterCard => ({
   promptsNamed: r(0, 0),
   position: null,
   positionRead: true,
+  positionOn: "2026-09-30",
   positionBefore: null,
   positionChange: null,
   positionEvent: null,

@@ -27,6 +27,7 @@ import {
   sparkPoints,
 } from "@/lib/tracking/figures";
 import { type ClusterCard, clusterChart, keyFigureChanges, pendingBasis } from "@/lib/tracking/cluster-figures";
+import { type PositionSlot, positionSlot } from "@/lib/tracking/position-slot";
 import { NO_PROMPT_NO_CHECK, checkTime, clockIn } from "@/lib/tracking/check-time";
 import { rangeLabel } from "@/lib/tracking/date-range";
 import { whoIsNamedCard } from "@/lib/tracking/named-figures";
@@ -41,6 +42,7 @@ import { addedFromWork } from "@/lib/diy/ai/prompt-table";
 
 import { type WorkMark, marksFor } from "@/lib/diy/shell/work";
 import ClusterChart from "./ClusterChart";
+import PositionValue, { POSITION_WORDS, WhoRanks } from "./PositionValue";
 import SinceLastCheck from "./SinceLastCheck";
 import DatePicker from "./DatePicker";
 import Fig from "./Fig";
@@ -168,7 +170,13 @@ export default function Overview({
   watched,
   leavesOut,
   dayZero = null,
+  whoRanks,
 }: {
+  /**
+   * 13 Oct 2026 (Danny): the cluster keywords whose page 1 the Google page can open (keywords/data.ts loadWhoRanks);
+   * each card's Google slot links "See who ranks" for these. None links none (/app/parity).
+   */
+  whoRanks?: ReadonlySet<string>;
   /**
    * 13 Oct 2026, DIY P9 (spec 10 section 6.8 line 8): pursued pages and placements whose first citation is known, for
    * Since last check's "first cited" line. None writes no such line.
@@ -269,7 +277,7 @@ export default function Overview({
     ? ""
     : picked.status === "pending"
       ? `First check tomorrow at ${next}.`
-      : `${pct(picked.now)} named, ${picked.position === null ? (picked.keyword ? "no Google position" : "no keyword yet") : `#${picked.position} on Google`}.` +
+      : `${pct(picked.now)} named, ${picked.position === null ? (picked.keyword ? `on Google: ${lowerFirst(positionSlot(picked, market, range).short)}` : "no keyword yet") : `#${picked.position} on Google`}.` +
         (pickedHasPrev && chartBefore ? ` Dashed: ${span(chartBefore)}` : ` Tracked from ${formatDay(picked.started_on)}.`);
   const heatRows = cards ? cards.filter((c) => c.status !== "pending") : [];
   const pendingKeywords = cards ? cards.filter((c) => c.status === "pending" && c.keyword).length : 0;
@@ -446,6 +454,10 @@ export default function Overview({
   const { said, bullets, diff } = overviewStory(basis, { data, range, today, engines, brand, domain, startedOn, recent, ...(watched ? { watched } : {}) });
   // 13 Oct 2026, DIY P9 (spec 10 section 4.1 rows 3b and 5): a keyword opens its row on Google, "who holds page 1".
   const keywordHref = (id: string): string | null => (clientPath ? `${clientPath}/google?${new URLSearchParams({ ...rangeQuery, row: id })}#kw-h` : null);
+  // 13 Oct 2026 (Danny): each cluster's Google slot in words (position-slot.ts), and "See who ranks" where the Google
+  // page has that keyword's page 1 stored to show: a keyword read in this range, with a top 20 in loadWhoRanks's window.
+  const slotOf = (c: ClusterCard) => positionSlot(c, market, range);
+  const whoRanksHref = (c: ClusterCard): string | null => (c.keywordId && c.positionRead && whoRanks?.has(c.keywordId) ? keywordHref(c.keywordId) : null);
   const bulletHref = (b: Bullet): string | null =>
     !b.link || !clientPath
       ? null
@@ -511,7 +523,8 @@ export default function Overview({
   const gapNote = [brandGapNote(gaps), sovGapNote(gaps, brandGaps(data.answers, range))].filter(Boolean).join(" ") || null;
   const top = board.slice(0, 5);
   const rest = board.slice(5);
-  const kwRows = keywordRows(data.serp, { from: addDays(range.to, -27) < range.from ? range.from : addDays(range.to, -27), to: range.to });
+  const kwWindow = { from: addDays(range.to, -27) < range.from ? range.from : addDays(range.to, -27), to: range.to };
+  const kwRows = keywordRows(data.serp, kwWindow);
   const pages = citedPages(data.answers, range, domain);
 
   // The lower cards; the cluster layout keeps two of them (boards-3/Main.dc.html).
@@ -667,7 +680,8 @@ export default function Overview({
                       <td style={{ ...TD, padding: "12px 8px", textAlign: "right", fontSize: "15px", fontWeight: 700, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
                         {/* R151 (3 Oct 2026): held to one line, this pushed the Places column 89px off the 390 card,
                             so it wraps on the phone (.app-kw-note); wrapping everywhere broke it into four lines at 1440. */}
-                        {k.added_on > today ? <span className="app-kw-note" style={{ display: "inline-block", fontWeight: 400, fontSize: "13px", lineHeight: 1.35, color: T.soft }}>{`First check tomorrow at ${next}`}</span> : row?.position ? `#${row.position}` : <span style={{ fontWeight: 400, fontSize: "13px", color: T.soft }}>Not in top 20</span>}
+                        {/* 13 Oct 2026 (Danny): read and outside the top 20 says so with its market; a keyword with no reading in the window says that instead (position-slot.ts). */}
+                        {k.added_on > today ? <span className="app-kw-note" style={{ display: "inline-block", fontWeight: 400, fontSize: "13px", lineHeight: 1.35, color: T.soft }}>{`First check tomorrow at ${next}`}</span> : row?.position ? `#${row.position}` : <PositionValue slot={positionSlot({ keyword: k.keyword, position: null, positionRead: !!row, positionOn: null, status: "live" }, market, kwWindow)} big={{}} words={{ display: "inline-block", fontWeight: 400, fontSize: "13px", lineHeight: 1.35, color: T.soft, whiteSpace: "normal" }} />}
                       </td>
                       <td style={{ ...TD, paddingLeft: "8px", textAlign: "right" }}>{row?.change === null || row?.change === undefined ? null : <Delta value={row.change} unit="" vs={row.since ? `since ${formatDay(row.since)}` : null} />}</td>
                     </tr>
@@ -1018,8 +1032,8 @@ export default function Overview({
         </p>
       ) : null}
 
-      {cards ? <ClusterCards cards={cards} engines={engines} picked={picked?.id ?? null} href={clusterHref} detail={detailHref} manage={manage} next={next} vs={vs} /> : ungroupedCard}
-      {cards ? <ClusterRows cards={cards} picked={detailHref ? null : (picked?.id ?? null)} href={detailHref ?? clusterHref} opens={!!detailHref} manage={manage} next={next} vs={vs} /> : null}
+      {cards ? <ClusterCards cards={cards} engines={engines} picked={picked?.id ?? null} href={clusterHref} detail={detailHref} manage={manage} next={next} vs={vs} slot={slotOf} whoRanks={whoRanksHref} /> : ungroupedCard}
+      {cards ? <ClusterRows cards={cards} picked={detailHref ? null : (picked?.id ?? null)} href={detailHref ?? clusterHref} opens={!!detailHref} manage={manage} next={next} vs={vs} slot={slotOf} /> : null}
       {/* R151 (3 Oct 2026): the headline counts read ungrouped prompts beside clusters ("1 cluster and 5 ungrouped prompts"), so they get their card too. */}
       {cards && loose ? ungroupedCard : null}
 
@@ -1226,6 +1240,7 @@ export function ClusterHeat({
 }
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** A change chip in the cards' 12px size, or the grey word when there is no change to show. */
 /** `vs` (ON-3, 9 Oct 2026): what the change is against, read out after it (VsText); a grey word with no change has nothing to say it of. */
@@ -1311,7 +1326,13 @@ function ClusterCards({
   manage,
   next,
   vs = null,
+  slot,
+  whoRanks,
 }: {
+  /** 13 Oct 2026 (Danny): the Google slot in words (position-slot.ts), never a bare "-". */
+  slot: (c: ClusterCard) => PositionSlot;
+  /** "See who ranks" for a card, or null where the Google page has no page 1 stored to show for its keyword. */
+  whoRanks: (c: ClusterCard) => string | null;
   cards: ClusterCard[];
   engines: readonly Engine[];
   picked: string | null;
@@ -1439,8 +1460,9 @@ function ClusterCards({
                 </svg>
                 <div style={{ width: "108px", flexShrink: 0, boxSizing: "border-box", padding: "10px 12px", borderRadius: "12px", border: `1px solid ${on ? T.washLine : T.line}`, background: T.bg, display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-start" }}>
                   <span style={{ fontSize: "11px", fontWeight: 600, color: T.soft }}>Google</span>
-                  <span style={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>{c.position === null ? "-" : `#${c.position}`}</span>
+                  <PositionValue slot={slot(c)} big={{ fontSize: "24px", fontWeight: 700, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }} words={{ ...POSITION_WORDS, color: T.ink }} />
                   <PositionChip c={c} vs={vs} />
+                  {detail && c.keyword && whoRanks(c) ? <WhoRanks href={whoRanks(c)!} keyword={c.keyword} className="app-over" /> : null}
                 </div>
               </div>
               {detail ? (
@@ -1484,7 +1506,7 @@ function ClusterCards({
  * picks the chart below, as the cards do. "Manage" goes to the Clusters
  * page (T6).
  */
-function ClusterRows({ cards, picked, href, opens, manage, next, vs = null }: { cards: ClusterCard[]; picked: string | null; href: (id: string) => string; opens: boolean; manage: Manage; next: string; vs?: string | null }) {
+function ClusterRows({ cards, picked, href, opens, manage, next, vs = null, slot }: { cards: ClusterCard[]; picked: string | null; href: (id: string) => string; opens: boolean; manage: Manage; next: string; vs?: string | null; slot: (c: ClusterCard) => PositionSlot }) {
   return (
     <section aria-labelledby="cl-h-sm" className="app-show-sm" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "16px", paddingTop: "14px" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 16px 10px" }}>
@@ -1516,9 +1538,10 @@ function ClusterRows({ cards, picked, href, opens, manage, next, vs = null }: { 
                 );
               })}
             </svg>
-            <span style={{ width: "44px", height: "40px", flexShrink: 0, boxSizing: "border-box", borderRadius: "10px", border: `1px solid ${pending ? T.line : T.washLine}`, background: T.surface, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+            {/* 13 Oct 2026 (Danny): no bare "-"; the words wrap in the box, which is one width on every row so the keywords line up (position-slot.ts). */}
+            <span style={{ width: "64px", minHeight: "40px", flexShrink: 0, boxSizing: "border-box", padding: "3px 5px", borderRadius: "10px", border: `1px solid ${pending ? T.line : T.washLine}`, background: T.surface, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
               <span style={{ fontSize: "9px", fontWeight: 600, color: T.soft }}>Google</span>
-              <span style={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{c.position === null ? "-" : `#${c.position}`}</span>
+              <PositionValue slot={slot(c)} big={{ fontSize: "14px", fontWeight: 700, fontVariantNumeric: "tabular-nums" }} words={{ fontSize: "11px", fontWeight: 600, lineHeight: 1.2, color: T.ink }} />
             </span>
             <span style={{ display: "flex", flexDirection: "column", gap: "3px", flexGrow: 1, minWidth: 0 }}>
               <span style={{ fontSize: "14px", fontWeight: 600, lineHeight: 1.3 }}>{c.keyword ?? c.name}</span>
