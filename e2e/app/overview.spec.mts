@@ -56,6 +56,19 @@ const WIDTHS = [1440, 1024, 390] as const;
 const MOTION = ["no-preference", "reduce"] as const;
 /** BRIEF-2 T9 budget 7: /app route JS under 180 kB gzipped. */
 const JS_BUDGET_GZ = 180 * 1024;
+/**
+ * 13 Oct 2026 (dashboard speed work): the sidebar now prefetches its pages in
+ * full (src/components/app/NavLink.tsx), and a full prefetch also fetches each
+ * target route's own client chunks, in the background after the page is up.
+ * Budget 7 measured every script loaded by network idle, so it began counting
+ * other routes' code: 201.2 kB on 13 Oct, of which the page's own was 164.4 kB.
+ * Budget 7 now measures the route with its flight requests blocked - every
+ * flight request before the first click is a prefetch - which is what it was
+ * written to hold. This second ceiling holds the whole download with the
+ * prefetches, so background code cannot grow unwatched either: 201.2 kB
+ * measured, set at 230 kB for headroom.
+ */
+const JS_WITH_PREFETCH_GZ = 230 * 1024;
 
 const fx = expandFixture(JSON.parse(readFileSync(path.join(ROOT, "src", "lib", "tracking", "fixture.json"), "utf8")));
 const range = { from: addDays(fx.today, -27), to: fx.today };
@@ -189,10 +202,21 @@ for (const width of WIDTHS) {
 }
 
 describe("budgets", () => {
-  test("7. /app route JS under 180 kB gzipped", async () => {
+  /** Every script /app loads by network idle, gzipped; with `prefetch: false`, flight requests are refused. */
+  async function appJs(prefetch: boolean): Promise<{ n: number; gz: number; refused: number }> {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await ctx.newPage();
     const scripts = new Set<string>();
+    let refused = 0;
+    if (!prefetch) {
+      await page.route("**/*", (route) => {
+        if (route.request().headers()["rsc"]) {
+          refused++;
+          return route.abort();
+        }
+        return route.continue();
+      });
+    }
     page.on("response", (r) => {
       if (r.request().resourceType() === "script") scripts.add(r.url());
     });
@@ -200,8 +224,20 @@ describe("budgets", () => {
     let gz = 0;
     for (const url of scripts) gz += gzipSync(Buffer.from(await (await fetch(url)).arrayBuffer())).length;
     await ctx.close();
-    console.log(`# /app JS: ${scripts.size} scripts, ${(gz / 1024).toFixed(1)} kB gzipped (budget 180 kB)`);
+    return { n: scripts.size, gz, refused };
+  }
+
+  test("7. /app route JS under 180 kB gzipped", async () => {
+    const { n, gz, refused } = await appJs(false);
+    console.log(`# /app JS: ${n} scripts, ${(gz / 1024).toFixed(1)} kB gzipped (budget 180 kB; ${refused} prefetch requests refused)`);
+    assert.ok(refused > 0, "no prefetch was refused, so this is not measuring what the comment on JS_WITH_PREFETCH_GZ says");
     assert.ok(gz < JS_BUDGET_GZ, `${(gz / 1024).toFixed(1)} kB gzipped`);
+  });
+
+  test("7. /app JS with the sidebar's background prefetches under 230 kB gzipped", async () => {
+    const { n, gz } = await appJs(true);
+    console.log(`# /app JS with prefetches: ${n} scripts, ${(gz / 1024).toFixed(1)} kB gzipped (ceiling 230 kB)`);
+    assert.ok(gz < JS_WITH_PREFETCH_GZ, `${(gz / 1024).toFixed(1)} kB gzipped`);
   });
 
   test.todo("7. overview in 3 or fewer database round trips (the Supabase repo does not log round trips yet)");
