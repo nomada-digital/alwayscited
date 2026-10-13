@@ -150,3 +150,13 @@ test("the opportunity ask takes no free text: the route reads the kind, the ids 
   assert.match(body, /from\("opportunities"\)\.select\("id, url, url_key, title, route, evidence"\)\.eq\("client_domain_id", client\.id\)/);
   assert.match(body, /placed\.has\(r\.url_key\)/, "a page where another client was placed is never asked about");
 });
+
+test("a type the rules did not settle was written by a model, and says so", async () => {
+  const { typesLine, byModel } = await import("./payload.ts");
+  const base = { url: "https://lists.example/best-invoicing-apps", domain: "lists.example", title: null };
+  assert.equal(typesLine({ ...base, domainType: "publisher", pageType: "best_of" }), "Publisher · Best-of list · classified automatically", "the domain type is the model's");
+  assert.equal(typesLine({ ...base, url: "https://g2.com/categories/x", domain: "g2.com", domainType: "review_platform", pageType: "category" }), "Review site · Category page", "both by rule");
+  assert.equal(byModel({ ...base, url: "https://lists.example/roundup", domainType: null, pageType: "best_of" }), true);
+  assert.equal(typesLine({ domainType: null, pageType: null }), "not classified yet");
+  assert.equal(typesLine({ lens: "own", domainType: null, pageType: "best_of", url: "https://tallyroo.com/", domain: "tallyroo.com" }), "Your site · Best-of list");
+});

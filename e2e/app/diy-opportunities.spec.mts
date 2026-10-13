@@ -152,7 +152,7 @@ test("list (full) at 1280: header counts, the lenses with counts, the order line
   const row = await page.locator('[data-opp-row="opp-invoicing"]').innerText();
   assert.match(row, /The 9 best invoicing apps for freelancers \(2026\) - SmallBizDesk/);
   assert.match(row, /Ask to be added/);
-  assert.match(row, /Publisher · Best-of list/);
+  assert.match(row, /Publisher · Best-of list · classified automatically/);
   assert.match(row, /Cited by ChatGPT and Perplexity for 2 of your prompts in the last 28 days \(36 answers\)\./);
   assert.match(row, /Names Brightbook and Ledgerline, not you \(read 27 Sep\)\./);
   assert.match(row, /updated on the page: Sep 2026 · still cited this week/);
@@ -386,7 +386,7 @@ test("Cited pages ?leaves=1: the pages that leave you out, other clients' placem
   const all = await text(p2);
   assert.match(all, /softwarecritic\.com/, "the unfiltered list is unchanged: every page the engines cite");
   assert.match(all, /Kind\s+Page type/);
-  assert.match(all, /Publisher\s+How-to/);
+  assert.match(all, /Publisher, classified automatically\s+How-to/, "a type the model wrote says so; the rules' does not");
   await c2.close();
   const { ctx: c3, page: p3 } = await open("/app/tallyroo/cited?type=vendor");
   assert.match(await text(p3), /ledgerline\.com/);

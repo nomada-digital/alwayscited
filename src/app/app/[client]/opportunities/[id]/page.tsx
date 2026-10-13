@@ -129,7 +129,7 @@ export default async function ClientOpportunity({ params, searchParams }: { para
           title={opp.lens === "own" && opp.route === "publish_own" ? `Publish your own ${opp.pageType ? PAGE_TYPE_LABEL[opp.pageType].toLowerCase() : "page"}` : (shown?.status === "ok" && shown.title) || opp.title || pathOf(opp.url)}
           url={opp.url}
           domain={pathOf(opp.url)}
-          types={typesLine(opp)}
+          types={typesLine({ ...opp, title: shown?.status === "ok" ? shown.title : opp.title })}
           route={ROUTE_LABEL[opp.route]}
           status={opp.status}
           statusLine={statusLine(opp)}

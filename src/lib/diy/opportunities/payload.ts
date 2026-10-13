@@ -3,6 +3,8 @@ import { type Day, addDays, formatDay } from "../../tracking/figures.ts";
 
 import { NOT_CLASSIFIED, PAGE_TYPE_LABEL, DOMAIN_TYPE_LABEL, ROUTE_LABEL, STATUS_LABEL, LENS_LABEL, type OppStatus, type Opportunity, type PageFacts, type PageType, type Route, type TabLens, AI_CITED_LENSES, LIST_TYPES } from "./types.ts";
 import { unreadableLine } from "./brief.ts";
+import { domainTypeByRule, pageTypeByRule } from "./classify-rules.ts";
+import { CLASSIFIED_LABEL } from "../core/evidence.ts";
 import { compareOrder, orderKey } from "./order.ts";
 import { pursuingLine } from "./verify.ts";
 
@@ -67,12 +69,26 @@ export function pathOf(url: string): string {
   }
 }
 
-/** "Publisher · Best-of list", or "not classified yet" for a blank; an `own` row is on the client's own site. */
-export function typesLine(o: Pick<Opportunity, "domainType" | "pageType"> & { lens?: Opportunity["lens"] }): string {
+/**
+ * "Publisher · Best-of list", or "not classified yet" for a blank; an `own`
+ * row is on the client's own site. A type the rules did not settle was
+ * written by a model, and says so (spec 10 section 2.6: "classified
+ * automatically").
+ */
+export function typesLine(o: Pick<Opportunity, "domainType" | "pageType"> & { lens?: Opportunity["lens"]; url?: string; domain?: string; title?: string | null }): string {
   const d = o.lens === "own" ? "Your site" : o.domainType ? DOMAIN_TYPE_LABEL[o.domainType] : null;
   const p = o.pageType ? PAGE_TYPE_LABEL[o.pageType] : null;
   if (!d && !p) return NOT_CLASSIFIED;
-  return [d ?? NOT_CLASSIFIED, p ?? NOT_CLASSIFIED].join(" · ");
+  const line = [d ?? NOT_CLASSIFIED, p ?? NOT_CLASSIFIED].join(" · ");
+  return o.lens !== "own" && byModel(o) ? `${line} · ${CLASSIFIED_LABEL}` : line;
+}
+
+/** Whether a row's domain or page type came from the classify call rather than the rules. */
+export function byModel(o: Pick<Opportunity, "domainType" | "pageType"> & { url?: string; domain?: string; title?: string | null }): boolean {
+  if (!o.url || !o.domain) return false;
+  const ruleD = domainTypeByRule(o.domain);
+  const ruleP = pageTypeByRule(o.url, o.title ?? null, ruleD ?? o.domainType);
+  return (o.domainType !== null && o.domainType !== ruleD) || (o.pageType !== null && o.pageType !== ruleP);
 }
 
 const typeWords = (t: PageType | null | undefined, n: number) => {
@@ -132,7 +148,7 @@ export function listRow(o: Opportunity, ctx: ViewCtx): ListRow {
     href: ctx.path(`/opportunities/${encodeURIComponent(o.id)}`),
     title: o.lens === "own" && o.route === "publish_own" ? `Publish your own ${typeWords(o.pageType, 1)}` : title,
     domain: o.domain,
-    types: typesLine(o),
+    types: typesLine({ ...o, title: (!ctx.dark && facts?.status === "ok" && facts.title) || o.title }),
     route: ROUTE_LABEL[o.route],
     routeKey: o.route,
     why: whyLine(o),

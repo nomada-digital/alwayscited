@@ -3,6 +3,8 @@ import { brandsRead, type Day, formatDay } from "../../tracking/figures.ts";
 import { domainKey, pageKey } from "./classify-rules.ts";
 import { citationKey, domainTypeOf, pageTypeOf } from "./derive.ts";
 import { AI_CITED_LENSES, DOMAIN_TYPE_LABEL, DOMAIN_TYPES, type DomainType, NOT_CLASSIFIED, PAGE_TYPE_LABEL, type KindRow, type Opportunity, type PageFacts } from "./types.ts";
+import { domainTypeByRule, pageTypeByRule } from "./classify-rules.ts";
+import { CLASSIFIED_LABEL } from "../core/evidence.ts";
 
 /**
  * Cited pages' facts (13 Oct 2026, DIY P7; spec 10 section 4.5). Facts
@@ -52,7 +54,11 @@ export function citedFacts(input: {
   for (const p of input.pages) {
     const dt = domainTypeOf(p.host, input.kinds);
     const pt = pageTypeOf(`https://${p.page}`, p.page, input.reads.get(p.page)?.title ?? null, dt, input.kinds);
-    kinds.set(p.page, { kind: dt ? DOMAIN_TYPE_LABEL[dt] : NOT_CLASSIFIED, type: pt ? PAGE_TYPE_LABEL[pt] : NOT_CLASSIFIED, domainType: dt });
+    // A type the rules did not settle was written by a model, and says so (spec 10 section 2.6).
+    const auto = (label: string, mine: string | null, rule: string | null) => (mine !== null && mine !== rule ? `${label}, ${CLASSIFIED_LABEL}` : label);
+    const ruleD = domainTypeByRule(p.host);
+    const ruleP = pageTypeByRule(`https://${p.page}`, input.reads.get(p.page)?.title ?? null, dt);
+    kinds.set(p.page, { kind: dt ? auto(DOMAIN_TYPE_LABEL[dt], dt, ruleD) : NOT_CLASSIFIED, type: pt ? auto(PAGE_TYPE_LABEL[pt], pt, ruleP) : NOT_CLASSIFIED, domainType: dt });
   }
   // Pages cited in an answer that named another brand, in the range.
   const othersNamed = new Set<string>();
