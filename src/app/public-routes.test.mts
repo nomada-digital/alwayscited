@@ -77,6 +77,9 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/app/[client]/placements": "one client's placements and where the cluster stood; private, same membership 404, and a 404 for a client with no placed tier and no placement",
   // 13 Oct 2026, DIY P3: Actions (internally the Plan).
   "/app/[client]/plan": "one client's actions, what was done and what was read after; private, same membership 404",
+  // 13 Oct 2026, DIY P8: Your pages and one key page.
+  "/app/[client]/pages": "one client's key pages, their crawler access and the schema examples; private, same membership 404",
+  "/app/[client]/pages/[page]": "one key page's schema, fit, basics and history; private, same membership 404, and a 404 for a page not the client's live key page",
   // 2 Oct 2026, R173 pass 3, DS36.
   "/app/[client]/[...rest]": "any /app/[client] address no page matches; private, same membership 404, then the dashboard's own 404",
   "/app/auth": "where a single-use login link lands; the token in its URL is private",

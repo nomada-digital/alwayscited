@@ -35,7 +35,12 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 const ROUTES = join(ROOT, "src", "app", "api", "app", "[client]");
 
 /** Routes that write what a client tracks, its plan, or its setup: each judges the role through writeRole(client). */
-const TRACKED_WRITES = ["check", "cluster", "edit", "group", "keyword", "note", "plan", "prompt", "setup", "stop"];
+/**
+ * 13 Oct 2026, DIY P8: `pages` joins - it adds and removes a client's key
+ * pages, spends its page checks and drafted examples, and adds Actions items,
+ * each judged through writeRole(client).
+ */
+const TRACKED_WRITES = ["check", "cluster", "edit", "group", "keyword", "note", "pages", "plan", "prompt", "setup", "stop"];
 
 /** Routes that read the member's own role, and why that is not writeRole's question. */
 const ACCOUNT_ROLE: Record<string, string> = {
