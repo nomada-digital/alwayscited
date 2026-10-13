@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
-import { clientsFor, sessionEmail } from "@/lib/tracking/member";
+import { clientsFor, sessionEmail, writeRole } from "@/lib/tracking/member";
 import { type NoteState, addNote, noteCodeOf, noteReturn, readNote } from "@/lib/tracking/note";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 
@@ -16,6 +16,9 @@ export const dynamic = "force-dynamic";
  * page state in the action's query string, the note in the body. Rules and
  * the one insert are note.ts. Session and membership as the edit route; the
  * fixture writes nothing. Returns to the page with `note=` a NOTE_SAID code.
+ * 13 Oct 2026 (DIY P5, the inventory's ended-client finding): the role is
+ * writeRole's, as the edit route's is, so an ended client is read-only here
+ * too; it passed the member's own role.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -33,7 +36,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   if (!client) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
   if (typeof note === "string") return done(noteCodeOf(note));
-  const r = await addNote(supabaseAdmin(), { clientId: client.id, clusterId: sp.get("cluster")!, questionId: sp.get("q")!, text: note.text, email, role: client.role, today: trackingDay() });
+  const r = await addNote(supabaseAdmin(), { clientId: client.id, clusterId: sp.get("cluster")!, questionId: sp.get("q")!, text: note.text, email, role: writeRole(client), today: trackingDay() });
   if (!r.ok) {
     console.warn(`[app] note refused: ${r.message}`);
     return done("refused");

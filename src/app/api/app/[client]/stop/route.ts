@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { fixtureStop } from "@/lib/tracking/fixture-writes";
-import { clientsFor, sessionEmail } from "@/lib/tracking/member";
+import { clientsFor, sessionEmail, writeRole } from "@/lib/tracking/member";
 import { writeFixture } from "@/lib/tracking/repo";
 import { slotWhyOf } from "@/lib/tracking/slot";
 import { BULK_ID, type BulkCount, type StopDone, readBulkIds, readStopForm, stop, stopReturn, undoStop } from "@/lib/tracking/stop";
@@ -23,7 +23,10 @@ export const dynamic = "force-dynamic";
  * The session decides the member and their role, and the slug must be one of
  * their clients - anyone else gets the same 404 the page gives. The rules and
  * the writes are stop.ts, which refuses a viewer again and scopes every read
- * and write to this client. The fixture is read-only unless
+ * and write to this client. 13 Oct 2026 (DIY P5, the inventory's ended-client
+ * finding): the role handed to stop.ts is writeRole's, so an ended client is
+ * read-only here as on every other write - it passed the member's own role,
+ * and an owner of an ended client could still stop and undo. The fixture is read-only unless
  * TRACKING_FIXTURE_WRITE=1 (R168), which holds the write in memory.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
@@ -54,7 +57,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     if (!client) return NextResponse.json({ error: "Not found." }, { status: 404 });
     const today = trackingDay();
     for (const id of ids) {
-      const r = await stop(supabaseAdmin(), { kind: "prompt", clientId: client.id, id, today, role: client.role, by: email });
+      const r = await stop(supabaseAdmin(), { kind: "prompt", clientId: client.id, id, today, role: writeRole(client), by: email });
       if (r.ok) n++;
       else console.warn(`[app] bulk stop refused: ${r.message}`);
     }
@@ -73,7 +76,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   const client = (await clientsFor(email)).find((c) => c.slug === slug);
   if (!client) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
-  const p = { kind: f.kind, clientId: client.id, id: f.id, today: trackingDay(), role: client.role };
+  const p = { kind: f.kind, clientId: client.id, id: f.id, today: trackingDay(), role: writeRole(client) };
   const r = f.undo ? await undoStop(supabaseAdmin(), p) : await stop(supabaseAdmin(), { ...p, by: email });
   if (!r.ok) {
     console.warn(`[app] ${f.undo ? "undo" : "stop"} ${f.kind} refused: ${r.message}`);
