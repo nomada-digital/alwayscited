@@ -171,3 +171,48 @@ test("who ranks: the keywords with a stored top in the window, this client's onl
   assert.deepEqual([...fixture].sort(), [...fixtureTops(keywordsFixture(env(), ROOT), fx.data.serp, fx.today).keys()].sort());
   assert.equal((await loadWhoRanks("someone-else", fx.today, fx.data.serp, { env: env(), root: ROOT })).size, 0);
 });
+
+// 13 Oct 2026 (dashboard speed work): the top 20s are read for each keyword's newest day only - a narrow read of the
+// days, then the tops on them - and the answer is the one the 14-day read of every top gave.
+test("tops: each keyword's newest stored top 20, read on its newest day only, as the whole window's read had it", async () => {
+  const top = (d: string) => [{ rank: 1, domain: `${d}.example`, url: `https://${d}.example/` }];
+  const serp = [
+    { id: 1, client_domain_id: "c1", keyword_id: "k1", run_date: "2026-10-12", top: top("k1-12") },
+    { id: 2, client_domain_id: "c1", keyword_id: "k1", run_date: "2026-10-13", top: top("k1-13") },
+    { id: 3, client_domain_id: "c1", keyword_id: "k2", run_date: "2026-10-11", top: top("k2-11") },
+    { id: 4, client_domain_id: "c1", keyword_id: "k2", run_date: "2026-10-13", top: null },
+    { id: 5, client_domain_id: "c1", keyword_id: "k3", run_date: "2026-09-01", top: top("k3-old") },
+    { id: 6, client_domain_id: "c2", keyword_id: "k4", run_date: "2026-10-13", top: top("k4") },
+  ];
+  const f = fakeDiyDb({ tracking_serp: serp.map((r) => ({ ...r })) });
+  const got = await loadSerpDetail("c1", { from: "2026-10-01", to: "2026-10-13" }, [], { db: () => f.db, env: {} });
+  assert.ok(got.tops.ok);
+  const whole = latestTops(serp.filter((r) => r.client_domain_id === "c1" && r.run_date >= "2026-09-29" && r.run_date <= "2026-10-13"));
+  assert.deepEqual([...got.tops.value].sort(), [...whole].sort(), "the same newest top per keyword as reading every day's");
+  assert.deepEqual(got.tops.value.get("k2")?.day, "2026-10-11", "a day with no top is passed over for the newest that has one");
+  assert.equal(got.tops.value.has("k3"), false, "older than the lookback: none");
+  // The second read carried the newest days' rows only, never the window's every top.
+  const topReads = f.calls.filter((c) => c.table === "tracking_serp" && c.op === "select");
+  assert.ok(topReads.at(-1)!.rows <= 2, `the tops read took ${topReads.at(-1)!.rows} rows`);
+});
+
+// 13 Oct 2026 (dashboard speed work): pages hand the overview's positions as a function, so production never waits on
+// the overview for them; the fixture still reads them, and a function and a list answer alike.
+test("positions handed as a function are read on the fixture only, and answer as the list does", async () => {
+  let asked = 0;
+  const later = () => {
+    asked += 1;
+    return Promise.resolve(fx.data.serp);
+  };
+  const f = fakeDiyDb({ tracking_serp: [] });
+  await loadWhoRanks("c1", "2026-10-13", later, { db: () => f.db, env: {} });
+  await loadSerpDetail("c1", { from: "2026-10-01", to: "2026-10-13" }, later, { db: () => f.db, env: {} });
+  assert.equal(asked, 0, "Supabase reads its own: the overview is never waited on");
+  const listed = await loadWhoRanks(FIXTURE_CLIENT, fx.today, fx.data.serp, { env: env(), root: ROOT });
+  const handed = await loadWhoRanks(FIXTURE_CLIENT, fx.today, later, { env: env(), root: ROOT });
+  assert.deepEqual([...handed].sort(), [...listed].sort());
+  const detail = await loadSerpDetail(FIXTURE_CLIENT, { from: "2026-09-01", to: fx.today }, later, { env: env(), root: ROOT });
+  const detailListed = await loadSerpDetail(FIXTURE_CLIENT, { from: "2026-09-01", to: fx.today }, fx.data.serp, { env: env(), root: ROOT });
+  assert.deepEqual(detail, detailListed);
+  assert.equal(asked, 2, "the fixture reads them, once a call");
+});

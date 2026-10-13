@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import Settings from "@/components/app/Settings";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
@@ -42,19 +43,20 @@ export default async function ClientSettings({ params, searchParams }: { params:
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
-  // perf-4 (8 Oct 2026): Settings draws the clusters and prompts only, so no answer is read.
-  const [structure, upgrade, settings] = await Promise.all([repo.structure(client.id), repo.upgradeContext(client.id, email, today), repo.settings(client.id)]);
   // 13 Oct 2026, DIY P9 (spec 10 section 4.13): this month's research, counts only. Each count is read on its own
   // (loadDiyUsage); a whole failure says so in its section and the rest of Settings draws. 13 Oct 2026, DIY P10:
   // Links is built (wave 3), so the link targets row is drawn too ("Link targets: 5 of 5", section 4.13).
-  const research: DiyUsage | { failed: true } = await (async () => {
+  // 13 Oct 2026 (dashboard speed work): read beside the rest rather than after it. The counts take the client's id,
+  // market and trial only (usage-meter.ts), so they do not wait for the upsell mode.
+  const researchP: Promise<DiyUsage | { failed: true }> = (async () => {
     try {
       const diy = diyClient(
         { id: client.id, slug: client.slug, domain: client.domain, brand_name: client.brand, market: client.market, tier: client.tier, started_on: client.started_on, status: client.status ?? "active", trial_ends_at: client.trial_ends_at ?? null },
-        { setupConfirmedAt: null, upsellMode: upgrade.mode },
+        { setupConfirmedAt: null, upsellMode: null },
         repo.now(),
       );
       return await loadDiyUsage(fixtureMode() ? null : supabaseAdmin(), diy, repo.now());
@@ -63,6 +65,8 @@ export default async function ClientSettings({ params, searchParams }: { params:
       return { failed: true as const };
     }
   })();
+  // perf-4 (8 Oct 2026): Settings draws the clusters and prompts only, so no answer is read.
+  const [structure, upgrade, settings, research] = await Promise.all([repo.structure(client.id), repo.upgradeContext(client.id, email, today), repo.settings(client.id), researchP]);
   const clusterLimit = client.cluster_limit ?? CLUSTER_BASE;
   // A stopped cluster frees its slot at once, as the Clusters page counts it.
   const inUse = (structure.clusters ?? []).filter((c) => c.stopped_on === null).length;

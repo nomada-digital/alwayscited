@@ -8,7 +8,7 @@ import { expandFixture } from "../../tracking/fixture-mode.ts";
 import { addDays } from "../../tracking/figures.ts";
 import { promptsDb } from "../prompts/fake-prompts-db.mts";
 
-import { countLoggedSince, countOpenOpportunities, factsOf, loggedSince, fixtureEntry, fixtureWorld, missingTable, readKeyPages, readPageReads, readWorld, type OppFixtureState, type Overlay } from "./data.ts";
+import { KIND_PAGES_AT_ONCE, countLoggedSince, countOpenOpportunities, factsOf, loggedSince, fixtureEntry, fixtureWorld, missingTable, readKeyPages, readKinds, readPageReads, readWorld, type OppFixtureState, type Overlay } from "./data.ts";
 import { writePageRead } from "./record.ts";
 import { ENGINE_ORDER } from "./refresh.job.ts";
 import { EMPTY_ALL_NAME_YOU, EMPTY_NO_CITATIONS, citedEmpty, headerCounts, listed } from "./payload.ts";
@@ -189,4 +189,40 @@ test("origins.opportunity.json: P7's opportunity prompt is merged after P2's, an
   assert.ok(world("capped").rows.some((r) => r.id === o?.ref && r.promptId === "q1-5"), "the chip links to an opportunity that carries the prompt");
   const full = fixtureOriginMap(await readOriginsFiles(dir, "full"), fx.data.questions, []);
   assert.ok(![...full.values()].some((x) => x.kind === "opportunity"), "nothing of P7's under full: P2's chips stand as P2 recorded them");
+});
+
+// 13 Oct 2026 (dashboard speed work): readKinds' 200-key pages go out side by side, KIND_PAGES_AT_ONCE at a time, where
+// they went one after another; every key is still asked for once, and a page that fails still throws.
+test("readKinds: every key asked once across the pages side by side, every cached type returned; a failed page throws", async () => {
+  const keys = Array.from({ length: 1301 }, (_, i) => `site${i}.example`);
+  const rows = keys.filter((_, i) => i % 3 === 0).map((key) => ({ key, level: "domain", domain_type: "blog", page_type: null, set_by: "rule" }));
+  let inFlight = 0;
+  let most = 0;
+  const asked: string[] = [];
+  const db = {
+    from: () => {
+      let chunk: string[] = [];
+      const b = {
+        select: () => b,
+        in: (_c: string, vs: string[]) => ((chunk = vs), b),
+        limit: () => b,
+        then: (resolve: (v: unknown) => void) => {
+          inFlight += 1;
+          most = Math.max(most, inFlight);
+          asked.push(...chunk);
+          setTimeout(() => {
+            inFlight -= 1;
+            resolve({ data: rows.filter((r) => chunk.includes(r.key)), error: null });
+          }, 5);
+        },
+      };
+      return b;
+    },
+  } as unknown as Parameters<typeof readKinds>[0];
+  const got = await readKinds(db, [...keys, ...keys.slice(0, 10)]);
+  assert.equal(got.size, rows.length);
+  assert.deepEqual([...asked].sort(), [...keys].sort(), "each key once");
+  assert.equal(most, Math.min(KIND_PAGES_AT_ONCE, Math.ceil(keys.length / 200)), "the pages were in flight together");
+  const broken = { from: () => ({ select() { return this; }, in() { return this; }, limit() { return this; }, then: (resolve: (v: unknown) => void) => resolve({ data: null, error: { message: "statement timeout" } }) }) } as unknown as Parameters<typeof readKinds>[0];
+  await assert.rejects(readKinds(broken, keys), /could not read the page types: statement timeout/);
 });

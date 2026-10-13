@@ -13,6 +13,7 @@ import { placementAllowance } from "@/lib/tracking/fixture-mode";
 import { fixtureFillSlot, fixtureStop } from "@/lib/tracking/fixture-writes";
 import { CLUSTER_BASE, promptRoom } from "@/lib/tracking/limits";
 import type { MemberClient } from "@/lib/tracking/member";
+import type { Structure } from "@/lib/tracking/read-shape";
 import { type TrackingRepo, writableFixture, writeFixture } from "@/lib/tracking/repo";
 
 import { type OppFixtureState, type OppWorld, type Overlay, fixtureEntry, fixtureWorld, oppFixture, overlayKey, readFixtureFile, readKeyPages, readRankingUrl, readWorld } from "./data";
@@ -39,12 +40,18 @@ export async function fixtureState(): Promise<OppFixtureState | null> {
   return fixtureEntry(await readFixtureFile(), state);
 }
 
-/** The tracking fixture as the derivation reads it: 28 days of answers to its today, its structure, the client's domain. */
-async function trackingWorld(repo: TrackingRepo, client: Client) {
+/**
+ * The tracking fixture as the derivation reads it: 28 days of answers to its today, its structure, the client's domain.
+ * `structure` (13 Oct 2026, dashboard speed work): the page's own structure read, when it has one in flight, so it is
+ * not read a second time.
+ */
+export async function trackingWorld(repo: TrackingRepo, client: Client, structure?: PromiseLike<Structure>) {
   const today = repo.today();
-  const [structure, data] = await Promise.all([repo.structure(client.id), repo.loadOverview(client.id, { from: addDays(today, -27), to: today }, "none", { answers: "full" })]);
-  return { today, engines: ENGINE_ORDER, answers: data.answers, questions: structure.questions, clusters: structure.clusters, keywords: structure.keywords, domain: client.domain };
+  const [s, data] = await Promise.all([structure ?? repo.structure(client.id), repo.loadOverview(client.id, { from: addDays(today, -27), to: today }, "none", { answers: "full" })]);
+  return { today, engines: ENGINE_ORDER, answers: data.answers, questions: s.questions, clusters: s.clusters, keywords: s.keywords, domain: client.domain };
 }
+
+export type TrackingWorld = Awaited<ReturnType<typeof trackingWorld>>;
 
 /** Everything the pages draw, and whether DIY is switched on. A failed read throws: the caller's section says so. */
 export async function loadOppWorld(repo: TrackingRepo, client: Client): Promise<OppWorld & { enabled: boolean; entry: OppFixtureState | null }> {
@@ -65,10 +72,14 @@ export async function loadOppWorld(repo: TrackingRepo, client: Client): Promise<
  * last 28 days of answers. Read only when that tab is empty, so the list's
  * usual load reads no answers. A failed read throws: the caller's section
  * then shows the plain line, never a claim.
+ *
+ * `started` (13 Oct 2026, dashboard speed work): the answers read, when the
+ * page began it with its first reads because the cited tab was asked for -
+ * one round trip beside the rest instead of one after them.
  */
-export async function loadCitedSummary(repo: TrackingRepo, client: Client, world: OppWorld): Promise<CitedSummary> {
+export async function loadCitedSummary(repo: TrackingRepo, client: Client, world: OppWorld, started?: Promise<TrackingWorld>): Promise<CitedSummary> {
   if (world.cited) return world.cited;
-  const t = await trackingWorld(repo, client);
+  const t = await (started ?? trackingWorld(repo, client));
   return citedSummary({ answers: t.answers, questions: t.questions, today: t.today, domain: t.domain, engines: t.engines }, world.reads);
 }
 

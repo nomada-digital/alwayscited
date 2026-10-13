@@ -185,7 +185,7 @@ test("the dashboard's payment read failing costs the banner, never the clients",
 
 const src = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
-test("census: the webhook writes payment state only over an older event, only to a client its order row names, and the dashboard reads it on its own", () => {
+test("census: the webhook writes payment state only over an older event, only to a client its order row names, and the dashboard's read of it costs only the banner", () => {
   // 9 Oct 2026, review of 2c6dc99: the payment step moved from signup.ts to subscription-events.ts, so it runs under test.
   const events = src("./subscription-events.ts");
   assert.ok(events.includes('.update(step.write).eq("id", client.id).or(newerThanRecorded(at))'), "the payment write is no longer guarded by the event's time");
@@ -202,11 +202,16 @@ test("census: the webhook writes payment state only over an older event, only to
   // Deletion still ends the client (and mails plan_ended) before the canceled status is recorded.
   const del = signup.slice(signup.indexOf("export async function onSubscriptionDeleted("), signup.indexOf("async function endClient("));
   assert.ok(del.indexOf("endClient(db, client.id, sub)") > 0 && del.indexOf("endClient(db, client.id, sub)") < del.indexOf("recordPayment("), "onSubscriptionDeleted ends the client first");
-  const member = readFileSync(new URL("../tracking/member.ts", import.meta.url), "utf8");
-  assert.ok(member.includes(".select(PAYMENT_BANNER_READ)"), "the banner's columns are not read on their own");
-  assert.ok(member.includes("withPayment(clients, pErr ? null :"), "a failed payment read is not handed on as null");
-  const main = member.match(/\.select\("id, account_id[^"]*"\)/)?.[0] ?? "";
-  assert.ok(main && !main.includes("payment_"), "the clients read names a payment column, so its failure would hold back the dashboard");
+  // 13 Oct 2026 (dashboard speed work): the banner's columns ride in the shell's one read (shell.ts SHELL_READ). When
+  // that read fails it is made again without them (SHELL_READ_UNPAID), so their failure still costs only the banner;
+  // shell.test.mts runs both reads on a fake. Until then they were read on their own, a round trip on every click.
+  const shell = readFileSync(new URL("../tracking/shell.ts", import.meta.url), "utf8");
+  const paid = shell.match(/export const SHELL_READ = `[^`]*`/)?.[0] ?? "";
+  const unpaid = shell.match(/export const SHELL_READ_UNPAID = `[^`]*`/)?.[0] ?? "";
+  assert.ok(paid.includes("${PAYMENT_BANNER_READ}"), "the banner's columns are not in the shell's read");
+  assert.ok(unpaid && !unpaid.includes("PAYMENT_BANNER_READ") && !unpaid.includes("payment_"), "the read made when the first fails names a payment column, so its failure would hold back the dashboard");
+  assert.match(shell, /if \(paidErr\) \{\s*const \{ data: unpaid, error: unpaidErr \} = await db\.from\("dashboard_members"\)\.select\(SHELL_READ_UNPAID\)/, "a failed read with the payment columns is not made again without them");
+  assert.ok(shell.includes("return withPayment(clients, paidErr ? null : rows);"), "a failed payment read is not handed on as null");
 });
 
 /**

@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import Google from "@/components/app/google/Google";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackLine, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
@@ -65,13 +66,17 @@ export default async function ClientGoogle({ params, searchParams }: { params: P
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
-  const [data, upgrade, footprint, others, placements, pursuing, settings] = await Promise.all([
-    repo.loadOverview(client.id, range, compare, { answers: "none" }),
+  // 13 Oct 2026 (dashboard speed work): the ranking URLs and top 20s are read beside the rest, not after the overview;
+  // only the fixture lays them over the overview's positions.
+  const loaded = repo.loadOverview(client.id, range, compare, { answers: "none" });
+  const [data, upgrade, footprint, others, placements, pursuing, settings, serp] = await Promise.all([
+    loaded,
     repo.upgradeContext(client.id, email, today),
     loadFootprint(client.id),
     loadOthersPlaced(client.id),
@@ -79,8 +84,8 @@ export default async function ClientGoogle({ params, searchParams }: { params: P
     loadPursuing(client.id),
     // The brand's aliases for the brand rule: the footprint read carries them in production; the fixture's are its settings'.
     fixtureMode() ? section("google aliases", () => repo.settings(client.id)) : Promise.resolve(null),
+    loadSerpDetail(client.id, { from: comparisonRange(range, compare)?.from ?? range.from, to: range.to }, () => loaded.then((d) => d.serp)),
   ]);
-  const serp = await loadSerpDetail(client.id, { from: comparisonRange(range, compare)?.from ?? range.from, to: range.to }, data.serp);
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const cluster = (data.clusters ?? []).some((c) => c.id === one("cluster")) ? one("cluster") : null;
   const rowId = pickId(one("row"));

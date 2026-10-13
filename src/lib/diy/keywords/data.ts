@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { urlKey } from "../../tracking/placements.ts";
 import { FIXTURE_DIR, type DiyFixtureState, diyFixtureState, diyFixtureStore, diyFixtureWrites } from "../core/fixture.ts";
@@ -206,12 +206,22 @@ async function readAliases(db: SupabaseClient, clientId: string): Promise<string
 /** How far back from the window's end a stored top 20 is looked for: a live keyword is read every day. */
 export const TOP_LOOKBACK_DAYS = 14;
 
-export async function loadSerpDetail(clientId: string, window: { from: Day; to: Day }, positions: readonly { run_date: Day; keyword_id: string; position: number | null }[], deps: Deps = {}): Promise<SerpDetail> {
+/**
+ * The overview's keyword positions, or a way to read them (13 Oct 2026,
+ * dashboard speed work). Only the fixture lays its made-up URLs and tops over
+ * them; Supabase reads its own. A page hands a function, so its first reads
+ * start together and production never waits on the overview for these.
+ */
+export type Positions<P> = readonly P[] | (() => PromiseLike<readonly P[]>);
+const positionsOf = async <P,>(p: Positions<P>): Promise<readonly P[]> => (typeof p === "function" ? await p() : p);
+
+export async function loadSerpDetail(clientId: string, window: { from: Day; to: Day }, positions: Positions<{ run_date: Day; keyword_id: string; position: number | null }>, deps: Deps = {}): Promise<SerpDetail> {
   const env = deps.env ?? process.env;
   if (diyFixtureState(env) !== null) {
     const fx = keywordsFixture(env, deps.root);
     const mine = clientId === FIXTURE_CLIENT;
-    return { urls: { ok: true, value: mine ? fixtureUrls(fx, positions) : new Map() }, tops: { ok: true, value: mine ? fixtureTops(fx, positions, window.to) : new Map() } };
+    const at = await positionsOf(positions);
+    return { urls: { ok: true, value: mine ? fixtureUrls(fx, at) : new Map() }, tops: { ok: true, value: mine ? fixtureTops(fx, at, window.to) : new Map() } };
   }
   let db: SupabaseClient;
   try {
@@ -233,13 +243,13 @@ export async function loadSerpDetail(clientId: string, window: { from: Day; to: 
  * and answers none: the link is left out, never pointed at a page that
  * cannot show it.
  */
-export async function loadWhoRanks(clientId: string, to: Day, positions: readonly { run_date: Day; keyword_id: string }[], deps: Deps = {}): Promise<ReadonlySet<string>> {
+export async function loadWhoRanks(clientId: string, to: Day, positions: Positions<{ run_date: Day; keyword_id: string }>, deps: Deps = {}): Promise<ReadonlySet<string>> {
   const env = deps.env ?? process.env;
-  if (diyFixtureState(env) !== null) return clientId === FIXTURE_CLIENT ? new Set(fixtureTops(keywordsFixture(env, deps.root), positions, to).keys()) : new Set();
+  if (diyFixtureState(env) !== null) return clientId === FIXTURE_CLIENT ? new Set(fixtureTops(keywordsFixture(env, deps.root), await positionsOf(positions), to).keys()) : new Set();
   try {
     const db = await admin(deps);
-    const rows = await selectAll<{ keyword_id: string }>((lo, hi) =>
-      db.from("tracking_serp").select("keyword_id").eq("client_domain_id", clientId).gte("run_date", addDays(to, -TOP_LOOKBACK_DAYS)).lte("run_date", to).not("top", "is", null).order("id", { ascending: true }).range(lo, hi),
+    const rows = await selectAllCounted<{ keyword_id: string }>((lo, hi, count) =>
+      db.from("tracking_serp").select("keyword_id", { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).gte("run_date", addDays(to, -TOP_LOOKBACK_DAYS)).lte("run_date", to).not("top", "is", null).order("id", { ascending: true }).range(lo, hi),
     );
     return new Set(rows.map((r) => r.keyword_id));
   } catch (err) {
@@ -249,17 +259,37 @@ export async function loadWhoRanks(clientId: string, to: Day, positions: readonl
 }
 
 export async function readUrls(db: SupabaseClient, clientId: string, window: { from: Day; to: Day }): Promise<Map<string, string | null>> {
-  const rows = await selectAll<{ run_date: string; keyword_id: string; url: string | null }>((from, to) =>
-    db.from("tracking_serp").select("run_date, keyword_id, url").eq("client_domain_id", clientId).gte("run_date", window.from).lte("run_date", window.to).order("id", { ascending: true }).range(from, to),
+  const rows = await selectAllCounted<{ run_date: string; keyword_id: string; url: string | null }>((from, to, count) =>
+    db.from("tracking_serp").select("run_date, keyword_id, url", { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).gte("run_date", window.from).lte("run_date", window.to).order("id", { ascending: true }).range(from, to),
   );
   return new Map(rows.map((r) => [urlAt(r.keyword_id, r.run_date), r.url]));
 }
 
+/**
+ * Each keyword's newest stored top 20 in the lookback. 13 Oct 2026 (dashboard
+ * speed work): only those rows' tops are read. It read every day's top 20 in
+ * the window - 14 a keyword, jsonb each - to keep one; now a narrow read finds
+ * each keyword's newest day with a top, and a second reads the tops on those
+ * days alone. Two round trips, beside the footprint's two on the same page.
+ */
 export async function readTops(db: SupabaseClient, clientId: string, to: Day): Promise<Map<string, { day: Day; top: TopHit[] }>> {
-  const rows = await selectAll<{ run_date: string; keyword_id: string; top: unknown }>((lo, hi) =>
-    db.from("tracking_serp").select("run_date, keyword_id, top").eq("client_domain_id", clientId).gte("run_date", addDays(to, -TOP_LOOKBACK_DAYS)).lte("run_date", to).order("id", { ascending: true }).range(lo, hi),
+  const days = await selectAllCounted<{ run_date: string; keyword_id: string }>((lo, hi, count) =>
+    db.from("tracking_serp").select("run_date, keyword_id", { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).gte("run_date", addDays(to, -TOP_LOOKBACK_DAYS)).lte("run_date", to).not("top", "is", null).order("id", { ascending: true }).range(lo, hi),
   );
-  return latestTops(rows);
+  const newest = new Map<string, string>();
+  for (const r of days) if ((newest.get(r.keyword_id) ?? "") < r.run_date) newest.set(r.keyword_id, r.run_date);
+  if (!newest.size) return new Map();
+  // Every keyword on every newest day, then each keyword's own day kept: one row a keyword when they share a day.
+  const on = [...new Set(newest.values())];
+  const { data, error } = await db
+    .from("tracking_serp")
+    .select("run_date, keyword_id, top")
+    .eq("client_domain_id", clientId)
+    .in("keyword_id", [...newest.keys()])
+    .in("run_date", on)
+    .not("top", "is", null);
+  if (error) throw new Error(`could not read the top 20: ${error.message}`);
+  return latestTops(((data ?? []) as { run_date: string; keyword_id: string; top: unknown }[]).filter((r) => newest.get(r.keyword_id) === r.run_date));
 }
 
 /** Each keyword's newest row with a stored top. A row from before MS-1 (no top) is passed over. */
@@ -311,7 +341,7 @@ export async function loadOthersPlaced(clientId: string, deps: Deps = {}): Promi
   if (diyFixtureState(env) !== null) return { ok: true, value: new Set(keywordsFixture(env, deps.root).othersPlaced) };
   return section("google other placements", async () => {
     const db = await admin(deps);
-    const rows = await selectAll<{ url_key: string | null; url: string | null }>((from, to) => db.from("placements").select("url_key, url").neq("client_domain_id", clientId).order("id", { ascending: true }).range(from, to));
+    const rows = await selectAllCounted<{ url_key: string | null; url: string | null }>((from, to, count) => db.from("placements").select("url_key, url", { count: count ? "exact" : undefined }).neq("client_domain_id", clientId).order("id", { ascending: true }).range(from, to));
     return new Set(rows.map((r) => r.url_key || (r.url ? urlKey(r.url) : null)).filter((k): k is string => !!k));
   });
 }

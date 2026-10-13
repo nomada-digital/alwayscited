@@ -212,7 +212,10 @@ function boundName(destructure: string): string {
  * spellings.
  *
  * A read handed to `selectAll` is not caught and must not be: those are arrow
- * functions returning a page, and `selectAll` throws on the error itself.
+ * functions returning a page, and `selectAll` throws on the error itself. The
+ * same holds for `selectAllCounted` (page.ts), which throws on any page's
+ * error and on the first page's: since 13 Oct 2026 (dashboard speed work) the
+ * per-render readers call it, so it is excluded by the same call rule.
  */
 function undestructuredIn(file: string): { file: string; line: number; text: string }[] {
   const source = readFileSync(file, "utf8");
@@ -234,7 +237,7 @@ function undestructuredIn(file: string): { file: string; line: number; text: str
     // read - it is the one shape in this tree that is checked somewhere else
     // on purpose. Excluded by the call, not by the binding, because the
     // binding is rows and looks exactly like an unchecked read.
-    if (/\bselectAll[<(]/.test(body)) continue;
+    if (/\bselectAll(?:Counted)?[<(]/.test(body)) continue;
     if (!/\.from\(/.test(body)) continue;
     if (!/\.select\(/.test(body)) continue;
     if (/\.(update|insert|upsert|delete)\(/.test(body)) continue;
@@ -351,9 +354,9 @@ function matchBracket(text: string, open: number): number {
   return -1;
 }
 
-/** Does this expression read rows through postgrest rather than through selectAll? */
+/** Does this expression read rows through postgrest rather than through selectAll (or selectAllCounted, 13 Oct 2026)? */
 function isBareRead(expr: string): boolean {
-  if (/\bselectAll[<(]/.test(expr)) return false;
+  if (/\bselectAll(?:Counted)?[<(]/.test(expr)) return false;
   // `.rpc(` was here too and was removed for the reason given above
   // `undestructuredIn`: it cannot fire against the `.select(` line below it.
   // An RPC inside a `Promise.all` is caught by `rpcUndestructuredIn`, which

@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import type { Day } from "../../tracking/figures.ts";
 import { GRADES, type Grade } from "../core/evidence.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, readDiyFixture, type DiyFixtureState } from "../core/fixture.ts";
@@ -96,7 +96,7 @@ export function itemOf(r: Record<string, unknown>): PlanItem | null {
 
 /** Every item of one client, any status, oldest first. Paged; a failed read throws. */
 export async function loadPlanItems(db: SupabaseClient, clientId: string): Promise<PlanItem[]> {
-  const rows = await selectAll<Record<string, unknown>>((lo, hi) => db.from("plan_items").select(PLAN_COLUMNS).eq("client_domain_id", clientId).order("created_at").order("id").range(lo, hi));
+  const rows = await selectAllCounted<Record<string, unknown>>((lo, hi, count) => db.from("plan_items").select(PLAN_COLUMNS, { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).order("created_at").order("id").range(lo, hi));
   return rows.map(itemOf).filter((i): i is PlanItem => i !== null);
 }
 

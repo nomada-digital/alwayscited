@@ -170,16 +170,18 @@ const RECORDED: Record<string, string> = {
   // account id is used only to join the two and is dropped before return
   // (MemberClient has no account_id), so no page or response carries it.
   // 9 Oct 2026 (AG-1): the member id joined, to read the member's client scope (scope.ts readScopes).
-  "src/lib/tracking/member.ts :: id, account_id, role":
-    "joins a member to their accounts server-side; clientsFor returns no account_id.",
-  // 30 Sep 2026, T6 part 1: cluster_limit added for the Clusters page's usage bar; account_id still stays server-side.
-  // 8 Oct 2026: trial_ends_at and trial_cancelled_at added for the plan card's trial line; account_id still stays server-side.
-  // 8 Oct 2026 (audit activation-5, ia-12): status, so an ended client says so rather than promising a next check.
-  "src/lib/tracking/member.ts :: id, account_id, slug, domain, brand_name, market, tier, started_on, question_limit, keyword_limit, cluster_limit, trial_ends_at, trial_cancelled_at, status":
-    "maps each client to its role by account server-side; the returned MemberClient omits account_id.",
-  // 1 Oct 2026, R142 (BRIEF-4 P2): Settings' team list. The id picks the account's members and is dropped.
-  "src/lib/tracking/settings-data.ts :: account_id, brand_aliases":
-    "finds the client's account server-side to list its live members; SettingsData carries no account_id.",
+  // 30 Sep, 8 Oct and 8 Oct 2026: cluster_limit, the trial columns and status joined the client read; same use.
+  // 13 Oct 2026 (dashboard speed work): member.ts's memberships read and clients read became one embedded read in
+  // shell.ts, with the scope and BL-2's payment columns inside it (SHELL_READ), and the same read without the payment
+  // columns, made only when that one fails (SHELL_READ_UNPAID). The account id still only joins a membership to its
+  // clients in visibleClients, and readShell names the fields it returns, none of them account_id.
+  "src/lib/tracking/shell.ts :: SHELL_READ":
+    "joins a member to their accounts and clients server-side; readShell, and so clientsFor, returns no account_id.",
+  "src/lib/tracking/shell.ts :: SHELL_READ_UNPAID":
+    "the same join without the payment columns, made only when SHELL_READ fails; readShell returns no account_id.",
+  // 1 Oct 2026, R142 (BRIEF-4 P2): Settings' team list read the client's account_id to pick the account's members.
+  // 13 Oct 2026 (dashboard speed work): no longer - the client row embeds its account's members through the foreign
+  // key (settings-data.ts SETTINGS_READ), so the id is never read into the module at all and its entry went.
   // 1 Oct 2026, R142 part 2 (BRIEF-4 P2 Team): the owner's own client, already membership-checked.
   "src/app/api/app/[client]/member/route.ts :: account_id":
     "the member route's team lookup; the 303 carries only the toast word and the email the owner typed.",
@@ -225,15 +227,15 @@ const MENTIONED: Record<string, string> = {
   "src/app/admin/tracking/page.tsx":
     "T2: renders the admin's member form with the account id as a hidden field. " +
     "Admin-only, behind the /admin Basic auth.",
-  "src/lib/tracking/member.ts":
-    "T3: reads the column to join a signed-in member to their clients; returns none of it.",
+  // 13 Oct 2026 (dashboard speed work): the read moved from member.ts to shell.ts, which member.ts clientsFor calls.
+  "src/lib/tracking/shell.ts":
+    "T3: reads the column to join a signed-in member to their clients (readShell, behind member.ts clientsFor); returns none of it.",
   "src/app/api/app/[client]/ask/route.ts":
     "T11 /ask (30 Sep 2026): reads the member's own client's account_id to find its upsell mode " +
     "and agency contact. Used only to pick the recipient; the route answers with a 303 carrying " +
     "sent|refused and us|agency, never the id.",
-  "src/lib/tracking/settings-data.ts":
-    "R142 (1 Oct 2026): reads the column to list the client's live members for Settings; " +
-    "used only in the member read's filter, and SettingsData returns emails, names, roles and sign-in days, never the id.",
+  // settings-data.ts left this list 13 Oct 2026 (dashboard speed work): its team read embeds the account's members
+  // through the foreign key and no longer names the column (R142, 1 Oct 2026, read it to filter the members).
   "src/app/api/app/[client]/member/route.ts":
     "R142 part 2 (1 Oct 2026): reads the owner's own client's account_id to read and change its team. " +
     "Used only in team.ts filters and writes; the route answers with a 303 carrying a toast word and an email, never the id.",
@@ -243,7 +245,8 @@ const MENTIONED: Record<string, string> = {
     "row id and client scope, which the route uses for its writes and never puts in the 303.",
   "src/lib/tracking/scope.ts":
     "AG-1 (9 Oct 2026): visibleClients joins a member's memberships to client rows by account_id, a pure function " +
-    "clientsFor calls server-side. It hands each row back unspread with its role, and clientsFor names the fields it returns.",
+    "clientsFor calls server-side (through shell.ts readShell since 13 Oct 2026). It hands each row back unspread with its role, " +
+    "and readShell names the fields it returns.",
   "src/lib/checkout/signup.ts":
     "C4 (30 Sep 2026): writes the column on client_domains and dashboard_members when a " +
     "paid checkout from a scan becomes a client. Writes, behind the Stripe signature; " +

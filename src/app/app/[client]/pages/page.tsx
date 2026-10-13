@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import Bots from "@/components/app/pages/Bots";
 import ExamplesLibrary from "@/components/app/pages/ExamplesLibrary";
 import KeyPagesList from "@/components/app/pages/KeyPagesList";
@@ -62,6 +63,7 @@ export default async function ClientPages({ params, searchParams }: { params: Pr
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();

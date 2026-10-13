@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import Clusters, { type StopToast } from "@/components/app/Clusters";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
@@ -67,6 +68,7 @@ export default async function ClientClusters({
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
@@ -74,6 +76,7 @@ export default async function ClientClusters({
   const { range, compare } = rangeFrom(sp, today, client.started_on);
   // 13 Oct 2026, DIY P2: each prompt's origin, for its chip and the "From placements" sub-list (loadOverview reads no origin column).
   // 13 Oct 2026 (Danny): the cluster keywords whose page 1 the Google page has stored, for each slot's "See who ranks".
+  // 13 Oct 2026 (dashboard speed work): read beside the rest, not after the overview; only the fixture needs its positions.
   const loaded = repo.loadOverview(client.id, range, compare);
   const [data, upgrade, typed, origins, footprint, settings, whoRanks] = await Promise.all([
     loaded,
@@ -83,7 +86,7 @@ export default async function ClientClusters({
     loadFootprint(client.id),
     // DIY P6: the brand's aliases for the footprint's brand rule; the footprint read carries them in production.
     fixtureMode() ? section("clusters aliases", () => repo.settings(client.id)) : Promise.resolve(null),
-    loaded.then((d) => loadWhoRanks(client.id, range.to, d.serp)),
+    loadWhoRanks(client.id, range.to, () => loaded.then((d) => d.serp)),
   ]);
   const subject = { brand: client.brand ?? null, domain: client.domain, aliases: settings?.ok ? settings.value.aliases : footprint.aliases };
   const { latest, gaining } = footprintFacts(footprint, { tracked: data.keywords, subject, today });

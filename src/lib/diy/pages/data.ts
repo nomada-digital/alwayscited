@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, readDiyFixture } from "../core/fixture.ts";
 import { countOpenOpportunities } from "../opportunities/data.ts";
@@ -198,22 +198,58 @@ export function topResults(v: unknown): TopResult[] {
  * The live cluster keywords' readings over SERP_DAYS (position and ranking
  * URL: tracking_serp holds a row only for a keyword that was read that day),
  * and each keyword's latest page of results.
+ *
+ * 13 Oct 2026 (dashboard speed work): the readings and the latest pages are
+ * read side by side, and the latest pages in one read (newestTops) where each
+ * keyword had a read of its own, one after another.
  */
 export async function readSerp(db: SupabaseClient, clientId: string, keywordIds: readonly string[], today: Day): Promise<KeywordSerp[]> {
   if (!keywordIds.length) return [];
   const from = addDays(today, -SERP_DAYS);
-  const all = await selectAll<{ run_date: Day; keyword_id: string; position: number | null; url: string | null }>((lo, hi) =>
-    db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", clientId).gte("run_date", from).lte("run_date", today).order("id").range(lo, hi),
+  const allP = selectAllCounted<{ run_date: Day; keyword_id: string; position: number | null; url: string | null }>((lo, hi, count) =>
+    db.from("tracking_serp").select("run_date, keyword_id, position, url", { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).gte("run_date", from).lte("run_date", today).order("id").range(lo, hi),
   );
-  const out: KeywordSerp[] = [];
-  for (const k of keywordIds) {
+  const topsP = newestTops(db, clientId, keywordIds);
+  // A throw from one must not leave the other rejecting unobserved; each await still throws.
+  for (const p of [allP, topsP]) p.catch(() => {});
+  const all = await allP;
+  const tops = await topsP;
+  return keywordIds.map((k) => {
     const readings: SerpReading[] = all.filter((r) => r.keyword_id === k).map((r) => ({ day: r.run_date, position: r.position, url: r.url })).sort((a, b) => (a.day < b.day ? -1 : 1));
-    const { data, error } = await db.from("tracking_serp").select("run_date, top").eq("client_domain_id", clientId).eq("keyword_id", k).not("top", "is", null).order("run_date", { ascending: false }).limit(1);
-    if (error) throw new Error(`could not read the results for a keyword: ${error.message}`);
-    const row = rows(data)[0];
-    out.push({ keywordId: k, readings, top: topResults(row?.top), topOn: row ? String(row.run_date) : null });
-  }
+    const row = tops.get(k);
+    return { keywordId: k, readings, top: topResults(row?.top), topOn: row ? String(row.run_date) : null };
+  });
+}
+
+/** How many of the newest stored pages newestTops reads per keyword: today's and two more days, or a day read twice. */
+export const TOPS_PER_KEYWORD = 3;
+
+/**
+ * Each keyword's newest row with a stored page of results, whenever it was
+ * read - the row a `limit 1` per keyword, newest first, answered - in one
+ * read. The newest rows of all the keywords together, TOPS_PER_KEYWORD a
+ * keyword: every row newer than the oldest one returned is among them, so
+ * a keyword they hold has its newest row there. Only when that read came
+ * back full is a keyword missing from it read on its own, side by side; a
+ * keyword not in a read that came back short has no stored page at all.
+ */
+export async function newestTops(db: SupabaseClient, clientId: string, keywordIds: readonly string[]): Promise<Map<string, Record<string, unknown>>> {
+  const limit = keywordIds.length * TOPS_PER_KEYWORD;
+  const { data, error } = await db.from("tracking_serp").select("keyword_id, run_date, top").eq("client_domain_id", clientId).in("keyword_id", [...keywordIds]).not("top", "is", null).order("run_date", { ascending: false }).limit(limit);
+  if (error) throw new Error(`could not read the results for a keyword: ${error.message}`);
+  const got = rows(data);
+  const out = new Map<string, Record<string, unknown>>();
+  for (const r of got) if (typeof r.keyword_id === "string" && !out.has(r.keyword_id)) out.set(r.keyword_id, r);
+  const missing = got.length < limit ? [] : keywordIds.filter((k) => !out.has(k));
+  for (const r of await Promise.all(missing.map((k) => newestTop(db, clientId, k)))) if (r && typeof r.keyword_id === "string") out.set(r.keyword_id, r);
   return out;
+}
+
+/** One keyword's newest row with a stored page of results, or undefined. A failed read throws. */
+async function newestTop(db: SupabaseClient, clientId: string, keywordId: string): Promise<Record<string, unknown> | undefined> {
+  const { data, error } = await db.from("tracking_serp").select("keyword_id, run_date, top").eq("client_domain_id", clientId).eq("keyword_id", keywordId).not("top", "is", null).order("run_date", { ascending: false }).limit(1);
+  if (error) throw new Error(`could not read the results for a keyword: ${error.message}`);
+  return rows(data)[0];
 }
 
 /**
@@ -222,7 +258,7 @@ export async function readSerp(db: SupabaseClient, clientId: string, keywordIds:
  * the url_key column is read, and the set is used only to subtract.
  */
 export async function readPlacedElsewhere(db: SupabaseClient, clientId: string): Promise<Set<string>> {
-  const all = await selectAll<{ url_key: string | null }>((lo, hi) => db.from("placements").select("url_key").neq("client_domain_id", clientId).order("id").range(lo, hi));
+  const all = await selectAllCounted<{ url_key: string | null }>((lo, hi, count) => db.from("placements").select("url_key", { count: count ? "exact" : undefined }).neq("client_domain_id", clientId).order("id").range(lo, hi));
   return new Set(all.map((r) => r.url_key).filter((k): k is string => typeof k === "string" && k.length > 0));
 }
 

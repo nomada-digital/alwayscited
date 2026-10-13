@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import UpgradePrompt from "@/components/app/UpgradePrompt";
 import Links from "@/components/app/links/Links";
 import type { TierKey } from "@/components/TierName";
@@ -57,6 +58,7 @@ export default async function ClientLinks({ params, searchParams }: { params: Pr
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();

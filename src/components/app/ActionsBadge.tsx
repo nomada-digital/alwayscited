@@ -31,6 +31,20 @@ const counts = cache(async (clientId: string): Promise<{ done: number; of: numbe
   }
 });
 
+/**
+ * Start the badge's read now (13 Oct 2026, dashboard speed work; Next's
+ * preload pattern, docs 06-fetching-data.md "Preloading data"). The sidebar
+ * draws only after the page's last await, and with no Suspense under
+ * /app/[client] (R151, AppLink.tsx) the badge's read used to start there too,
+ * one more round trip at the end of every page. Each page with a Sidebar calls
+ * this right after its slug check; `counts` is React-cached, so the badge then
+ * awaits the read already in flight. It never throws: a failed read is no
+ * badge, as above.
+ */
+export function preloadActionsBadge(clientId: string): void {
+  void counts(clientId);
+}
+
 export default async function ActionsBadge({ clientId, compact = false }: { clientId: string; compact?: boolean }) {
   const c = await counts(clientId);
   const words = c ? badgeWords(c) : null;

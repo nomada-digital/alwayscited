@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import Actions, { SECTION_ERROR } from "@/components/app/plan/Actions";
 import { PlacementsGroup } from "@/components/app/plan/List";
 import ThisWeek from "@/components/app/plan/ThisWeek";
@@ -68,6 +69,7 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
@@ -77,9 +79,23 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
   const reason = client.status === "ended" ? ENDED_REASON : VIEWER_REASON;
   const placed = placedTier(tier);
 
+  // The placed tiers' Placements group, owned by nomada digital or, in agency mode, the account contact. The mode is read
+  // where a failed read throws (client.ts), so a failure hides the group rather than naming Nomada to an agency's client.
+  // 13 Oct 2026 (Danny): the group belongs to the list, which is the default at every width now; the board has none.
+  // 13 Oct 2026 (dashboard speed work): whether it is drawn is the URL's alone, so its read starts with the rest
+  // rather than after the readouts.
+  const upgradeP = repo.upgradeContext(client.id, email, today);
+  const modeP = placed && drawnView(pickView(one("view")), pickStatus(one("status"))) === "list"
+    ? section("plan mode", async () => {
+        if (fixtureMode()) return (await upgradeP).mode;
+        const c = await loadDiyClient(supabaseAdmin(), client.id, repo.now());
+        if (!c) throw new Error("no client row");
+        return c.upsellMode;
+      })
+    : null;
   const [structure, upgrade, team, plan, placements] = await Promise.all([
     repo.structure(client.id),
-    repo.upgradeContext(client.id, email, today),
+    upgradeP,
     section("plan team", () => repo.settings(client.id)),
     section("plan items", () => readPlan(() => supabaseAdmin(), client.id)),
     section("plan placements", () => repo.placements(client.id)),
@@ -115,17 +131,10 @@ export default async function ClientPlan({ params, searchParams }: { params: Pro
     }
   }
 
-  // The placed tiers' Placements group, owned by nomada digital or, in agency mode, the account contact. The mode is read
-  // where a failed read throws (client.ts), so a failure hides the group rather than naming Nomada to an agency's client.
-  // 13 Oct 2026 (Danny): the group belongs to the list, which is the default at every width now; the board has none.
+  // The placed tiers' Placements group (its mode read above, with the rest).
   let group: React.ReactNode = null;
-  if (placed && drawnView(view, filters.status) === "list") {
-    const mode = await section("plan mode", async () => {
-      if (fixtureMode()) return upgrade.mode;
-      const c = await loadDiyClient(supabaseAdmin(), client.id, repo.now());
-      if (!c) throw new Error("no client row");
-      return c.upsellMode;
-    });
+  if (modeP) {
+    const mode = await modeP;
     group =
       mode.ok && placements.ok ? (
         <PlacementsGroup rows={placementsGroup(placements.value, clusterNames)} owner={ownerLabel(mode.value)} />

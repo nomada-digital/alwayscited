@@ -133,9 +133,11 @@ export type CoreFixture = { reads: LedgerCountRow[]; counts: { examples: number;
 /** The usage block. Each count on its own: one that cannot be read is unknown and logged, and the rest still show. */
 export async function loadDiyUsage(db: SupabaseClient | null, client: DiyClient, now: number): Promise<DiyUsage> {
   const month = allowanceMonth(client.market, now);
-  const enabled = await loadDiyEnabled(db);
+  // 13 Oct 2026 (dashboard speed work): the switch is read beside the counts, not before them. It never throws.
+  const enabledP = loadDiyEnabled(db);
   const state = diyFixtureState();
   if (state !== null) {
+    const enabled = await enabledP;
     const fx = readDiyFixture<CoreFixture>("core");
     const used: Record<UsageKey, number> = {
       page_checks: countLedger(fx.reads, "page_checks"),
@@ -146,17 +148,20 @@ export async function loadDiyUsage(db: SupabaseClient | null, client: DiyClient,
     };
     return { enabled, resetsOn: month.resetsOn, resetsLabel: month.resetsLabel, rows: USAGE_KEYS.map((k) => usageRow(k, used[k], client)) };
   }
-  const rows = await Promise.all(
-    USAGE_KEYS.map(async (key) => {
-      if (!db) return usageRow(key, null, client);
-      try {
-        return usageRow(key, await countUsage(db, client, key, now), client);
-      } catch (err) {
-        console.warn(`[diy] usage ${key}: ${msg(err)}`);
-        return usageRow(key, null, client);
-      }
-    }),
-  );
+  const [enabled, rows] = await Promise.all([
+    enabledP,
+    Promise.all(
+      USAGE_KEYS.map(async (key) => {
+        if (!db) return usageRow(key, null, client);
+        try {
+          return usageRow(key, await countUsage(db, client, key, now), client);
+        } catch (err) {
+          console.warn(`[diy] usage ${key}: ${msg(err)}`);
+          return usageRow(key, null, client);
+        }
+      }),
+    ),
+  ]);
   return { enabled, resetsOn: month.resetsOn, resetsLabel: month.resetsLabel, rows };
 }
 

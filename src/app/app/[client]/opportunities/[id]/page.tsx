@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import UpgradePrompt from "@/components/app/UpgradePrompt";
 import OppDetail from "@/components/app/opportunities/OppDetail";
 import type { TierKey } from "@/components/TierName";
@@ -58,6 +59,7 @@ export default async function ClientOpportunity({ params, searchParams }: { para
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   if (!OPP_ID.test(id)) notFound();
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);

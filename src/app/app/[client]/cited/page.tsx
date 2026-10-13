@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import Cited from "@/components/app/Cited";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
@@ -51,11 +52,16 @@ export default async function ClientCited({ params, searchParams }: { params: Pr
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
+  // 13 Oct 2026 (dashboard speed work): the opportunities world needs nothing from the overview, so it is read beside
+  // it rather than after; its failure is still the facts section's alone (awaited there, observed here).
+  const worldP = loadOppWorld(repo, client);
+  worldP.catch(() => {});
   const [data, upgrade, placements] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today), repo.placements(client.id)]);
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const cluster = (data.clusters ?? []).some((c) => c.id === one("cluster")) ? one("cluster") : null;
@@ -65,7 +71,7 @@ export default async function ClientCited({ params, searchParams }: { params: Pr
   const leaves = one("leaves") === "1";
   // The page facts: types, who each page leaves out, and its opportunity, with other clients' placements subtracted.
   const facts = await section("cited facts", async () => {
-    const world = await loadOppWorld(repo, client);
+    const world = await worldP;
     const pages = citedPageRows(data.answers, range, client.domain).map((p) => ({ page: p.page, host: p.host }));
     const kinds = world.entry
       ? new Map((world.entry.kinds ?? []).map((x) => [x.key, { domain_type: pickDomainType(x.domain_type), page_type: pickPageType(x.page_type), set_by: x.set_by ?? "model" }] as const))

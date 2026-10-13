@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 
 import OneCluster from "@/components/app/OneCluster";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
@@ -49,6 +50,7 @@ export default async function ClientCluster({
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
@@ -56,7 +58,15 @@ export default async function ClientCluster({
   const { range, compare } = rangeFrom(sp, today, client.started_on);
   // perf-9 (8 Oct 2026): this cluster's prompts' answers only; every cluster and prompt is still read, for "N of M"
   // and for firstCheckDay, which reads every prompt as every other page does (audit data-10).
-  const data = await repo.loadOverview(client.id, range, compare, { cluster: id });
+  const dataP = repo.loadOverview(client.id, range, compare, { cluster: id });
+  // 13 Oct 2026 (dashboard speed work): what needs nothing from the overview starts with it - the account's mode, the
+  // prompts' origins and the slot's "See who ranks" (only the fixture reads its positions) - rather than after it.
+  const upgradeP = repo.upgradeContext(client.id, email, today);
+  const originsP = loadPromptOrigins(client.id);
+  const whoRanksP = loadWhoRanks(client.id, range.to, () => dataP.then((d) => d.serp));
+  // A throw below (the overview's, or this cluster's 404) must not leave these rejecting unobserved; each await still throws.
+  for (const p of [upgradeP, originsP, whoRanksP]) p.catch(() => {});
+  const data = await dataP;
   const input = { clusters: data.clusters ?? [], questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: resolveComparison(range, compare, client.started_on, firstCheckDay(client.started_on, data.questions), firstReadComplete(data.runs, firstCheckDay(client.started_on, data.questions))).range, today, engines };
   const detail = clusterDetail(input, id);
   if (!detail) notFound();
@@ -71,9 +81,9 @@ export default async function ClientCluster({
   const [latest, notes, upgrade, origins, whoRanks] = await Promise.all([
     picked && detail.card.status !== "pending" ? repo.answerDay(client.id, dayPlan(picked.id, range.to, day)) : null,
     repo.clusterNotes(client.id, detail.card.prompts.map((p) => p.id)),
-    repo.upgradeContext(client.id, email, today),
-    loadPromptOrigins(client.id),
-    loadWhoRanks(client.id, range.to, data.serp),
+    upgradeP,
+    originsP,
+    whoRanksP,
   ]);
 
   return (

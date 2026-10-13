@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { appPath } from "../../app-host.ts";
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import type { UpsellMode } from "../../tracking/ask.ts";
 import { missingColumn } from "../../tracking/limits.ts";
 
@@ -143,7 +143,15 @@ const LEGACY = "id, source";
 /** Every prompt row of one client, paged; on missing columns, the legacy columns only. Throws on any other failure. */
 export async function readOriginRows(db: SupabaseClient, clientId: string): Promise<OriginRow[]> {
   const read = (cols: string) =>
-    selectAll<OriginRow>((from, to) => db.from("tracked_questions").select(cols).eq("client_domain_id", clientId).order("id", { ascending: true }).range(from, to) as unknown as PromiseLike<{ data: OriginRow[] | null; error: PgError | null }>);
+    selectAllCounted<OriginRow>(
+      (from, to, count) =>
+        db
+          .from("tracked_questions")
+          .select(cols, { count: count ? "exact" : undefined })
+          .eq("client_domain_id", clientId)
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{ data: OriginRow[] | null; error: PgError | null; count?: number | null }>,
+    );
   try {
     return await read(FULL);
   } catch (e) {
@@ -159,8 +167,14 @@ export async function readPromptOrigins(db: SupabaseClient, clientId: string): P
   try {
     const rows = await readOriginRows(db, clientId);
     if (!rows.some((r) => r.origin_kind === "placement" && r.origin_ref)) return originMap(rows);
-    const placements = await selectAll<{ id: string; url_key: string }>((from, to) =>
-      db.from("placements").select("id, url_key").eq("client_domain_id", clientId).order("id", { ascending: true }).range(from, to) as unknown as PromiseLike<{ data: { id: string; url_key: string }[] | null; error: PgError | null }>,
+    const placements = await selectAllCounted<{ id: string; url_key: string }>(
+      (from, to, count) =>
+        db
+          .from("placements")
+          .select("id, url_key", { count: count ? "exact" : undefined })
+          .eq("client_domain_id", clientId)
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as PromiseLike<{ data: { id: string; url_key: string }[] | null; error: PgError | null; count?: number | null }>,
     ).catch((e: unknown) => {
       // The chips still draw, as "Placement" with no domain.
       console.warn(`[diy] origins: placements not read: ${e instanceof Error ? e.message : String(e)}`);

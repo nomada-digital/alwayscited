@@ -51,13 +51,12 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
   const { repo, client, today } = p;
   const fixture = fixtureMode();
   const db = fixture ? null : () => supabaseAdmin();
-  const upgrade = await repo.upgradeContext(client.id, p.email, today);
-  const diy = diyClient(
-    { id: client.id, slug: client.slug, domain: client.domain, brand_name: client.brand, market: client.market, tier: client.tier, started_on: client.started_on, status: client.status ?? "active", trial_ends_at: client.trial_ends_at ?? null },
-    { setupConfirmedAt: null, upsellMode: upgrade.mode },
-    p.now,
-  );
-  const [enabled, structure, keyPages, checks, bots, examples, top, jobs, items, placed] = await Promise.all([
+  const row = { id: client.id, slug: client.slug, domain: client.domain, brand_name: client.brand, market: client.market, tier: client.tier, started_on: client.started_on, status: client.status ?? "active", trial_ends_at: client.trial_ends_at ?? null };
+  // 13 Oct 2026 (dashboard speed work): every read that needs nothing but the client starts at once - the upsell mode
+  // and the usage counts were each a round trip of their own before the rest. The usage block counts by the client's
+  // id, market and trial only (usage-meter.ts), so it is handed the client before the mode is known.
+  const [upgrade, enabled, structure, keyPages, checks, bots, examples, top, jobs, items, placed, usage] = await Promise.all([
+    repo.upgradeContext(client.id, p.email, today),
     loadDiyEnabled(fixture ? null : supabaseAdmin()),
     section("pages structure", () => repo.structure(client.id)),
     section("pages key pages", () => readPagesPart("keyPages", db, client.id, today)),
@@ -68,21 +67,24 @@ export async function loadPages(p: { repo: TrackingRepo; client: MemberClient; e
     section("pages jobs", () => readPagesPart("jobs", db, client.id, today)),
     section("pages plan", () => readPlan(() => supabaseAdmin(), client.id)),
     section("pages placed", () => readPagesPart("placed", db, client.id, today)),
+    section("pages usage", () => loadDiyUsage(fixture ? null : supabaseAdmin(), diyClient(row, { setupConfirmedAt: null, upsellMode: null }, p.now), p.now)),
   ]);
-  const usage = await section("pages usage", () => loadDiyUsage(fixture ? null : supabaseAdmin(), diy, p.now));
+  const diy = diyClient(row, { setupConfirmedAt: null, upsellMode: upgrade.mode }, p.now);
 
   const clusters: Cluster[] = structure.ok ? structure.value.clusters.map((c) => ({ id: c.id, name: c.name, keywordId: c.keyword_id ?? null, stoppedOn: c.stopped_on })) : [];
   const keywords: Keyword[] = structure.ok ? structure.value.keywords.map((k) => ({ id: k.id, keyword: k.keyword, volume: typeof k.search_volume === "number" ? k.search_volume : null })) : [];
   const prompts: Prompt[] = structure.ok ? structure.value.questions.map((q) => ({ id: q.id, text: q.text, clusterId: q.cluster_id ?? null, stoppedOn: q.stopped_on })) : [];
   const keywordIds = clusters.filter((c) => c.stoppedOn === null && c.keywordId).map((c) => c.keywordId!);
-  const serp = await section("pages serp", () => readPagesSerp(db, client.id, keywordIds, today));
-
   // Citations of the client's own pages in 28 days: Cited pages' own count (figures.ts citedPageRows), by url_key.
+  // Read beside the keyword readings: both wait on the structure alone.
   const range = { from: addDays(today, -(CITED_DAYS - 1)), to: today };
-  const cited = await section("pages cited", async () => {
-    const data = await repo.loadOverview(client.id, range, "none", { answers: "cites", ...(structure.ok ? { structure: structure.value } : {}) });
-    return new Map(citedPageRows(data.answers, range, client.domain).filter((r) => r.yours).map((r) => [r.page, r.count] as const));
-  });
+  const [serp, cited] = await Promise.all([
+    section("pages serp", () => readPagesSerp(db, client.id, keywordIds, today)),
+    section("pages cited", async () => {
+      const data = await repo.loadOverview(client.id, range, "none", { answers: "cites", ...(structure.ok ? { structure: structure.value } : {}) });
+      return new Map(citedPageRows(data.answers, range, client.domain).filter((r) => r.yours).map((r) => [r.page, r.count] as const));
+    }),
+  ]);
 
   const core = structure.ok && keyPages.ok && checks.ok && bots.ok && serp.ok && placed.ok;
   // Dark: what only a paid read made is left out.

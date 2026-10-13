@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import UpgradePrompt from "@/components/app/UpgradePrompt";
 import Opportunities, { type OppView } from "@/components/app/opportunities/Opportunities";
 import type { TierKey } from "@/components/TierName";
@@ -14,7 +15,7 @@ import { citedEmpty, headerCounts, headerLine, listRow, listed, pursuing, pursui
 import { type OppKeep } from "@/lib/diy/opportunities/paths";
 import { ENDED_REASON, VIEWER_REASON, oppToast, pursuitCap } from "@/lib/diy/opportunities/status";
 import { ACTIVE, TAB_LENSES, type TabLens } from "@/lib/diy/opportunities/types";
-import { linkCheckWords, loadCitedSummary, loadOppWorld } from "@/lib/diy/opportunities/world";
+import { linkCheckWords, loadCitedSummary, loadOppWorld, trackingWorld } from "@/lib/diy/opportunities/world";
 import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 import { ENGINE_SPECS } from "@/lib/scan/engines";
 import { clusterSearch } from "@/lib/tracking/cluster-figures";
@@ -70,6 +71,7 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
@@ -78,9 +80,14 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   const canWrite = refuseRole(writeRole(client)) === null;
   const reason = client.status === "ended" ? ENDED_REASON : VIEWER_REASON;
 
-  const [structure, upgrade, world, origins] = await Promise.all([repo.structure(client.id), repo.upgradeContext(client.id, email, today), section("opportunities", () => loadOppWorld(repo, client)), loadPromptOrigins(client.id)]);
-  const view = pickView(one("view"));
   const lens = pickLens(one("lens"));
+  // 13 Oct 2026 (dashboard speed work): on the cited tab, the answers its empty state is summarised from are read with
+  // the first reads, on the same structure read, rather than after them; used only when the tab turns out empty.
+  const structureP = repo.structure(client.id);
+  const citedP = lens === "cited" ? trackingWorld(repo, client, structureP) : undefined;
+  citedP?.catch(() => {});
+  const [structure, upgrade, world, origins] = await Promise.all([structureP, repo.upgradeContext(client.id, email, today), section("opportunities", () => loadOppWorld(repo, client)), loadPromptOrigins(client.id)]);
+  const view = pickView(one("view"));
   const cluster = structure.clusters.some((c) => c.id === one("cluster")) ? one("cluster") : null;
   const engine = engines.find((e) => e === one("engine")) ?? null;
   const q = clusterSearch(one("q"));
@@ -108,7 +115,7 @@ export default async function ClientOpportunities({ params, searchParams }: { pa
   // summary needs the window's answers, so it is read only when the tab is empty.
   let empty: string | null = null;
   if (world.ok && lens === "cited" && !listed(rows, "cited").length) {
-    const cited = await section("cited pages", () => loadCitedSummary(repo, client, world.value));
+    const cited = await section("cited pages", () => loadCitedSummary(repo, client, world.value, citedP));
     empty = citedEmpty(cited.ok ? cited.value : null, rows);
   }
 

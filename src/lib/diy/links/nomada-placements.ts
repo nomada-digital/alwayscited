@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import { urlKey } from "../../tracking/placements.ts";
 
 /**
@@ -69,7 +69,7 @@ export function excludePlacedDomains<T>(rows: readonly T[], placed: Placed, pick
 
 /** The placements of every client but this one: their domains and page keys. Paged; a failed read throws, and the caller fails closed. */
 export async function readPlacedDomains(db: SupabaseClient, clientId: string): Promise<Placed> {
-  const rows = await selectAll<{ domain: string | null; url_key: string | null }>((lo, hi) => db.from("placements").select("domain, url_key").neq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
+  const rows = await selectAllCounted<{ domain: string | null; url_key: string | null }>((lo, hi, count) => db.from("placements").select("domain, url_key", { count: count ? "exact" : undefined }).neq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
   const domains = new Set<string>();
   const keys = new Set<string>();
   for (const r of rows) {

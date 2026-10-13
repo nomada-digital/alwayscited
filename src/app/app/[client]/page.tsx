@@ -5,6 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import Activation from "@/components/app/Activation";
 import Overview from "@/components/app/Overview";
 import Sidebar from "@/components/app/Sidebar";
+import { preloadActionsBadge } from "@/components/app/ActionsBadge";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { CARD, T } from "@/config/tokens";
@@ -74,6 +75,7 @@ export default async function ClientDashboard({
   const clients = await repo.clientsFor(email);
   const client = clients.find((c) => c.slug === slug);
   if (!client) notFound();
+  preloadActionsBadge(client.id);
   const tier = (client.tier as TierKey) ?? "tracked";
   const engines = enginesFor(tier);
   const today = repo.today();
@@ -92,8 +94,15 @@ export default async function ClientDashboard({
   // and P2's prompt origins for the basis line and the log. Each is its own section: a failed plan read says so where it
   // would have drawn, and origins never throw (an empty map draws no basis line).
   // 13 Oct 2026 (Danny): the cluster keywords whose page 1 the Google page has stored, for each card's "See who ranks".
+  // 13 Oct 2026 (dashboard speed work): read from the start - only the fixture needs the overview's positions for it -
+  // and so are P7's opportunities (wave 2 below), which only a client past its first check draws: one round trip
+  // for the whole page, where each used to wait on the reads before it.
   const loaded = repo.loadOverview(client.id, range, compare);
-  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead, plan, origins, whoRanks] = await Promise.all([
+  const oppRead = loadOppWorld(repo, client).then(
+    (w) => ({ ok: true as const, value: w }),
+    (err: unknown) => (console.warn(`[diy] overview opportunities: ${err instanceof Error ? err.message : String(err)}`), { ok: false as const }),
+  );
+  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead, plan, origins, whoRanks, oppAll] = await Promise.all([
     loaded,
     repo.upgradeContext(client.id, email, today),
     repo.placements(client.id),
@@ -108,7 +117,8 @@ export default async function ClientDashboard({
         ),
     section("overview plan", () => readPlan(() => supabaseAdmin(), client.id)),
     loadPromptOrigins(client.id),
-    loaded.then((d) => loadWhoRanks(client.id, range.to, d.serp)),
+    loadWhoRanks(client.id, range.to, () => loaded.then((d) => d.serp)),
+    oppRead,
   ]);
   // DS10: a member who left setup before confirming gets back to it from here. Only a client that needs setup pays the read.
   const outstanding = setupOutstanding(client, confirmed, fixtureMode());
@@ -161,13 +171,8 @@ export default async function ClientDashboard({
   // ---- 13 Oct 2026, DIY P9 (spec 10 sections 4.1 and 7.10): wave 2 on the Overview ----
   // P7's opportunities, read once, for two things: the cited card's "Leaves you out" tags (row 9) and the pursued
   // pages whose first citation Since last check can report (section 6.8 line 8). A failed read draws neither, says
-  // so in the log, and the rest of the page draws.
-  const oppWorld = firstCheckYet
-    ? await loadOppWorld(repo, client).then(
-        (w) => ({ ok: true as const, value: w }),
-        (err: unknown) => (console.warn(`[diy] overview opportunities: ${err instanceof Error ? err.message : String(err)}`), { ok: false as const }),
-      )
-    : null;
+  // so in the log, and the rest of the page draws. Read with the first reads above; used only after the first check.
+  const oppWorld = firstCheckYet ? oppAll : null;
   const OPEN_OPP = ["new", "pursuing", "pitched"];
   const leavesOut = oppWorld?.ok
     ? (() => {

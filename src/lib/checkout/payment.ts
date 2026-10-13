@@ -38,8 +38,13 @@ export const SUBSCRIPTION_STATUSES: readonly string[] = ["trialing", "active", "
 /** What the webhook reads back before it decides. */
 export const PAYMENT_READ = "status, payment_status, payment_status_at, payment_ended_at";
 
-/** What the dashboard reads for its banner (member.ts), apart from its main read. */
-export const PAYMENT_BANNER_READ = "id, payment_status, payment_retry_at, payment_invoice_url, payment_ended_at";
+/**
+ * The banner's columns. Read on their own until 13 Oct 2026; since the
+ * dashboard speed work they ride in the shell's one read (tracking/shell.ts),
+ * which is read again without them when it fails, so a failure here still
+ * costs the banner and never the dashboard.
+ */
+export const PAYMENT_BANNER_READ = "payment_status, payment_retry_at, payment_invoice_url, payment_ended_at";
 
 export type PaymentRow = { status: string | null; payment_status: string | null; payment_status_at: string | null; payment_ended_at: string | null };
 
@@ -154,11 +159,12 @@ export function afterFailedInvoice(row: PaymentRow, invoice: Record<string, unkn
 export type PaymentView = { payment_status: string | null; payment_retry_at: string | null; payment_invoice_url: string | null; payment_ended_at: string | null };
 
 /**
- * The banner's read joined onto the clients (member.ts). It is a read of its
- * own so that its failure - the columns not there yet, or anything else -
- * costs the banner and never the dashboard: a paying client's data is not
- * held back because we could not read whether they paid. `rows` is null when
- * that read failed, and every client is then drawn as if nothing were wrong.
+ * The banner's columns joined onto the clients (tracking/shell.ts). Their
+ * failure - the columns not there yet, or anything else - costs the banner
+ * and never the dashboard: a paying client's data is not held back because
+ * we could not read whether they paid. `rows` is null when the read with
+ * them failed and the shell read again without, and every client is then
+ * drawn as if nothing were wrong.
  */
 export function withPayment<C extends { id: string }>(clients: C[], rows: Record<string, unknown>[] | null): (C & Partial<PaymentView>)[] {
   if (!rows) return clients;

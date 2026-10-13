@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { diyFixtureState, diyFixtureStore, diyFixtureWrites, FIXTURE_DIR, type DiyFixtureState } from "../core/fixture.ts";
 
@@ -111,18 +111,21 @@ export type OppWorld = {
   cited?: CitedSummary;
 };
 
+/** How many of readKinds' 200-key pages are in flight at once: a month of Cited pages' keys (about 1,300, seven pages, on 13 Oct 2026) in one go. */
+export const KIND_PAGES_AT_ONCE = 8;
+
 /** This package's night jobs, for the failed-job line. */
 export const OPP_JOB_KINDS = ["opportunity_refresh", "page_reads", "classify", "watch"] as const;
 
 /** Every row of this client, paged. A failed read throws. */
 export async function readOpportunityRows(db: SupabaseClient, clientId: string): Promise<Opportunity[]> {
-  const rows = await selectAll<Record<string, unknown>>((lo, hi) => db.from("opportunities").select(OPP_COLUMNS).eq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
+  const rows = await selectAllCounted<Record<string, unknown>>((lo, hi, count) => db.from("opportunities").select(OPP_COLUMNS, { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
   return rows.map(opportunityOf).filter((o): o is Opportunity => o !== null);
 }
 
 /** Every page read of this client, by url_key. A failed read throws. */
 export async function readPageReads(db: SupabaseClient, clientId: string): Promise<Map<string, PageFacts>> {
-  const rows = await selectAll<Record<string, unknown>>((lo, hi) => db.from("page_reads").select(PAGE_READ_COLUMNS).eq("client_domain_id", clientId).order("url_key", { ascending: true }).range(lo, hi));
+  const rows = await selectAllCounted<Record<string, unknown>>((lo, hi, count) => db.from("page_reads").select(PAGE_READ_COLUMNS, { count: count ? "exact" : undefined }).eq("client_domain_id", clientId).order("url_key", { ascending: true }).range(lo, hi));
   return new Map(rows.map(factsOf).filter((f): f is PageFacts => f !== null).map((f) => [f.urlKey, f]));
 }
 
@@ -138,15 +141,33 @@ export async function readJobFailed(db: SupabaseClient, clientId: string): Promi
   return [...latest.values()].some((o) => o === "failed");
 }
 
-/** The cached types for these keys. Paged by key, at most 200 a request. A failed read throws. */
+/**
+ * The cached types for these keys. Paged by key, at most 200 a request. A failed read throws.
+ *
+ * 13 Oct 2026 (dashboard speed work): the pages go out side by side, as many
+ * as KIND_PAGES_AT_ONCE at a time. They were one after another, and Cited
+ * pages asks about 1,300 keys for a month of answers: seven round trips in a
+ * row on every view.
+ */
 export async function readKinds(db: SupabaseClient, keys: readonly string[]): Promise<Map<string, KindRow>> {
   const out = new Map<string, KindRow>();
   const unique = [...new Set(keys)];
-  for (let i = 0; i < unique.length; i += 200) {
-    const chunk = unique.slice(i, i + 200);
-    const { data, error } = await db.from("source_kinds").select("key, level, domain_type, page_type, set_by").in("key", chunk).limit(chunk.length);
-    if (error) throw new Error(`could not read the page types: ${error.message}`);
-    for (const r of (data ?? []) as Record<string, unknown>[]) {
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += 200) chunks.push(unique.slice(i, i + 200));
+  const answers: Record<string, unknown>[][] = new Array(chunks.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < chunks.length) {
+      const i = next++;
+      const chunk = chunks[i]!;
+      const { data, error } = await db.from("source_kinds").select("key, level, domain_type, page_type, set_by").in("key", chunk).limit(chunk.length);
+      if (error) throw new Error(`could not read the page types: ${error.message}`);
+      answers[i] = (data ?? []) as Record<string, unknown>[];
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(KIND_PAGES_AT_ONCE, chunks.length) }, worker));
+  for (const page of answers) {
+    for (const r of page) {
       if (typeof r.key !== "string") continue;
       out.set(r.key, { key: r.key, level: r.level === "page" ? "page" : "domain", domain_type: pickDomainType(r.domain_type), page_type: pickPageType(r.page_type), set_by: r.set_by === "model" ? "model" : "rule" });
     }

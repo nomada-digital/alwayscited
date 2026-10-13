@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { brandKey, domainStem } from "../../scan/brand-name.ts";
 import { knownKind } from "../../scan/source-kinds.ts";
-import { selectAll } from "../../supabase/page.ts";
+import { selectAllCounted } from "../../supabase/page.ts";
 import { addDays, brandsRead, citedPage, type Day } from "../../tracking/figures.ts";
 
 import { bare, domainKey, domainTypeByRule, isEngineProperty, pageKey, pageTypeByRule } from "./classify-rules.ts";
@@ -542,7 +542,7 @@ export function withoutPlaced<T extends { urlKey: string }>(rows: readonly T[], 
  * (a list it cannot subtract from is not shown).
  */
 export async function readPlacedKeys(db: SupabaseClient, clientId: string): Promise<Set<string>> {
-  const rows = await selectAll<{ url_key: string | null }>((lo, hi) => db.from("placements").select("url_key").neq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
+  const rows = await selectAllCounted<{ url_key: string | null }>((lo, hi, count) => db.from("placements").select("url_key", { count: count ? "exact" : undefined }).neq("client_domain_id", clientId).order("id", { ascending: true }).range(lo, hi));
   return new Set(rows.map((r) => r.url_key).filter((k): k is string => typeof k === "string" && k.length > 0));
 }
 
