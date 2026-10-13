@@ -26,6 +26,7 @@ import { loadPromptOrigins } from "@/lib/diy/prompts/origins";
 import { loadFootprint } from "@/lib/diy/keywords/data";
 import { trackedSet } from "@/lib/diy/keywords/momentum";
 import { footprintFacts, suggestedClusters } from "@/lib/diy/keywords/setup-suggestions";
+import { readOnlyReason } from "@/lib/diy/keywords/write";
 import { section } from "@/lib/diy/plan/data";
 import { trackingPackLine } from "@/config/pricing";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
@@ -151,6 +152,7 @@ export default async function ClientClusters({
           suggested={suggested}
           gaining={gaining?.rows[0]?.keyword ?? null}
           packLine={trackingPackLine(packPrice)}
+          readOnly={readOnlyReason(client)}
         />
       </div>
     </div>

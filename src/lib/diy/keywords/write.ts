@@ -3,8 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { keywordForm } from "../../scan/dataforseo-request.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { formatDate } from "../../format-date.ts";
+import { ENDED_REASON, VIEWER_REASON } from "../plan/transitions.ts";
 
 import { DISMISS_DAYS, type Dismissal, liveDismissal } from "./data.ts";
+
+/** Why a member cannot write here, in the words the Plan uses: an ended client's, or a viewer's. */
+export const readOnlyReason = (c: { status?: string | null }): string => (c.status === "ended" ? ENDED_REASON : VIEWER_REASON);
 
 /**
  * Dismiss and restore a gaining-ground keyword (13 Oct 2026, DIY P6; spec 10
@@ -27,9 +31,9 @@ export type KeywordsDo = (typeof KEYWORDS_DO)[number];
 export const isKeywordsDo = (v: unknown): v is KeywordsDo => (KEYWORDS_DO as readonly unknown[]).includes(v);
 
 export type KeywordsDone = "dismissed" | "restored" | "refused";
-export type KeywordsWhy = "viewer" | "unknown" | "failed" | "readonly" | "dark";
+export type KeywordsWhy = "viewer" | "ended" | "unknown" | "failed" | "readonly" | "dark";
 export const KEYWORDS_DONE: readonly KeywordsDone[] = ["dismissed", "restored", "refused"];
-export const KEYWORDS_WHY: readonly KeywordsWhy[] = ["viewer", "unknown", "failed", "readonly", "dark"];
+export const KEYWORDS_WHY: readonly KeywordsWhy[] = ["viewer", "ended", "unknown", "failed", "readonly", "dark"];
 
 /** The keyword field's bound (diy_dismissals.key's check). */
 export const KEYWORD_MAX = 120;
@@ -40,11 +44,14 @@ export type KeywordsDecision =
   | { op: "refuse"; why: KeywordsWhy };
 
 /**
- * What one post does. `role` is writeRole's refusal (null when the member may
- * write); `latest` the keywords of the latest pull; `dismissals` the client's.
+ * What one post does. `refused` is writeRole's refusal (null when the member
+ * may write) and `ended` whether the client's tracking has ended - writeRole
+ * refuses an owner there too, and the toast says that reason, not the
+ * viewer's (13 Oct 2026, review of the P6 handoff); `latest` the keywords of
+ * the latest pull; `dismissals` the client's.
  */
-export function decideKeywords(p: { do: KeywordsDo; keyword: unknown; refused: string | null; enabled: boolean; latest: ReadonlySet<string> | null; dismissals: readonly Dismissal[]; today: Day }): KeywordsDecision {
-  if (p.refused) return { op: "refuse", why: "viewer" };
+export function decideKeywords(p: { do: KeywordsDo; keyword: unknown; refused: string | null; ended?: boolean; enabled: boolean; latest: ReadonlySet<string> | null; dismissals: readonly Dismissal[]; today: Day }): KeywordsDecision {
+  if (p.refused) return { op: "refuse", why: p.ended ? "ended" : "viewer" };
   if (!p.enabled) return { op: "refuse", why: "dark" };
   const raw = typeof p.keyword === "string" ? p.keyword.trim() : "";
   if (!raw || raw.length > KEYWORD_MAX) return { op: "refuse", why: "unknown" };
@@ -86,7 +93,8 @@ export const readDone = (v: string | null): KeywordsDone | null => ((KEYWORDS_DO
 export const readWhy = (v: string | null): KeywordsWhy | null => ((KEYWORDS_WHY as readonly string[]).includes(String(v)) ? (v as KeywordsWhy) : null);
 
 const WHY: Record<KeywordsWhy, string> = {
-  viewer: "Viewers can't change this. Ask an owner or editor.",
+  viewer: VIEWER_REASON,
+  ended: ENDED_REASON,
   unknown: "That keyword isn't in your latest Google footprint, so nothing changed.",
   failed: "That didn't save. Try again.",
   readonly: "This preview doesn't save changes.",

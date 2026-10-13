@@ -7,6 +7,7 @@ import { selectAll } from "../../supabase/page.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { urlKey } from "../../tracking/placements.ts";
 import { FIXTURE_DIR, type DiyFixtureState, diyFixtureState, diyFixtureStore, diyFixtureWrites } from "../core/fixture.ts";
+import { MAX_ATTEMPTS } from "../core/jobs.ts";
 import { type Section, section } from "../plan/data.ts";
 
 import { FOOTPRINT_COLUMNS, type Pull, latestTwo, readPull } from "./footprint.ts";
@@ -55,11 +56,32 @@ export type FootprintData = {
   /** Null while dark: hidden, not read. */
   pulls: Section<{ latest: Pull | null; previous: Pull | null }> | null;
   dismissals: Section<Dismissal[]> | null;
-  /** The footprint job: the day the next one is due (the first read's date before any pull), and whether its latest run failed. */
-  job: Section<{ dueOn: Day | null; failed: boolean }> | null;
+  /** The footprint job's newest row: its due day, whether it is still queued to run, and whether its latest run failed. */
+  job: Section<FootprintJob> | null;
   /** The brand's aliases, for the brand rule; empty when unread. */
   aliases: string[];
 };
+
+export type FootprintJob = {
+  dueOn: Day | null;
+  /** Not done and under its attempts: a night pass will run it (jobs.ts claimable). */
+  queued: boolean;
+  failed: boolean;
+};
+
+/**
+ * The day a pending first read can be promised (spec 10 section 4: "First read
+ * <date>", from the job's due_on): only when a footprint job row is actually
+ * queued - its due day, or tomorrow's night pass for one due today or carried.
+ * Null when none is, and then nothing is promised: a client whose setup the
+ * dispatcher does not count as confirmed (jobs.ts dueFor) has no paid job
+ * queued, so its page must not say a read is coming (13 Oct 2026, review of
+ * the P6 handoff).
+ */
+export function firstReadOn(job: FootprintJob | null, today: Day): Day | null {
+  if (!job?.queued) return null;
+  return job.dueOn !== null && job.dueOn > today ? job.dueOn : addDays(today, 1);
+}
 
 export type SerpDetail = {
   /** The ranking URL of each keyword on each day it ranked, keyed by `urlAt(keyword, day)`. */
@@ -74,6 +96,7 @@ type FixturePull = { pulled_on: Day; labs_date: Day | null; total_count: number 
 export type KeywordsFixture = {
   pulls: FixturePull[];
   dismissals: { key: string; until: Day; by_email: string; created_at: string }[];
+  /** The footprint job's rows; one with no outcome yet is still queued. */
   jobs: { due_on: Day; outcome: string | null }[];
   serp: {
     /** Per keyword, the URL it ranks with from each listed day on. */
@@ -125,7 +148,7 @@ export async function loadFootprint(clientId: string, deps: Deps = {}): Promise<
       enabled,
       pulls: { ok: true, value: latestTwo(pulls) },
       dismissals: { ok: true, value: mine ? fixtureDismissals(env, deps.root) : [] },
-      job: { ok: true, value: { dueOn: job?.due_on ?? null, failed: job?.outcome === "failed" } },
+      job: { ok: true, value: { dueOn: job?.due_on ?? null, queued: !!job && job.outcome === null, failed: job?.outcome === "failed" } },
       aliases: [],
     };
   }
@@ -161,11 +184,15 @@ export async function readDismissals(db: SupabaseClient, clientId: string): Prom
   return ((data ?? []) as { key: string; until: string; by_email: string; created_at: string }[]).map((d) => ({ key: d.key, until: String(d.until).slice(0, 10), by: d.by_email, at: d.created_at }));
 }
 
-async function readJob(db: SupabaseClient, clientId: string): Promise<{ dueOn: Day | null; failed: boolean }> {
-  const { data, error } = await db.from("diy_jobs").select("due_on, outcome").eq("client_domain_id", clientId).eq("kind", "footprint").order("due_on", { ascending: false }).limit(1);
+export async function readJob(db: SupabaseClient, clientId: string): Promise<FootprintJob> {
+  const { data, error } = await db.from("diy_jobs").select("due_on, outcome, done_at, attempts").eq("client_domain_id", clientId).eq("kind", "footprint").order("due_on", { ascending: false }).limit(1);
   if (error) throw new Error(`could not read the footprint job: ${error.message}`);
-  const row = (data?.[0] ?? null) as { due_on: string; outcome: string | null } | null;
-  return { dueOn: row ? String(row.due_on).slice(0, 10) : null, failed: row?.outcome === "failed" };
+  const row = (data?.[0] ?? null) as { due_on: string; outcome: string | null; done_at: string | null; attempts: number | null } | null;
+  return {
+    dueOn: row ? String(row.due_on).slice(0, 10) : null,
+    queued: !!row && row.done_at === null && (row.attempts ?? 0) < MAX_ATTEMPTS,
+    failed: row?.outcome === "failed",
+  };
 }
 
 async function readAliases(db: SupabaseClient, clientId: string): Promise<string[]> {

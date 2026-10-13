@@ -31,7 +31,8 @@ export const maxDuration = 60;
  *
  * The session decides the member, and the slug must be one of their clients
  * or the answer is a 404. Owners and editors write; a viewer, and anyone on
- * an ended client (writeRole), is refused. Only a keyword the latest
+ * an ended client (writeRole), is refused - `why=ended` for the second, so
+ * the toast says which. Only a keyword the latest
  * footprint pull holds can be dismissed, and only a live dismissal restored
  * (write.ts decideKeywords), so the only text stored is DataForSEO's own.
  * While diy_enabled is off the page hides gaining ground, and a post that
@@ -66,6 +67,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     do: d,
     keyword: form?.get("keyword"),
     refused: refuseRole(writeRole(client)),
+    ended: client.status === "ended",
     enabled: footprint.enabled,
     latest,
     dismissals: footprint.dismissals?.ok ? footprint.dismissals.value : [],

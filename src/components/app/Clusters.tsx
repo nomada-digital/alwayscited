@@ -111,6 +111,7 @@ export default function Clusters({
   suggested = [],
   gaining = null,
   packLine = "",
+  readOnly = "",
 }: {
   brand: string;
   /**
@@ -125,6 +126,8 @@ export default function Clusters({
   gaining?: string | null;
   /** DIY P6: trackingPackLine(trackingPackPrice(market)), U7's words from pricing.ts. */
   packLine?: string;
+  /** DIY P6: why a member who cannot write cannot (keywords/write.ts readOnlyReason), for Suggested clusters' disabled control. */
+  readOnly?: string;
   /** 13 Oct 2026, DIY P2: each prompt's origin (loadPromptOrigins), for its chip and the "From placements" sub-list. */
   origins?: ReadonlyMap<string, PromptOrigin>;
   /** R133: the client's brand and domain, so a prompt that names them carries the "Names the brand" chip. */
@@ -320,7 +323,7 @@ export default function Clusters({
 
       {canWrite && adding ? <AddPanel slug={slug} adding={adding} full={full} clusterLimit={clusterLimit} packPrice={packPrice} packHref={siteHref(upgrade ? contactUrlFor(upgrade.tier) : CONTACT_URL)} close={href({})} keep={keep} src={src} /> : null}
 
-      {!full && suggested.length ? <SuggestedClusters items={suggested} canWrite={canWrite} free={clusterLimit - used} hrefFor={(kw) => href({ add: "1", kw, src: "gaining" })} /> : null}
+      {!full && suggested.length ? <SuggestedClusters items={suggested} canWrite={canWrite} reason={readOnly} free={clusterLimit - used} hrefFor={(s) => href({ add: "1", kw: s.keyword, ...(s.source === "gaining" ? { src: "gaining" } : {}) })} /> : null}
 
       <section aria-label="Clusters" style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "18px", overflow: "hidden" }}>
         <div className="app-cl-grid app-hide-sm" style={{ display: "grid", gridTemplateColumns: GRID, gap: "16px", padding: "14px 24px 12px" }}>

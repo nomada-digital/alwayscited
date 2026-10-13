@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { fakeDiyDb, testClient } from "../core/fake-diy.mts";
+import { fakeDiyDb, settingsRows, testClient } from "../core/fake-diy.mts";
 import { clientPath } from "../plan/types.ts";
 
 import { keywordCandidates, keywordCandidatesFrom, MAX_KEYWORD_CANDIDATES } from "./candidates.ts";
 import { DISMISS_DAYS, liveDismissal } from "./data.ts";
 import { momentum } from "./momentum.ts";
-import { applyToFixture, decideKeywords, keywordsToast, lapseDismissal, readDone, readWhy, writeDismissal } from "./write.ts";
+import { applyToFixture, decideKeywords, keywordsToast, lapseDismissal, readDone, readOnlyReason, readWhy, writeDismissal } from "./write.ts";
 
 /**
  * Gaining ground's Dismiss and Restore, and the Plan's keyword candidates
@@ -28,8 +28,14 @@ test("dismiss: only a keyword the latest pull holds, stored as the pull has it, 
   assert.deepEqual(decideKeywords({ ...base, latest: null }), { op: "refuse", why: "failed" }, "an unread footprint is a failure, never a pass");
 });
 
-test("refused first: a viewer or an ended client, then the switch off", () => {
+test("refused first: a viewer or an ended client, each with its own reason, then the switch off", () => {
   assert.deepEqual(decideKeywords({ ...base, refused: "Only owners and editors can change what is tracked." }), { op: "refuse", why: "viewer" });
+  // 13 Oct 2026 (review of the P6 handoff): an owner on an ended client is refused by writeRole too, and told why.
+  assert.deepEqual(decideKeywords({ ...base, refused: "Only owners and editors can change what is tracked.", ended: true }), { op: "refuse", why: "ended" });
+  assert.equal(keywordsToast("refused", "ended", null), "Tracking has ended for this client, so its actions are read-only.");
+  assert.equal(readWhy("ended"), "ended");
+  assert.equal(readOnlyReason({ status: "ended" }), "Tracking has ended for this client, so its actions are read-only.");
+  assert.equal(readOnlyReason({ status: "active" }), "Viewers can't change this. Ask an owner or editor.");
   assert.deepEqual(decideKeywords({ ...base, enabled: false }), { op: "refuse", why: "dark" });
 });
 
@@ -80,6 +86,7 @@ const pull = (pulledOn: string, rows: ReturnType<typeof row>[]) => ({ pulledOn, 
 
 test("candidates: Tidy-up, one per free cluster slot, at most 3, from the top of the momentum order; none with no free slot", () => {
   const m = momentum({ latest: pull("2026-10-14", [row("one", 5, 900), row("two", 6, 800), row("three", 7, 700), row("four", 8, 600)]), previous: pull("2026-10-07", []), tracked: [], dismissed: new Set(), subject: { brand: "Tallyroo", domain: "tallyroo.com" }, showAll: false, today });
+  assert.equal(m.previousComplete, true, "an empty pull Labs totalled at 0 is complete: absence there is new");
   assert.deepEqual(keywordCandidatesFrom(m, 0), []);
   assert.deepEqual(keywordCandidatesFrom(m, 2).map((c) => c.title), ["Track 'one' as a cluster", "Track 'two' as a cluster"]);
   const all = keywordCandidatesFrom(m, 9);
@@ -96,21 +103,28 @@ test("candidates: Tidy-up, one per free cluster slot, at most 3, from the top of
 
 test("gather: the stored pulls, the client's slots, its tracked keywords and live dismissals, read one client at a time", async () => {
   const f = fakeDiyDb({
+    app_settings: settingsRows(),
     client_domains: [{ id: "c-tallyroo", brand_aliases: ["Tally Roo"], cluster_limit: 3 }],
     tracked_clusters: [{ id: "cl1", client_domain_id: "c-tallyroo", stopped_on: null }, { id: "cl2", client_domain_id: "c-tallyroo", stopped_on: "2026-09-01" }, { id: "x", client_domain_id: "other", stopped_on: null }],
     tracked_keywords: [{ keyword: "two", client_domain_id: "c-tallyroo", stopped_on: null }],
     diy_dismissals: [{ client_domain_id: "c-tallyroo", kind: "gaining_keyword", key: "three", until: "2026-12-01", by_email: "o", created_at: "2026-10-01T00:00:00Z" }],
     keyword_footprints: [
       { client_domain_id: "c-tallyroo", pulled_on: "2026-10-14", labs_date: "2026-10-12", total_count: 4, etv: 1, rows: [row("one", 5), row("two", 6), row("three", 7), row("tally roo app", 3), row("four", 8, 100)] },
-      { client_domain_id: "c-tallyroo", pulled_on: "2026-10-07", labs_date: "2026-10-05", total_count: 4, etv: 1, rows: [] },
+      { client_domain_id: "c-tallyroo", pulled_on: "2026-10-07", labs_date: "2026-10-05", total_count: 0, etv: 1, rows: [] },
       { client_domain_id: "other", pulled_on: "2026-10-15", labs_date: "2026-10-12", total_count: 1, etv: 1, rows: [row("not mine", 2)] },
     ],
   });
   const got = await keywordCandidates.gather(f.db, testClient(), today);
   assert.deepEqual(got.map((c) => c.dedupeKey), ["kw-gaining:one", "kw-gaining:four"], "2 slots free; tracked, dismissed and branded left out");
   assert.equal(keywordCandidates.name, "keywords");
-  const none = await keywordCandidates.gather(fakeDiyDb({ client_domains: [{ id: "c-tallyroo", cluster_limit: 3 }], tracked_clusters: [], tracked_keywords: [], diy_dismissals: [], keyword_footprints: [] }).db, testClient(), today);
+  const none = await keywordCandidates.gather(fakeDiyDb({ app_settings: settingsRows(), client_domains: [{ id: "c-tallyroo", cluster_limit: 3 }], tracked_clusters: [], tracked_keywords: [], diy_dismissals: [], keyword_footprints: [] }).db, testClient(), today);
   assert.deepEqual(none, [], "no pull yet: nothing");
+  // 13 Oct 2026 (review of the P6 handoff): dark, as the pages are. plan_refresh runs while the switch is off, and a
+  // stored pull must not keep offering "Track 'x'" with a why-link to a gaining ground the Google page hides.
+  f.tables.app_settings = settingsRows({ diy_enabled: false });
+  assert.deepEqual(await keywordCandidates.gather(f.db, testClient(), today), [], "switched off: nothing, whatever is stored");
+  f.tables.app_settings = [];
+  assert.deepEqual(await keywordCandidates.gather(f.db, testClient(), today), [], "an unread switch fails closed");
 });
 
 // ---- ready for the wave 2 shell (P9 registers both; this package does not edit wiring.ts) ----

@@ -18,13 +18,17 @@ import { draftPrompts } from "@/lib/tracking/add-cluster";
  * Track as a cluster opens Clusters' add panel prefilled (`?add=1&kw=&src=gaining`);
  * the client still presses Check keyword, the existing door with its Google
  * Ads volume and its 20 a day. Dismiss is a plain POST to the keywords route
- * that answers with a 303 and a toast. Viewers see both, disabled, with the
- * reason.
+ * that answers with a 303 and a toast. Viewers, and members of an ended
+ * client, see both disabled, with the reason that applies to them.
+ *
+ * The intent switch and the Dismissed list (with Restore) stay reachable when
+ * nothing is gaining under the current filter: a member who dismissed the
+ * last keyword, or whose only climbers are informational, can still restore
+ * one or see every intent (13 Oct 2026, review of the P6 handoff).
  */
 
 const H2: React.CSSProperties = { margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink };
 const BTN: React.CSSProperties = { display: "inline-flex", alignItems: "center", height: "44px", padding: "0 16px", boxSizing: "border-box", borderRadius: "12px", fontSize: "14px", fontWeight: 600, textDecoration: "none", fontFamily: "inherit", whiteSpace: "nowrap" };
-const VIEWER = "Viewers can't change this. Ask an owner or editor.";
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export type GainingState =
@@ -39,6 +43,8 @@ export default function GainingGround(p: {
   open: boolean;
   showAll: boolean;
   canWrite: boolean;
+  /** Why a member who cannot write cannot (write.ts readOnlyReason): a viewer's, or an ended client's. */
+  reason: string;
   /** Live dismissals, newest first, each with its Restore. */
   dismissed: readonly Dismissal[];
   /** The page's view state, which the forms carry back. */
@@ -50,7 +56,9 @@ export default function GainingGround(p: {
 }) {
   const route = `/api/app/${encodeURIComponent(p.slug)}/keywords?${new URLSearchParams(p.keep)}`;
   const s = p.state;
-  const head = s.kind === "ok" ? `${gainingSummary(s.m)} From DataForSEO's index, read ${formatDate(s.m.readOn)}.` : null;
+  const head = s.kind === "ok" ? `${gainingSummary(s.m, p.showAll)} From DataForSEO's index, read ${formatDate(s.m.readOn)}.` : null;
+  const total = s.kind === "ok" ? s.m.total : 0;
+  const pill = (on: boolean): React.CSSProperties => ({ display: "inline-flex", alignItems: "center", height: "36px", padding: "0 14px", borderRadius: "999px", border: `1px solid ${on ? T.washLine : T.line}`, background: on ? T.surface : "transparent", color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none" });
   return (
     <section id="gaining" aria-labelledby="gaining-h" style={{ scrollMarginTop: "24px", background: T.wash, border: `1px solid ${T.washLine}`, borderRadius: "18px", minWidth: 0 }}>
       <div className="gg-pad" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px 16px", flexWrap: "wrap", padding: "18px 22px" }}>
@@ -62,9 +70,25 @@ export default function GainingGround(p: {
             {s.kind === "ok" ? head : s.kind === "pending" ? `Your Google footprint is read weekly. First read ${formatDate(s.firstReadOn)}.` : s.kind === "none" ? `DataForSEO's index has no Google rankings for ${s.domain} yet (read ${formatDate(s.readOn)}).` : s.text}
           </p>
         </div>
-        {s.kind === "ok" && s.m.total ? (
+        {s.kind === "ok" && total ? (
           <Link href={p.toggle} scroll={false} aria-expanded={p.open} style={{ ...BTN, border: `1px solid ${T.washLine}`, background: T.surface, color: T.ink }}>
-            {p.open ? "Hide them" : `Show ${s.m.rows.length === s.m.total ? (s.m.total === 1 ? "it" : `all ${s.m.total}`) : `the top ${s.m.rows.length}`}`}
+            {p.open ? "Hide them" : `Show ${s.m.rows.length === total ? (total === 1 ? "it" : `all ${total}`) : `the top ${s.m.rows.length}`}`}
+          </Link>
+        ) : s.kind === "ok" && !p.open ? (
+          // Nothing gaining under this filter: the other intents, and the dismissed keywords, stay one link away.
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+            <Link href={p.intentHref(!p.showAll)} scroll={false} data-gaining-intent="" style={{ ...BTN, border: `1px solid ${T.washLine}`, background: T.surface, color: T.ink }}>
+              {p.showAll ? "Buying intent only" : "See every intent"}
+            </Link>
+            {p.dismissed.length ? (
+              <Link href={p.toggle} scroll={false} aria-expanded={false} style={{ ...BTN, border: `1px solid ${T.washLine}`, background: T.surface, color: T.ink }}>
+                {`Dismissed (${p.dismissed.length})`}
+              </Link>
+            ) : null}
+          </div>
+        ) : s.kind === "ok" ? (
+          <Link href={p.toggle} scroll={false} aria-expanded={true} style={{ ...BTN, border: `1px solid ${T.washLine}`, background: T.surface, color: T.ink }}>
+            Hide
           </Link>
         ) : null}
       </div>
@@ -82,67 +106,69 @@ export default function GainingGround(p: {
           ) : null}
         </div>
       ) : null}
-      {s.kind === "ok" && p.open && s.m.total ? (
+      {s.kind === "ok" && p.open ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "0 22px 20px" }} className="gg-pad">
           <nav aria-label="Which intents" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
             {[false, true].map((all) => (
-              <Link key={String(all)} href={p.intentHref(all)} aria-current={p.showAll === all ? "true" : undefined} scroll={false} style={{ display: "inline-flex", alignItems: "center", height: "36px", padding: "0 14px", borderRadius: "999px", border: `1px solid ${p.showAll === all ? T.washLine : T.line}`, background: p.showAll === all ? T.surface : "transparent", color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+              <Link key={String(all)} href={p.intentHref(all)} aria-current={p.showAll === all ? "true" : undefined} scroll={false} style={pill(p.showAll === all)}>
                 {all ? "Every intent" : "Buying intent only"}
               </Link>
             ))}
           </nav>
-          <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
-            {s.m.rows.map((g, i) => (
-              <li key={g.keyword} data-gaining={g.keyword} style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px 16px", flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0, flex: "1 1 280px" }}>
-                    <span style={{ fontSize: "15px", fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>{g.keyword}</span>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: T.goodFg }}>{gainingLabel(g, s.m.basis)}</span>
-                    <span style={{ fontSize: "13px", lineHeight: 1.5, color: T.soft, overflowWrap: "anywhere" }}>
-                      {[g.volume !== null ? `${g.volume.toLocaleString("en-GB")} searches a month` : null, g.intent ? cap(g.intent) : null, g.url ? `ranking with ${g.url}` : null].filter(Boolean).join(" · ")} (DataForSEO estimate)
-                    </span>
+          {total ? (
+            <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "8px" }}>
+              {s.m.rows.map((g, i) => (
+                <li key={g.keyword} data-gaining={g.keyword} style={{ background: T.surface, border: `1px solid ${T.line}`, borderRadius: "14px", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px 16px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", minWidth: 0, flex: "1 1 280px" }}>
+                      <span style={{ fontSize: "15px", fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>{g.keyword}</span>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: T.goodFg }}>{gainingLabel(g)}</span>
+                      <span style={{ fontSize: "13px", lineHeight: 1.5, color: T.soft, overflowWrap: "anywhere" }}>
+                        {[g.volume !== null ? `${g.volume.toLocaleString("en-GB")} searches a month` : null, g.intent ? cap(g.intent) : null, g.url ? `ranking with ${g.url}` : null].filter(Boolean).join(" · ")} (DataForSEO estimate)
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+                      {p.canWrite ? (
+                        <>
+                          <Link href={p.trackHref(g.keyword)} data-usage="gaining_track" data-track={g.keyword} style={{ ...BTN, background: T.accent, color: T.surface }}>
+                            Track as a cluster<span className="sr-only">{`: '${g.keyword}'`}</span>
+                          </Link>
+                          <form method="post" action={route} style={{ margin: 0 }}>
+                            <input id={`gg-do-${i}`} type="hidden" name="do" value="dismiss" />
+                            <input id={`gg-kw-${i}`} type="hidden" name="keyword" value={g.keyword} />
+                            <SubmitButton busy="Dismissing..." style={{ ...BTN, border: `1px solid ${T.line}`, background: T.surface, color: T.ink }}>
+                              Dismiss<span className="sr-only">{` '${g.keyword}'`}</span>
+                            </SubmitButton>
+                          </form>
+                        </>
+                      ) : (
+                        <>
+                          <button type="button" disabled aria-describedby="gg-viewer" style={{ ...BTN, border: 0, background: T.chip, color: T.soft, cursor: "not-allowed" }}>
+                            Track as a cluster
+                          </button>
+                          <button type="button" disabled aria-describedby="gg-viewer" style={{ ...BTN, border: `1px solid ${T.line}`, background: T.surface, color: T.soft, cursor: "not-allowed" }}>
+                            Dismiss
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-                    {p.canWrite ? (
-                      <>
-                        <Link href={p.trackHref(g.keyword)} data-usage="gaining_track" data-track={g.keyword} style={{ ...BTN, background: T.accent, color: T.surface }}>
-                          Track as a cluster<span className="sr-only">{`: '${g.keyword}'`}</span>
-                        </Link>
-                        <form method="post" action={route} style={{ margin: 0 }}>
-                          <input id={`gg-do-${i}`} type="hidden" name="do" value="dismiss" />
-                          <input id={`gg-kw-${i}`} type="hidden" name="keyword" value={g.keyword} />
-                          <SubmitButton busy="Dismissing..." style={{ ...BTN, border: `1px solid ${T.line}`, background: T.surface, color: T.ink }}>
-                            Dismiss<span className="sr-only">{` '${g.keyword}'`}</span>
-                          </SubmitButton>
-                        </form>
-                      </>
-                    ) : (
-                      <>
-                        <button type="button" disabled aria-describedby="gg-viewer" style={{ ...BTN, border: 0, background: T.chip, color: T.soft, cursor: "not-allowed" }}>
-                          Track as a cluster
-                        </button>
-                        <button type="button" disabled aria-describedby="gg-viewer" style={{ ...BTN, border: `1px solid ${T.line}`, background: T.surface, color: T.soft, cursor: "not-allowed" }}>
-                          Dismiss
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <details>
-                  <summary style={{ cursor: "pointer", minHeight: "32px", display: "flex", alignItems: "center", fontSize: "13px", fontWeight: 600, color: T.accent }}>Its 5 drafted prompts</summary>
-                  <ul style={{ margin: "6px 0 0", paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", lineHeight: 1.5, color: T.ink }}>
-                    {draftPrompts(g.keyword).map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
-                  <p style={{ margin: "6px 0 0", fontSize: "12px", color: T.soft }}>Drafted from the keyword. You can edit each one before tracking starts.</p>
-                </details>
-              </li>
-            ))}
-          </ol>
+                  <details>
+                    <summary style={{ cursor: "pointer", minHeight: "32px", display: "flex", alignItems: "center", fontSize: "13px", fontWeight: 600, color: T.accent }}>Its 5 drafted prompts</summary>
+                    <ul style={{ margin: "6px 0 0", paddingLeft: "18px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "13px", lineHeight: 1.5, color: T.ink }}>
+                      {draftPrompts(g.keyword).map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                    <p style={{ margin: "6px 0 0", fontSize: "12px", color: T.soft }}>Drafted from the keyword. You can edit each one before tracking starts.</p>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          ) : null}
           {!p.canWrite ? (
             <p id="gg-viewer" style={{ margin: 0, fontSize: "13px", color: T.soft }}>
-              {VIEWER}
+              {p.reason}
             </p>
           ) : null}
           {p.dismissed.length ? (
@@ -167,11 +193,21 @@ export default function GainingGround(p: {
               </ul>
             </div>
           ) : null}
-          <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.5, color: T.soft }}>
-            {`These are watch rows: weekly positions from DataForSEO's index, never counted in the daily figures above. ${s.m.basis === "ours" ? "Each is compared with our previous pull." : "With one pull so far, each is compared with DataForSEO's previous reading; from our second pull, with ours."} Climbing means up 5 or more places; new means it arrived in the top 20.`}
-          </p>
+          <p style={{ margin: 0, fontSize: "12px", lineHeight: 1.5, color: T.soft }}>{basisNote(s.m)}</p>
         </div>
       ) : null}
     </section>
   );
+}
+
+/** The block's footnote: what the rows are, and what each is compared with. */
+export function basisNote(m: Pick<Momentum, "basis" | "fallback" | "previousOn" | "previousRows">): string {
+  const watch = "These are watch rows: weekly positions from DataForSEO's index, never counted in the daily figures above. Positions are among Google's organic results.";
+  const rule = "Climbing means up 5 or more places; new means it arrived in the top 20.";
+  if (m.basis === "dataforseo") return `${watch} With one pull so far, each is compared with DataForSEO's own previous reading of that keyword, counted in places on the results page and dated on its row; from our second pull, with ours. ${rule}`;
+  const ours = `Each is compared with our previous pull, read ${formatDate(m.previousOn!)}.`;
+  const fb = m.fallback
+    ? ` That pull read the top ${m.previousRows.toLocaleString("en-GB")} keywords by estimated traffic, so ${m.fallback === 1 ? "one keyword" : `${m.fallback} keywords`} below it ${m.fallback === 1 ? "is" : "are"} compared with DataForSEO's own previous reading instead, as ${m.fallback === 1 ? "its row says" : "their rows say"}.`
+    : "";
+  return `${watch} ${ours}${fb} ${rule}`;
 }

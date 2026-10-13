@@ -29,6 +29,7 @@ import SetupSuggestions from "@/components/app/google/SetupSuggestions";
 import { loadFootprint } from "@/lib/diy/keywords/data";
 import { trackedSet } from "@/lib/diy/keywords/momentum";
 import { footprintFacts, setupSuggestions } from "@/lib/diy/keywords/setup-suggestions";
+import { readOnlyReason } from "@/lib/diy/keywords/write";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 
 export const dynamic = "force-dynamic";
@@ -287,7 +288,7 @@ export default async function ClientSetup({
         </p>
       )}
 
-      <SetupSuggestions items={suggestions} slug={slug} card={needs} canWrite={canWrite} addHref={(kw) => appPath(`/${encodeURIComponent(slug)}/clusters?${new URLSearchParams({ add: "1", kw, src: "gaining" })}`)} />
+      <SetupSuggestions items={suggestions} slug={slug} card={needs} canWrite={canWrite} reason={readOnlyReason(client)} addHref={(s) => appPath(`/${encodeURIComponent(slug)}/clusters?${new URLSearchParams({ add: "1", kw: s.keyword, ...(s.source === "gaining" ? { src: "gaining" } : {}) })}`)} />
 
       <span id="confirm" style={{ ...STEP, scrollMarginTop: "24px" }}>
         Step 3 of 3

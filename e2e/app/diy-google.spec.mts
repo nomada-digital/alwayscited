@@ -176,8 +176,10 @@ test("Tracked (full) at 1280: the figures, the bands, gaining ground's line, the
   assert.match((await all(page, '[data-keyword="k9"]'))[0] ?? "", /Not in the top 20/);
   assert.match(body, /No tracked keyword has fallen out of the top 20/);
   const sites = await all(page, "[data-site]");
-  assert.equal(sites.length, 10);
+  assert.ok(sites.length >= 5 && sites.length <= 10, `${sites.length}`);
   assert.ok(!sites.some((s) => s.startsWith("tallyroo.com")), "the client is left out");
+  // 13 Oct 2026 (review of the P6 handoff): a domain holding another client's placed page is left out whole, not listed with a smaller count.
+  assert.ok(!sites.some((s) => /^(softwarecritic\.com|ownerledger\.co)/.test(s)), sites.join(" | "));
   assert.match(body, /Derived from Google's top 10 for your keywords on 29 Sep 2026\./);
   assert.match((await all(page, '[aria-label="Upgrade"]'))[0] ?? "", /keywords sit just off page 1.*Shown because 3 of your 9 cluster keywords rank #11 to #20 today\./);
   assert.doesNotMatch(await page.content(), /best-bookkeeping-software/, "another client's placed page is in no list");
@@ -200,7 +202,9 @@ test("gaining ground expanded: 15 watch rows with Track and Dismiss, every inten
   assert.ok(await page.locator('[data-gaining="estimate template for contractors"]').count(), "a lapsed dismissal is back");
   assert.equal(await page.locator('[data-gaining="expense app for consultants"]').count(), 0, "the live dismissal is left out");
   assert.match((await all(page, "[data-dismissed]"))[0]!, /Dismissed \(1\)\s*expense app for consultants\s*out of this list until 20 Dec 2026\s*Restore/);
-  assert.match(await text(page), /These are watch rows: weekly positions from DataForSEO's index, never counted in the daily figures above\./);
+  assert.match(await text(page), /These are watch rows: weekly positions from DataForSEO's index, never counted in the daily figures above\. Positions are among Google's organic results\. Each is compared with our previous pull, read 22 Sep 2026\. That pull read the top 298 keywords by estimated traffic, so 3 keywords below it are compared with DataForSEO's own previous reading instead, as their rows say\./);
+  // A keyword missing from our previous pull (cut at its row limit) is new by DataForSEO's own reading, and says so with its date.
+  assert.match((await all(page, '[data-gaining="receipt scanner app for small business"]'))[0]!, /New at 12th since DataForSEO's reading of \d{1,2} \w{3} 2026/);
   assert.deepEqual(await axe(page), []);
   await ctx.close();
   const every = await open(`${GOOGLE}?gaining=1&intent=all`);
@@ -215,9 +219,16 @@ test("gaining ground expanded: 15 watch rows with Track and Dismiss, every inten
 test("day0 and nofootprint: DataForSEO's previous reading is named as the comparison; an empty pull is said as one", async () => {
   as("default", { diy: "day0" });
   const day0 = await open(`${GOOGLE}?gaining=1`);
-  assert.match((await all(day0.page, "[data-gaining]"))[0]!, /by DataForSEO's previous reading/);
-  assert.match(await text(day0.page), /With one pull so far, each is compared with DataForSEO's previous reading/);
+  const labels = await all(day0.page, "[data-gaining]");
+  assert.ok(labels.every((l) => /since DataForSEO's reading of \d{1,2} \w{3} 2026/.test(l)), labels[0]);
+  // A climb against DataForSEO's reading is counted on the whole results page, as that reading is, and the position shown is the organic one.
+  assert.ok(labels.some((l) => /Up \d+ places on the results page since DataForSEO's reading of \d{1,2} \w{3} 2026; now \d+(st|nd|rd|th)/.test(l)), labels.join(" | "));
+  assert.match(await text(day0.page), /With one pull so far, each is compared with DataForSEO's own previous reading of that keyword, counted in places on the results page and dated on its row/);
+  assert.deepEqual(await axe(day0.page), []);
   await day0.ctx.close();
+  const day0all = await open(`${GOOGLE}?view=all`);
+  assert.match(await text(day0all.page), /With one pull so far, change is against DataForSEO's own previous reading of each keyword, in places on the results page\./);
+  await day0all.ctx.close();
   as("default", { diy: "nofootprint" });
   const none = await open(GOOGLE);
   assert.equal((await all(none.page, "[data-gaining-summary]"))[0], "DataForSEO's index has no Google rankings for tallyroo.com yet (read 29 Sep 2026).");
@@ -241,6 +252,32 @@ test("dark: gaining ground and the All view are hidden, and the view switch show
   await save(GOOGLE, "google", "dark");
 });
 
+test("zero: nothing gaining with a buying intent, and every intent and the dismissed keyword stay one link away, with Restore (JS off)", async () => {
+  as("default", { diy: "zero", write: true });
+  const look = await open(GOOGLE);
+  assert.equal((await all(look.page, "[data-gaining-summary]"))[0], "No untracked keyword with a buying intent is gaining ground in this pull. From DataForSEO's index, read 29 Sep 2026.");
+  assert.match((await look.page.locator("[data-gaining-intent]").getAttribute("href")) ?? "", /gaining=1&intent=all|intent=all.*gaining=1/);
+  assert.deepEqual(await axe(look.page), []);
+  await look.ctx.close();
+  const every = await open(`${GOOGLE}?gaining=1&intent=all`);
+  assert.equal((await all(every.page, "[data-gaining-summary]"))[0], "No untracked keyword is gaining ground in this pull. From DataForSEO's index, read 29 Sep 2026.");
+  assert.equal(await every.page.locator('nav[aria-label="Which intents"] a[aria-current="true"]').innerText(), "Every intent");
+  assert.deepEqual(await axe(every.page), []);
+  await every.ctx.close();
+  const { ctx, page } = await open(GOOGLE, 1280, false);
+  await page.locator('#gaining a:has-text("Dismissed (1)")').click();
+  await page.waitForURL(/gaining=1/, { timeout: 15_000 });
+  assert.match((await all(page, "[data-dismissed]"))[0]!, /Dismissed \(1\)\s*expense app for consultants\s*out of this list until 20 Dec 2026\s*Restore/);
+  assert.equal(await page.locator('nav[aria-label="Which intents"] a').count(), 2, "the intent switch shows with nothing gaining");
+  await page.locator("[data-dismissed] button[type=submit]").click();
+  await page.waitForURL(/done=restored/, { timeout: 15_000 });
+  assert.match((await all(page, "[data-gaining-notice]"))[0]!, /^Restored\./);
+  assert.equal(await page.locator("[data-dismissed]").count(), 0);
+  await ctx.close();
+  as("default", { diy: "zero" });
+  await save(`${GOOGLE}?gaining=1`, "google", "zero");
+});
+
 // ---- the All view ----
 
 test("All ranking keywords: the estimates labelled, 100 rows a page, search, intent and band filters, and paging", async () => {
@@ -250,8 +287,18 @@ test("All ranking keywords: the estimates labelled, 100 rows a page, search, int
   const figs = await all(page, "[data-figure]");
   assert.equal(figs.length, 4);
   for (const f of figs) assert.match(f, /DataForSEO estimate, read 29 Sep 2026/);
-  assert.match(figs[0]!, /^Ranking keywords\s*1,342/);
-  assert.match(await text(page), /300 ranking keywords/);
+  assert.match(figs[0]!, /^Ranking keywords\s*1,342\s*The top 300 read, by estimated traffic\./);
+  // 13 Oct 2026 (review of the P6 handoff): the table says it holds the top rows by estimated traffic, not every keyword.
+  assert.equal((await all(page, "#all-h"))[0], "300 of 1,342 ranking keywords, by estimated traffic");
+  assert.match(await text(page), /The top 300 of the 1,342 keywords DataForSEO's index has your site ranking for in Google's top 100, by estimated traffic, read weekly at most\. Positions are among Google's organic results\./);
+  assert.match(await text(page), /Change is against our previous pull, read 22 Sep 2026, which held the top 298 by estimated traffic: a keyword below that has no change shown\./);
+  // Only a keyword gaining ground carries the Momentum origin from Track.
+  const gainingTrack = await page.locator('[data-ranking="payroll software for sole traders"] a').getAttribute("href");
+  assert.match(gainingTrack ?? "", /src=gaining/);
+  const tracks = await page.evaluate(() => [...document.querySelectorAll("[data-ranking] a")].map((a) => ({ src: /[?&]src=gaining\b/.test(a.getAttribute("href") ?? ""), usage: a.getAttribute("data-usage") })));
+  assert.ok(tracks.some((t) => t.src) && tracks.some((t) => !t.src), "both kinds of row on the page");
+  assert.ok(tracks.every((t) => t.src === (t.usage === "gaining_track")), "src=gaining and gaining_track go together, on gaining keywords only");
+  assert.ok(tracks.filter((t) => t.src).length <= 15);
   assert.match(await text(page), /Page 1 of 3/);
   assert.doesNotMatch(await page.content(), /difficulty|\bKD\b/i);
   assert.deepEqual(await axe(page), []);
@@ -263,6 +310,7 @@ test("All ranking keywords: the estimates labelled, 100 rows a page, search, int
   const q = await open(`${GOOGLE}?view=all&q=invoice`);
   const kws = (await all(q.page, "[data-ranking]")).map((t) => t.toLowerCase());
   assert.ok(kws.length > 0 && kws.every((t) => t.includes("invoice")), "search narrows to the term");
+  assert.match((await all(q.page, "#all-h"))[0]!, /^\d+ ranking keywords? match(es)?, of the top 300 by estimated traffic$/);
   await q.ctx.close();
   const intent = await open(`${GOOGLE}?view=all&intent=informational`);
   const n = await intent.page.locator("[data-ranking]").count();
@@ -277,17 +325,29 @@ test("All ranking keywords: the estimates labelled, 100 rows a page, search, int
   await noSideways(`${GOOGLE}?view=all`);
 });
 
-test("who holds page 1: a keyword's row opens Google's top 10 at its latest reading, less another client's placed page, ranks unrenumbered", async () => {
+test("who holds page 1: a keyword's row opens Google's top 10 at its latest reading, less another client's placed page, in Google's order with no rank numbers; axe passes with it open", async () => {
   as("default");
   const { ctx, page } = await open(`${GOOGLE}?row=k4`);
-  const ranks = await page.evaluate(() => [...document.querySelectorAll("[data-page-one=k4] [data-rank]")].map((e) => Number(e.getAttribute("data-rank"))));
-  assert.deepEqual(ranks, [1, 3, 4, 5, 6, 7, 8, 9, 10]);
-  assert.match((await all(page, "[data-page-one=k4]"))[0]!, /Google's organic results for this keyword, checked 29 Sep 2026\./);
+  const hits = await page.evaluate(() => [...document.querySelectorAll("[data-page-one=k4] [data-hit]")].map((e) => e.getAttribute("data-hit")));
+  assert.equal(hits.length, 9, "the top 10 less the placed page");
+  assert.equal(hits[0], "quickledger.example");
+  const panel = (await all(page, "[data-page-one=k4]"))[0]!;
+  assert.match(panel, /Google's organic results for this keyword, top to bottom, checked 29 Sep 2026\./);
+  // 13 Oct 2026 (review of the P6 handoff): no numbered gap pointing at the page left out, in the text or the markup.
+  assert.doesNotMatch(panel, /\b(1st|2nd|3rd|10th)\b/);
+  assert.doesNotMatch(await page.content(), /best-bookkeeping-software|data-rank=/);
   const out = await page.evaluate(() => [...document.querySelectorAll<HTMLAnchorElement>("[data-page-one] a")].map((a) => a.rel));
   assert.ok(out.length && out.every((r) => r.includes("noopener")));
   assert.equal(await page.locator('[data-keyword="k4"] a[aria-expanded="true"]').count(), 1);
+  assert.deepEqual(await axe(page), []);
   await ctx.close();
+  await save(`${GOOGLE}?row=k4`, "google", "row");
 });
+
+// Not yet exercisable here (13 Oct 2026, review of the P6 handoff): no tracking fixture state has a keyword losing
+// ground, positions come from fixture.json (never edited) through fixture-mode.ts (not this package's file), and the
+// card's link goes to P8's /pages, which 404s until P8 merges. Handed to the wave 2 shell (P9).
+test.todo("losing ground, listed: a keyword that held 16th or better and is outside the top 20 on 2 of its last 3 readings, its copy, and its link to Your pages (/pages?url=) resolving");
 
 // ---- writes, with JS off ----
 
@@ -329,6 +389,20 @@ test("a viewer sees Track and Dismiss disabled with the reason, and a post is re
   assert.match(res.headers.get("location") ?? "", /done=refused&why=viewer/);
 });
 
+test("an ended client: an owner sees the controls disabled with the ended reason, and a post is refused with it", async () => {
+  as("ended", { write: true });
+  const { ctx, page } = await open(`${GOOGLE}?gaining=1`);
+  assert.equal(await page.locator("[data-gaining] [data-track]").count(), 0);
+  assert.equal((await all(page, "#gg-viewer"))[0], "Tracking has ended for this client, so its actions are read-only.");
+  assert.deepEqual(await axe(page), []);
+  await ctx.close();
+  const res = await fetch(`${BASE}/api/app/tallyroo/keywords`, { method: "POST", body: new URLSearchParams({ do: "dismiss", keyword: "invoice app for contractors" }), redirect: "manual" });
+  assert.match(res.headers.get("location") ?? "", /done=refused&why=ended/);
+  const toast = await open(new URL(res.headers.get("location")!).pathname + new URL(res.headers.get("location")!).search);
+  assert.match((await all(toast.page, "[data-gaining-notice]"))[0]!, /^Tracking has ended for this client, so its actions are read-only\.$/);
+  await toast.ctx.close();
+});
+
 test("Track lands on Clusters with the panel open and prefilled; after Check keyword and add, the cluster's prompts carry the Momentum chip (JS off)", async () => {
   as("default", { write: true });
   // Every cluster is in use on the fixture: stop the pending one to free a slot, as a member would.
@@ -338,7 +412,7 @@ test("Track lands on Clusters with the panel open and prefilled; after Check key
   const cl = await open(`${APP}/clusters`);
   const sugg = await all(cl.page, "[data-suggestion]");
   assert.equal(sugg.length, 5);
-  assert.match(sugg[0]!, /^receipt scanner app for small business\s*New at 12th, \/receipts; 2,400 searches a month \(DataForSEO estimate, read 29 Sep 2026\)\./);
+  assert.match(sugg[0]!, /^receipt scanner app for small business\s*New at 12th since DataForSEO's reading of \d{1,2} \w{3} 2026, \/receipts; 2,400 searches a month \(DataForSEO estimate, read 29 Sep 2026\)\./);
   assert.match((await cl.page.locator("[data-suggestion] a").first().getAttribute("href")) ?? "", /add=1&kw=receipt\+scanner\+app\+for\+small\+business&src=gaining/);
   assert.deepEqual(await axe(cl.page), []);
   await cl.ctx.close();
@@ -384,6 +458,14 @@ test("setup suggestions: up to 10 keywords the site ranks for, with the checkout
   const look = await open(`${APP}/setup`);
   assert.deepEqual(await axe(look.page), []);
   await look.ctx.close();
+  // 13 Oct 2026 (review of the P6 handoff): the keyword typed at checkout keeps a slot, and gaining ground comes before the footprint's tail.
+  as("signup-typed");
+  const typed = await open(`${APP}/setup`);
+  const listed = await all(typed.page, "[data-suggestion]");
+  assert.ok(listed.length <= 10);
+  assert.match(listed[listed.length - 1]!, /^invoicing app for freelancers\s*The keyword you gave at checkout\./);
+  assert.ok(listed.some((l) => /since DataForSEO's reading of|Up from \d+(st|nd|rd|th) to/.test(l)), "gaining ground is listed");
+  await typed.ctx.close();
   await save(`${APP}/setup`, "setup", "suggested");
   as("signup", { role: "viewer" });
   const viewer = await open(`${APP}/setup`);

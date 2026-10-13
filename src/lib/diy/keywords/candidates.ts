@@ -6,6 +6,8 @@ import type { DiyClient } from "../core/client.ts";
 import { formatDate } from "../../format-date.ts";
 import type { Candidate, CandidateSource } from "../plan/types.ts";
 
+import { loadDiyEnabled } from "../core/settings.ts";
+
 import { type Dismissal, liveDismissal, readDismissals, readPulls } from "./data.ts";
 import { type Momentum, gainingLabel, momentum } from "./momentum.ts";
 
@@ -23,6 +25,11 @@ import { type Momentum, gainingLabel, momentum } from "./momentum.ts";
  * origin. Graded Common practice: tracking a keyword promises nothing, and
  * the copy says no outcome. With no free slot there is no candidate - the
  * Google page's U7 says that instead.
+ *
+ * Dark as the pages are (spec 10 section 4): plan_refresh is free and runs
+ * while diy_enabled is off, so gather reads the switch first and offers
+ * nothing while it is off - no stale footprint, and no why-link to a gaining
+ * ground the Google page hides (13 Oct 2026, review of the P6 handoff).
  */
 
 export const MAX_KEYWORD_CANDIDATES = 3;
@@ -59,7 +66,7 @@ export function keywordCandidatesFrom(m: Momentum | null, free: number): Candida
     clusterId: null,
     title: `Track '${g.keyword}' as a cluster`,
     why: [
-      { text: `${gainingLabel(g, m.basis)} on Google${g.volume !== null ? `, ${g.volume.toLocaleString("en-GB")} searches a month` : ""} (DataForSEO estimate, read ${formatDate(m.readOn)}).`, href: "/google?gaining=1" },
+      { text: `${gainingLabel(g)} on Google${g.volume !== null ? `, ${g.volume.toLocaleString("en-GB")} searches a month` : ""} (DataForSEO estimate, read ${formatDate(m.readOn)}).`, href: "/google?gaining=1" },
       { text: `${free} of your cluster slots ${free === 1 ? "is" : "are"} free.`, href: "/clusters" },
     ],
     grade: "practice",
@@ -73,6 +80,7 @@ export function keywordCandidatesFrom(m: Momentum | null, free: number): Candida
 export const keywordCandidates: CandidateSource = {
   name: "keywords",
   async gather(db, client: DiyClient, today: Day) {
+    if (!(await loadDiyEnabled(db))) return [];
     const [pulls, facts, dismissals] = await Promise.all([readPulls(db, client.id), readClientFacts(db, client.id), readDismissals(db, client.id)]);
     if (!pulls.latest) return [];
     const m = momentum({

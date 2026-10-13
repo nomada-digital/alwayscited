@@ -1,9 +1,10 @@
 import { type Intent, keywordForm } from "../../scan/dataforseo-request.ts";
 import { type Day, addDays } from "../../tracking/figures.ts";
 import { type Subject, namesBrandIn } from "../../tracking/limits.ts";
+import { formatDate } from "../../format-date.ts";
 import { ordinal } from "../plan/words.ts";
 
-import type { FootprintRow, Pull } from "./footprint.ts";
+import { type FootprintRow, type Pull, completePull } from "./footprint.ts";
 
 /**
  * Keyword momentum (13 Oct 2026, DIY P6; spec 10 section 6.6): Nomada's rule
@@ -23,6 +24,19 @@ import type { FootprintRow, Pull } from "./footprint.ts";
  *     else skip
  *     key = gain * max(10, r.volume)
  *   keep the top 15 by key, with their volume, intent and URL carried       (fix 3)
+ *
+ * Positions are organic (`p`, rank_group), as every DIY page shows them, and
+ * our two pulls are compared on that basis. DataForSEO's own previous reading
+ * is a rank_absolute, so a row compared with it uses the row's rank_absolute
+ * (`a`) for the climb and says the climb is in places on the results page,
+ * with that reading's date (13 Oct 2026, review of the P6 handoff).
+ *
+ * A keyword missing from our previous pull is "new" only when that pull was
+ * complete. Each pull is the top 1000 rows by estimated traffic, so for a
+ * bigger site a missing keyword may only have been below the cut: such a row
+ * is compared with DataForSEO's own previous reading instead, and is new only
+ * when DataForSEO says its earlier results did not hold the site (`is_new`),
+ * never from absence alone (review of the P6 handoff, 13 Oct 2026).
  *
  * The order key is an order, never a figure: it is not returned, and no page
  * shows it (spec 2.6, "no new figure definitions"). Ties go to volume, then
@@ -49,14 +63,21 @@ export const MOMENTUM = {
 
 const COMMERCIAL: ReadonlySet<string> = new Set(["commercial", "transactional"]);
 
+/** What a row is compared with: our previous pull (organic positions), or DataForSEO's own previous reading (places on the results page). */
+export type Basis = "ours" | "dataforseo";
+
 export type Gaining = {
   keyword: string;
+  /** Organic position, rank_group. */
   position: number;
-  /** The reading it is compared with: our previous pull's position, or DataForSEO's own previous rank; null for a new one. */
+  /** The reading it is compared with: our previous pull's organic position, or DataForSEO's previous rank_absolute; null for a new one. */
   previous: number | null;
   kind: "new" | "climbing";
-  /** Places gained, for a climb. */
+  /** Places gained, for a climb: organic places on our basis, places on the results page on DataForSEO's. */
   gain: number;
+  basis: Basis;
+  /** The compared reading's day: our previous pull's, or DataForSEO's previous_updated_time; null when unknown. */
+  since: Day | null;
   volume: number | null;
   intent: Intent | null;
   /** The ranking page's path, as Labs gives it. */
@@ -73,8 +94,15 @@ export type Momentum = {
   new: number;
   /** Search volume across every kept keyword, a DataForSEO estimate. */
   volume: number;
-  /** "ours": compared with our previous pull. "dataforseo": one pull only, compared with DataForSEO's own previous reading. */
-  basis: "ours" | "dataforseo";
+  /** "ours": there is a previous pull of ours. "dataforseo": one pull only, every row compared with DataForSEO's own previous reading. */
+  basis: Basis;
+  /** With a previous pull, the kept rows compared with DataForSEO's reading instead (absent from a pull cut at its row limit). */
+  fallback: number;
+  /** Our previous pull's day, when there is one. */
+  previousOn: Day | null;
+  /** Our previous pull's rows read, and whether it held every keyword Labs had. */
+  previousRows: number;
+  previousComplete: boolean;
   /** The latest pull's day: its "read <date>" label. */
   readOn: Day;
 };
@@ -106,10 +134,31 @@ function byKey(a: Gaining & { key: number }, b: Gaining & { key: number }): numb
   return b.key - a.key || (b.volume ?? 0) - (a.volume ?? 0) || a.position - b.position || a.keyword.localeCompare(b.keyword);
 }
 
+/** What one row is compared with, or null when nothing it can honestly be compared with says it gained. */
+function compare(r: FootprintRow & { p: number }, prevAt: ReadonlyMap<string, number | null> | null, complete: boolean, previousOn: Day | null): Pick<Gaining, "previous" | "kind" | "gain" | "basis" | "since"> | null {
+  const key = keywordForm(r.k);
+  if (prevAt && (prevAt.has(key) || complete)) {
+    // Our own two pulls, organic on both sides.
+    const prev = prevAt.get(key) ?? null;
+    if (prevAt.has(key) && prev === null) return null; // in the pull, position unread: unknown, not new
+    if (prev === null) return r.p <= MOMENTUM.newDepth ? { previous: null, kind: "new", gain: 101 - r.p, basis: "ours", since: previousOn } : null;
+    return prev - r.p >= MOMENTUM.climb ? { previous: prev, kind: "climbing", gain: prev - r.p, basis: "ours", since: previousOn } : null;
+  }
+  // DataForSEO's own previous reading: rank_absolute against rank_absolute.
+  const since = r.pd ?? null;
+  if (r.pr !== undefined && r.pr !== null) {
+    if (r.a === undefined || r.a === null) return null;
+    return r.pr - r.a >= MOMENTUM.climb ? { previous: r.pr, kind: "climbing", gain: r.pr - r.a, basis: "dataforseo", since } : null;
+  }
+  return r.n === true && r.p <= MOMENTUM.newDepth ? { previous: null, kind: "new", gain: 101 - r.p, basis: "dataforseo", since } : null;
+}
+
 export function momentum(input: MomentumInput): Momentum {
   const tracked = trackedSet(input.tracked, input.today);
   const dismissed = new Set([...input.dismissed].map(keywordForm));
-  const prevAt = input.previous ? new Map(input.previous.rows.map((r) => [keywordForm(r.k), r.p] as const)) : null;
+  const prev = input.previous;
+  const prevAt = prev ? new Map(prev.rows.map((r) => [keywordForm(r.k), r.p] as const)) : null;
+  const complete = prev ? completePull(prev) : false;
   const kept: (Gaining & { key: number })[] = [];
   for (const r of input.latest.rows) {
     if (r.p === null || r.p < 1 || r.p > MOMENTUM.depth) continue;
@@ -117,39 +166,45 @@ export function momentum(input: MomentumInput): Momentum {
     if (tracked.has(key) || dismissed.has(key) || namesBrandIn(r.k, input.subject)) continue;
     if (!input.showAll && !commercial(r)) continue;
     if ((r.v ?? 0) < MOMENTUM.minVolume) continue;
-    const prev = prevAt ? (prevAt.get(key) ?? null) : (r.pr ?? null);
-    let gain: number;
-    let kind: Gaining["kind"];
-    if (prev === null && r.p <= MOMENTUM.newDepth) {
-      gain = 101 - r.p;
-      kind = "new";
-    } else if (prev !== null && prev - r.p >= MOMENTUM.climb) {
-      gain = prev - r.p;
-      kind = "climbing";
-    } else continue;
-    kept.push({ keyword: r.k, position: r.p, previous: prev, kind, gain, volume: r.v, intent: r.i, url: r.u, etv: r.e, key: gain * Math.max(MOMENTUM.keyFloor, r.v ?? 0) });
+    const c = compare({ ...r, p: r.p }, prevAt, complete, prev?.pulledOn ?? null);
+    if (!c) continue;
+    kept.push({ keyword: r.k, position: r.p, ...c, volume: r.v, intent: r.i, url: r.u, etv: r.e, key: c.gain * Math.max(MOMENTUM.keyFloor, r.v ?? 0) });
   }
   kept.sort(byKey);
   return {
-    rows: kept.slice(0, MOMENTUM.top).map((g) => ({ keyword: g.keyword, position: g.position, previous: g.previous, kind: g.kind, gain: g.gain, volume: g.volume, intent: g.intent, url: g.url, etv: g.etv })),
+    rows: kept.slice(0, MOMENTUM.top).map(({ key: _key, ...g }) => g),
     total: kept.length,
     climbing: kept.filter((g) => g.kind === "climbing").length,
     new: kept.filter((g) => g.kind === "new").length,
     volume: kept.reduce((s, g) => s + (g.volume ?? 0), 0),
-    basis: input.previous ? "ours" : "dataforseo",
+    basis: prev ? "ours" : "dataforseo",
+    fallback: prev ? kept.slice(0, MOMENTUM.top).filter((g) => g.basis === "dataforseo").length : 0,
+    previousOn: prev?.pulledOn ?? null,
+    previousRows: prev?.rows.length ?? 0,
+    previousComplete: complete,
     readOn: input.latest.pulledOn,
   };
 }
 
-/** "Up from 18th to 7th" or "New at 12th". With one pull only, the comparison is DataForSEO's own previous reading, and says so. */
-export function gainingLabel(g: Pick<Gaining, "kind" | "position" | "previous">, basis: Momentum["basis"]): string {
-  if (g.kind === "new") return `New at ${ordinal(g.position)}${basis === "dataforseo" ? ", by DataForSEO's previous reading" : ""}`;
-  return `Up from ${ordinal(g.previous!)} to ${ordinal(g.position)}${basis === "dataforseo" ? ", by DataForSEO's previous reading" : ""}`;
+/** "DataForSEO's reading of 9 Sep", or "DataForSEO's previous reading" when its day is unknown. */
+const theirs = (since: Day | null) => (since ? `DataForSEO's reading of ${formatDate(since)}` : "DataForSEO's previous reading");
+
+/**
+ * "Up from 18th to 7th" or "New at 12th", against our previous pull. Against
+ * DataForSEO's own reading the climb is counted in places on the results page
+ * (rank_absolute, as that reading is) and the position shown is the organic
+ * one, each said: "Up 7 places on the results page since DataForSEO's reading
+ * of 9 Sep; now 6th", or "New at 12th since DataForSEO's reading of 9 Sep".
+ */
+export function gainingLabel(g: Pick<Gaining, "kind" | "position" | "previous" | "gain" | "basis" | "since">): string {
+  if (g.basis === "ours") return g.kind === "new" ? `New at ${ordinal(g.position)}` : `Up from ${ordinal(g.previous!)} to ${ordinal(g.position)}`;
+  if (g.kind === "new") return `New at ${ordinal(g.position)} since ${theirs(g.since)}`;
+  return `Up ${g.gain} ${g.gain === 1 ? "place" : "places"} on the results page since ${theirs(g.since)}; now ${ordinal(g.position)}`;
 }
 
 /** The block's one line: "7 untracked keywords gaining ground: 4 climbing, 3 new, 2,900 searches a month between them." */
-export function gainingSummary(m: Pick<Momentum, "total" | "climbing" | "new" | "volume">): string {
-  if (!m.total) return "No untracked keyword is gaining ground in this pull.";
+export function gainingSummary(m: Pick<Momentum, "total" | "climbing" | "new" | "volume">, showAll = true): string {
+  if (!m.total) return showAll ? "No untracked keyword is gaining ground in this pull." : "No untracked keyword with a buying intent is gaining ground in this pull.";
   const parts = [m.climbing ? `${m.climbing} climbing` : null, m.new ? `${m.new} new` : null].filter(Boolean).join(", ");
   const vol = m.volume ? `, ${m.volume.toLocaleString("en-GB")} searches a month between them` : "";
   return `${m.total} untracked ${m.total === 1 ? "keyword" : "keywords"} gaining ground: ${parts}${vol}.`;

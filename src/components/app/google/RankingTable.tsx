@@ -3,13 +3,15 @@ import Link from "@/components/app/AppLink";
 import { T } from "@/config/tokens";
 import type { RankingRow, RankingSort } from "@/lib/diy/keywords/ranking";
 import { ordinal } from "@/lib/diy/plan/words";
+import { keywordForm } from "@/lib/scan/dataforseo-request";
 
 /**
  * "All ranking keywords" (13 Oct 2026, DIY P6; spec 10 section 4.3,
  * `?view=all`): every keyword in the latest footprint pull, a DataForSEO
  * estimate. Keyword, position, change since the previous reading, volume,
  * estimated traffic, intent and page; no difficulty column (spec 2.3). Each
- * untracked row has Track as a cluster. Sorting is links in the heads, so it
+ * untracked row has Track as a cluster; only a keyword gaining ground carries
+ * the Momentum origin (src=gaining) and counts as gaining_track. Sorting is links in the heads, so it
  * works with JS off; below 860px a row is a card with its position on the
  * right.
  */
@@ -33,7 +35,7 @@ function Head({ label, sort, link, align = "left" }: { label: string; sort: Rank
   );
 }
 
-export default function RankingTable({ rows, link, trackHref, canWrite, basis }: { rows: readonly RankingRow[]; link: RankSortLink; trackHref: (keyword: string) => string; canWrite: boolean; basis: "ours" | "dataforseo" }) {
+export default function RankingTable({ rows, link, trackHref, canWrite, basis, gaining }: { rows: readonly RankingRow[]; link: RankSortLink; trackHref: (keyword: string) => string; canWrite: boolean; basis: "ours" | "dataforseo"; /** Keywords gaining ground: only their Track counts as gaining_track and carries src=gaining. */ gaining: ReadonlySet<string> }) {
   return (
     <div role="table" aria-label="Every keyword you rank for, DataForSEO estimate" style={{ display: "flex", flexDirection: "column" }}>
       <div role="row" className="gk-grid gr-head" style={{ ...GRID, padding: "10px 24px", borderTop: `1px solid ${T.line}`, borderBottom: `1px solid ${T.line}` }}>
@@ -61,7 +63,7 @@ export default function RankingTable({ rows, link, trackHref, canWrite, basis }:
               {r.tracked ? (
                 <span style={{ alignSelf: "flex-start", fontSize: "12px", fontWeight: 600, color: T.goodFg, background: T.goodBg, borderRadius: "999px", padding: "2px 9px" }}>Tracked</span>
               ) : canWrite ? (
-                <Link href={trackHref(r.keyword)} data-usage="gaining_track" style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", minHeight: "32px", fontSize: "13px", fontWeight: 600, color: T.accent, textDecoration: "none" }}>
+                <Link href={trackHref(r.keyword)} {...(gaining.has(keywordForm(r.keyword)) ? { "data-usage": "gaining_track" } : {})} style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", minHeight: "32px", fontSize: "13px", fontWeight: 600, color: T.accent, textDecoration: "none" }}>
                   Track as a cluster<span className="sr-only">{`: '${r.keyword}'`}</span>
                 </Link>
               ) : null}

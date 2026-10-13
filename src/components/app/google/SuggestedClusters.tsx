@@ -8,11 +8,15 @@ import type { Suggestion } from "@/lib/diy/keywords/setup-suggestions";
  * cluster slot is free, up to 5 keywords to track - gaining ground first,
  * then keywords the client already ranks 4th to 30th for with a buying
  * intent - each with its reason line and its estimate's read date. "Use this
- * keyword" opens the Add panel prefilled (`?add=1&kw=&src=gaining`), so the
- * existing Check keyword still decides, at 20 a day. A link, so it works with
- * JS off. Viewers see the list with the control disabled and the reason.
+ * keyword" opens the Add panel prefilled (`?add=1&kw=`), so the existing
+ * Check keyword still decides, at 20 a day. A link, so it works with JS off.
+ * Only a gaining-ground keyword's link carries `src=gaining` and counts as
+ * gaining_track: the Momentum origin is for an add that came from gaining
+ * ground (spec 10 section 6.6), and its chip links there (13 Oct 2026, review
+ * of the P6 handoff). Viewers, and members of an ended client, see the list
+ * with the control disabled and the reason that applies to them.
  */
-export default function SuggestedClusters({ items, hrefFor, canWrite, free }: { items: readonly Suggestion[]; hrefFor: (keyword: string) => string; canWrite: boolean; free: number }) {
+export default function SuggestedClusters({ items, hrefFor, canWrite, reason, free }: { items: readonly Suggestion[]; hrefFor: (s: Suggestion) => string; canWrite: boolean; reason: string; free: number }) {
   if (!items.length) return null;
   return (
     <section aria-labelledby="suggested-h" data-suggested="" style={{ padding: "18px 22px", borderRadius: "18px", background: T.surface, border: `1px solid ${T.line}`, display: "flex", flexDirection: "column", gap: "12px", minWidth: 0 }}>
@@ -30,7 +34,7 @@ export default function SuggestedClusters({ items, hrefFor, canWrite, free }: { 
               <span style={{ fontSize: "13px", lineHeight: 1.5, color: T.soft, overflowWrap: "anywhere" }}>{s.reason}</span>
             </span>
             {canWrite ? (
-              <Link href={hrefFor(s.keyword)} scroll={false} data-usage="gaining_track" style={{ display: "inline-flex", alignItems: "center", height: "44px", padding: "0 14px", borderRadius: "10px", border: `1px solid ${T.line}`, background: T.surface, color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
+              <Link href={hrefFor(s)} scroll={false} {...(s.source === "gaining" ? { "data-usage": "gaining_track" } : {})} style={{ display: "inline-flex", alignItems: "center", height: "44px", padding: "0 14px", borderRadius: "10px", border: `1px solid ${T.line}`, background: T.surface, color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }}>
                 Use this keyword<span className="sr-only">{`: '${s.keyword}'`}</span>
               </Link>
             ) : (
@@ -43,7 +47,7 @@ export default function SuggestedClusters({ items, hrefFor, canWrite, free }: { 
       </ul>
       {canWrite ? null : (
         <p id="suggested-viewer" style={{ margin: 0, fontSize: "13px", color: T.soft }}>
-          Viewers can&apos;t change this. Ask an owner or editor.
+          {reason}
         </p>
       )}
     </section>

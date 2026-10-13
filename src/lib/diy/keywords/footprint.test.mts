@@ -38,10 +38,12 @@ test("the compacted footprint keeps the named fields and no keyword_difficulty, 
   const fp = compactFootprint(parseRankedKeywords(sample()));
   assert.equal(fp.total, 1342);
   assert.ok(fp.rows.length >= 2);
-  assert.deepEqual(fp.rows[0], { k: "payroll software for sole traders", p: 7, u: "/payroll", v: 880, i: "commercial", e: 41.2, pr: 14, n: false });
+  // 13 Oct 2026 (review of the P6 handoff): `p` is rank_group (6th organic), `a` rank_absolute (7th on the page), and
+  // `pd` the day of DataForSEO's previous reading, which `pr` (a rank_absolute) is taken against.
+  assert.deepEqual(fp.rows[0], { k: "payroll software for sole traders", p: 6, u: "/payroll", v: 880, i: "commercial", e: 41.2, a: 7, pr: 14, n: false, pd: "2026-09-09" });
   const keys = [...keysDeep(fp)];
   assert.deepEqual(keys.filter((k) => /difficulty|^kd$|spam|sponsor/i.test(k)), []);
-  for (const r of fp.rows) for (const k of Object.keys(r)) assert.ok(["k", "p", "u", "v", "i", "e", "pr", "n"].includes(k), `a stored row kept ${k}`);
+  for (const r of fp.rows) for (const k of Object.keys(r)) assert.ok(["k", "p", "u", "v", "i", "e", "a", "pr", "n", "pd"].includes(k), `a stored row kept ${k}`);
   // A missing previous reading is left off the row, and reads back as none.
   const fresh = fp.rows.find((r) => r.n === true)!;
   assert.ok(!("pr" in fresh));
@@ -49,13 +51,13 @@ test("the compacted footprint keeps the named fields and no keyword_difficulty, 
 
 test("a stored row is read back strictly: unknown keys, a kd and wrong types are dropped, never coerced into a figure", () => {
   const rows = readFootprintRows([
-    { k: "invoicing app", p: 4, u: "/invoicing", v: 1000, i: "commercial", e: 12.5, pr: 9, n: false, kd: 71, keyword_difficulty: 71 },
+    { k: "invoicing app", p: 4, u: "/invoicing", v: 1000, i: "commercial", e: 12.5, a: 5, pr: 9, n: false, pd: "2026-09-02", kd: 71, keyword_difficulty: 71 },
     { k: "", p: 3 },
-    { k: "weird intent", p: "5", u: 7, v: null, i: "shopping", e: "x" },
+    { k: "weird intent", p: "5", u: 7, v: null, i: "shopping", e: "x", a: "x", pd: "last week" },
     "not a row",
   ]);
   assert.deepEqual(rows, [
-    { k: "invoicing app", p: 4, u: "/invoicing", v: 1000, i: "commercial", e: 12.5, pr: 9, n: false },
+    { k: "invoicing app", p: 4, u: "/invoicing", v: 1000, i: "commercial", e: 12.5, a: 5, pr: 9, n: false, pd: "2026-09-02" },
     { k: "weird intent", p: 5, u: null, v: null, i: null, e: null },
   ]);
   assert.equal(readPull({ pulled_on: "not a day", rows: [] }), null);

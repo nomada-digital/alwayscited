@@ -58,8 +58,8 @@ export function footprintCandidates(latest: Pull, tracked: ReadonlySet<string>, 
 }
 
 /** A gaining-ground keyword as a suggestion, its reason the climb. */
-function fromGaining(g: Momentum["rows"][number], m: Pick<Momentum, "basis" | "readOn">): Suggestion {
-  return { keyword: g.keyword, source: "gaining", position: g.position, volume: g.volume, url: g.url, reason: footprintReason({ position: g.position, url: g.url, volume: g.volume, readOn: m.readOn, lead: gainingLabel(g, m.basis) }) };
+function fromGaining(g: Momentum["rows"][number], m: Pick<Momentum, "readOn">): Suggestion {
+  return { keyword: g.keyword, source: "gaining", position: g.position, volume: g.volume, url: g.url, reason: footprintReason({ position: g.position, url: g.url, volume: g.volume, readOn: m.readOn, lead: gainingLabel(g) }) };
 }
 
 function dedupe(list: readonly Suggestion[], max: number): Suggestion[] {
@@ -75,17 +75,32 @@ function dedupe(list: readonly Suggestion[], max: number): Suggestion[] {
   return out;
 }
 
+/** Footprint candidates Setup lists before the gaining-ground keywords; the rest follow them. */
+export const SETUP_FOOTPRINT_HEAD = 5;
+
 /**
- * Setup's list (spec 4.12), up to SETUP_MAX: the footprint's candidates,
- * then the gaining-ground keywords not among them, then the keyword typed at
- * checkout, each once and none the client tracks. Empty with no footprint:
- * the block only shows when one exists.
+ * Setup's list (spec 4.12), up to SETUP_MAX, each keyword once and none the
+ * client tracks: the footprint's first SETUP_FOOTPRINT_HEAD candidates, then
+ * the gaining-ground keywords, then the rest of the footprint's, and the
+ * keyword typed at checkout always among them - last, on a slot kept for it
+ * (or where it already sits, when the footprint or gaining ground has it).
+ * A site with ten or more candidates would otherwise fill every slot before
+ * gaining ground or the checkout keyword were reached (13 Oct 2026, review of
+ * the P6 handoff). Empty with no footprint: the block only shows when one
+ * exists.
  */
 export function setupSuggestions(p: { latest: Pull | null; gaining: Momentum | null; tracked: ReadonlySet<string>; subject: Subject; typed: string | null }): Suggestion[] {
   if (!p.latest) return [];
-  const typed = p.typed?.trim() && !p.tracked.has(keywordForm(p.typed)) ? [{ keyword: keywordForm(p.typed), source: "checkout" as const, position: null, volume: null, url: null, reason: "The keyword you gave at checkout." }] : [];
+  const typedKey = p.typed?.trim() ? keywordForm(p.typed) : "";
+  const typed: Suggestion[] = typedKey && !p.tracked.has(typedKey) ? [{ keyword: typedKey, source: "checkout", position: null, volume: null, url: null, reason: "The keyword you gave at checkout." }] : [];
   const gaining = p.gaining ? p.gaining.rows.filter((g) => !p.tracked.has(keywordForm(g.keyword))).map((g) => fromGaining(g, p.gaining!)) : [];
-  return dedupe([...footprintCandidates(p.latest, p.tracked, p.subject), ...gaining, ...typed], SETUP_MAX);
+  const footprint = footprintCandidates(p.latest, p.tracked, p.subject);
+  const ordered = [...footprint.slice(0, SETUP_FOOTPRINT_HEAD), ...gaining, ...footprint.slice(SETUP_FOOTPRINT_HEAD)];
+  const listed = dedupe(ordered, SETUP_MAX);
+  if (!typed.length || listed.some((s) => keywordForm(s.keyword) === typedKey)) return listed;
+  // The checkout keyword on its kept slot: as the footprint or gaining ground has it when they do, with its figures.
+  const own = ordered.find((s) => keywordForm(s.keyword) === typedKey) ?? typed[0]!;
+  return [...dedupe(ordered.filter((s) => keywordForm(s.keyword) !== typedKey), SETUP_MAX - 1), own];
 }
 
 /**

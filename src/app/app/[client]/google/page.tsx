@@ -10,7 +10,7 @@ import { T } from "@/config/tokens";
 import { appPath } from "@/lib/app-host";
 import { loadFootprint, loadOthersPlaced, loadPursuing, loadSerpDetail } from "@/lib/diy/keywords/data";
 import { pickBand, pickDir, pickId, pickIntent, pickPage, pickSort, pickView } from "@/lib/diy/keywords/keys";
-import { readDone, readWhy } from "@/lib/diy/keywords/write";
+import { readDone, readOnlyReason, readWhy } from "@/lib/diy/keywords/write";
 import { section } from "@/lib/diy/plan/data";
 import { clusterSearch } from "@/lib/tracking/cluster-figures";
 import { comparisonRange } from "@/lib/tracking/figures";
@@ -115,6 +115,7 @@ export default async function ClientGoogle({ params, searchParams }: { params: P
           page={pickPage(one("page"))}
           row={row}
           canWrite={refuseRole(writeRole(client)) === null}
+          readOnly={readOnlyReason(client)}
           clusterLimit={client.cluster_limit ?? CLUSTER_BASE}
           packLine={trackingPackLine(trackingPackPrice(client.market))}
           footprint={footprint}

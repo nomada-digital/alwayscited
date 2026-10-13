@@ -6,8 +6,8 @@ import { APP_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
 import { appPath } from "@/lib/app-host";
 import { vendorLabel } from "@/lib/diy/core/evidence";
-import { type Dismissal, type FootprintData, type SerpDetail, liveDismissal } from "@/lib/diy/keywords/data";
-import type { Pull } from "@/lib/diy/keywords/footprint";
+import { type Dismissal, type FootprintData, type SerpDetail, firstReadOn, liveDismissal } from "@/lib/diy/keywords/data";
+import { type Pull, completePull } from "@/lib/diy/keywords/footprint";
 import type { IntentKey, View } from "@/lib/diy/keywords/keys";
 import { losingGround } from "@/lib/diy/keywords/losing";
 import { type Momentum, momentum } from "@/lib/diy/keywords/momentum";
@@ -22,7 +22,7 @@ import { INTENTS, keywordForm } from "@/lib/scan/dataforseo-request";
 import type { UpsellMode } from "@/lib/tracking/ask";
 import { clusterCards } from "@/lib/tracking/cluster-figures";
 import { rangeLabel } from "@/lib/tracking/date-range";
-import { type Day, type Range, addDays, comparisonLabel, firstCheckDay, firstReadComplete, formatDay, resolveComparison } from "@/lib/tracking/figures";
+import { type Day, type Range, comparisonLabel, firstCheckDay, firstReadComplete, formatDay, resolveComparison } from "@/lib/tracking/figures";
 import type { Compare, OverviewData } from "@/lib/tracking/overview-data";
 import { lostReads, runNote, todayRun } from "@/lib/tracking/run-note";
 import { offPageOneFacts } from "@/lib/tracking/upgrade-facts";
@@ -100,6 +100,8 @@ export type GoogleProps = {
   page: number;
   row: string | null;
   canWrite: boolean;
+  /** Why a member who cannot write cannot (write.ts readOnlyReason): a viewer's, or an ended client's. */
+  readOnly: string;
   clusterLimit: number;
   /** trackingPackLine(trackingPackPrice(market)), from pricing.ts. */
   packLine: string;
@@ -130,10 +132,40 @@ export default function Google(p: GoogleProps) {
   const withRows = clusters.filter((c) => rows.some((r) => r.clusterId === c.id));
   const others = p.others.ok ? p.others.value : new Set<string>();
 
+  const clientPath = appPath(`/${encodeURIComponent(p.slug)}`);
+
+  // ---- the footprint: gaining ground and the All view (hidden while dark) ----
+  const pulls = p.footprint.pulls;
+  const latest = pulls?.ok ? pulls.value.latest : null;
+  const previous = pulls?.ok ? pulls.value.previous : null;
+  const dismissals: Dismissal[] = p.footprint.dismissals?.ok ? p.footprint.dismissals.value : [];
+  const liveDismissed = dismissals.filter((d) => liveDismissal(d, today));
+  const subject = { brand: p.brand, domain: p.domain, aliases: [...p.aliases] };
+  const m: Momentum | null = latest && latest.rows.length ? momentum({ latest, previous, tracked: data.keywords, dismissed: new Set(liveDismissed.map((d) => d.key)), subject, showAll: p.intent === "all", today }) : null;
+  // The dark rule (spec 10 section 4): with no pull yet, "First read <date>" only when a footprint job is actually
+  // queued; with none queued nothing is promised, and the footprint's sections are hidden as when the switch is off.
+  const job = p.footprint.job?.ok ? p.footprint.job.value : null;
+  const promised = p.footprint.enabled && pulls?.ok && !latest ? firstReadOn(job, today) : null;
+  const footprintShown = p.footprint.enabled && !(pulls?.ok && !latest && !promised);
+  // Track as a cluster carries src=gaining - the Momentum origin - only from a keyword gaining ground (spec 10 section 6.6).
+  const gainingKeys = new Set((m?.rows ?? []).map((g) => keywordForm(g.keyword)));
+  const trackHref = (keyword: string) => `${clientPath}/clusters?${new URLSearchParams({ add: "1", kw: keyword, ...(gainingKeys.has(keywordForm(keyword)) ? { src: "gaining" } : {}) })}`;
+  const gainingState: GainingState | null = !footprintShown
+    ? null
+    : !pulls?.ok
+      ? { kind: "error", text: SECTION_ERROR }
+      : !latest
+        ? { kind: "pending", firstReadOn: promised! }
+        : !latest.rows.length
+          ? { kind: "none", readOn: latest.pulledOn, domain: p.domain }
+          : { kind: "ok", m: m! };
+  // "They retry tonight" only while the failed job is still queued to retry.
+  const jobFailed = p.footprint.enabled && !!job?.failed && job.queued;
+
   // ---- URL state ----
   const base: Record<string, string> = { from: range.from, to: range.to, ...(p.compareMode === "prev" ? {} : { compare: p.compareMode }) };
-  const darkAll = !p.footprint.enabled;
-  const view: View = darkAll ? "tracked" : p.view;
+  // While the footprint is hidden, ?view=all is the Tracked view: the view switch shows Tracked only.
+  const view: View = footprintShown ? p.view : "tracked";
   const state: Record<string, string> = {
     ...base,
     ...(view === "all" ? { view: "all" } : {}),
@@ -151,28 +183,6 @@ export default function Google(p: GoogleProps) {
     else q[k] = v;
     return `?${new URLSearchParams(q)}`;
   };
-  const clientPath = appPath(`/${encodeURIComponent(p.slug)}`);
-  const trackHref = (keyword: string) => `${clientPath}/clusters?${new URLSearchParams({ add: "1", kw: keyword, src: "gaining" })}`;
-
-  // ---- the footprint: gaining ground and the All view (hidden while dark) ----
-  const pulls = p.footprint.pulls;
-  const latest = pulls?.ok ? pulls.value.latest : null;
-  const previous = pulls?.ok ? pulls.value.previous : null;
-  const dismissals: Dismissal[] = p.footprint.dismissals?.ok ? p.footprint.dismissals.value : [];
-  const liveDismissed = dismissals.filter((d) => liveDismissal(d, today));
-  const subject = { brand: p.brand, domain: p.domain, aliases: [...p.aliases] };
-  const m: Momentum | null = latest && latest.rows.length ? momentum({ latest, previous, tracked: data.keywords, dismissed: new Set(liveDismissed.map((d) => d.key)), subject, showAll: p.intent === "all", today }) : null;
-  const firstReadOn = (p.footprint.job?.ok ? p.footprint.job.value.dueOn : null) ?? addDays(today, 1);
-  const gainingState: GainingState | null = !p.footprint.enabled
-    ? null
-    : !pulls?.ok
-      ? { kind: "error", text: SECTION_ERROR }
-      : !latest
-        ? { kind: "pending", firstReadOn: firstReadOn > today ? firstReadOn : addDays(today, 1) }
-        : !latest.rows.length
-          ? { kind: "none", readOn: latest.pulledOn, domain: p.domain }
-          : { kind: "ok", m: m! };
-  const jobFailed = p.footprint.enabled && p.footprint.job?.ok && p.footprint.job.value.failed;
   const newest = liveDismissed.length ? [...liveDismissed].sort((a, b) => b.at.localeCompare(a.at))[0]! : null;
   const toast = keywordsToast(p.notice.done, p.notice.why, p.notice.done === "dismissed" ? newest : null);
   const notice = toast ? { text: toast, ok: p.notice.done !== "refused", undo: p.notice.done === "dismissed" && newest ? newest.key : null } : null;
@@ -234,7 +244,7 @@ export default function Google(p: GoogleProps) {
         <Link href={href({ view: null, page: null, sort: null, dir: null, band: null, q: null, intent: p.intent === "all" ? "all" : null })} aria-current={view === "tracked" ? "page" : undefined} style={PILL(view === "tracked")}>
           Tracked keywords
         </Link>
-        {darkAll ? null : (
+        {!footprintShown ? null : (
           <Link href={href({ view: "all", page: null, sort: null, dir: null, cluster: null, row: null, intent: p.intent === "all" ? null : p.intent })} aria-current={view === "all" ? "page" : undefined} style={PILL(view === "all")}>
             All ranking keywords
           </Link>
@@ -327,6 +337,7 @@ export default function Google(p: GoogleProps) {
               open={p.gaining}
               showAll={p.intent === "all"}
               canWrite={p.canWrite}
+              reason={p.readOnly}
               dismissed={liveDismissed}
               keep={state}
               toggle={`${href({ gaining: p.gaining ? null : "1" })}#gaining`}
@@ -401,7 +412,7 @@ export default function Google(p: GoogleProps) {
           {rows.length ? <CompetitorsCard tops={p.serp.tops} rows={rows} others={others} domain={p.domain} /> : null}
         </>
       ) : (
-        <AllView p={p} latest={latest} previous={previous} pullsOk={!!pulls?.ok} firstReadOn={firstReadOn} href={href} state={state} trackHref={trackHref} />
+        <AllView p={p} latest={latest} previous={previous} pullsOk={!!pulls?.ok} firstReadOn={promised} href={href} state={state} trackHref={trackHref} gaining={gainingKeys} />
       )}
     </div>
   );
@@ -522,21 +533,24 @@ function AllView({
   href,
   state,
   trackHref,
+  gaining,
 }: {
   p: GoogleProps;
   latest: Pull | null;
   previous: Pull | null;
   pullsOk: boolean;
-  firstReadOn: Day;
+  firstReadOn: Day | null;
   href: (over: Record<string, string | null>, keepPage?: boolean) => string;
   state: Record<string, string>;
   trackHref: (keyword: string) => string;
+  gaining: ReadonlySet<string>;
 }) {
   if (!pullsOk) return <p style={{ ...CARD, margin: 0, padding: "22px 24px", fontSize: "14px", color: T.soft }}>{SECTION_ERROR}</p>;
   if (!latest)
+    // Reached only with a footprint job queued (the page hides the All view otherwise): the date is that job's.
     return (
       <section aria-label="Every keyword you rank for" style={{ ...CARD, padding: "22px 24px" }}>
-        <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>{`Your Google footprint is read weekly. First read ${formatDate(firstReadOn > p.today ? firstReadOn : addDays(p.today, 1))}.`}</p>
+        <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.5, color: T.ink }}>{firstReadOn ? `Your Google footprint is read weekly. First read ${formatDate(firstReadOn)}.` : SECTION_ERROR}</p>
       </section>
     );
   if (!latest.rows.length)
@@ -555,8 +569,10 @@ function AllView({
   const k = rankingKpis(latest);
   const read = vendorLabel(latest.pulledOn);
   const basis = previous ? "ours" : "dataforseo";
+  const cut = k.total > k.read;
+  const filteredBy = !!(p.q.trim() || intent || p.band);
   const cells = [
-    { id: "a-total", label: "Ranking keywords", value: n(k.total), foot: k.total > k.read ? `${n(k.read)} read, by estimated traffic. ${read}` : read },
+    { id: "a-total", label: "Ranking keywords", value: n(k.total), foot: cut ? `The top ${n(k.read)} read, by estimated traffic. ${read}` : read },
     { id: "a-p1", label: "On page 1", value: `${n(k.page1)} of ${n(k.read)}`, foot: read },
     { id: "a-comm", label: "Buying intent", value: k.commercial.of ? `${Math.round((100 * k.commercial.n) / k.commercial.of)}%` : "-", foot: `${n(k.commercial.n)} of ${n(k.commercial.of)} with an intent are commercial or transactional. ${read}` },
     { id: "a-etv", label: "Estimated monthly traffic", value: k.etv === null ? "-" : n(Math.round(k.etv)), foot: read },
@@ -572,13 +588,15 @@ function AllView({
           </div>
         ))}
         <p style={{ gridColumn: "1 / -1", margin: 0, padding: "12px 22px 14px", borderTop: `1px solid ${T.line}`, fontSize: "13px", lineHeight: 1.5, color: T.soft }}>
-          Every keyword DataForSEO&apos;s index has your site ranking for in Google&apos;s top 100, read weekly at most. These are estimates, not our daily reads, and are never counted in the Tracked figures.
+          {cut
+            ? `The top ${n(k.read)} of the ${n(k.total)} keywords DataForSEO's index has your site ranking for in Google's top 100, by estimated traffic, read weekly at most. Positions are among Google's organic results. These are estimates, not our daily reads, and are never counted in the Tracked figures.`
+            : "Every keyword DataForSEO's index has your site ranking for in Google's top 100, read weekly at most. Positions are among Google's organic results. These are estimates, not our daily reads, and are never counted in the Tracked figures."}
         </p>
       </section>
       <section aria-labelledby="all-h" style={{ ...CARD, overflow: "hidden" }}>
         <div className="gk-pad" style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "20px 24px 14px" }}>
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "8px 16px", flexWrap: "wrap" }}>
-            <h2 id="all-h" style={{ ...H2, scrollMarginTop: "24px" }}>{`${n(filtered.length)} ranking ${filtered.length === 1 ? "keyword" : "keywords"}`}</h2>
+            <h2 id="all-h" style={{ ...H2, scrollMarginTop: "24px" }}>{allHeading(filtered.length, k.read, k.total, filteredBy)}</h2>
             {p.q.trim() || intent || p.band ? <ClearFilters href={`?${new URLSearchParams({ view: "all" })}#all-h`} /> : null}
           </div>
           <nav aria-label="Filter by intent" className="app-nm-filters" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -607,6 +625,7 @@ function AllView({
           <RankingTable
             rows={shown.rows}
             basis={basis}
+            gaining={gaining}
             canWrite={p.canWrite}
             trackHref={trackHref}
             link={(s) => {
@@ -634,10 +653,20 @@ function AllView({
           </nav>
         ) : null}
         <p className="gk-pad" style={{ margin: 0, padding: "12px 24px 18px", borderTop: `1px solid ${T.line}`, fontSize: "12px", lineHeight: 1.5, color: T.soft }}>
-          {previous ? `Change is against our previous pull, read ${formatDate(previous.pulledOn)}. ` : "* With one pull so far, change is against DataForSEO's previous reading. "}
+          {previous
+            ? `Change is against our previous pull, read ${formatDate(previous.pulledOn)}${completePull(previous) ? "" : `, which held the top ${n(previous.rows.length)} by estimated traffic: a keyword below that has no change shown`}. `
+            : "* With one pull so far, change is against DataForSEO's own previous reading of each keyword, in places on the results page. "}
           {`DataForSEO estimate, read ${formatDate(latest.pulledOn)}.`}
         </p>
       </section>
     </>
   );
+}
+
+/** "300 of 1,342 ranking keywords, by estimated traffic"; with a filter, "42 ranking keywords match, of the top 300 by estimated traffic". */
+export function allHeading(shown: number, read: number, total: number, filtered: boolean): string {
+  const kw = (x: number) => `${n(x)} ranking ${x === 1 ? "keyword" : "keywords"}`;
+  const cut = total > read;
+  if (!filtered) return cut ? `${n(read)} of ${kw(total)}, by estimated traffic` : kw(read);
+  return `${kw(shown)} ${shown === 1 ? "matches" : "match"}${cut ? `, of the top ${n(read)} by estimated traffic` : ""}`;
 }

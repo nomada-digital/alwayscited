@@ -20,11 +20,16 @@
 -- keyword_footprints: one row per weekly pull of DataForSEO Labs'
 -- ranked_keywords for the client's domain (spec 5.2), only when Labs' Google
 -- date has moved since the last pull and at most once a week, plus the
--- onboarding pull. `rows` is compacted to named fields: keyword, position, url
--- path, volume, intent, estimated traffic, DataForSEO's previous rank and its
--- is_new flag. No keyword_difficulty: the parser never reads it (spec 2.3).
--- About 80 KB a pull at 1000 rows (spec 5.9). Old pulls are never deleted;
--- readers take the latest two.
+-- onboarding pull. `rows` is compacted to named fields: keyword, organic
+-- position (rank_group: what our own daily read stores and every page shows),
+-- url path, volume, intent, estimated traffic, the position on the whole
+-- results page (rank_absolute), DataForSEO's previous rank_absolute, its
+-- is_new flag and that previous reading's day (previous_updated_time). The
+-- two positions were split, and the day added, on 13 Oct 2026 (review of the
+-- P6 handoff), before this file was applied. No keyword_difficulty: the
+-- parser never reads it (spec 2.3). About 105 KB a pull at 1000 rows (spec
+-- 5.9 said 80 KB before the two fields). Old pulls are never deleted; readers
+-- take the latest two.
 create table if not exists keyword_footprints (
   id uuid primary key default gen_random_uuid(),
   client_domain_id uuid not null references client_domains(id) on delete cascade,
@@ -32,7 +37,7 @@ create table if not exists keyword_footprints (
   labs_date date,
   total_count integer,
   etv numeric,
-  rows jsonb not null,             -- [{k,p,u,v,i,e,pr,n}] keyword, position, url path, volume, intent, etv, dfs previous rank, dfs is_new (no kd)
+  rows jsonb not null,             -- [{k,p,u,v,i,e,a,pr,n,pd}] keyword, organic position, url path, volume, intent, etv, page position, dfs previous rank_absolute, dfs is_new, its day (no kd)
   read_id uuid references diy_reads(id) on delete set null,
   created_at timestamptz not null default now(),
   unique (client_domain_id, pulled_on)

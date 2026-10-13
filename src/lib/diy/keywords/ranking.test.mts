@@ -16,18 +16,22 @@ const row = (k: string, p: number | null, o: Partial<FootprintRow> = {}): Footpr
 const pull = (pulledOn: string, rows: FootprintRow[], total: number | null = null): Pull => ({ pulledOn, labsDate: pulledOn, total, etv: 120.5, rows });
 const subject = { brand: "Tallyroo", domain: "tallyroo.com", aliases: [] };
 
-test("All view rows: change against our previous pull, or DataForSEO's own reading with one pull; tracked keywords marked; no difficulty field", () => {
-  const latest = pull("2026-10-14", [row("a", 4, { pr: 9 }), row("b", 12, { n: true }), row("c", 30, { pr: 20 }), row("Tracked One", 3)]);
-  const ours = rankingRows(latest, pull("2026-10-07", [row("a", 6), row("c", 25)]), new Set(["tracked one"]));
-  assert.deepEqual(ours.map((r) => [r.keyword, r.change, r.isNew, r.tracked]), [
-    ["a", 2, false, false],
-    ["b", null, true, false],
-    ["c", -5, false, false],
-    ["Tracked One", null, true, true],
+test("All view rows: organic positions; change against our previous pull, or DataForSEO's own reading (absolute against absolute) with one pull; tracked keywords marked; no difficulty field", () => {
+  const latest = pull("2026-10-14", [row("a", 4, { a: 5, pr: 10 }), row("b", 12, { a: 13, n: true }), row("c", 30, { a: 31, pr: 21 }), row("Tracked One", 3, { a: 3 })]);
+  const prev = [row("a", 6), row("c", 25)];
+  const ours = rankingRows(latest, pull("2026-10-07", prev, prev.length), new Set(["tracked one"]));
+  assert.deepEqual(ours.map((r) => [r.keyword, r.position, r.change, r.isNew, r.tracked]), [
+    ["a", 4, 2, false, false],
+    ["b", 12, null, true, false],
+    ["c", 30, -5, false, false],
+    ["Tracked One", 3, null, true, true],
   ]);
   const theirs = rankingRows(latest, null, new Set());
   assert.deepEqual(theirs.map((r) => [r.change, r.isNew]), [[5, false], [null, true], [-10, false], [null, false]]);
   for (const r of ours) assert.deepEqual(Object.keys(r).filter((k) => /difficulty|kd|score/i.test(k)), []);
+  // 13 Oct 2026 (review of the P6 handoff): a previous pull cut at its row limit says nothing of a keyword missing from it.
+  const cut = rankingRows(latest, pull("2026-10-07", prev, 1342), new Set());
+  assert.deepEqual(cut.map((r) => [r.keyword, r.change, r.isNew]), [["a", 2, false], ["b", null, false], ["c", -5, false], ["Tracked One", null, false]]);
 });
 
 test("All view: search, intent and band filters, the sorts, and pages of 100", () => {
@@ -46,6 +50,8 @@ test("All view: search, intent and band filters, the sorts, and pages of 100", (
 test("All view figures: Labs' total, page 1 of the rows read, buying-intent share of those with an intent, etv", () => {
   const k = rankingKpis(pull("x", [row("a", 3), row("b", 11, { i: "informational" }), row("c", 9, { i: null })], 1342));
   assert.deepEqual(k, { total: 1342, read: 3, page1: 2, commercial: { n: 1, of: 2 }, etv: 120.5 });
+  // Page 1 is organic: 9th organic under two features is 11th on the page, and still on page 1.
+  assert.equal(rankingKpis(pull("x", [row("under features", 9, { a: 11 })], 1)).page1, 1);
 });
 
 test("setup suggestions: buying intent, volume, positions 4-30, not branded or tracked, by volume then position; gaining; the checkout keyword last; 10 at most", () => {
@@ -69,6 +75,17 @@ test("setup suggestions: buying intent, volume, positions 4-30, not branded or t
   const setup = setupSuggestions({ latest, gaining, tracked, subject, typed: "Invoicing App For Freelancers" });
   assert.equal(setup.length, 10);
   assert.equal(setup.filter((s) => s.keyword === "big one").length, 1, "each once");
+  // 13 Oct 2026 (review of the P6 handoff): with more candidates than slots, gaining ground comes before the footprint's
+  // tail and the checkout keyword keeps a slot, last.
+  const before = latest.rows.map((r) => (r.k === "filler 10" ? { ...r, p: 22 } : r.k === "filler 11" ? { ...r, p: 23 } : r));
+  const climbs = momentum({ latest, previous: pull("2026-10-07", before, before.length), tracked: [], dismissed: new Set(), subject, showAll: false, today: "2026-10-14" });
+  const reserved = setupSuggestions({ latest, gaining: climbs, tracked, subject, typed: "Invoicing App For Freelancers" });
+  assert.deepEqual(reserved.map((s) => s.source), ["footprint", "footprint", "footprint", "footprint", "footprint", "gaining", "gaining", "footprint", "footprint", "checkout"]);
+  assert.deepEqual(reserved.slice(5, 7).map((s) => s.keyword), ["filler 11", "filler 10"], "in the momentum order");
+  assert.equal(reserved[9]!.keyword, "invoicing app for freelancers");
+  // The checkout keyword the footprint already lists keeps its figures, on the kept slot.
+  const own = setupSuggestions({ latest, gaining: null, tracked, subject, typed: "filler 11" });
+  assert.deepEqual([own.length, own[9]!.keyword, own[9]!.source], [10, "filler 11", "footprint"]);
   const few = setupSuggestions({ latest: pull("x", [row("only one", 9)]), gaining: null, tracked: new Set(), subject, typed: "invoicing app for freelancers" });
   assert.deepEqual(few.map((s) => [s.keyword, s.source]), [["only one", "footprint"], ["invoicing app for freelancers", "checkout"]]);
   assert.deepEqual(setupSuggestions({ latest: null, gaining: null, tracked: new Set(), subject, typed: "x y z" }), [], "no footprint: the block does not show");

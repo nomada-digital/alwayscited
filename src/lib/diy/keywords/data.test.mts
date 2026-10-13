@@ -6,8 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import { fakeDiyDb, settingsRows } from "../core/fake-diy.mts";
 
-import { FIXTURE_CLIENT, fixtureTops, fixtureUrls, keywordsFixture, latestTops, loadFootprint, loadOthersPlaced, loadSerpDetail, readPulls } from "./data.ts";
-import { momentum } from "./momentum.ts";
+import { FIXTURE_CLIENT, firstReadOn, fixtureTops, fixtureUrls, keywordsFixture, latestTops, loadFootprint, loadOthersPlaced, loadSerpDetail, readJob, readPulls } from "./data.ts";
+import { gainingLabel, momentum } from "./momentum.ts";
 import { urlAt } from "./tracked.ts";
 
 /**
@@ -36,6 +36,11 @@ test("full: two pulls of 300 rows, and the momentum rule finds 15 gaining ground
   assert.ok(all.total > 15 && all.rows.length === 15, "intent=all finds more, and shows the top 15");
   assert.ok(!m.rows.some((g) => g.keyword === "expense app for consultants"), "the live dismissal is left out");
   assert.ok(m.rows.some((g) => g.keyword === "estimate template for contractors"), "the lapsed one is back");
+  // The previous pull holds 298 of 1,318: the 3 new keywords are missing from it, so DataForSEO's own reading says they are new.
+  assert.equal(m.previousComplete, false);
+  assert.deepEqual(m.rows.filter((g) => g.kind === "new").map((g) => g.basis), ["dataforseo", "dataforseo", "dataforseo"]);
+  assert.ok(m.rows.filter((g) => g.kind === "climbing").every((g) => g.basis === "ours"));
+  assert.equal(gainingLabel(m.rows.find((g) => g.keyword === "payroll software for sole traders")!), "Up from 18th to 7th");
 });
 
 test("dark: nothing read - hidden, not shown empty; day0: one pull, compared with DataForSEO's reading; nofootprint: an empty pull; zero: nothing gaining", async () => {
@@ -45,7 +50,8 @@ test("dark: nothing read - hidden, not shown empty; day0: one pull, compared wit
   assert.ok(day0.pulls?.ok && day0.pulls.value.latest && !day0.pulls.value.previous);
   const m = momentum({ latest: day0.pulls.value.latest!, previous: null, tracked: fx.data.keywords, dismissed: new Set(), subject: { brand: "Tallyroo", domain: "tallyroo.com", aliases: fx.aliases }, showAll: false, today: fx.today });
   assert.equal(m.basis, "dataforseo");
-  assert.ok(m.total > 0);
+  assert.ok(m.climbing > 0 && m.new > 0, "climbs read rank_absolute against DataForSEO's previous one, so the fixture carries both");
+  assert.ok(m.rows.every((g) => g.basis === "dataforseo" && /since DataForSEO's reading of \d+ \w+ 2026/.test(gainingLabel(g))));
   const none = await loadFootprint(FIXTURE_CLIENT, { env: env("nofootprint"), root: ROOT });
   assert.ok(none.pulls?.ok);
   assert.deepEqual(none.pulls.value.latest?.rows, []);
@@ -114,4 +120,28 @@ test("Supabase: the newest two pulls, one client's; each top the newest stored f
   }
   const off = await loadFootprint("c1", { db: () => fakeDiyDb({ app_settings: settingsRows({ diy_enabled: false }) }).db, env: {} });
   assert.deepEqual(off, { enabled: false, pulls: null, dismissals: null, job: null, aliases: [] }, "dark: not read at all");
+});
+
+// 13 Oct 2026 (review of the P6 handoff): "First read <date>" only for a footprint job that is actually queued.
+// P1's dispatcher queues no paid job for a client whose setup it does not count as confirmed, so a page that fell
+// back to "tomorrow" promised a read every day that never came.
+test("the first read is promised only from a queued footprint job: its due day, or the next night for one due today or carried", async () => {
+  const today = "2026-10-14";
+  assert.equal(firstReadOn(null, today), null, "no job row: nothing is promised");
+  assert.equal(firstReadOn({ dueOn: "2026-10-14", queued: false, failed: false }, today), null, "done: nothing is promised");
+  assert.equal(firstReadOn({ dueOn: "2026-10-20", queued: true, failed: false }, today), "2026-10-20");
+  assert.equal(firstReadOn({ dueOn: "2026-10-14", queued: true, failed: false }, today), "2026-10-15");
+  assert.equal(firstReadOn({ dueOn: "2026-10-11", queued: true, failed: true }, today), "2026-10-15", "a failed attempt still under its attempts retries");
+  const f = fakeDiyDb({
+    diy_jobs: [
+      { client_domain_id: "c1", kind: "footprint", due_on: "2026-10-14", outcome: "failed", done_at: null, attempts: 1 },
+      { client_domain_id: "c2", kind: "footprint", due_on: "2026-10-14", outcome: "failed", done_at: null, attempts: 3 },
+      { client_domain_id: "c3", kind: "footprint", due_on: "2026-10-07", outcome: "ok", done_at: "2026-10-07T03:40:00Z", attempts: 1 },
+      { client_domain_id: "c4", kind: "key_pages_weekly", due_on: "2026-10-14", outcome: null, done_at: null, attempts: 0 },
+    ],
+  });
+  assert.deepEqual(await readJob(f.db, "c1"), { dueOn: "2026-10-14", queued: true, failed: true });
+  assert.deepEqual(await readJob(f.db, "c2"), { dueOn: "2026-10-14", queued: false, failed: true }, "out of attempts: not queued");
+  assert.deepEqual(await readJob(f.db, "c3"), { dueOn: "2026-10-07", queued: false, failed: false });
+  assert.deepEqual(await readJob(f.db, "c4"), { dueOn: null, queued: false, failed: false }, "another kind's row is not the footprint's");
 });

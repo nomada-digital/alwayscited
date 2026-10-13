@@ -569,20 +569,41 @@ const text = (v: unknown, max: number): string | null => {
   return t ? t.slice(0, max) : null;
 };
 const firstResult = (task: Task): Obj => obj(arr(task.result)[0]);
+/** A DataForSEO time ("2026-09-09 06:00:00 +00:00") as its day; null for anything else. */
+const dayOrNull = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const m = /^(\d{4}-\d{2}-\d{2})[ T]/.exec(v.trim());
+  return m && !Number.isNaN(Date.parse(`${m[1]}T00:00:00Z`)) ? m[1]! : null;
+};
 
 export type RankedKeyword = {
   keyword: string;
-  /** `rank_absolute`: the position on the page of results. */
+  /** `rank_absolute`: the position among every element on the page of results (an AI overview, a snippet, a video row count). */
   position: number | null;
+  /**
+   * `rank_group`: the position among the organic results only - the figure our own daily read stores
+   * (engines.ts) and the one every DIY page shows as "Nth on Google". Added 13 Oct 2026, DIY P6 (review of
+   * the P6 handoff): pages had shown `rank_absolute` in the same words, so one keyword read two ways on one
+   * page. DataForSEO v3 docs, ranked_keywords/live, read 13 Oct 2026: "position within a group of elements
+   * with identical type values".
+   */
+  group: number | null;
   /** `relative_url`: the ranking page's path. */
   url: string | null;
   volume: number | null;
   intent: Intent | null;
   /** Estimated traffic from this keyword: a vendor estimate. */
   etv: number | null;
-  /** `rank_changes.previous_rank_absolute`: DataForSEO's own previous reading. The window it covers is [VERIFY] (section 6.10). */
+  /** `rank_changes.previous_rank_absolute`: DataForSEO's own previous reading, a `rank_absolute`, taken at `previousOn`. */
   previous: number | null;
   isNew: boolean | null;
+  /**
+   * The day of that previous reading: `ranked_serp_element.previous_updated_time` (or
+   * `keyword_data.serp_info.previous_updated_time`), YYYY-MM-DD. DataForSEO v3 docs, ranked_keywords/live,
+   * read 13 Oct 2026: `rank_changes` holds "the ranking changes of the SERP element since the
+   * previous_updated_time" - per keyword, so each row says its own date (13 Oct 2026, DIY P6).
+   */
+  previousOn: string | null;
 };
 export type RankedKeywords = { total: number | null; etv: number | null; rows: RankedKeyword[] };
 
@@ -594,18 +615,21 @@ export function parseRankedKeywords(task: Task): RankedKeywords {
     const kd = obj(item.keyword_data);
     const keyword = text(kd.keyword, 120);
     if (!keyword) continue;
-    const serp = obj(obj(item.ranked_serp_element).serp_item);
+    const element = obj(item.ranked_serp_element);
+    const serp = obj(element.serp_item);
     const changes = obj(serp.rank_changes);
     const intent = obj(kd.search_intent_info).main_intent;
     rows.push({
       keyword: keywordForm(keyword),
       position: numOrNull(serp.rank_absolute),
+      group: numOrNull(serp.rank_group),
       url: text(serp.relative_url, 500),
       volume: numOrNull(obj(kd.keyword_info).search_volume),
       intent: (INTENTS as readonly string[]).includes(String(intent)) ? (intent as Intent) : null,
       etv: numOrNull(serp.etv),
       previous: numOrNull(changes.previous_rank_absolute),
       isNew: boolOrNull(changes.is_new),
+      previousOn: dayOrNull(element.previous_updated_time) ?? dayOrNull(obj(kd.serp_info).previous_updated_time),
     });
   }
   return { total: numOrNull(r.total_count), etv: numOrNull(obj(obj(r.metrics).organic).etv), rows };

@@ -29,8 +29,8 @@ test("Nomada's cases: up 5 or more places is climbing, a new keyword in the top 
   );
   assert.equal(m.total, 2);
   assert.equal(m.basis, "ours");
-  assert.equal(gainingLabel(m.rows[0]!, m.basis), "New at 12th");
-  assert.equal(gainingLabel(m.rows[1]!, m.basis), "Up from 15th to 10th");
+  assert.equal(gainingLabel(m.rows[0]!), "New at 12th");
+  assert.equal(gainingLabel(m.rows[1]!), "Up from 15th to 10th");
 });
 
 test("the order key is gain times volume, floored at 10; it is never on a returned row", () => {
@@ -47,20 +47,61 @@ test("fix 1, the commercial default: commercial and transactional only, unless i
   assert.deepEqual(run(latest, pull("a", []), { showAll: true }).rows.map((g) => g.keyword).sort(), ["buy it", "compare it", "find it", "learn it", "no intent"]);
 });
 
-test("fix 2, one pull only: DataForSEO's own previous reading stands in, and the label says so", () => {
-  const latest = pull("b", [row("climbed", 7, { pr: 18 }), row("arrived", 12, { n: true }), row("steady", 9, { pr: 10 })]);
+test("fix 2, one pull only: DataForSEO's own previous reading stands in, rank_absolute against rank_absolute, and the label says so with its date", () => {
+  // "climbed": 6th organic, 7th on the page (an AI overview above), 18th on the page at DataForSEO's reading of 9 Sep.
+  const latest = pull("b", [row("climbed", 6, { a: 7, pr: 18, pd: "2026-09-09" }), row("arrived", 12, { a: 13, n: true }), row("steady", 9, { a: 10, pr: 11 }), row("no flag", 11, { a: 12 })]);
   const m = run(latest, null);
   assert.equal(m.basis, "dataforseo");
-  assert.deepEqual(m.rows.map((g) => g.keyword), ["arrived", "climbed"]);
-  assert.equal(gainingLabel(m.rows[1]!, m.basis), "Up from 18th to 7th, by DataForSEO's previous reading");
-  assert.equal(gainingLabel(m.rows[0]!, m.basis), "New at 12th, by DataForSEO's previous reading");
-  // With a previous pull of ours, DataForSEO's own field is not read at all.
-  assert.deepEqual(run(latest, pull("a", [row("climbed", 8), row("arrived", 13), row("steady", 9)])).rows, []);
+  assert.deepEqual(m.rows.map((g) => [g.keyword, g.kind, g.gain, g.basis]), [["arrived", "new", 89, "dataforseo"], ["climbed", "climbing", 11, "dataforseo"]], "no previous reading and no is_new flag is not new");
+  assert.equal(gainingLabel(m.rows[1]!), "Up 11 places on the results page since DataForSEO's reading of 9 Sep 2026; now 6th");
+  assert.equal(gainingLabel(m.rows[0]!), "New at 12th since DataForSEO's previous reading");
+  // With a previous pull of ours that holds them, DataForSEO's own field is not read at all.
+  assert.deepEqual(run(latest, pull("a", [row("climbed", 8), row("arrived", 13), row("steady", 9), row("no flag", 11)])).rows, []);
+});
+
+test("positions are organic (rank_group): depth, new and our own climb read p; DataForSEO's climb reads a against pr", () => {
+  // 30th organic but 34th on the page: still read; 31st organic: not.
+  const latest = pull("b", [row("organic thirty", 30, { a: 34 }), row("organic thirty one", 31, { a: 31 })]);
+  const prev = pull("a", [row("organic thirty", 40, { a: 46 }), row("organic thirty one", 45, { a: 50 })]);
+  assert.deepEqual(run(latest, prev).rows.map((g) => [g.keyword, g.previous, g.gain]), [["organic thirty", 40, 10]], "our pulls compare organic with organic");
+  // Up 4 organic places but 6 on the page, by DataForSEO's reading (two features gone above it): the page's count is what that reading measures.
+  const one = run(pull("b", [row("features gone", 8, { a: 9, pr: 15 })]), null);
+  assert.equal(one.rows[0]!.gain, 6);
+  assert.equal(gainingLabel(one.rows[0]!), "Up 6 places on the results page since DataForSEO's previous reading; now 8th");
+  // DataForSEO's climb with no rank_absolute to compare is not guessed from the organic position.
+  assert.deepEqual(run(pull("b", [row("no absolute", 8, { pr: 30 })]), null).rows, []);
+});
+
+test("a previous pull cut at its row limit: a keyword missing from it is not new from absence; DataForSEO's own reading decides, and says so", () => {
+  const latest = pull("b", [row("kept both times", 7), row("below the cut, is_new", 12, { a: 12, n: true, pd: "2026-09-02" }), row("below the cut, climbed", 9, { a: 10, pr: 19, pd: "2026-09-02" }), row("below the cut, steady", 6, { a: 6, pr: 7, n: false }), row("below the cut, unknown", 5)]);
+  const cut: Pull = { ...pull("2026-10-07", [row("kept both times", 14)]), total: 1342 };
+  const m = run(latest, cut);
+  assert.equal(m.basis, "ours");
+  assert.equal(m.previousComplete, false);
+  assert.deepEqual(
+    m.rows.map((g) => [g.keyword, g.kind, g.basis]),
+    [
+      ["below the cut, is_new", "new", "dataforseo"],
+      ["below the cut, climbed", "climbing", "dataforseo"],
+      ["kept both times", "climbing", "ours"],
+    ],
+  );
+  assert.equal(m.fallback, 2);
+  assert.equal(gainingLabel(m.rows[0]!), "New at 12th since DataForSEO's reading of 2 Sep 2026");
+  assert.equal(gainingLabel(m.rows[2]!), "Up from 14th to 7th");
+  // The same pull, complete: absence is new, by our pulls.
+  const whole = run(latest, { ...cut, total: 1 });
+  assert.equal(whole.previousComplete, true);
+  assert.deepEqual(whole.rows.filter((g) => g.kind === "new").map((g) => [g.keyword, g.basis]), [["below the cut, unknown", "ours"], ["below the cut, steady", "ours"], ["below the cut, climbed", "ours"], ["below the cut, is_new", "ours"]]);
+  // An unknown total is not a complete pull.
+  assert.equal(run(latest, { ...cut, total: null }).previousComplete, false);
+  // A keyword in our previous pull with no position read there is unknown, not new.
+  assert.deepEqual(run(pull("b", [row("unread before", 6)]), pull("a", [row("unread before", null)])).rows, []);
 });
 
 test("fix 3: volume, intent and the ranking URL are carried on each row", () => {
   const m = run(pull("b", [row("payroll software for sole traders", 7, { v: 880, i: "commercial", u: "/payroll", e: 41.2 })]), pull("a", [row("payroll software for sole traders", 18)]));
-  assert.deepEqual(m.rows[0], { keyword: "payroll software for sole traders", position: 7, previous: 18, kind: "climbing", gain: 11, volume: 880, intent: "commercial", url: "/payroll", etv: 41.2 });
+  assert.deepEqual(m.rows[0], { keyword: "payroll software for sole traders", position: 7, previous: 18, kind: "climbing", gain: 11, basis: "ours", since: "a", volume: 880, intent: "commercial", url: "/payroll", etv: 41.2 });
 });
 
 test("left out: tracked (live, or stopped within 30 days), dismissed, and naming the brand, its domain or an alias", () => {
@@ -93,6 +134,7 @@ test("the top 15 by the order key, with the total, the counts and the volume of 
   assert.equal(m.volume, rows.reduce((s, r) => s + (r.v ?? 0), 0));
   assert.equal(gainingSummary(m), `20 untracked keywords gaining ground: 8 climbing, 12 new, ${m.volume.toLocaleString("en-GB")} searches a month between them.`);
   assert.equal(gainingSummary({ total: 0, climbing: 0, new: 0, volume: 0 }), "No untracked keyword is gaining ground in this pull.");
+  assert.equal(gainingSummary({ total: 0, climbing: 0, new: 0, volume: 0 }, false), "No untracked keyword with a buying intent is gaining ground in this pull.");
 });
 
 test("ties: the same key goes to volume, then the better position, then the keyword", () => {

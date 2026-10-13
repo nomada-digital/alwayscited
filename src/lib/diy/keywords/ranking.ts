@@ -1,6 +1,6 @@
 import { INTENTS, type Intent, keywordForm } from "../../scan/dataforseo-request.ts";
 
-import type { FootprintRow, Pull } from "./footprint.ts";
+import { type FootprintRow, type Pull, completePull } from "./footprint.ts";
 import { commercial } from "./momentum.ts";
 import { type Band, inBand } from "./tracked.ts";
 
@@ -13,6 +13,14 @@ import { type Band, inBand } from "./tracked.ts";
  * keyword_difficulty is a vendor 0-100 score, which spec 2.3 rules out, and
  * the parser never reads it. The change is against our own previous pull;
  * with one pull only, against DataForSEO's own previous reading, said so.
+ *
+ * Positions are organic (rank_group), as the Tracked view's are, so page 1 and
+ * the bands mean the same on both views. Against our previous pull the change
+ * is in organic places; against DataForSEO's reading it is rank_absolute
+ * against its previous_rank_absolute, as that reading is. A keyword missing
+ * from a previous pull that was cut at its row limit has no change and is not
+ * called new: it may only have been below the cut (13 Oct 2026, review of the
+ * P6 handoff).
  */
 
 export const PAGE_ROWS = 100;
@@ -39,14 +47,23 @@ export const RANKING_SORTS: readonly RankingSort[] = ["keyword", "position", "ch
 /** Every row of the latest pull, each with its change since the previous one. */
 export function rankingRows(latest: Pull, previous: Pull | null, tracked: ReadonlySet<string>): RankingRow[] {
   const prev = previous ? new Map(previous.rows.map((r) => [keywordForm(r.k), r.p] as const)) : null;
+  const complete = previous ? completePull(previous) : false;
   return latest.rows.map((r: FootprintRow) => {
     const key = keywordForm(r.k);
-    const before = prev ? (prev.has(key) ? (prev.get(key) ?? null) : undefined) : (r.pr ?? undefined);
-    const isNew = prev ? !prev.has(key) : r.n === true;
+    let change: number | null = null;
+    let isNew = false;
+    if (prev) {
+      const before = prev.get(key) ?? null;
+      if (before !== null && r.p !== null) change = before - r.p;
+      isNew = !prev.has(key) && complete;
+    } else {
+      if (r.pr !== undefined && r.pr !== null && r.a !== undefined && r.a !== null) change = r.pr - r.a;
+      isNew = (r.pr === undefined || r.pr === null) && r.n === true;
+    }
     return {
       keyword: r.k,
       position: r.p,
-      change: before !== undefined && before !== null && r.p !== null ? before - r.p : null,
+      change,
       isNew,
       volume: r.v,
       etv: r.e,

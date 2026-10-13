@@ -21,7 +21,18 @@ import type { Day } from "../../tracking/figures.ts";
  * cannot reach a row here.
  */
 
-/** One stored footprint row: keyword, position, url path, volume, intent, estimated traffic, DataForSEO's previous rank and its is_new flag. */
+/**
+ * One stored footprint row: keyword, position, url path, volume, intent, estimated traffic, and DataForSEO's own
+ * previous reading.
+ *
+ * Two positions, never mixed (13 Oct 2026, review of the P6 handoff). `p` is `rank_group`, the place among the
+ * organic results: what our own daily read stores (engines.ts) and what every DIY page shows, bands and counts
+ * as "Nth on Google", so a keyword reads the same in the Tracked and All views. `a` is `rank_absolute`, the
+ * place among every element on the page (an AI overview, a snippet, a video row each take one); it is kept only
+ * to compare with DataForSEO's `previous_rank_absolute` (`pr`), which is on that basis. `pd` is the day of that
+ * previous reading (`previous_updated_time`), per keyword - DataForSEO v3 docs, ranked_keywords/live, read 13 Oct
+ * 2026: rank_changes are "since the previous_updated_time".
+ */
 export type FootprintRow = {
   k: string;
   p: number | null;
@@ -29,9 +40,14 @@ export type FootprintRow = {
   v: number | null;
   i: Intent | null;
   e: number | null;
-  /** `rank_changes.previous_rank_absolute`: DataForSEO's own previous reading. The window it covers is [VERIFY] (spec 6.10). */
+  /** `rank_absolute`; left off when unknown. */
+  a?: number | null;
+  /** `rank_changes.previous_rank_absolute`: DataForSEO's own previous reading, a rank_absolute. */
   pr?: number | null;
+  /** `rank_changes.is_new`: DataForSEO's previous reading of this keyword's results did not hold the site's page. */
   n?: boolean | null;
+  /** The previous reading's day (`previous_updated_time`). */
+  pd?: Day | null;
 };
 
 /** One pull as the pages read it. */
@@ -60,17 +76,19 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /**
  * A parsed `ranked_keywords` read as it is stored: named fields only, empty
- * keywords dropped, etv to two places, and the null fields of DataForSEO's
- * own previous reading left off the row to keep it small (a missing `pr` reads
- * as null).
+ * keywords dropped, etv to two places, `p` the organic position (rank_group)
+ * and `a` the absolute one, and the null fields of DataForSEO's own previous
+ * reading left off the row to keep it small (a missing `pr` reads as null).
  */
 export function compactFootprint(read: RankedKeywords): { total: number | null; etv: number | null; rows: FootprintRow[] } {
   const rows: FootprintRow[] = [];
   for (const r of read.rows) {
     if (!r.keyword) continue;
-    const row: FootprintRow = { k: r.keyword, p: r.position, u: r.url, v: r.volume, i: r.intent, e: r.etv === null ? null : round2(r.etv) };
+    const row: FootprintRow = { k: r.keyword, p: r.group, u: r.url, v: r.volume, i: r.intent, e: r.etv === null ? null : round2(r.etv) };
+    if (r.position !== null) row.a = r.position;
     if (r.previous !== null) row.pr = r.previous;
     if (r.isNew !== null) row.n = r.isNew;
+    if (r.previousOn !== null && isDay(r.previousOn)) row.pd = r.previousOn;
     rows.push(row);
   }
   return { total: read.total, etv: read.etv === null ? null : round2(read.etv), rows };
@@ -92,9 +110,12 @@ export function readFootprintRows(v: unknown): FootprintRow[] {
       i: intentOf(r.i),
       e: num(r.e),
     };
+    const a = num(r.a);
+    if (a !== null) row.a = a;
     const pr = num(r.pr);
     if (pr !== null) row.pr = pr;
     if (typeof r.n === "boolean") row.n = r.n;
+    if (isDay(r.pd)) row.pd = r.pd;
     out.push(row);
   }
   return out;
@@ -111,6 +132,14 @@ export function readPull(row: Record<string, unknown> | null | undefined): Pull 
     rows: readFootprintRows(row.rows),
   };
 }
+
+/**
+ * Whether a pull holds every keyword Labs had for the domain. Each pull reads
+ * the top 1000 rows by estimated traffic, so for a bigger site a keyword
+ * missing from it may simply have been below the cut, not out of Google's top
+ * 100. An unknown total is not a complete pull.
+ */
+export const completePull = (pull: Pick<Pull, "total" | "rows">): boolean => pull.total !== null && pull.total <= pull.rows.length;
 
 /** The newest two pulls, newest first, from rows in any order. */
 export function latestTwo(pulls: readonly Pull[]): { latest: Pull | null; previous: Pull | null } {

@@ -11,9 +11,11 @@ import type { Suggestion } from "@/lib/diy/keywords/setup-suggestions";
  * keyword" runs the existing Check keyword on the cluster card that needs
  * one (the same plain POST its own field makes, so the same signed pass, the
  * same 20 a day, and the same 303 back to that card); with no such card it
- * opens Clusters' Add panel prefilled. Viewers see the list and the reason.
+ * opens Clusters' Add panel prefilled - with `src=gaining` only for a
+ * gaining-ground keyword (spec 10 section 6.6). Viewers, and members of an
+ * ended client, see the list and the reason that applies to them.
  */
-export default function SetupSuggestions({ items, slug, card, addHref, canWrite }: { items: readonly Suggestion[]; slug: string; card: string | null; addHref: (keyword: string) => string; canWrite: boolean }) {
+export default function SetupSuggestions({ items, slug, card, addHref, canWrite, reason }: { items: readonly Suggestion[]; slug: string; card: string | null; addHref: (s: Suggestion) => string; canWrite: boolean; reason: string }) {
   if (!items.length) return null;
   const BTN = { height: "44px", padding: "0 14px", border: `1px solid ${T.ink}`, borderRadius: "10px", background: T.surface, color: T.ink, fontFamily: "inherit", fontSize: "13px", fontWeight: 600, whiteSpace: "nowrap" } as const;
   return (
@@ -43,7 +45,7 @@ export default function SetupSuggestions({ items, slug, card, addHref, canWrite 
                 </SubmitButton>
               </form>
             ) : (
-              <a href={addHref(s.keyword)} style={{ ...BTN, display: "inline-flex", alignItems: "center", textDecoration: "none", boxSizing: "border-box" }}>
+              <a href={addHref(s)} style={{ ...BTN, display: "inline-flex", alignItems: "center", textDecoration: "none", boxSizing: "border-box" }}>
                 Use this keyword<span className="sr-only">{`: '${s.keyword}'`}</span>
               </a>
             )}
@@ -52,7 +54,7 @@ export default function SetupSuggestions({ items, slug, card, addHref, canWrite 
       </ul>
       {canWrite ? null : (
         <p id="setup-sg-viewer" style={{ margin: "8px 0 0", fontSize: "13px", color: T.soft }}>
-          Viewers can&apos;t change this. Ask an owner or editor.
+          {reason}
         </p>
       )}
     </div>

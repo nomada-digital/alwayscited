@@ -14,7 +14,11 @@ import Sparkline from "./Sparkline";
  * latest reading in the range, the change, its best, the page ranking with
  * the "URL changed" and "two of your pages take turns" flags, and its last
  * 28 readings. Read by us, every day. A keyword's row opens "Who holds page
- * 1" (`?row=<keyword id>`), Google's top 10 at its latest reading. Sorting is
+ * 1" (`?row=<keyword id>`), Google's top 10 at its latest reading, as a row of
+ * its own with one cell across the table (so the table holds only rows), drawn
+ * in Google's order without rank numbers: a page where Nomada has placed
+ * another client is left out, and numbers would leave a gap that points at it
+ * (13 Oct 2026, review of the P6 handoff). Sorting is
  * links in the column heads, so all of it works with JS off. Below 860px a
  * row is a card: the keyword, its one figure (the latest position) on the
  * right, the rest as a line under it.
@@ -162,32 +166,31 @@ export default function TrackedTable(p: {
               </span>
             </div>
             {open ? (
-              <div data-page-one={r.id} className="gk-pad" style={{ margin: "0 24px 16px", padding: "14px 16px", borderRadius: "12px", background: T.bg, border: `1px solid ${T.line}` }}>
-                <h3 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: T.ink }}>{`Who holds page 1 for '${r.keyword}'`}</h3>
-                {p.top === "error" ? (
-                  <p style={{ margin: 0, fontSize: "13px", color: T.soft }}>We couldn&apos;t read this part just now. The rest of the page is up to date.</p>
-                ) : p.top === "none" || p.top === null ? (
-                  <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: T.soft }}>Google&apos;s top 10 is kept from each daily reading since 13 Oct 2026. None is stored for this keyword&apos;s latest reading yet.</p>
-                ) : (
-                  <>
-                    <ol style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
-                      {p.top.hits.map((h) => (
-                        <li key={`${h.rank}-${h.domain}`} data-rank={h.rank} style={{ display: "grid", gridTemplateColumns: "36px minmax(0, 1fr)", gap: "8px", alignItems: "baseline", fontSize: "13px", lineHeight: 1.5 }}>
-                          <span style={{ fontWeight: 700, color: T.soft, fontVariantNumeric: "tabular-nums" }}>{ordinal(h.rank)}</span>
-                          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+              <div role="row" style={{ display: "block" }}>
+                <div role="cell" data-page-one={r.id} className="gk-pad" style={{ margin: "0 24px 16px", padding: "14px 16px", borderRadius: "12px", background: T.bg, border: `1px solid ${T.line}` }}>
+                  <h3 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: T.ink }}>{`Who holds page 1 for '${r.keyword}'`}</h3>
+                  {p.top === "error" ? (
+                    <p style={{ margin: 0, fontSize: "13px", color: T.soft }}>We couldn&apos;t read this part just now. The rest of the page is up to date.</p>
+                  ) : p.top === "none" || p.top === null ? (
+                    <p style={{ margin: 0, fontSize: "13px", lineHeight: 1.5, color: T.soft }}>Google&apos;s top 10 is kept from each daily reading since 13 Oct 2026. None is stored for this keyword&apos;s latest reading yet.</p>
+                  ) : (
+                    <>
+                      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
+                        {p.top.hits.map((h) => (
+                          <li key={`${h.domain}-${h.url ?? ""}`} data-hit={h.domain} style={{ fontSize: "13px", lineHeight: 1.5, minWidth: 0, overflowWrap: "anywhere" }}>
                             <span style={{ fontWeight: 600, color: h.domain === p.own || h.domain.endsWith(`.${p.own}`) ? T.accent : T.ink }}>{h.domain}</span>{" "}
                             {h.url ? (
                               <a href={h.url} rel="noopener noreferrer" target="_blank" style={{ color: T.soft, textDecorationColor: T.faint }}>
                                 {pathOf(h.url)}
                               </a>
                             ) : null}
-                          </span>
-                        </li>
-                      ))}
-                    </ol>
-                    <p style={{ margin: "8px 0 0", fontSize: "12px", color: T.soft }}>{`Google's organic results for this keyword, checked ${formatDate(p.top.day)}.`}</p>
-                  </>
-                )}
+                          </li>
+                        ))}
+                      </ul>
+                      <p style={{ margin: "8px 0 0", fontSize: "12px", color: T.soft }}>{`Google's organic results for this keyword, top to bottom, checked ${formatDate(p.top.day)}.`}</p>
+                    </>
+                  )}
+                </div>
               </div>
             ) : null}
           </div>
