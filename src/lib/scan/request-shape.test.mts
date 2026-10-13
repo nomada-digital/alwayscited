@@ -511,3 +511,101 @@ test("a request DataForSEO refused whole says why, and an account's 'not now' is
   assert.equal(readRetryDelay(err, 0, 200_000), null, "a bad request is not");
   assert.throws(() => firstTask({}), /^Error: DataForSEO returned no task$/, "no top-level code: the old words");
 });
+
+// ───────────────────────────── the DIY launch reads ─────────────────────────────
+
+/**
+ * 13 Oct 2026, DIY P1 (spec 10 sections 5.2 and 5.6). The DIY platform's
+ * Labs and OnPage reads and its two free paths, each held the way the keyword
+ * reads above are: its path built in `dataforseo-request.ts` and nowhere else,
+ * its one door in `dataforseo.ts`, and that door referenced from exactly one
+ * module, `src/lib/diy/core/doors.ts` - where every paid one goes through the
+ * capped `diyRead`, reserved in the DIY ledger before it is sent. A second
+ * caller of a door is a read no cap can see. The Backlinks and Content
+ * Analysis reads are P10's, in wave 3, and add their own rows here.
+ *
+ * "Referenced", not "called": the doors are handed to `diyRead` as values, so
+ * a call-only sweep would find none and report a clean tree. An import of a
+ * door anywhere else fails this too, which is the stricter reading and the
+ * right one.
+ */
+const DIY_DOORS = [
+  "readDiyRankedKeywords",
+  "readDiyRelevantPages",
+  "readDiyCompetitorsDomain",
+  "readDiyInstantPage",
+  "readDiyMicrodata",
+  "readDiyContentParsing",
+  "readLabsStatus",
+  "readBacklinksFilters",
+];
+const DIY_BUILDERS = ["rankedKeywordsRequest", "relevantPagesRequest", "competitorsDomainRequest", "instantPagesRequest", "microdataRequest", "contentParsingRequest"];
+
+test("each DIY launch path is built in one module", async () => {
+  const { DIY_PATHS, DIY_FREE_PATHS } = await import("./dataforseo-request.ts");
+  const paths = [...Object.values(DIY_PATHS), ...Object.values(DIY_FREE_PATHS)].map((p) => p.replace(/^\/v3\//, ""));
+  assert.equal(paths.length, 8, "six paid paths (microdata rides on instant_pages) and two free ones");
+  const where: Record<string, string[]> = Object.fromEntries(paths.map((p) => [p, []]));
+  for (const file of sourceFiles(ROOT)) {
+    const src = code(readFileSync(join(ROOT, file), "utf8"));
+    for (const p of paths) if (src.includes(p)) where[p]!.push(file);
+  }
+  for (const p of paths) assert.deepEqual(where[p], ["src/lib/scan/dataforseo-request.ts"], p);
+});
+
+test("each DIY door lives in dataforseo.ts and is referenced from doors.ts alone; each builder is called from doors.ts alone", () => {
+  const refs: Record<string, string[]> = Object.fromEntries([...DIY_DOORS, ...DIY_BUILDERS].map((n) => [n, []]));
+  for (const file of sourceFiles(ROOT)) {
+    const src = code(readFileSync(join(ROOT, file), "utf8"));
+    for (const name of DIY_DOORS) if (new RegExp(`(?<![\\w.])${name}\\b`).test(src.replace(new RegExp(`export async function ${name}\\b`, "g"), ""))) refs[name]!.push(file);
+    for (const name of DIY_BUILDERS) if (new RegExp(`(?<![\\w.])(?<!function\\s+)${name}\\(`).test(src)) refs[name]!.push(file);
+  }
+  const want = Object.fromEntries([...DIY_DOORS, ...DIY_BUILDERS].map((n) => [n, ["src/lib/diy/core/doors.ts"]]));
+  assert.deepEqual(refs, want);
+  const doors = readFileSync(join(ROOT, "src/lib/scan/dataforseo.ts"), "utf8");
+  for (const name of DIY_DOORS) assert.match(doors, new RegExp(`export async function ${name}\\(`), `${name} is a door in dataforseo.ts`);
+});
+
+test("the DIY row ceilings: 100 by default, 1000 only for ranked_keywords, anything higher refused in code", async () => {
+  const { DIY_LIMIT_CEILING, DIY_LIMIT_DEFAULT, rankedKeywordsRequest, relevantPagesRequest, competitorsDomainRequest } = await import("./dataforseo-request.ts");
+  assert.equal(DIY_LIMIT_DEFAULT, 100);
+  assert.deepEqual(DIY_LIMIT_CEILING, { ranked_keywords: 1000, relevant_pages: 100, competitors_domain: 100 });
+  assert.equal(rankedKeywordsRequest({ target: "tallyroo.com", market: "UK" }).rows, 1000);
+  assert.throws(() => rankedKeywordsRequest({ target: "tallyroo.com", market: "UK", limit: 1001 }));
+  for (const req of [relevantPagesRequest({ target: "tallyroo.com", market: "UK" }), competitorsDomainRequest({ target: "tallyroo.com", market: "US" })]) {
+    const limit = (req.body as { limit: number }[])[0]!.limit;
+    assert.ok(limit <= DIY_LIMIT_DEFAULT, `${req.endpoint} asks for ${limit} rows`);
+    assert.equal(limit, req.rows, "the rows reserved are the rows asked for");
+  }
+});
+
+test("the two free paths cost 0: GETs with no body, outside the ledger, and freeRead refuses every other path", () => {
+  const doors = readFileSync(join(ROOT, "src/lib/scan/dataforseo.ts"), "utf8");
+  for (const name of ["readLabsStatus", "readBacklinksFilters"]) {
+    const body = doors.slice(doors.indexOf(`export async function ${name}(`)).split("\n}\n")[0]!;
+    assert.match(body, /await get\(DIY_FREE_PATHS\./, `${name} is a GET of a free path`);
+    assert.doesNotMatch(body, /post\(|taskCost/, `${name} posts nothing and bills nothing`);
+  }
+  // 13 Oct 2026, DIY P1 review: the cost-0 fact is the account's price table
+  // (04 section 2, read 12 Oct 2026), recorded in prices.ts - not a sample
+  // response's cost field, which says only what the sample's writer typed.
+  const prices = readFileSync(join(ROOT, "src/lib/diy/core/prices.ts"), "utf8");
+  assert.match(prices, /export const DIY_FREE_COST = \{ labs_status: 0, backlinks_filters: 0 \} as const;/, "both free paths recorded at cost 0");
+  assert.match(prices, /DIY_FREE_COST_SOURCE = "research note 04 \([^)]*04-dataforseo\.md\) section 2, the account's price table read 12 Oct 2026"/, "and where that was read, with the date");
+  const free = readFileSync(join(ROOT, "src/lib/diy/core/doors.ts"), "utf8");
+  assert.match(free, /export async function freeRead\(path: DiyFreePath\): Promise<FreeAnswer> \{\n\s+if \(!isDiyFreePath\(path\)\) throw/);
+  assert.doesNotMatch(free.slice(free.indexOf("export async function freeRead")), /paidRead|diyRead/, "the free door writes no ledger row");
+});
+
+/**
+ * The endpoints spec 10 section 5.2 says are never called, refused by name
+ * across the tree (13 Oct 2026, DIY P1): LLM Mentions ($0.10 a call, its
+ * ChatGPT data US-only), historical rank overview (history is not
+ * backfilled), keyword overview as a stand-in for Check keyword (R38/R39),
+ * Lighthouse, OnPage site crawls, and Google Trends.
+ */
+test("the endpoints the DIY build never calls appear nowhere", () => {
+  const banned = /llm_mentions|historical_rank_overview|keyword_overview|lighthouse|on_page\/task_post|dataforseo_trends|google_trends/;
+  const found = sourceFiles(ROOT).filter((f) => banned.test(code(readFileSync(join(ROOT, f), "utf8"))));
+  assert.deepEqual(found, []);
+});

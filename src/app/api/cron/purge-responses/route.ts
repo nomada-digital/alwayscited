@@ -1,13 +1,31 @@
 import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/constant-time";
+import { dispatchDiyWork } from "@/lib/diy/core/dispatch";
+import { freeRead } from "@/lib/diy/core/doors";
+import { JOB_HANDLERS } from "@/lib/diy/wiring";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * The nightly purge, which no longer purges anything.
+ * The nightly purge, which no longer purges anything - and, since 13 Oct
+ * 2026, the first DIY night pass.
+ *
+ * **Why the DIY dispatch is here (DIY P1; spec 10 section 5.7).** It needs a
+ * nightly trigger before the 05:00 UTC tracking burst, and a new cron entry
+ * lives in `vercel.json`, which builders cannot stage. This route already runs
+ * at 03:30 UTC behind CRON_SECRET and does nothing, so it carries pass 1:
+ * `dispatchDiyWork` queues each client's due DIY jobs, makes the two free
+ * vendor reads once a UTC day, and posts two signed workers to
+ * `/api/diy/run`. Every paid read those workers make is capped by the DIY
+ * ledger and refused while `diy_enabled` is false. It runs in its own try, so
+ * neither half can hide the other's failure, and it writes nothing here: the
+ * retention answer below is unchanged. `/api/cron/reap-stalled-scans` carries
+ * pass 2 at 03:45. A dedicated `/api/cron/diy` is a later tidy-up for whoever
+ * can edit `vercel.json`.
  *
  * **Danny's decision, 24 September 2026: transcripts are kept indefinitely.**
  * What each engine said is the evidence behind every figure a reading
@@ -60,8 +78,20 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // DIY pass 1, in its own try: a dispatch that throws still answers the retention decision below.
+  let diy: Record<string, unknown>;
+  try {
+    diy = await dispatchDiyWork({ db: supabaseAdmin(), handlers: JOB_HANDLERS, pass: 1, free: freeRead });
+    if ((diy.errors as string[]).length) console.warn(`[diy] night pass 1: ${(diy.errors as string[]).join("; ")}`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.warn(`[diy] night pass 1 failed: ${error}`);
+    diy = { error };
+  }
+
   return NextResponse.json({
     ok: true,
+    diy,
     purged: false,
     answers_cleared: 0,
     retention: "indefinite",

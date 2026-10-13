@@ -311,6 +311,39 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     evidence: /export const CHECKS_PER_CLIENT_PER_DAY = \d+/,
     where: "src/lib/tracking/check-keyword.ts",
   },
+  /**
+   * 13 October 2026, DIY P1 (spec 10 sections 5.6 and 5.7): the DIY night.
+   * Not a visitor's scan, so checkCeilings is the wrong guard; the DIY ledger
+   * is its own, and it is read before every paid read rather than at the
+   * door. The worker route is held by its HMAC; both night crons by
+   * CRON_SECRET (paid-get, cron-schedule) and by the dispatcher queuing no
+   * paid kind while diy_enabled is off. "the DIY ledger holds the caps" below
+   * holds the reservation order every one of the three depends on.
+   */
+  "diy/run": {
+    why:
+      "Runs one DIY night worker. Only a body signed with CRON_SECRET (HMAC-SHA256, x-diy-signature) is accepted, " +
+      "and since 13 Oct 2026 (DIY P1 review) only on its own night: its day today's UTC day, posted 03:25-04:20 UTC. " +
+      "Every paid read inside is reserved in diy_reads first and refused while diy_enabled is off, past the global " +
+      "daily caps, past the client's per-door daily count or past its month budget.",
+    evidence: /if \(!verifyRun\(body, req\.headers\.get\(DIY_SIGNATURE_HEADER\), secret\)\)/,
+    where: "src/app/api/diy/run/route.ts",
+  },
+  "cron/purge-responses": {
+    why:
+      "DIY night pass 1 at 03:30 UTC, behind CRON_SECRET. Makes the two free vendor reads (cost 0) once a UTC day, " +
+      "queues paid kinds only for confirmed clients while diy_enabled is on, and posts two signed workers; every " +
+      "paid read they make is reserved and capped by the DIY ledger.",
+    evidence: /dueJobs\(deps\.handlers, client, \{ enabled: out\.enabled/,
+    where: "src/lib/diy/core/dispatch.ts",
+  },
+  "cron/reap-stalled-scans": {
+    why:
+      "DIY night pass 2 at 03:45 UTC, behind CRON_SECRET: the same dispatch, posting its two workers only while " +
+      "claimable due jobs remain. Every paid read is reserved and capped by the DIY ledger before it goes out.",
+    evidence: /if \(out\.pending === 0\) return out;/,
+    where: "src/lib/diy/core/dispatch.ts",
+  },
 };
 
 /**
@@ -597,8 +630,27 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * Twelve on 2 Oct 2026: `app/[client]/setup`, setup confirmed (R166 step
      * 4). One Resend message to us, once a client; it starts no scan, so the
      * decision is not moved.
+     *
+     * Fifteen on 13 Oct 2026 (DIY P1): `diy/run` and the two night crons that
+     * carry the DIY dispatch, `cron/purge-responses` and
+     * `cron/reap-stalled-scans`. They start no scan; the DIY platform has its
+     * own switch, `diy_enabled`, and its own caps in the DIY ledger, so
+     * `scans_enabled` has nothing to refuse and the decision is not moved.
      */
-    12,
+    15,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
+});
+
+test("the DIY ledger holds the caps: decided before the reservation, reserved before the read (13 Oct 2026, DIY P1)", () => {
+  const ledger = code(readFileSync(join(ROOT, "src/lib/diy/core/ledger.ts"), "utf8"));
+  const reserve = ledger.slice(ledger.indexOf("async function reserve("));
+  const decide = reserve.indexOf("refusal = decideReservation(");
+  const write = reserve.indexOf("await reserveRead(");
+  assert.ok(decide > 0 && write > decide, "the caps are decided before the reservation is written");
+  assert.match(reserve, /const settings = await readDiySettings\(rt\.db\);/, "the switch and caps are read on every reservation");
+  const paid = ledger.slice(ledger.indexOf("export async function paidRead"));
+  assert.ok(paid.indexOf("await reserve(") < paid.indexOf("await send("), "the read goes out after its reservation");
+  const doors = code(readFileSync(join(ROOT, "src/lib/diy/core/doors.ts"), "utf8"));
+  assert.match(doors, /return paidRead\(ctx, \{ door, endpoint, estimate: dfsEstimate\(endpoint, request\.rows\)/, "diyRead reserves at the request's maximum");
 });

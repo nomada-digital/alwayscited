@@ -80,8 +80,13 @@ test("rule 1: the walk finds the model calls it is written about", () => {
   // cluster keyword's candidates. Eight since 1 Oct 2026: `readCoverage`, the
   // decision being R140 (Danny, 30 Sep 2026, danny.md lines 128-133) - one
   // call per /coverage-check draft, behind Turnstile, checkCeilings and a
-  // per-IP draft cap, debited to model_call_debits. A ninth needs its own.
-  assert.equal(calls.length, 8, "anthropic.ts makes eight model calls; a ninth needs a decision, not a default");
+  // per-IP draft cap, debited to model_call_debits. Ten since 13 Oct 2026, DIY
+  // P1: classifyPages and writeReoptExample, Danny's 12 Oct brief (spec 10
+  // section 5.3) - each reached only through src/lib/diy/core/model.ts, which
+  // reserves it on the DIY ledger's model door and debits model_call_debits
+  // with billed.calls. Both are `beta.messages.parse` on `anthropic(billed)`, so
+  // the method set and rules 2-4 stand unchanged. An eleventh needs its own.
+  assert.equal(calls.length, 10, "anthropic.ts makes ten model calls; an eleventh needs a decision, not a default");
   assert.deepEqual(
     [...new Set(calls.map((c) => c.method))],
     ["parse"],

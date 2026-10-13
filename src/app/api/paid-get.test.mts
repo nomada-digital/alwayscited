@@ -143,7 +143,14 @@ test("every route that spends money refuses GET, except the email link", () => {
    * - and the unique (client, day) run row, so even an authorised repeat
    * dispatches nothing. Earned here against the route's own source.
    */
-  const SECRET_GATED_GET = ["cron/track"];
+  /*
+   * 13 Oct 2026, DIY P1 (spec 10 section 5.7): the two night crons that carry
+   * the DIY dispatch, beside `cron/track` and gated the same way - a request
+   * without `Bearer <CRON_SECRET>` is a 401 before anything is read. Behind
+   * the secret, the dispatch queues no paid kind while diy_enabled is off and
+   * every paid read is reserved in the DIY ledger first.
+   */
+  const SECRET_GATED_GET = ["cron/track", "cron/purge-responses", "cron/reap-stalled-scans"];
   for (const name of SECRET_GATED_GET) {
     const r = all.find((x) => x.name === name);
     assert.ok(r, `${name} is allowed a paid GET here and is not a route any more`);

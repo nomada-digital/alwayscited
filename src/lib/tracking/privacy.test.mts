@@ -18,8 +18,15 @@ import { join, relative } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { REVIEW_SITES } from "../scan/source-kinds.ts";
+
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
-const DIRS = ["src/app/app", "src/components/app", "src/lib/tracking", "e2e"];
+/**
+ * `src/lib/diy` since 13 Oct 2026 (DIY P1, spec 10 section 6.10 item 3): the
+ * DIY platform's code, fixtures and DataForSEO sample payloads name only the
+ * fixture's made-up world, `.example` hosts, and the recorded hosts below.
+ */
+const DIRS = ["src/app/app", "src/components/app", "src/lib/tracking", "src/lib/diy", "e2e"];
 
 /** The fixture's made-up world: boards-3/dataset.py's brands and the hosts it cites. */
 const BRANDS = new Set(["Tallyroo", "Ledgerline", "Brightbook", "Countwise", "Sumly"]);
@@ -45,9 +52,40 @@ const DOMAINS = new Set([
   // (fixture-mode.ts), because the banner keeps a payment link only when it is
   // a Stripe invoice page (checkout/payment.ts hostedInvoiceUrl).
   "invoice.stripe.com",
+  // 13 Oct 2026, DIY P1 (spec 10 section 6.10 item 3): the hosts the DIY
+  // platform's rules and evidence register name, none of them a client's.
+  // The engines' own hosts, which crawler and answer rules name:
+  "google.com",
+  "bing.com",
+  "openai.com",
+  "chatgpt.com",
+  "perplexity.ai",
+  "anthropic.com",
+  // The documentation hosts the evidence register cites:
+  "developers.google.com",
+  "search.google.com",
+  "schema.org",
+  // The social and community hosts the rules name (a footer's sameAs links, the threads lens):
+  "linkedin.com",
+  "x.com",
+  "twitter.com",
+  "facebook.com",
+  "instagram.com",
+  "youtube.com",
+  "tiktok.com",
+  "reddit.com",
+  "quora.com",
+  "stackexchange.com",
+  "wikipedia.org",
+  // And the review platforms, read from the one list the scan already keeps (source-kinds.ts REVIEW_SITES).
+  ...Object.keys(REVIEW_SITES),
 ]);
-/** Walked files, this one excluded. 29 Sep 2026: 25. */
-const FLOOR = 25;
+/**
+ * Walked files, this one excluded. 29 Sep 2026: 25. 13 Oct 2026, DIY P1: 71 -
+ * src/lib/diy joined the walk with 46 files (its modules, tests, fake, fixture
+ * and eight sample payloads; 230 walked in all), and the floor rises by them.
+ */
+const FLOOR = 71;
 
 const HOST = /\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:com|co\.uk|org\.uk|co|io|net|org|ai|uk|us|de|fr|au|ca|nz|ie|xyz|shop|store)\b/gi;
 

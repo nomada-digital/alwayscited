@@ -1,0 +1,191 @@
+{
+  "_sample": "Rebuilt 13 Oct 2026 (review of DIY P1) from the response example and field list in DataForSEO's v3 documentation for this endpoint, read that day: every key sits at the path the documentation gives it. Every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose. Note: `content` (with plain_text_word_count) is inside `meta`, not beside it.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0.0015,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0.0015,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "on_page",
+        "instant_pages"
+      ],
+      "data": {
+        "api": "on_page",
+        "function": "instant_pages",
+        "url": "https://tallyroo.com/payroll",
+        "custom_js": null
+      },
+      "result": [
+        {
+          "crawl_progress": "finished",
+          "crawl_status": null,
+          "crawl_gateway_address": "127.0.0.1",
+          "items_count": 1,
+          "items": [
+            {
+              "resource_type": "html",
+              "status_code": 200,
+              "location": null,
+              "url": "https://tallyroo.com/payroll",
+              "meta": {
+                "title": "Payroll for small businesses | Tallyroo",
+                "charset": 65001,
+                "follow": true,
+                "generator": null,
+                "htags": {
+                  "h1": [
+                    "Payroll that runs itself"
+                  ],
+                  "h2": [
+                    "How it works",
+                    "Pricing"
+                  ]
+                },
+                "description": "Made-up description of a made-up payroll product.",
+                "favicon": "https://tallyroo.com/favicon.ico",
+                "meta_keywords": null,
+                "canonical": "https://tallyroo.com/payroll",
+                "internal_links_count": 40,
+                "external_links_count": 6,
+                "inbound_links_count": 0,
+                "images_count": 9,
+                "images_size": 0,
+                "scripts_count": 12,
+                "scripts_size": 0,
+                "stylesheets_count": 3,
+                "stylesheets_size": 0,
+                "title_length": 38,
+                "description_length": 48,
+                "render_blocking_scripts_count": 1,
+                "render_blocking_stylesheets_count": 1,
+                "cumulative_layout_shift": 0.01,
+                "meta_title": null,
+                "content": {
+                  "plain_text_size": 8000,
+                  "plain_text_rate": 0.1,
+                  "plain_text_word_count": 1240,
+                  "automated_readability_index": 9.1,
+                  "coleman_liau_readability_index": 10.2,
+                  "dale_chall_readability_index": 7.4,
+                  "flesch_kincaid_readability_index": 55.1,
+                  "smog_readability_index": 11.0,
+                  "description_to_content_consistency": 0.8,
+                  "title_to_content_consistency": 0.9,
+                  "meta_keywords_to_content_consistency": null
+                },
+                "deprecated_tags": null,
+                "duplicate_meta_tags": null,
+                "spell": null,
+                "social_media_tags": {
+                  "og:site_name": "Tallyroo"
+                }
+              },
+              "page_timing": {
+                "time_to_interactive": 900,
+                "dom_complete": 1200,
+                "largest_contentful_paint": 1100,
+                "first_input_delay": 12,
+                "connection_time": 40,
+                "time_to_secure_connection": 60,
+                "request_sent_time": 2,
+                "waiting_time": 180,
+                "download_time": 30,
+                "duration_time": 1250,
+                "fetch_start": 0,
+                "fetch_end": 1250
+              },
+              "onpage_score": 91.4,
+              "total_dom_size": 120000,
+              "custom_js_response": null,
+              "custom_js_client_exception": null,
+              "resource_errors": null,
+              "broken_resources": false,
+              "broken_links": false,
+              "duplicate_title": false,
+              "duplicate_description": false,
+              "duplicate_content": false,
+              "click_depth": 0,
+              "size": 90000,
+              "encoded_size": 30000,
+              "total_transfer_size": 30000,
+              "fetch_time": "2026-10-13 03:31:00 +00:00",
+              "cache_control": {
+                "cachable": true,
+                "ttl": 0
+              },
+              "checks": {
+                "no_content_encoding": false,
+                "high_loading_time": false,
+                "is_redirect": false,
+                "is_4xx_code": false,
+                "is_5xx_code": false,
+                "is_broken": false,
+                "is_www": false,
+                "is_https": true,
+                "is_http": false,
+                "high_waiting_time": false,
+                "no_doctype": false,
+                "has_html_doctype": true,
+                "canonical": true,
+                "no_encoding_meta_tag": false,
+                "no_h1_tag": false,
+                "https_to_http_links": false,
+                "size_greater_than_3mb": false,
+                "meta_charset_consistency": true,
+                "has_meta_refresh_redirect": false,
+                "has_render_blocking_resources": true,
+                "low_content_rate": false,
+                "high_content_rate": false,
+                "low_character_count": false,
+                "high_character_count": false,
+                "small_page_size": false,
+                "large_page_size": false,
+                "low_readability_rate": false,
+                "irrelevant_description": false,
+                "irrelevant_title": false,
+                "irrelevant_meta_keywords": false,
+                "title_too_long": false,
+                "has_meta_title": false,
+                "title_too_short": false,
+                "deprecated_html_tags": false,
+                "duplicate_meta_tags": false,
+                "duplicate_title_tag": false,
+                "no_image_alt": true,
+                "no_image_title": true,
+                "no_description": false,
+                "no_title": false,
+                "no_favicon": false,
+                "seo_friendly_url": true,
+                "flash": false,
+                "frame": false,
+                "lorem_ipsum": false,
+                "has_micromarkup": true,
+                "has_micromarkup_errors": true
+              },
+              "content_encoding": "gzip",
+              "media_type": "text/html",
+              "server": "made-up",
+              "is_resource": false,
+              "last_modified": {
+                "header": null,
+                "sitemap": null,
+                "meta_tag": null
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

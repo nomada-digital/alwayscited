@@ -475,3 +475,79 @@ export async function readSite(domain: string): Promise<string> {
     clearTimeout(timer);
   }
 }
+
+/**
+ * One guarded read of any URL, for the DIY platform's own fetches (13 Oct
+ * 2026, DIY P1; spec 10 section 5.4): robots.txt, llms.txt, key pages, and the
+ * first-pass verification of a pursued page. Used through
+ * `src/lib/diy/core/fetch.ts`, which checks robots.txt for a third-party page
+ * before it is read.
+ *
+ * The same guard as `getText` above, hop for hop - every hostname checked by
+ * `checkHost`, redirects followed by hand up to MAX_REDIRECTS, bytes capped
+ * by `bodyUpTo` as they stream - with two differences that are the reason it
+ * is a second loop rather than a flag on the first: it trusts no host, not
+ * even the first, and it answers whatever status and type the page has
+ * (a robots.txt is text/plain, a 404 is an answer), with its headers.
+ * `fetch.test.mts` holds the two loops to the same guard.
+ *
+ * `allowHop` (13 Oct 2026, review of DIY P1) is asked before each redirect is
+ * followed, with the URL it points at: fetch.ts checks that URL's robots.txt
+ * for a third-party read, so a page that redirects to a host or path that
+ * disallows us is not read. A hop it refuses answers `refused`.
+ */
+export type GuardedRead =
+  | { ok: true; status: number; html: string; headers: Record<string, string>; url: string }
+  | { ok: false; why: "network" | "private" | "timeout" | "refused" };
+
+export async function guardedRead(
+  url: string,
+  opts: { capBytes: number; ua: string; timeoutMs: number; allowHop?: (next: string) => Promise<boolean> },
+): Promise<GuardedRead> {
+  const signal = AbortSignal.timeout(opts.timeoutMs);
+  let current = url;
+  try {
+    for (let hop = 0; ; hop++) {
+      let target: URL;
+      try {
+        target = new URL(current);
+      } catch {
+        return { ok: false, why: "network" };
+      }
+      if (target.protocol !== "https:" && target.protocol !== "http:") return { ok: false, why: "network" };
+      const where = await checkHost(target.hostname, signal);
+      if (where === "private") return { ok: false, why: "private" };
+      if (where === "unresolved") return { ok: false, why: "network" };
+
+      let res: Response;
+      try {
+        res = await fetch(current, { signal, redirect: "manual", headers: { "user-agent": opts.ua } });
+      } catch {
+        return { ok: false, why: signal.aborted ? "timeout" : "network" };
+      }
+
+      const location = REDIRECTS.has(res.status) ? res.headers.get("location") : null;
+      if (location) {
+        await res.body?.cancel().catch(() => {});
+        if (hop >= MAX_REDIRECTS) return { ok: false, why: "network" };
+        try {
+          current = new URL(location, current).toString();
+        } catch {
+          return { ok: false, why: "network" };
+        }
+        if (opts.allowHop && !(await opts.allowHop(current))) return { ok: false, why: "refused" };
+        continue;
+      }
+
+      const headers: Record<string, string> = {};
+      res.headers.forEach((value, key) => {
+        headers[key.toLowerCase()] = value.slice(0, 500);
+      });
+      const type = res.headers.get("content-type") ?? "";
+      const html = res.body ? decodeBody(await bodyUpTo(res.body, opts.capBytes), type) : "";
+      return { ok: true, status: res.status, html, headers, url: current };
+    }
+  } catch {
+    return { ok: false, why: signal.aborted ? "timeout" : "network" };
+  }
+}

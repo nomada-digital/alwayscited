@@ -1,0 +1,308 @@
+{
+  "full": {
+    "reads": [
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "partial"
+      },
+      {
+        "action": "page_check",
+        "status": "failed"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": null,
+        "status": "ok"
+      },
+      {
+        "action": null,
+        "status": "ok"
+      },
+      {
+        "action": "example",
+        "status": "ok"
+      }
+    ],
+    "counts": {
+      "examples": 2,
+      "link_targets": 0,
+      "pursuits": 4
+    }
+  },
+  "dark": {
+    "reads": [],
+    "counts": {
+      "examples": 0,
+      "link_targets": 0,
+      "pursuits": 0
+    }
+  },
+  "day0": {
+    "reads": [],
+    "counts": {
+      "examples": 0,
+      "link_targets": 0,
+      "pursuits": 0
+    }
+  },
+  "capped": {
+    "reads": [
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "page_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "link_check",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      },
+      {
+        "action": "verify",
+        "status": "ok"
+      }
+    ],
+    "counts": {
+      "examples": 10,
+      "link_targets": 5,
+      "pursuits": 10
+    }
+  }
+}

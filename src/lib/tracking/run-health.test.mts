@@ -203,6 +203,26 @@ test("a day with every run complete sends nothing; a missing client is a problem
   assert.equal(box.sent.length, 1);
 });
 
+test("13 Oct 2026, DIY P1: a clean tracking day still mails when the DIY night needs a look, for today only, on the same claim", async () => {
+  const runs = [{ client_domain_id: "a", status: "complete" }, { client_domain_id: "b", status: "complete" }];
+  const asked: number[] = [];
+  const quiet = fakeDb(day({ runs }));
+  const box = outbox();
+  const io = (line: string | null) => ({ ...box.health, diyAttention: async (now: number) => (asked.push(now), line) });
+  assert.equal(await reportRunHealth(quiet.db, io(null), { day: DAY, now: AFTER_RUNS }), "healthy", "a quiet DIY night sends nothing");
+  const loud = fakeDb(day({ runs }));
+  const line = "DIY reads overnight (9 Oct, UTC): DataForSEO $0.40 of $10.00, model $0.00 of $5.00; paused at cap: no; jobs carried to tonight: 4";
+  assert.equal(await reportRunHealth(loud.db, io(line), { day: DAY, now: AFTER_RUNS }), "sent");
+  assert.equal(box.sent.length, 1);
+  assert.match(box.sent[0]!.subject, /every client complete; DIY night to look at/);
+  assert.deepEqual(loud.tables.dashboard_events!.map((e) => e.event), [RUN_HEALTH_EVENT], "the day's one claim");
+  assert.equal(await reportRunHealth(loud.db, io(line), { day: DAY, now: AFTER_RUNS + MIN }), "taken");
+  const before = asked.length;
+  const yesterday = fakeDb(day({ runs }));
+  assert.equal(await reportRunHealth(yesterday.db, io(line), { day: DAY, now: AFTER_RUNS + 24 * 60 * MIN }), "healthy", "the next morning's catch-up never carries tonight's line");
+  assert.equal(asked.length, before, "not even asked");
+});
+
 test("nothing dispatched: the cron's report sends at once, with why", async () => {
   const { db } = fakeDb(day());
   const box = outbox();

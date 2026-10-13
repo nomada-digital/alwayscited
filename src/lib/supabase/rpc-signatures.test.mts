@@ -291,5 +291,8 @@ test("the six call sites are the ones we think they are", () => {
     // is a function the database has and the app no longer calls.
     scan_source_coverage: 1,
     scan_teaser: 2,
+    // 13 Oct 2026, DIY P1 (spec 10 section 5.6 item 4): every sum a DIY
+    // reservation checks, in one read-only round trip (ledger.ts readDiySpend).
+    diy_spend: 1,
   });
 });

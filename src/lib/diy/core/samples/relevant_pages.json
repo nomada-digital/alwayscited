@@ -1,0 +1,154 @@
+{
+  "_sample": "Shaped on DataForSEO's documented response for this endpoint, read in DataForSEO's v3 documentation on 13 Oct 2026; every value, host and keyword is made up (Tallyroo and every brand here are illustrative, other hosts are .example). Fields the parsers must drop are kept on purpose.",
+  "version": "0.1.20261001",
+  "status_code": 20000,
+  "status_message": "Ok.",
+  "time": "0.4 sec.",
+  "cost": 0.01224,
+  "tasks_count": 1,
+  "tasks_error": 0,
+  "tasks": [
+    {
+      "id": "10131234-1111-0066-0000-0123456789ab",
+      "status_code": 20000,
+      "status_message": "Ok.",
+      "time": "0.3 sec.",
+      "cost": 0.01224,
+      "result_count": 1,
+      "path": [
+        "v3",
+        "dataforseo_labs",
+        "google",
+        "relevant_pages",
+        "live"
+      ],
+      "data": {
+        "api": "dataforseo_labs"
+      },
+      "result": [
+        {
+          "se_type": "google",
+          "target": "tallyroo.com",
+          "location_code": 2826,
+          "language_code": "en",
+          "total_count": 64,
+          "items_count": 2,
+          "items": [
+            {
+              "se_type": "google",
+              "page_address": "https://tallyroo.com/payroll",
+              "metrics": {
+                "organic": {
+                  "pos_1": 4,
+                  "pos_2_3": 9,
+                  "pos_4_10": 31,
+                  "pos_11_20": 48,
+                  "pos_21_30": 22,
+                  "pos_31_40": 10,
+                  "pos_41_50": 6,
+                  "pos_51_60": 3,
+                  "pos_61_70": 2,
+                  "pos_71_80": 1,
+                  "pos_81_90": 0,
+                  "pos_91_100": 1,
+                  "etv": 640.2,
+                  "count": 210,
+                  "estimated_paid_traffic_cost": 812.4,
+                  "is_new": 12,
+                  "is_up": 30,
+                  "is_down": 18,
+                  "is_lost": 5,
+                  "clickstream_etv": null,
+                  "clickstream_gender_distribution": null,
+                  "clickstream_age_distribution": null
+                },
+                "paid": {
+                  "pos_1": 4,
+                  "pos_2_3": 9,
+                  "pos_4_10": 31,
+                  "pos_11_20": 48,
+                  "pos_21_30": 22,
+                  "pos_31_40": 10,
+                  "pos_41_50": 6,
+                  "pos_51_60": 3,
+                  "pos_61_70": 2,
+                  "pos_71_80": 1,
+                  "pos_81_90": 0,
+                  "pos_91_100": 1,
+                  "etv": 0,
+                  "count": 0,
+                  "estimated_paid_traffic_cost": 812.4,
+                  "is_new": 12,
+                  "is_up": 30,
+                  "is_down": 18,
+                  "is_lost": 5,
+                  "clickstream_etv": null,
+                  "clickstream_gender_distribution": null,
+                  "clickstream_age_distribution": null
+                },
+                "featured_snippet": null,
+                "local_pack": null
+              }
+            },
+            {
+              "se_type": "google",
+              "page_address": "https://tallyroo.com/",
+              "metrics": {
+                "organic": {
+                  "pos_1": 4,
+                  "pos_2_3": 9,
+                  "pos_4_10": 31,
+                  "pos_11_20": 48,
+                  "pos_21_30": 22,
+                  "pos_31_40": 10,
+                  "pos_41_50": 6,
+                  "pos_51_60": 3,
+                  "pos_61_70": 2,
+                  "pos_71_80": 1,
+                  "pos_81_90": 0,
+                  "pos_91_100": 1,
+                  "etv": 410.7,
+                  "count": 180,
+                  "estimated_paid_traffic_cost": 812.4,
+                  "is_new": 12,
+                  "is_up": 30,
+                  "is_down": 18,
+                  "is_lost": 5,
+                  "clickstream_etv": null,
+                  "clickstream_gender_distribution": null,
+                  "clickstream_age_distribution": null
+                },
+                "paid": {
+                  "pos_1": 4,
+                  "pos_2_3": 9,
+                  "pos_4_10": 31,
+                  "pos_11_20": 48,
+                  "pos_21_30": 22,
+                  "pos_31_40": 10,
+                  "pos_41_50": 6,
+                  "pos_51_60": 3,
+                  "pos_61_70": 2,
+                  "pos_71_80": 1,
+                  "pos_81_90": 0,
+                  "pos_91_100": 1,
+                  "etv": 0,
+                  "count": 0,
+                  "estimated_paid_traffic_cost": 812.4,
+                  "is_new": 12,
+                  "is_up": 30,
+                  "is_down": 18,
+                  "is_lost": 5,
+                  "clickstream_etv": null,
+                  "clickstream_gender_distribution": null,
+                  "clickstream_age_distribution": null
+                },
+                "featured_snippet": null,
+                "local_pack": null
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

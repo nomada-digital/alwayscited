@@ -200,6 +200,13 @@ export const STATE_WORDS: Record<RunState, string> = {
 export function healthMail(h: RunHealth, p: { today: string; adminUrl: string; note?: string | null }): { subject: string; text: string } {
   const looking = h.clients.filter((c) => c.state !== "complete");
   const total = h.clients.length;
+  if (!looking.length) {
+    // 13 Oct 2026, DIY P1: every tracking run complete, sent for the DIY line the send appends.
+    return {
+      subject: `alwaystracked run health ${h.day}: every client complete; DIY night to look at`,
+      text: [`The daily check for ${h.day} (London) read all ${total} client${total === 1 ? "" : "s"} complete. The DIY night below needs a look.`, ...(p.note ? ["", p.note] : [])].join("\n"),
+    };
+  }
   const tally = RUN_STATES.filter((s) => h.counts[s] > 0)
     .map((s) => `${STATE_WORDS[s]} ${h.counts[s]}`)
     .join(", ");
@@ -315,6 +322,16 @@ export function claimAbandoned(props: unknown, now: number): boolean {
 export type HealthIo = {
   send: (mail: { subject: string; text: string }) => Promise<boolean>;
   adminUrl: string;
+  /**
+   * 13 Oct 2026, DIY P1 (spec 10 section 5.6): the DIY night's line when it
+   * needs a look - paused at a cap, jobs carried to tonight, or unreadable -
+   * else null (src/lib/diy/core/health.ts diyAttention). Asked only on a day
+   * every client's run was complete, and only for today, so a clean tracking
+   * day still mails a DIY problem and the next morning's catch-up for the day
+   * before never carries tonight's line. The send itself appends the DIY line
+   * to every summary (health-mail.ts).
+   */
+  diyAttention?: (now: number) => Promise<string | null>;
 };
 
 export type ReportOutcome = "sent" | "unsent" | "taken" | "healthy" | "pending";
@@ -346,13 +363,20 @@ export type ReportOutcome = "sent" | "unsent" | "taken" | "healthy" | "pending";
  *
  * `note` is what the dispatcher knows and the rows cannot say: why nothing
  * was dispatched.
+ *
+ * A day every client read complete is "healthy" and sends nothing, unless the
+ * DIY night needs a look (`io.diyAttention`, 13 Oct 2026, DIY P1): then the
+ * day's one summary goes anyway, on the same claim, saying tracking was clean.
  */
 export async function reportRunHealth(db: SupabaseClient, io: HealthIo, p: { day: string; now: number; note?: string | null }): Promise<ReportOutcome> {
   const runs = await readDayRuns(db, p.day);
   if (runs.some((r) => IN_FLIGHT.has(runState(r, p.now)))) return "pending";
   const h = runHealth({ day: p.day, now: p.now, clients: await readTrackable(db, p.day), runs });
   if (!h.settled) return "pending";
-  if (h.clients.every((c) => c.state === "complete")) return "healthy";
+  if (h.clients.every((c) => c.state === "complete")) {
+    const diy = io.diyAttention && p.day === trackingDay(new Date(p.now)) ? await io.diyAttention(p.now) : null;
+    if (!diy) return "healthy";
+  }
 
   const { data: held, error: sErr } = await db.from("dashboard_events").select("id, props").eq("event", RUN_HEALTH_EVENT).eq("props->>day", p.day).limit(1);
   if (sErr) throw new Error(`could not read the run-health claim: ${sErr.message}`);

@@ -238,7 +238,7 @@ test("every onConflict is backed by a unique constraint on that table", () => {
   }
 });
 
-test("the four sites are the ones we think they are", () => {
+test("the upsert sites are the ones we think they are", () => {
   /**
    * Pinned so that a new upsert is a deliberate edit here rather than an
    * addition nobody notices. The checks above already cover a new one; this
@@ -272,6 +272,15 @@ test("the four sites are the ones we think they are", () => {
       // the same key, clearing removed_at so a removed member comes back on their row.
       // 9 Oct 2026 (AG-1): one site still - team.ts writeMember, called not yet live and then live.
       "dashboard_members:account_id,email",
+      // 13 Oct 2026, DIY P1 (spec 10 section 5.7), each on its own key in
+      // 20261013000000_diy_core.sql and each ignoring a duplicate: the night
+      // dispatch and setup's enqueueOnboarding queue one diy_jobs row per
+      // client, kind and due day (upsertJobs, one site); the worker queues a
+      // deferred job again for tomorrow; and the dispatcher stores the two
+      // free vendor reads once per kind a UTC day.
+      "diy_jobs:client_domain_id,due_on,kind",
+      "diy_jobs:client_domain_id,due_on,kind",
+      "diy_vendor_status:kind,read_on",
       // 30 Sep 2026, R91: the Stripe webhook's one orders row per completed
       // Session (checkout/signup.ts writeOrder), on the unique column in
       // 20260930020000_orders.sql, so a replayed event writes nothing.
