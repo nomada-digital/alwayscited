@@ -62,10 +62,20 @@ const FATGRID_ROOTS = ["src/app/app", "src/components/app", "src/lib/diy"];
  * 22 - the P1 core under src/lib/diy (its modules, its fake, wiring.ts and
  * fixtures/core.json; the samples and tests are not swept). Raised by each
  * shell as packages land.
+ * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 72 - P1's core, P2's prompts and
+ * OriginChip, P3's plan library, page and components, P4's /ai page, its
+ * components and the changes and ai libraries, and the shell's wiring.ts and
+ * shell/work.ts.
  */
-const SOURCE_FLOOR = 22;
-/** Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai. */
-const SAVED_FLOOR = 0;
+const SOURCE_FLOOR = 72;
+/**
+ * Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai.
+ * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 11 on a built tree - P3's six Actions pages (board full and viewer,
+ * day 0, list full, placed and placed-agency), P4's three AI visibility pages (default, missing, new), and the
+ * shell's ai-shell and plan-shell. Held on a built tree only, as the test above is: on an unbuilt tree the e2e
+ * specs have not run either, and that tree's capture and sweeps skip.
+ */
+const SAVED_FLOOR = 11;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);
@@ -317,7 +327,7 @@ test("every DIY page this tree has, built, has its rendered HTML saved by its e2
 
 test("the saved DIY pages say nothing the gating rules forbid", () => {
   const files = savedFiles();
-  assert.ok(files.length >= SAVED_FLOOR, `swept ${files.length} saved pages, floor ${SAVED_FLOOR}`);
+  if (existsSync(join(ROOT, ".next"))) assert.ok(files.length >= SAVED_FLOOR, `swept ${files.length} saved pages, floor ${SAVED_FLOOR}: run npx playwright test e2e/app/diy-*.spec.mts on the fixture`);
   const bad = files.flatMap(({ route, file }) => renderedProblems(route, readFileSync(file, "utf8")).map((p) => `${relative(ROOT, file)}: ${p}`));
   assert.deepEqual(bad, []);
 });

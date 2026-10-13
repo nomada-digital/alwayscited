@@ -29,6 +29,13 @@ export const USAGE_EVENTS = [
   "cta_click",
   "cta_ask",
   "cta_hide",
+  // 13 Oct 2026, DIY P5 (spec 10 section 7.6): wave 1's. The plan route records an item moved (Start, Accept, a
+  // status, Drop), a task added and a suggestion hidden for 14 days (Not now); AI visibility's sort and filter
+  // links carry ai_filter. Names only, as every event here: never a title, a note or a search.
+  "plan_move",
+  "plan_task_added",
+  "plan_hidden",
+  "ai_filter",
 ] as const;
 
 export type UsageEvent = (typeof USAGE_EVENTS)[number];

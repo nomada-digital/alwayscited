@@ -372,6 +372,27 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/lib/tracking/runner.ts"), "utf8").includes("/api/track/run`"),
   },
   {
+    route: "/api/diy/run",
+    method: "POST",
+    // 13 Oct 2026, DIY P5 (P1's handoff, spec 10 section 7.2). P1's wording said the URL is built from the cron
+    // request's origin; dispatch.ts posts to SITE_URL instead, and says why, so the reason says what the code does.
+    why:
+      "Posted by the DIY dispatcher with an HMAC of the body, at an absolute URL built from SITE_URL, " +
+      "so the path scanner reads no literal call to it.",
+    earns: () => readFileSync(join(ROOT, "src/lib/diy/core/dispatch.ts"), "utf8").includes("/api/diy/run`"),
+  },
+  {
+    route: "/api/app/[client]/plan",
+    method: "POST",
+    // 13 Oct 2026, DIY P5 (P3's handoff, spec 10 section 3.6): every form on Actions and on the Overview's This week.
+    why: "Posted by the plain HTML forms on Actions and on the Overview's This week, which the fetch scanner does not read; paths.ts builds every one of their actions.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/lib/diy/plan/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/plan${query(keep)}`;") &&
+      readFileSync(join(ROOT, "src/components/app/plan/PlanCard.tsx"), "utf8").includes("planAction(slug, { ...keep, id: item.id })") &&
+      readFileSync(join(ROOT, "src/components/app/plan/ThisWeek.tsx"), "utf8").includes("action={planAction(slug, { ...at, id: item.id })}") &&
+      readFileSync(join(ROOT, "src/components/app/plan/AddTask.tsx"), "utf8").includes("action={planAction(slug, keep)}"),
+  },
+  {
     route: "/api/verify/[vtoken]",
     method: "GET",
     why: "It is the link in the verification email, followed by a person in a mail client.",

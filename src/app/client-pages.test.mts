@@ -62,6 +62,42 @@ const KEYS: Record<string, Record<string, string>> = {
     cluster: 'typeof sp.cluster === "string" ? sp.cluster : undefined', // matched against its cards in Overview.tsx, held below
     // 2 Oct 2026, R173 pass 2: the setup route's 303 after Confirm; the line shows only when the confirm reads back.
     setup: 'sp.setup === "confirmed" && confirmed === true',
+    // 13 Oct 2026, DIY P5 (spec 10 section 4.1 row 6): This week's Start and Not now post to the plan route with
+    // back=overview, which answers ?plan=<code>. overviewPlanToast (transitions.ts) draws planToast's fixed words for a
+    // known done code or refused-<why>, else nothing; nothing is echoed.
+    plan: 'overviewPlanToast(typeof sp.plan === "string" ? sp.plan : null)',
+  },
+  // 13 Oct 2026, DIY P5 (spec 10 sections 3.5 and 4.2): AI visibility (P4). Each key a whitelist, a match against this
+  // client's own rows, or a clamp, as P4 handed them over; prompt-table.ts's pick* functions own their lists and tests.
+  "/ai": {
+    cluster: '(data.clusters ?? []).some((c) => c.id === one("cluster"))',
+    angle: 'pickAngle(one("angle"))',
+    origin: 'pickOrigin(one("origin"))',
+    eng: 'engines.find((e) => e === one("eng"))',
+    lfl: 'one("lfl") === "1"',
+    missing: 'one("missing") === "1"',
+    q: 'clusterSearch(one("q"))',
+    sort: 'pickSort(one("sort"))',
+    dir: 'pickDir(one("dir"))',
+    page: 'pickPage(one("page"))',
+    // Review of P4 (13 Oct 2026): U1's Hide and Ask return here (surface=ai), so the page reads Clusters' toast keys -
+    // each a fixed code drawn as fixed words, nothing echoed.
+    hid: 'one("hid") === "1" && !ask',
+    ask: 'ask === "sent" ? askToast(',
+    via: 'one("via") === "agency"',
+    n: "n > 0 && n <= ASK_ITEMS_MAX",
+    of: '(of === "prompts" || of === "keywords")',
+  },
+  // 13 Oct 2026, DIY P5 (spec 10 sections 3.5 and 4.6): Actions, internally the Plan (P3). board.ts's pick* functions
+  // hold view, status and kind to their lists; cluster must be one of this client's live clusters; done and why are
+  // the plan route's codes, drawn through planToast's fixed words.
+  "/plan": {
+    view: 'pickView(one("view"))',
+    status: 'pickStatus(one("status"))',
+    kind: 'pickGroup(one("kind"))',
+    cluster: 'pickCluster(one("cluster"), clusters.map((c) => c.id))',
+    done: 'planToast(one("done"), one("why"))',
+    why: 'planToast(one("done"), one("why"))',
   },
   "/clusters": {
     filter: 'f === "named" || f === "never" ? f : "all"',
@@ -168,6 +204,9 @@ const ROLE_READS: Record<string, string[]> = {
   "/settings": ['owner={client.role === "owner"}'],
   // R166 part 3b: viewers see the cards but not Confirm; the route refuses them too.
   "/setup": ["const canWrite = refuseRole(writeRole(client)) === null;"],
+  // 13 Oct 2026, DIY P5: Actions' controls are drawn disabled with the reason for a viewer and on an ended client
+  // (writeRole); the plan route refuses them too (transitions.ts decide).
+  "/plan": ["const canWrite = refuseRole(writeRole(client)) === null;"],
 };
 
 /**
@@ -182,9 +221,11 @@ const ROLE_READS: Record<string, string[]> = {
  * Raised 9 Oct 2026 (ON-1, LB8): 40 keys - /setup's drafts and why, the prompt route's way back after a card's drafts.
  * Raised 9 Oct 2026 (ON-1 review): 41 keys - /setup's at, the refused field.
  * 9 Oct 2026, wave 2b merged: 42 keys - DB-2's day and ON-1's three, counted together.
+ * Raised 13 Oct 2026 (DIY P5, wave 1 of the DIY platform): 12 pages - /ai (P4) and /plan (P3); 64 keys - /ai's 15
+ * (ten view keys and U1's five way-back keys), /plan's 6, and the Overview's plan, This week's way back.
  */
-const PAGE_FLOOR = 10;
-const KEY_FLOOR = 42;
+const PAGE_FLOOR = 12;
+const KEY_FLOOR = 64;
 
 /** The query keys a page reads by name, as written. */
 export function keysRead(src: string): string[] {

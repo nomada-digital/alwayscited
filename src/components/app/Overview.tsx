@@ -39,7 +39,7 @@ import type { Bullet } from "@/lib/diy/changes/meaning";
 import { type Recent, overviewBasis, overviewStory } from "@/lib/diy/changes/story";
 import { addedFromWork } from "@/lib/diy/ai/prompt-table";
 
-import type { ChartMark } from "./chart-board";
+import { type WorkMark, marksFor } from "@/lib/diy/shell/work";
 import ClusterChart from "./ClusterChart";
 import SinceLastCheck from "./SinceLastCheck";
 import DatePicker from "./DatePicker";
@@ -179,8 +179,12 @@ export default function Overview({
   workLog?: React.ReactNode;
   /** P2's prompt origins by prompt id (loadPromptOrigins), for the basis line under the key figures (row 4). None draws no line. */
   origins?: ReadonlyMap<string, string>;
-  /** Work markers for the chart (row 8): Actions items started and done, placements live. None draws none. */
-  marks?: ChartMark[];
+  /**
+   * Work markers for the chart (row 8): Actions items started and done, placements live. None draws none.
+   * 13 Oct 2026, DIY P5: each carries its cluster, so a cluster's chart draws that cluster's work only and the
+   * whole-client chart draws all of it (shell/work.ts marksFor).
+   */
+  marks?: WorkMark[];
   /** client_domains.status is ended: no next check is promised (8 Oct 2026, audit activation-5). */
   ended?: boolean;
   /** ON-3 (9 Oct 2026): the activation checklist, drawn under the page's heading and date. */
@@ -1020,7 +1024,7 @@ export default function Overview({
             phoneLine,
             placements: placements ? chartMarkers(pickedChart.days, placements, picked.id) : null,
             isoDays: pickedChart.days,
-            marks,
+            marks: marks ? marksFor(marks, picked.id) : undefined,
             // T7 part 2b: the phone board's "Open this cluster" goes to QuestionDetail, the one-cluster page.
             openHref: clustersPath ? `${clustersPath}/${encodeURIComponent(picked.id)}?${new URLSearchParams(rangeQuery)}` : null,
           }}
@@ -1039,7 +1043,7 @@ export default function Overview({
           brand,
           questions: questionsAnswered,
           isoDays: daysIn(range),
-          marks,
+          marks: marks ? marksFor(marks, null) : undefined,
         }}
       />
       )}

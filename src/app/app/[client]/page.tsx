@@ -19,6 +19,18 @@ import { needsSetup, setupOutstanding, setupPath } from "@/lib/tracking/setup-la
 import { refuseRole } from "@/lib/tracking/stop";
 import { appPath } from "@/lib/app-host";
 import { recentRange } from "@/lib/diy/changes/diff";
+import ThisWeek from "@/components/app/plan/ThisWeek";
+import WorkLog from "@/components/app/plan/WorkLog";
+import { SECTION_ERROR } from "@/components/app/plan/Actions";
+import { H2 as PLAN_H2, SECTION as PLAN_SECTION } from "@/components/app/plan/styles";
+import { diyDay } from "@/lib/diy/core/jobs";
+import { readPlan, section } from "@/lib/diy/plan/data";
+import { ENDED_REASON, VIEWER_REASON, overviewPlanToast } from "@/lib/diy/plan/transitions";
+import { thisWeek, weekCounts } from "@/lib/diy/plan/week";
+import { workLog } from "@/lib/diy/plan/worklog";
+import { loadPromptOrigins, originKinds } from "@/lib/diy/prompts/origins";
+import { promptsAdded, workMarks } from "@/lib/diy/shell/work";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +77,10 @@ export default async function ClientDashboard({
   // and a failed one is that section's failure alone - it says so, and the rest of the page draws.
   const week = recentRange(today);
   const holdsWeek = range.from <= week.from && range.to >= today;
-  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead] = await Promise.all([
+  // 13 Oct 2026, DIY P5 (spec 10 section 7.6): the Plan's items for This week, the work log and the chart's work markers,
+  // and P2's prompt origins for the basis line and the log. Each is its own section: a failed plan read says so where it
+  // would have drawn, and origins never throw (an empty map draws no basis line).
+  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead, plan, origins] = await Promise.all([
     repo.loadOverview(client.id, range, compare),
     repo.upgradeContext(client.id, email, today),
     repo.placements(client.id),
@@ -78,6 +93,8 @@ export default async function ClientDashboard({
           (d) => ({ ok: true as const, data: d }),
           (err: unknown) => (console.warn(`[diy] since-last-check: ${err instanceof Error ? err.message : String(err)}`), { ok: false as const }),
         ),
+    section("overview plan", () => readPlan(() => supabaseAdmin(), client.id)),
+    loadPromptOrigins(client.id),
   ]);
   // DS10: a member who left setup before confirming gets back to it from here. Only a client that needs setup pays the read.
   const outstanding = setupOutstanding(client, confirmed, fixtureMode());
@@ -86,6 +103,46 @@ export default async function ClientDashboard({
   const canWrite = refuseRole(writeRole(client)) === null;
   // R97 part 5: "Show placements" on the same rule as the placements screen - a placed tier, or any placement logged.
   const placements = placed || rows.some((p) => p.status !== "removed") ? rows : undefined;
+  // This week (section 4.1 row 6), on the Plan's UTC week as Actions draws it, posting back here (`?plan=`).
+  const utc = diyDay(repo.now());
+  const reason = client.status === "ended" ? ENDED_REASON : VIEWER_REASON;
+  const firstCheckYet = data.lastRun !== null;
+  const weekNode = plan.ok ? (
+    <ThisWeek
+      items={thisWeek(plan.value, utc)}
+      counts={weekCounts(plan.value, utc)}
+      slug={slug}
+      canWrite={canWrite}
+      reason={reason}
+      back="overview"
+      empty={firstCheckYet ? undefined : "Your actions fill in after your first check."}
+      toast={overviewPlanToast(typeof sp.plan === "string" ? sp.plan : null)}
+    />
+  ) : (
+    <section id="this-week" aria-labelledby="wk-h" style={PLAN_SECTION}>
+      <h2 id="wk-h" style={PLAN_H2}>
+        This week
+      </h2>
+      <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+        {SECTION_ERROR}
+      </p>
+    </section>
+  );
+  // The work log (row 10): done items, placements live, prompts added after the first day with their origin.
+  const logNode = plan.ok ? (
+    <WorkLog slug={slug} entries={workLog({ today, items: plan.value, placements: rows, prompts: promptsAdded({ questions: data.questions, origins, mode: upgrade.mode, startedOn: client.started_on }) })} />
+  ) : (
+    <section aria-labelledby="log-h" style={PLAN_SECTION}>
+      <h2 id="log-h" style={PLAN_H2}>
+        Work log, last 30 days
+      </h2>
+      <p role="status" style={{ margin: 0, fontSize: "14px", color: T.ink }}>
+        {SECTION_ERROR}
+      </p>
+    </section>
+  );
+  // The chart's work markers (row 8): Actions items started and done, placements live; a cluster's chart draws its own.
+  const marks = workMarks({ slug, items: plan.ok ? plan.value : [], placements: rows });
   const steps =
     checklist && team && reportOpened !== null
       ? activationSteps({
@@ -143,6 +200,10 @@ export default async function ClientDashboard({
           ended={client.status === "ended"}
           lead={steps ? <Activation steps={steps} /> : null}
           recent={weekRead ?? { ok: true, data }}
+          thisWeek={weekNode}
+          workLog={logNode}
+          origins={originKinds(origins)}
+          marks={marks}
         />
       </div>
     </div>

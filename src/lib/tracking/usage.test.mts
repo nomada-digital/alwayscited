@@ -3,8 +3,10 @@ import { test } from "node:test";
 
 import { USAGE_EVENTS, dashPath, readUsage, usagePath, usageProps, usageSlug, weekOf, weeklyUsage } from "./usage.ts";
 
-test("the event list is the brief's sixteen, T10 (30 Sep 2026)", () => {
-  assert.equal(USAGE_EVENTS.length, 16);
+// 13 Oct 2026, DIY P5: twenty - the brief's sixteen and wave 1's plan_move, plan_task_added, plan_hidden and ai_filter.
+test("the event list is the brief's sixteen, T10 (30 Sep 2026), and DIY wave 1's four (13 Oct 2026)", () => {
+  assert.equal(USAGE_EVENTS.length, 20);
+  assert.deepEqual(USAGE_EVENTS.slice(16), ["plan_move", "plan_task_added", "plan_hidden", "ai_filter"]);
   assert.ok(!(USAGE_EVENTS as readonly string[]).includes("keyword_checked"), "the spend cap's row is not a usage event");
 });
 
@@ -14,6 +16,8 @@ test("a path is reduced to its route: no slug, no query, no id", () => {
   assert.equal(usagePath("/app/acme/clusters?filter=never"), "/clusters");
   assert.equal(usagePath("/app/acme/clusters/0b6f9f4e-1111-4222-8333-444455556666?prompt=abc"), "/clusters/[cluster]");
   assert.equal(usagePath("/app/acme/placements#t"), "/placements");
+  assert.equal(usagePath("/app/acme/plan?view=list&status=done"), "/plan");
+  assert.equal(usagePath("/app/acme/ai?missing=1"), "/ai");
   assert.equal(usagePath("/app/login"), null);
   assert.equal(usagePath("/app/parity/x"), null);
   assert.equal(usagePath("/pricing"), null);

@@ -9,7 +9,7 @@ import { blankComments, sourceFiles } from "../source-read.mts";
 /**
  * No read of a tracking table across every client is left to one page.
  *
- * The tracking tables are the seven in TABLES. The first version (9 Oct
+ * The tracking tables are the seven in TABLES, and since 13 Oct 2026 (DIY P5) the four DIY tables beside them. The first version (9 Oct
  * 2026) walked five and said "a tracking table"; tracked_clusters and
  * tracking_notes grow with the fleet the same way, and /admin/tracking read
  * every client's clusters in one select (review of 348abbd, 9 Oct 2026).
@@ -51,7 +51,12 @@ import { blankComments, sourceFiles } from "../source-read.mts";
 
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 
-const TABLES = ["tracked_questions", "tracked_keywords", "tracked_clusters", "tracking_runs", "tracking_answers", "tracking_serp", "tracking_notes"];
+/**
+ * 13 Oct 2026, DIY P5 (spec 10 section 7.6): the DIY wave 1 tables join - diy_reads (the paid-read ledger),
+ * diy_jobs (the night's queue), diy_vendor_status (two rows a night, no client data, but it grows a row pair a
+ * day like the rest) and plan_items. Each grows with every client and every day as the tracking tables do.
+ */
+const TABLES = ["tracked_questions", "tracked_keywords", "tracked_clusters", "tracking_runs", "tracking_answers", "tracking_serp", "tracking_notes", "diy_reads", "diy_jobs", "diy_vendor_status", "plan_items"];
 
 /** Reads across every client that may take one page, and why. Empty: a new entry is an argument, not a fix. */
 const FLEET_UNPAGED: Record<string, string> = {};

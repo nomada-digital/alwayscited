@@ -11,6 +11,10 @@ import { useEffect } from "react";
  * outside an open one, Escape (focus goes back to its summary) and a move to
  * another page each close it.
  *
+ * 13 Oct 2026, DIY P5: and a choice made in it. "+ Add"'s "Add a keyword" goes
+ * from Clusters to Clusters with the add panel open, the same path, so the
+ * move-to-another-page rule alone left the menu standing over the panel.
+ *
  * `selector` names the <details> elements this owns.
  */
 export default function MenuCloser({ selector }: { selector: string }) {
@@ -29,11 +33,17 @@ export default function MenuCloser({ selector }: { selector: string }) {
         if (inside) d.querySelector("summary")?.focus();
       }
     };
+    const onChoose = (e: MouseEvent) => {
+      const link = e.target instanceof Element ? e.target.closest("a[href]") : null;
+      if (link) for (const d of open()) if (d.contains(link)) d.open = false;
+    };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
+    document.addEventListener("click", onChoose);
     return () => {
       document.removeEventListener("pointerdown", onDown);
       document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", onChoose);
     };
   }, [selector]);
 

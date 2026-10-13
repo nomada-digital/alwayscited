@@ -6,13 +6,17 @@ import EngineLogo from "@/components/EngineLogo";
 import TierName, { type TierKey } from "@/components/TierName";
 import { PACK_CLUSTERS, TRACKED_BASIS, TRACKED_PRICE, contactUrlFor } from "@/config/pricing";
 import { trialStatus } from "@/config/trial";
-import { T } from "@/config/tokens";
+import { MICRO, T } from "@/config/tokens";
+import { VIEWER_REASON } from "@/lib/diy/plan/transitions";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { KEYWORDS_PER_CLUSTER, PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
+import { writeRole } from "@/lib/tracking/member";
 import { planBanner } from "@/lib/tracking/plan-banner";
+import { refuseRole } from "@/lib/tracking/stop";
 
+import ActionsBadge from "./ActionsBadge";
 import MenuCloser from "./MenuCloser";
-import { CLUSTER_NAV, CLUSTER_TABS, NAV, PLACEMENTS_ITEM, TABS, navHref } from "./nav";
+import { ADD_ITEMS, CLUSTER_NAV, CLUSTER_TABS, GROUPS, NAV, PLACEMENTS_ITEM, TABS, TAB_LABEL, addHref, navHref } from "./nav";
 import { appPath, siteHref } from "@/lib/app-host";
 
 const WORDS = ["no", "one", "two", "three", "four", "five"];
@@ -74,6 +78,19 @@ const ICONS: Record<string, ReactNode> = {
 };
 // boards-3/Placements.dc.html draws Placements with the link mark.
 ICONS[PLACEMENTS_ITEM] = ICONS["Cited pages"];
+// 13 Oct 2026, DIY P5: AI visibility is a spark (answers), Actions a ticked list. Same 24px grid and stroke.
+ICONS["AI visibility"] = (
+  <>
+    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+  </>
+);
+ICONS.Actions = (
+  <>
+    <path d="M4 6l1.5 1.5L8 5M4 12l1.5 1.5L8 11M4 18l1.5 1.5L8 17" />
+    <path d="M11 6.5h9M11 12.5h9M11 18.5h9" />
+  </>
+);
 // The phone's fifth tab (audit mobile-10): the pages the four tabs leave out.
 ICONS.More = (
   <>
@@ -92,6 +109,8 @@ function NavIcon({ item, size }: { item: string; size: number }) {
 }
 
 type Client = {
+  /** The client_domains id: the Actions badge reads this week's items by it. None on /app/parity, which draws no badge. */
+  id?: string;
   slug: string;
   domain: string;
   brand: string | null;
@@ -182,8 +201,19 @@ export default function Sidebar({
   // Audit mobile-10 (8 Oct 2026): on Who is named, Cited pages or Placements no tab was current and
   // More looked idle, so nothing on a phone said where you were. More is the fifth tab and is current then.
   const moreOn = more.includes(current);
+  // 13 Oct 2026, DIY P5 (spec 10 sections 3.1 and 3.2): the nav in its groups, as this client's nav has them, and
+  // More's sheet in the same groups as headed lists. A group with nothing in it is not drawn.
+  const groups = GROUPS.map((g) => ({ label: g.label, items: g.items.filter((i) => nav.includes(i)) })).filter((g) => g.items.length);
+  const moreGroups = groups.map((g) => ({ label: g.label, items: g.items.filter((i) => more.includes(i)) })).filter((g) => g.items.length);
+  // "+ Add" (spec 10 section 3.1): owners and editors. A viewer, and anyone on an ended client (writeRole), see it
+  // disabled with the reason; the forms it opens refuse them too.
+  const canAdd = refuseRole(writeRole({ role, status: client.status })) === null;
+  const addWhy = ended ? "This client's tracking has ended, so nothing can be added." : VIEWER_REASON;
+  const groupId = (where: string, label: string) => `nav-${where}-${label.toLowerCase()}`;
+  const addLink: React.CSSProperties = { display: "flex", alignItems: "center", minHeight: "44px", padding: "0 10px", borderRadius: "8px", fontSize: "14px", fontWeight: 500, color: T.ink, textDecoration: "none" };
+  const addButton: React.CSSProperties = { display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", height: "40px", padding: "0 14px", boxSizing: "border-box", borderRadius: "10px", fontSize: "14px", fontWeight: 600, listStyle: "none" };
   const chip: React.CSSProperties = { display: "flex", alignItems: "center", gap: "8px", height: "44px", padding: "0 10px", border: `1px solid ${T.line}`, borderRadius: "10px", fontSize: "14px", fontWeight: 700, boxSizing: "border-box", minWidth: 0 };
-  const tab: React.CSSProperties = { flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "10px 0 6px", fontSize: "11px", fontWeight: 600, textDecoration: "none" };
+  const tab: React.CSSProperties = { position: "relative", flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", padding: "10px 0 6px", fontSize: "11px", fontWeight: 600, textDecoration: "none" };
   const chipName = (
     <>
       <Initial name={name} size={22} />
@@ -261,36 +291,76 @@ export default function Sidebar({
           ) : null}
         </div>
 
-        <nav aria-label="Dashboard" style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-          {nav.map((item) => {
-            const on = item === current;
-            const href = hrefOf(item);
-            const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: "12px", height: "40px", padding: "0 12px", borderRadius: "10px", fontSize: "14px", textDecoration: "none" };
-            if (!href) {
-              return (
-                <span key={item} aria-disabled="true" style={{ ...row, color: T.soft, fontWeight: 500, cursor: "default" }}>
-                  <span style={{ display: "flex" }}>
-                    <NavIcon item={item} size={18} />
-                  </span>
-                  <span style={{ whiteSpace: "nowrap" }}>{item}</span>
-                  <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 600, color: T.soft, background: T.chip, borderRadius: "999px", padding: "2px 6px", whiteSpace: "nowrap" }}>Coming soon</span>
+        {/* 13 Oct 2026, DIY P5 (spec 10 section 3.1): "+ Add", links to forms that already exist. A <details>, so it
+            opens with JS off; MenuCloser closes it on Escape, a click outside and a move to another page. */}
+        {canAdd ? (
+          <details className="app-add" style={{ position: "relative", margin: "-8px 0" }}>
+            <summary style={{ ...addButton, width: "100%", border: `1px solid ${T.line}`, background: T.surface, color: T.ink, cursor: "pointer" }}>
+              <span aria-hidden="true" style={{ fontSize: "18px", lineHeight: 1 }}>+</span>
+              Add
+            </summary>
+            {/* A group, not a nav landmark: three links to forms, inside the sidebar's own region (host.spec.mts reads the first nav's links as the dashboard's). */}
+            <div role="group" aria-label="Add" style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 6px)", zIndex: 30, display: "grid", padding: "6px", background: T.surface, border: `1px solid ${T.line}`, borderRadius: "12px", boxSizing: "border-box", boxShadow: `0 8px 24px color-mix(in srgb, ${T.ink} 12%, transparent)` }}>
+              {ADD_ITEMS.map((a) => (
+                <Link key={a.label} href={addHref(a, client.slug, keep)} style={addLink}>
+                  {a.label}
+                </Link>
+              ))}
+            </div>
+          </details>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px", margin: "-8px 0" }}>
+            <span aria-disabled="true" aria-describedby="add-why" data-add="off" style={{ ...addButton, border: `1px dashed ${T.line}`, color: T.soft, cursor: "default" }}>
+              <span aria-hidden="true" style={{ fontSize: "18px", lineHeight: 1 }}>+</span>
+              Add
+            </span>
+            <p id="add-why" style={{ margin: 0, fontSize: "12px", lineHeight: 1.5, color: T.soft }}>
+              {addWhy}
+            </p>
+          </div>
+        )}
+
+        <nav aria-label="Dashboard" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          {groups.map((g) => (
+            <div key={g.label ?? "top"} role={g.label ? "group" : undefined} aria-labelledby={g.label ? groupId("side", g.label) : undefined} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              {g.label ? (
+                <span id={groupId("side", g.label)} style={{ ...MICRO, padding: "0 12px 4px" }}>
+                  {g.label}
                 </span>
-              );
-            }
-            return (
-              <Link
-                key={item}
-                href={href}
-                aria-current={on ? "page" : undefined}
-                style={{ ...row, background: on ? T.wash : "transparent", color: on ? T.accent : T.ink, fontWeight: on ? 600 : 500 }}
-              >
-                <span style={{ display: "flex", color: on ? T.accent : T.soft }}>
-                  <NavIcon item={item} size={18} />
-                </span>
-                {item}
-              </Link>
-            );
-          })}
+              ) : null}
+              {g.items.map((item) => {
+                const on = item === current;
+                const href = hrefOf(item);
+                const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: "12px", height: "40px", padding: "0 12px", borderRadius: "10px", fontSize: "14px", textDecoration: "none" };
+                if (!href) {
+                  return (
+                    <span key={item} aria-disabled="true" style={{ ...row, color: T.soft, fontWeight: 500, cursor: "default" }}>
+                      <span style={{ display: "flex" }}>
+                        <NavIcon item={item} size={18} />
+                      </span>
+                      <span style={{ whiteSpace: "nowrap" }}>{item}</span>
+                      <span style={{ marginLeft: "auto", fontSize: "10px", fontWeight: 600, color: T.soft, background: T.chip, borderRadius: "999px", padding: "2px 6px", whiteSpace: "nowrap" }}>Coming soon</span>
+                    </span>
+                  );
+                }
+                return (
+                  <Link
+                    key={item}
+                    href={href}
+                    aria-current={on ? "page" : undefined}
+                    style={{ ...row, background: on ? T.wash : "transparent", color: on ? T.accent : T.ink, fontWeight: on ? 600 : 500 }}
+                  >
+                    <span style={{ display: "flex", color: on ? T.accent : T.soft }}>
+                      <NavIcon item={item} size={18} />
+                    </span>
+                    {item}
+                    {/* The only badge (spec 10 section 3.1): "2 of 3 this week", read by its own small component. */}
+                    {item === "Actions" && client.id ? <ActionsBadge clientId={client.id} /> : null}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* T11 (30 Sep 2026): boards-3/common.py's plan card. On tracked, Claude is the dashed fifth tile (BRIEF decision 9);
@@ -364,7 +434,9 @@ export default function Sidebar({
           return (
             <Link key={item} href={href} aria-current={on ? "page" : undefined} className="app-tab" style={{ ...tab, color: on ? T.accent : T.soft }}>
               <NavIcon item={item} size={20} />
-              <span className="app-tab-label">{item}</span>
+              {/* 13 Oct 2026, DIY P5: "AI" on the tab for AI visibility (TAB_LABEL); the same item, current on its page. */}
+              <span className="app-tab-label">{TAB_LABEL[item] ?? item}</span>
+              {item === "Actions" && client.id ? <ActionsBadge clientId={client.id} compact /> : null}
             </Link>
           );
         })}
@@ -380,18 +452,45 @@ export default function Sidebar({
               <span className="app-tab-label">More</span>
               {moreOn ? <span className="sr-only">{`, current page: ${current}`}</span> : null}
             </summary>
-            <nav aria-label="More of the dashboard" style={{ position: "absolute", right: "8px", bottom: "calc(100% + 8px)", zIndex: 30, minWidth: "220px", maxWidth: "calc(100vw - 16px)", display: "grid", padding: "6px", background: T.surface, border: `1px solid ${T.line}`, borderRadius: "12px", boxSizing: "border-box", boxShadow: `0 8px 24px color-mix(in srgb, ${T.ink} 12%, transparent)` }}>
-              {more.map((item) => {
-                const on = item === current;
-                return (
-                  <Link key={item} href={hrefOf(item)!} aria-current={on ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "0 10px", borderRadius: "8px", fontSize: "14px", fontWeight: on ? 600 : 500, color: on ? T.accent : T.ink, background: on ? T.wash : "transparent", textDecoration: "none" }}>
-                    <span style={{ display: "flex", color: on ? T.accent : T.soft }}>
-                      <NavIcon item={item} size={18} />
+            {/* 13 Oct 2026, DIY P5 (spec 10 section 3.2): the sheet holds the groups as headed lists, and "+ Add" first,
+                which on a phone has no room in the top bar. Held under the screen's height, scrolling inside itself. */}
+            <nav aria-label="More of the dashboard" style={{ position: "absolute", right: "8px", bottom: "calc(100% + 8px)", zIndex: 30, minWidth: "220px", maxWidth: "calc(100vw - 16px)", maxHeight: "calc(100vh - 96px)", overflowY: "auto", display: "grid", padding: "6px", background: T.surface, border: `1px solid ${T.line}`, borderRadius: "12px", boxSizing: "border-box", boxShadow: `0 8px 24px color-mix(in srgb, ${T.ink} 12%, transparent)` }}>
+              <div role="group" aria-labelledby={groupId("more", "add")} style={{ display: "grid" }}>
+                <span id={groupId("more", "add")} style={{ ...MICRO, padding: "6px 10px 2px" }}>
+                  Add
+                </span>
+                {canAdd ? (
+                  ADD_ITEMS.map((a) => (
+                    <Link key={a.label} href={addHref(a, client.slug, keep)} style={addLink}>
+                      {a.label}
+                    </Link>
+                  ))
+                ) : (
+                  <p id="add-why-sm" data-add="off" style={{ margin: 0, padding: "4px 10px 8px", fontSize: "13px", lineHeight: 1.5, color: T.soft }}>
+                    {addWhy}
+                  </p>
+                )}
+              </div>
+              {moreGroups.map((g) => (
+                <div key={g.label ?? "top"} role={g.label ? "group" : undefined} aria-labelledby={g.label ? groupId("more", g.label) : undefined} style={{ display: "grid", borderTop: `1px solid ${T.line}`, marginTop: "4px", paddingTop: "4px" }}>
+                  {g.label ? (
+                    <span id={groupId("more", g.label)} style={{ ...MICRO, padding: "6px 10px 2px" }}>
+                      {g.label}
                     </span>
-                    {item}
-                  </Link>
-                );
-              })}
+                  ) : null}
+                  {g.items.map((item) => {
+                    const on = item === current;
+                    return (
+                      <Link key={item} href={hrefOf(item)!} aria-current={on ? "page" : undefined} style={{ display: "flex", alignItems: "center", gap: "10px", minHeight: "44px", padding: "0 10px", borderRadius: "8px", fontSize: "14px", fontWeight: on ? 600 : 500, color: on ? T.accent : T.ink, background: on ? T.wash : "transparent", textDecoration: "none" }}>
+                        <span style={{ display: "flex", color: on ? T.accent : T.soft }}>
+                          <NavIcon item={item} size={18} />
+                        </span>
+                        {item}
+                      </Link>
+                    );
+                  })}
+                </div>
+              ))}
               <form method="post" action="/api/app/logout" style={{ margin: "4px 0 0", borderTop: `1px solid ${T.line}`, paddingTop: "4px" }}>
                 <button type="submit" style={{ width: "100%", minHeight: "44px", padding: "0 10px", textAlign: "left", background: "none", border: "none", borderRadius: "8px", fontSize: "14px", fontWeight: 500, color: T.accent, cursor: "pointer" }}>
                   Log out
@@ -401,7 +500,7 @@ export default function Sidebar({
           </details>
         ) : null}
       </nav>
-      <MenuCloser selector="details.app-more, details.app-switch" />
+      <MenuCloser selector="details.app-more, details.app-switch, details.app-add" />
     </>
   );
 }

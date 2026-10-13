@@ -3,6 +3,7 @@ import { loginHref } from "@/lib/tracking/next-path";
 import { notFound, redirect } from "next/navigation";
 
 import AiVisibility from "@/components/app/ai/AiVisibility";
+import OriginChip from "@/components/app/prompts/OriginChip";
 import Sidebar from "@/components/app/Sidebar";
 import type { TierKey } from "@/components/TierName";
 import { enginesFor, trackingPackPrice } from "@/config/pricing";
@@ -17,6 +18,10 @@ import { rangeFrom, rangeQuery } from "@/lib/tracking/overview-data";
 import { placedTier } from "@/lib/tracking/placement-figures";
 import { trackingRepo } from "@/lib/tracking/repo";
 import { appPath } from "@/lib/app-host";
+import { readPlan, section } from "@/lib/diy/plan/data";
+import { loadPromptOrigins, originKinds } from "@/lib/diy/prompts/origins";
+import { marksFor, workMarks } from "@/lib/diy/shell/work";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -62,10 +67,20 @@ export default async function ClientAi({ params, searchParams }: { params: Promi
   const today = repo.today();
   const sp = await searchParams;
   const { range, compare } = rangeFrom(sp, today, client.started_on);
-  const [data, upgrade] = await Promise.all([repo.loadOverview(client.id, range, compare), repo.upgradeContext(client.id, email, today)]);
+  // 13 Oct 2026, DIY P5 (spec 10 sections 4.2 and 7.6): P2's prompt origins for the table's chips and the origin filter,
+  // and the chart's work markers from the Plan's done items and the placements gone live. Each read is tolerant: origins
+  // never throw, and a failed plan or placements read draws no markers from it (section 4.2 row 3: "absent, no markers").
+  const [data, upgrade, origins, plan, placed] = await Promise.all([
+    repo.loadOverview(client.id, range, compare),
+    repo.upgradeContext(client.id, email, today),
+    loadPromptOrigins(client.id),
+    section("ai plan", () => readPlan(() => supabaseAdmin(), client.id)),
+    section("ai placements", () => repo.placements(client.id)),
+  ]);
   const one = (k: string) => (typeof sp[k] === "string" ? (sp[k] as string) : null);
   const cluster = (data.clusters ?? []).some((c) => c.id === one("cluster")) ? one("cluster") : null;
   const engine = engines.find((e) => e === one("eng")) ?? null;
+  const marks = marksFor(workMarks({ slug, items: plan.ok ? plan.value : [], placements: placed.ok ? placed.value : [], kinds: ["done", "placement"] }), cluster);
   // U1's way back (hide and ask routes, `surface=ai`): the same codes and words as the Clusters page's toast.
   const ask = one("ask");
   const n = Number(one("n"));
@@ -103,6 +118,9 @@ export default async function ClientAi({ params, searchParams }: { params: Promi
           mode={upgrade.mode}
           hidden={upgrade.hidden}
           notice={asked ? { text: asked, done: ask === "sent" || hid } : null}
+          origins={originKinds(origins)}
+          originCell={(row) => <OriginChip origin={origins.get(row.id)} slug={slug} mode={upgrade.mode} />}
+          marks={marks}
         />
       </div>
     </div>

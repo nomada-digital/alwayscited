@@ -324,6 +324,26 @@ const EXEMPT: Record<string, Exemption> = {
   // T11 /ask (30 Sep 2026): "Ask us to pick one" carries the refused keyword
   // back as a hidden field. The ask route trims it and clamps it to
   // ADMIN_LIMITS.question in readAskKeyword before it goes in the mail.
+  // 13 Oct 2026, DIY P5 (P4's /ai page, spec 10 section 4.2): AI visibility's search form carries the page's
+  // state bar the search as hidden fields (`ai-${k}`: the range, cluster, angle, origin, eng, lfl, missing, sort
+  // and dir), so a search keeps the view. Nobody types in them; the page re-reads every one against its own bound,
+  // each registered in client-pages.test.mts.
+  "ai-${k}": {
+    why: [
+      "AI visibility's search form's hidden view keys, copied from the page's own state so a search keeps it.",
+      "type=hidden, which maxLength does not apply to and nobody types in. The page re-validates each: rangeFrom",
+      "for the range, this client's clusters, its tier's engines, and fixed lists for angle, origin, sort and dir.",
+    ].join(" "),
+    holds: [
+      { file: "app/app/[client]/ai/page.tsx", needs: "rangeFrom(sp, today, client.started_on)" },
+      { file: "app/app/[client]/ai/page.tsx", needs: '(data.clusters ?? []).some((c) => c.id === one("cluster"))' },
+      { file: "app/app/[client]/ai/page.tsx", needs: 'engines.find((e) => e === one("eng"))' },
+      { file: "app/app/[client]/ai/page.tsx", needs: 'pickAngle(one("angle"))' },
+      { file: "app/app/[client]/ai/page.tsx", needs: 'pickOrigin(one("origin"))' },
+      { file: "app/app/[client]/ai/page.tsx", needs: 'pickSort(one("sort"))' },
+      { file: "app/app/[client]/ai/page.tsx", needs: 'pickDir(one("dir"))' },
+    ],
+  },
   "ask-keyword": {
     why: [
       "Ask us to pick one's hidden keyword, the one Check keyword just refused.",

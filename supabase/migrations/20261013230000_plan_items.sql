@@ -22,7 +22,10 @@
 -- the create, so the file is right whether or not an earlier draft ran.
 --
 -- The two foreign keys are the spec's DDL as written, with no on delete
--- action, as P1's diy_core is: a hand delete of a client_domains or
+-- action (13 Oct 2026, DIY P5: P1's diy_core no longer matches this - its
+-- review gave diy_jobs on delete cascade and diy_reads on delete set null -
+-- so the two files now differ, and the choice below is still open): a hand
+-- delete of a client_domains or
 -- tracked_clusters row that has items fails loudly instead of cascading the
 -- client's action history away or orphaning it silently. The tracking tables
 -- cascade (20260929000000); whether plan_items should follow them is Danny's

@@ -16,7 +16,7 @@ import { join, relative, sep } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { CLUSTER_NAV, CLUSTER_TABS, NAV, NAV_TARGET, SEE_ALL, SOON, TABS } from "./nav.ts";
+import { ADD_ITEMS, CLUSTER_NAV, CLUSTER_TABS, GROUPS, NAV, NAV_TARGET, PLACEMENTS_ITEM, SEE_ALL, SOON, TABS, TAB_LABEL, groupOf } from "./nav.ts";
 
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 const CLIENT = join(ROOT, "src", "app", "app", "[client]");
@@ -53,9 +53,11 @@ test("every off-nav route is a built route", () => {
  * Raised 30 Sep 2026 (R97 part 3, T13): 4 routes (placements) and 9 items (Placements, cluster nav only).
  * Lowered 1 Oct 2026 (R141, BRIEF-4 P1): 7 items - Google keywords and the phone's Keywords are removed
  * on purpose (the keyword lives on its cluster card); the test below holds that they stay gone.
+ * Raised 13 Oct 2026 (DIY P5, wave 1): 12 routes - the eight static pages, /setup, the one-cluster page, the
+ * catch-all, and the DIY wave's /ai and /plan; 9 items - AI visibility and Actions join the seven.
  */
-const ROUTE_FLOOR = 4;
-const ITEM_FLOOR = 7;
+const ROUTE_FLOOR = 12;
+const ITEM_FLOOR = 9;
 
 const ITEMS = [...new Set<string>([...NAV, ...TABS, ...CLUSTER_NAV, ...CLUSTER_TABS])];
 
@@ -159,6 +161,66 @@ test("R141: no Keywords item on a flat or a cluster client", () => {
     assert.ok(!list.some((n) => /keywords/i.test(n)), `a keywords item is back: ${list.join(", ")}`);
   }
   assert.ok(!Object.keys(NAV_TARGET).some((n) => /keywords/i.test(n)), "NAV_TARGET still routes a keywords item");
+});
+
+/**
+ * 13 Oct 2026, DIY P5 (spec 10 sections 1.1 row 33, 3.1 and 3.2): the wave 1 nav, recorded. Overview alone,
+ * then Results, Do and Manage, each a label and never a link. Wave 2 adds Google to Results and Opportunities
+ * and Your pages to Do, and moves this fact with its date; wave 3 adds Links to Do.
+ */
+test("DIY W1: the nav is in its groups, in order, and a group label is never an item", () => {
+  assert.deepEqual(
+    GROUPS.map((g) => [g.label, [...g.items]]),
+    [
+      [null, ["Overview"]],
+      ["Results", ["AI visibility", "Who is named", "Cited pages"]],
+      ["Do", ["Actions", PLACEMENTS_ITEM]],
+      ["Manage", ["Clusters", "Reports", "Settings"]],
+    ],
+  );
+  assert.deepEqual([...CLUSTER_NAV], GROUPS.flatMap((g) => g.items), "the clustered client's nav is the groups read in order");
+  assert.deepEqual([...NAV], CLUSTER_NAV.filter((n) => n !== PLACEMENTS_ITEM), "the flat client's nav is the same groups, Placements aside");
+  for (const item of ITEMS) assert.equal(GROUPS.filter((g) => g.items.includes(item)).length, 1, `${item} is in one group exactly`);
+  for (const g of GROUPS) {
+    if (g.label === null) continue;
+    assert.ok(!Object.hasOwn(NAV_TARGET, g.label), `the group label ${g.label} is routed like an item`);
+    assert.match(g.label, /^[A-Z][a-z ]*$/, `${g.label}: group labels are sentence case, never upper case`);
+  }
+  assert.equal(groupOf("Actions"), "Do");
+  assert.equal(groupOf("Overview"), null);
+});
+
+test("DIY W1: Actions is the client's word for the Plan, and the route keeps /plan", () => {
+  assert.equal(NAV_TARGET.Actions, "/plan");
+  assert.ok(ROUTES.includes("/plan"), "the Actions page is built");
+  for (const list of [NAV, TABS, CLUSTER_NAV, CLUSTER_TABS] as readonly (readonly string[])[]) {
+    assert.ok(list.includes("Actions"), `Actions is missing from ${list.join(", ")}`);
+    assert.ok(!list.some((n) => /^plan$/i.test(n) || /^your plan$/i.test(n)), "the nav says Plan, which the sidebar's plan card and the alwayscited plan already use");
+  }
+  assert.equal(NAV_TARGET["AI visibility"], "/ai");
+  assert.ok(ROUTES.includes("/ai"), "the AI visibility page is built");
+});
+
+test("DIY W1: the phone's tabs are Overview, AI, Actions, Clusters, then More", () => {
+  assert.deepEqual([...TABS], ["Overview", "AI visibility", "Actions", "Clusters"]);
+  assert.deepEqual([...CLUSTER_TABS], [...TABS]);
+  assert.deepEqual(TABS.map((t) => TAB_LABEL[t] ?? t), ["Overview", "AI", "Actions", "Clusters"]);
+  for (const t of Object.keys(TAB_LABEL)) assert.ok(TABS.includes(t), `TAB_LABEL shortens ${t}, which is not a tab`);
+  const src = readFileSync(join(ROOT, "src", "components", "app", "Sidebar.tsx"), "utf8");
+  assert.ok(src.includes("{TAB_LABEL[item] ?? item}"), "the tab draws its short word");
+  assert.ok(src.includes("moreGroups.map("), "More's sheet lists the groups");
+});
+
+test("DIY W1: every + Add item opens a built page, and the sidebar gates it on writeRole", () => {
+  assert.deepEqual(
+    ADD_ITEMS.map((a) => a.label),
+    ["Add a keyword", "Add a prompt", "Add a task"],
+  );
+  for (const a of ADD_ITEMS) assert.ok(ROUTES.includes(a.route), `${a.label} opens ${a.route}, which is not built`);
+  const src = readFileSync(join(ROOT, "src", "components", "app", "Sidebar.tsx"), "utf8");
+  assert.ok(src.includes("const canAdd = refuseRole(writeRole({ role, status: client.status })) === null;"), "+ Add is not gated as the writes are");
+  assert.match(src, /aria-disabled="true" aria-describedby="add-why"/, "a viewer's + Add is not drawn disabled with its reason");
+  assert.ok(src.includes('{item === "Actions" && client.id ? <ActionsBadge clientId={client.id} /> : null}'), "the Actions badge is not drawn");
 });
 
 test("census probe: an orphan route, a plain item and a dead link each fire", () => {

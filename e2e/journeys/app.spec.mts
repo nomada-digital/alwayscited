@@ -77,7 +77,9 @@ async function links(page: Page): Promise<string[]> {
     () =>
       [...document.querySelectorAll("a[href]")]
         .filter((a) => (a as HTMLElement).offsetParent !== null || getComputedStyle(a).position === "fixed")
-        .map((a) => new URL((a as HTMLAnchorElement).href).pathname),
+        // 13 Oct 2026, DIY P5: read the attribute, not `.href`. The Overview's heat map links (DB-2, 9 Oct) are SVG
+        // <a> elements, whose href is an SVGAnimatedString, and new URL() threw on it, failing every walk.
+        .map((a) => new URL(a.getAttribute("href")!, location.href).pathname),
     null,
   );
 }

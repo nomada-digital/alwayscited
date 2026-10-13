@@ -248,8 +248,13 @@ describe("AI visibility", () => {
     assert.ok(await page.evaluate(() => !!document.querySelector('[aria-label="Daily checks by cluster"]')), "no heat map");
     // Review of P4 (13 Oct 2026): the API caveat is back, in /app's words.
     assert.match((await text(page, "#ai-measured-h + p"))[0]!, /^\d+ prompts on four engines, checked daily\. Google AI Overviews, ChatGPT and Gemini are read through their consumer interface; Perplexity is asked through its API, not read from its app, so its answers can differ from what a person sees there\. No modelled figures/);
-    // No recorded origin draws no chip: until the shell wires the origins in, no row says "Setup".
-    assert.ok(!(await text(page, "[data-prompt]")).some((t) => /\bSetup\b/.test(t)), "a row with no recorded origin reads Setup");
+    // No recorded origin draws no chip, never "Setup". 13 Oct 2026, DIY P5: the shell wires P2's origins in, so a row
+    // draws its recorded origin's chip (origins.json: q1-1 by its legacy source scan and q1-2 setup, q1-3 and q1-5
+    // you, q1-4 and q2-1 nomada digital) and every other row none - the fact this line held moved with the wiring.
+    const chips = await page.evaluate(() => Object.fromEntries([...document.querySelectorAll("[data-prompt]")].flatMap((r) => { const o = r.querySelector("[data-origin]")?.getAttribute("data-origin"); return o ? [[r.getAttribute("data-prompt"), o]] : []; })));
+    assert.deepEqual(chips, { "q1-1": "setup", "q1-2": "setup", "q1-3": "client", "q1-4": "nomada", "q1-5": "client", "q2-1": "nomada" });
+    // The chip's words run into the next cell's figure in textContent ("Origin: Setup0 of 4"), so the words are matched whole.
+    assert.equal((await text(page, "[data-prompt]")).filter((t) => /Origin: Setup/.test(t)).length, 2, "Setup on a row with no recorded origin");
     // Every row link resolves; the never-named upgrade prompt shows with its reason.
     await resolves("default", await hrefs(page, "[data-prompt] a"));
     assert.match(await page.evaluate(() => document.querySelector('[aria-label="Upgrade"]')?.textContent ?? ""), /Shown because \d+ of your \d+ prompts named you in none of their [\d,]+ answers this period\./);

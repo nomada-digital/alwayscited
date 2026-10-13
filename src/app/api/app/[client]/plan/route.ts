@@ -13,7 +13,6 @@ import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { writeRole } from "@/lib/tracking/member";
 import { trackingRepo } from "@/lib/tracking/repo";
-import { isUsageEvent } from "@/lib/tracking/usage";
 import { recordUsage } from "@/lib/tracking/usage-record";
 
 export const runtime = "nodejs";
@@ -58,9 +57,8 @@ function readKeep(sp: URLSearchParams): Record<string, string> {
 
 const field = (form: FormData | null, k: string): unknown => form?.get(k) ?? null;
 
-/** Until the shell adds the plan events to USAGE_EVENTS (usage.ts is a registry file), nothing is recorded. */
+/** One usage row per change (13 Oct 2026, DIY P5: the shell added the plan events to USAGE_EVENTS). Never fatal. */
 async function recordPlanUsage(db: SupabaseClient, p: { clientId: string; email: string; today: string; event: "plan_move" | "plan_task_added" | "plan_hidden" }) {
-  if (!isUsageEvent(p.event)) return;
   await recordUsage(db, { clientId: p.clientId, email: p.email, event: p.event, path: "/plan", today: p.today });
 }
 

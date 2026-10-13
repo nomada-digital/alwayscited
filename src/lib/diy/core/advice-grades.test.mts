@@ -33,8 +33,11 @@ import { type AdviceLine, type Source, adviceProblem, sourceProblems } from "./e
 
 const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
 
-/** Advice lines across every advice file. 13 Oct 2026, DIY P1: 0 - none written yet; P5 and P9 raise it as P3, P7 and P8 merge. */
-const ADVICE_FLOOR = 0;
+/**
+ * Advice lines across every advice file. 13 Oct 2026, DIY P1: 0 - none written yet; P5 and P9 raise it as P3, P7 and P8 merge.
+ * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 5 - P3's "Why this is first" line per severity (plan/why-first.advice.ts).
+ */
+const ADVICE_FLOOR = 5;
 /** Rendered (not internal) sources. 13 Oct 2026, DIY P1: 5 at seed - G1, G2, G3, G4 and S41 (core.sources.ts). */
 const RENDERED_SOURCE_FLOOR = 5;
 
