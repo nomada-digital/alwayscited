@@ -26,7 +26,10 @@ import { scopesFrom, visibleClients } from "./scope.ts";
  *   member's scope comes back under that member's own row, so it can never
  *   limit or widen anyone else's;
  * - a failed read throws, so it is never read as "no clients", which would
- *   be a 404;
+ *   be a 404. That now includes the scope table not being there: readScopes
+ *   read that as no rows while 20261009010000 was unapplied, but it is
+ *   applied (read on production 13 Oct 2026), and an embed of a missing table
+ *   fails the read - closed, never wider;
  * - BL-2: the payment columns cost only the banner. When the read with them
  *   fails it is made once more without them, and only a failure of that one
  *   throws.
