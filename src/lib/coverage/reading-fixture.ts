@@ -99,6 +99,7 @@ export function readingFixture(
     reading: {
       id: "fixture-reading",
       scanToken: complete ? "fixture-scan" : null,
+      market: "UK",
       status,
       step: null,
       error: state === "failed" ? "fixture: the engines did not answer" : null,

@@ -200,6 +200,20 @@ export const SCAN_LIMITS = {
 };
 
 /**
+ * The walkthrough ask's three required fields (Danny, 13 Oct 2026): the
+ * person's name, their business category and their market. Its email is
+ * SCAN_LIMITS.email, as it always was.
+ *
+ * name matches CONTACT_LIMITS.name and is typed, so it is refused over the
+ * bound by both walkthrough routes (lib/scan/walkthrough-fields.ts). category
+ * and market are picked, not typed - a select of SECTORS ids and two radios -
+ * so a long one is a hand-made post: refused over these bounds before it is
+ * matched against SECTORS or the two markets. 60 and 4 are the contact
+ * form's sector and market bounds, for the same values.
+ */
+export const WALKTHROUGH_LIMITS = { name: 120, category: 60, market: 4 };
+
+/**
  * Who runs the site, in the words Danny gave on 26 Sep 2026 (R31) - the
  * footer and /legal both print this. Name and number only: the address is
  * changing, so it is off every surface (Danny, 28 Sep 2026, R81). The ICO

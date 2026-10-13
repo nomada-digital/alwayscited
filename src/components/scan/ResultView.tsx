@@ -1020,7 +1020,7 @@ function TrackedSection(p: { token: string; r: RunScanResponse; cluster: ReturnT
       ) : (
         <div style={{ background: T.surface, color: T.ink, borderRadius: "18px", padding: "24px", minWidth: 0 }}>
           <div style={{ fontSize: "17px", fontWeight: 700, marginBottom: "16px" }}>{p.cluster ? "See it on your own cluster" : "See it on your own report"}</div>
-          <WalkthroughForm token={p.token} outcome={p.walkthrough} />
+          <WalkthroughForm token={p.token} outcome={p.walkthrough} market={p.r.market} />
         </div>
       )}
     </section>

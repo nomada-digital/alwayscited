@@ -741,3 +741,42 @@ test("the purge rules tell the promised write from a wider one", () => {
   assert.equal(unclaimed('.is("unlocked_at", null)'), true);
   assert.equal(unclaimed('.not("unlocked_at", "is", null)'), false, "the inverted filter purges exactly the claimed scans");
 });
+
+/* ------------------------------------------------------------------ *
+ * W. "If you ask for a walkthrough or a demo, we store the name, work
+ *    email, business category and market you gave, and nothing else about
+ *    you."
+ * ------------------------------------------------------------------ */
+
+/**
+ * 13 Oct 2026: Danny made name, category and market required on the
+ * walkthrough ask, and /legal's sentence - which said the ask stored "the email
+ * address you gave, and nothing else about you" - was rewritten to the four.
+ * Held to the two writes here, so a fifth thing stored about the person makes
+ * the sentence fail rather than quietly go untrue. `scan_id` is the report the
+ * ask is about, `kind` is which of the two was asked for, and `ip_hash` is the
+ * salted hash "What we collect" names on its own (rule A); `...fields` is
+ * writeAsk's, which is ASK_COLUMNS and nothing else.
+ */
+test("W: the walkthrough ask stores what /legal says it stores, and nothing else about the person", () => {
+  assert.ok(
+    LEGAL.includes("If you ask for a walkthrough or a demo, we store the name, work email, business category and market you gave, and nothing else about you."),
+    "/legal no longer says what the walkthrough ask stores in the words this rule holds - reword the rule with it, do not delete it",
+  );
+  const store = code(readFileSync(join(SRC, "lib/scan/walkthrough-store.ts"), "utf8"));
+  assert.match(store, /export const ASK_COLUMNS = \["name", "category", "market"\] as const;/, "the ask's columns are no longer name, category and market");
+  assert.match(store, /write\(ask\)/, "writeAsk writes the ask's three fields");
+  for (const route of ["app/api/scan/[token]/walkthrough/route.ts", "app/api/walkthrough/route.ts"]) {
+    const src = code(readFileSync(join(SRC, route), "utf8"));
+    const payloads = [...src.matchAll(/\.(?:insert|upsert)\(\s*\{([^}]*)\}/g)].map((m) =>
+      m[1]
+        .split(",")
+        .map((k) => k.trim().split(":")[0]!.trim())
+        .filter(Boolean)
+        .sort(),
+    );
+    assert.equal(payloads.length, 1, `${route}: one write of the ask, found ${payloads.length}`);
+    assert.deepEqual(payloads[0], ["...fields", "email", "ip_hash", "kind", "scan_id"], `${route} stores something /legal does not list`);
+    assert.match(src, /await writeAsk\(ask, \(fields\) =>/, `${route} writes the ask through writeAsk`);
+  }
+});

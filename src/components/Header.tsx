@@ -41,6 +41,17 @@ import { D, HEADER_H, WASH, WASH_SIZE } from "./home/dark";
  * edges. No drop shadow. globals.css offsets anchors and the guide nav by
  * --header-h (HEADER_H) plus a margin: the bars measure 61-68.4px, not one
  * height, so the offset clears the tallest rather than pinning a height.
+ *
+ * "Log in" for a company that already has a profile (Danny, 13 Oct 2026):
+ * the dashboard's sign-in screen, last before Free scan on the bar and above
+ * it in the phone menu. A plain link in the nav's own style, so the one
+ * filled button stays the scan. `loginHref` comes from the root layout
+ * (app-host.ts appHref): /app/login while the dashboard shares this host, the
+ * app host's /login once APP_HOST is set - this component cannot read
+ * APP_HOST, so it is handed the answer. A plain <a>, not <Link>: the
+ * dashboard is another layout, and once it has its own host another origin.
+ * The dashboard never shows this header (SiteChrome), so it never shows the
+ * link either.
  */
 
 const COMPARE_HREF = "/packages";
@@ -61,6 +72,7 @@ const navLinks = [
   { href: "/blog", label: "Blog" },
 ];
 const AGENCIES = "For agencies";
+const LOG_IN = "Log in";
 const agencyLinks: NavItem[] = [
   { key: "seo", href: "/seo-agencies", label: "SEO agencies" },
   { key: "pr", href: "/pr-agencies", label: "PR agencies" },
@@ -90,7 +102,7 @@ function Logo({ dark }: { dark: boolean }) {
 
 const menuRow: React.CSSProperties = { display: "flex", alignItems: "center", minHeight: "44px" };
 
-export default function Header() {
+export default function Header({ loginHref }: { loginHref: string }) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const dark = usePathname() === "/";
@@ -143,6 +155,9 @@ export default function Header() {
               {link.label}
             </Link>
           ))}
+          <a href={loginHref} style={links}>
+            {LOG_IN}
+          </a>
           <Link
             href="/#scan"
             style={{
@@ -200,6 +215,11 @@ export default function Header() {
                 </Link>
               </li>
             ))}
+            <li>
+              <a href={loginHref} style={{ ...linkStyle, ...menuRow }} onClick={() => setOpen(false)}>
+                {LOG_IN}
+              </a>
+            </li>
             <li style={{ marginTop: "8px" }}>
               <Link
                 href="/#scan"

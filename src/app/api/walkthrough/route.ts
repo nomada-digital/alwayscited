@@ -2,7 +2,9 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { TIERS } from "@/config/pricing";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { clientIp, hashIp } from "@/lib/scan/ip";
+import { readWalkthroughCategory, readWalkthroughMarket, readWalkthroughName } from "@/lib/scan/walkthrough-fields";
 import { sendWalkthroughAlert } from "@/lib/scan/walkthrough-mail";
+import { writeAsk } from "@/lib/scan/walkthrough-store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { isWorkEmail, WORK_EMAIL_REFUSAL } from "@/lib/work-email";
 import { workEmailBlockedExtra } from "@/lib/work-email-server";
@@ -26,9 +28,12 @@ const PER_IP_PER_DAY = 5;
  * looked up here and answered yes without a second alert. And `from` is held
  * to the four tier pages' own paths, so the alert never carries a string a
  * caller made up.
+ *
+ * 13 Oct 2026 (Danny): name, category and market are required, read in the
+ * form's order after `from`, as in the scan route beside this one.
  */
 export async function POST(req: Request) {
-  let body: { email?: string; kind?: string; from?: string };
+  let body: { email?: string; kind?: string; from?: string; name?: unknown; category?: unknown; market?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -41,6 +46,9 @@ export async function POST(req: Request) {
   const from = TIERS.find((t) => t.href === body.from)?.href;
   if (!from) return Response.json({ error: "bad_from" }, { status: 400 });
 
+  const name = readWalkthroughName(body.name);
+  if (!name.ok) return Response.json({ error: name.error, message: name.message }, { status: 400 });
+
   const email = normalizeEmail(body.email ?? "");
   if (email.length > SCAN_LIMITS.email || !isPlausibleEmail(email)) {
     return Response.json({ error: "bad_email", message: "That email does not look right." }, { status: 400 });
@@ -48,6 +56,12 @@ export async function POST(req: Request) {
   if (!isWorkEmail(email, await workEmailBlockedExtra())) {
     return Response.json({ error: "personal_email", message: WORK_EMAIL_REFUSAL }, { status: 400 });
   }
+
+  const category = readWalkthroughCategory(body.category);
+  if (!category.ok) return Response.json({ error: category.error, message: category.message }, { status: 400 });
+  const market = readWalkthroughMarket(body.market);
+  if (!market.ok) return Response.json({ error: market.error, message: market.message }, { status: 400 });
+  const ask = { name: name.value, category: category.value, market: market.value };
 
   const db = supabaseAdmin();
   const ipHash = hashIp(clientIp(req));
@@ -90,10 +104,14 @@ export async function POST(req: Request) {
   }
   if ((repeat ?? 0) > 0) return Response.json(done);
 
-  const { data: inserted, error: insertErr } = await db
-    .from("walkthrough_requests")
-    .insert({ scan_id: null, email, kind, ip_hash: ipHash })
-    .select("id");
+  // writeAsk goes again without name, category and market while their
+  // migration is not applied, rather than lose the ask.
+  const { data: inserted, error: insertErr } = await writeAsk(ask, (fields) =>
+    db
+      .from("walkthrough_requests")
+      .insert({ scan_id: null, email, kind, ip_hash: ipHash, ...fields })
+      .select("id"),
+  );
   if (insertErr) {
     console.error("[walkthrough] could not store the request: " + insertErr.message);
     return Response.json({ error: "write_failed", message: "That did not go through. Please try again." }, { status: 502 });
@@ -101,7 +119,7 @@ export async function POST(req: Request) {
   const fresh = inserted?.[0]?.id as string | undefined;
 
   if (fresh) {
-    const sent = await sendWalkthroughAlert({ kind, email, scan: null, from });
+    const sent = await sendWalkthroughAlert({ kind, email, ask, scan: null, from });
     if (sent) {
       const { error: notedErr } = await db
         .from("walkthrough_requests")

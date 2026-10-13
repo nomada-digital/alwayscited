@@ -564,7 +564,7 @@ export default async function CampaignReadingPage({
               reading.
             </p>
             <div style={{ marginTop: "14px" }}>
-              <WalkthroughForm token={reading.scanToken} back={`/coverage-check/${token}`} outcome={walkthrough} />
+              <WalkthroughForm token={reading.scanToken} back={`/coverage-check/${token}`} outcome={walkthrough} market={reading.market} />
             </div>
           </div>
         </section>
