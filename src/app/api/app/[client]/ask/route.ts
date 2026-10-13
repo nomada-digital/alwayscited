@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { APP_LIMITS } from "@/config/contact";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { aliasAskMail, billingAskMail, askGate, askItemWord, askMail, askRecipient, readAskAbout, readAskItems, readAskKeyword, readUpgradeCta, recordAsk, upgradeAskMail, upsellMode } from "@/lib/tracking/ask";
+import { ASK_PAGES_MAX, type AskPage, aliasAskMail, billingAskMail, askGate, askItemWord, askMail, askRecipient, opportunityAskMail, readAskAbout, readAskItems, readAskKeyword, readAskKind, readUpgradeCta, recordAsk, upgradeAskMail, upsellMode } from "@/lib/tracking/ask";
+import { readPlacedKeys } from "@/lib/diy/opportunities/derive";
+import { evidenceOf } from "@/lib/diy/opportunities/status";
+import { OPP_ID, ROUTE_LABEL, isRoute } from "@/lib/diy/opportunities/types";
+import { formatDay } from "@/lib/tracking/figures";
 import { sendAsk } from "@/lib/tracking/ask-mail";
 import { trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
@@ -35,6 +39,14 @@ export const dynamic = "force-dynamic";
  * returns to AI visibility with its own view (prompt-table.ts readAiKept);
  * anything else to Clusters, as before. The surface goes into the row's
  * `trigger` beside the item count.
+ *
+ * 13 Oct 2026, DIY P7 (spec 10 sections 3.6 and 4.7): `kind=opportunity` in
+ * the action's query is an ask about pages on Opportunities - "Suggest this
+ * to your account lead" on one page (`id` in the query), or U3's and U8's
+ * "Ask about" with the pages' ids as the form's `items`. The server reads
+ * each page from this client's own rows (and never one that is another
+ * client's placement), and takes no text from the form. It returns to the
+ * page it came from with Opportunities' own `done` and `why` codes.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ client: string }> }) {
   const { client: slug } = await ctx.params;
@@ -61,6 +73,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
       ),
       303,
     );
+  if (readAskKind(sp.get("kind"))) return opportunityAsk(req, slug, sp, form);
   if (fixtureMode()) return done("refused");
 
   const email = await sessionEmail();
@@ -127,4 +140,72 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   if (cta) await recordUsage(db, { clientId: client.id, email, event: "cta_ask", path: null, props: { cta }, today });
   // The toast's words are rebuilt on the page (askToast) from these words, never passed as text.
   return done("sent", { via: recipient.to ? "agency" : "us", ...(cta ? { n: String(items.length), of: askItemWord(cta, 2) } : {}) });
+}
+
+/**
+ * The opportunity ask (DIY P7). Back to the one page asked about, or to the
+ * list for several, with `done=asked` (or `asked_agency`) and, refused,
+ * `why=ask_refused` or `ask_capped`: Opportunities' toast codes.
+ */
+async function opportunityAsk(req: Request, slug: string, sp: URLSearchParams, form: FormData | null) {
+  const one = sp.get("id");
+  const fromQuery = one && OPP_ID.test(one) ? [one] : [];
+  const ids = (fromQuery.length ? fromQuery : readAskItems(String(form?.get("items") ?? "").split(","))).slice(0, ASK_PAGES_MAX);
+  const back = (done: "asked" | "asked_agency" | "refused", why: "ask_refused" | "ask_capped" | null = null) => {
+    const q = new URLSearchParams({ done, ...(why ? { why } : {}) });
+    const page = ids.length === 1 ? `/${slug}/opportunities/${encodeURIComponent(ids[0]!)}` : `/${slug}/opportunities`;
+    return NextResponse.redirect(dashUrl(req, appPath(`${page}?${q}`)), 303);
+  };
+  if (!ids.length) return back("refused", "ask_refused");
+  if (fixtureMode()) return back("refused", "ask_refused");
+  const email = await sessionEmail();
+  if (!email) return NextResponse.redirect(dashUrl(req, dashPath(req, "/login")), 303);
+  const client = (await clientsFor(email)).find((c) => c.slug === slug);
+  if (!client) return NextResponse.json({ error: "Not found." }, { status: 404 });
+  const db = supabaseAdmin();
+  const { data: row, error: rowErr } = await db.from("client_domains").select("account_id").eq("id", client.id).maybeSingle();
+  if (rowErr || !row) {
+    console.warn(`[app] opportunity ask could not read the client's account: ${rowErr?.message ?? "none"}`);
+    return back("refused", "ask_refused");
+  }
+  const { data: account, error } = await db.from("accounts").select("upsell_mode, upsell_contact_email").eq("id", row.account_id as string).maybeSingle();
+  if (error || !account) {
+    console.warn(`[app] opportunity ask could not read the account: ${error?.message ?? "none"}`);
+    return back("refused", "ask_refused");
+  }
+  const mode = upsellMode(account.upsell_mode);
+  const recipient = askRecipient(mode, (account.upsell_contact_email as string | null) ?? null);
+  if (!recipient) return back("refused", "ask_refused");
+  const today = trackingDay();
+  const gate = await askGate(db, { clientId: client.id, email, today });
+  if (!gate.ok) {
+    console.warn(`[app] opportunity ask refused: ${gate.reason}`);
+    return back("refused", gate.reason === "capped" ? "ask_capped" : "ask_refused");
+  }
+  // Only this client's rows, and never a page where another client has been placed: an id from elsewhere lists nothing.
+  const { data: rows, error: readErr } = await db.from("opportunities").select("id, url, url_key, title, route, evidence").eq("client_domain_id", client.id).in("id", ids);
+  let placed: Set<string>;
+  try {
+    placed = await readPlacedKeys(db, client.id);
+  } catch (err) {
+    console.warn(`[app] opportunity ask could not read the placements to leave out: ${err instanceof Error ? err.message : String(err)}`);
+    return back("refused", "ask_refused");
+  }
+  if (readErr) {
+    console.warn(`[app] opportunity ask could not read its pages: ${readErr.message}`);
+    return back("refused", "ask_refused");
+  }
+  const pages: AskPage[] = ((rows ?? []) as Record<string, unknown>[])
+    .filter((r) => typeof r.url === "string" && typeof r.url_key === "string" && !placed.has(r.url_key) && isRoute(r.route))
+    .map((r) => {
+      const e = evidenceOf(r.evidence, today);
+      return { url: r.url as string, title: typeof r.title === "string" ? r.title : null, route: ROUTE_LABEL[r.route as keyof typeof ROUTE_LABEL], answers: e.answers, prompts: e.prompt_count, to: e.answers ? formatDay(e.to) : null, competitors: e.competitors };
+    });
+  if (!pages.length) return back("refused", "ask_refused");
+  const brand = client.brand ?? client.domain;
+  const mail = opportunityAskMail({ brand, domain: client.domain, member: email, pages, mode });
+  if (!(await sendAsk({ agencyContact: recipient.to, replyTo: email, ...mail }))) return back("refused", "ask_refused");
+  const cta = readUpgradeCta(form?.get("cta")) ?? "mentioned";
+  if (!(await recordAsk(db, { clientId: client.id, email, cta, trigger: upgradeTrigger(ids.length === 1 ? "opportunity" : "opportunities", { items: String(pages.length) }) }))) console.warn("[app] opportunity ask sent but not recorded");
+  return back(recipient.to ? "asked_agency" : "asked");
 }

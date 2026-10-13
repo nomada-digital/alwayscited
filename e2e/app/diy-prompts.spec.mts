@@ -131,10 +131,13 @@ test("full: chips on Clusters - c1's five prompts and c2's first, in the fixture
       ["setup", "Origin: Setup"],
       ["client", "Origin: You"],
       ["nomada", "Origin: nomada digital"],
-      ["client", "Origin: You"],
+      // 13 Oct 2026, DIY P7: q1-5 was added from a pursued page (src/lib/diy/fixtures/origins.opportunity.json, wave 2),
+      // so its chip is Opportunity, and it links to that opportunity.
+      ["opportunity", "Origin: Opportunity"],
     ],
   );
-  assert.ok(c1.every((c) => c.href === null), "Setup, You and nomada digital are not links");
+  assert.ok(c1.filter((c) => c.kind !== "opportunity").every((c) => c.href === null), "Setup, You and nomada digital are not links");
+  assert.match(c1.find((c) => c.kind === "opportunity")!.href ?? "", /\/opportunities\/opp-solo$/);
   assert.doesNotMatch(await text(page), /From placements/, "no placement prompt on the full fixture");
   await ctx.close();
   const two = await open(`${SLUG}/clusters?open=c2`);

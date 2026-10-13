@@ -204,6 +204,10 @@ export const STATES: Record<string, State> = {
   // 13 Oct 2026, DIY P3: Actions (internally the Plan), same session rule. The signed-in page is swept from
   // the HTML e2e/app/diy-plan.spec.mts saves (spec 10 section 6.10 item 2).
   "/app/[client]/plan": { urls: ["/app/example/plan", "/app/example/plan?view=list&status=done"] },
+  // 13 Oct 2026, DIY P7 (spec 10 section 3.3): Opportunities and one opportunity, same session rule. The signed-in
+  // pages are swept from the HTML e2e/app/diy-opportunities.spec.mts saves (spec 10 section 6.10 item 2).
+  "/app/[client]/opportunities": { urls: ["/app/example/opportunities", "/app/example/opportunities?view=pursuing"] },
+  "/app/[client]/opportunities/[id]": { urls: ["/app/example/opportunities/opp-invoicing"] },
   // 29 Sep 2026, T4: the overview drawn from the local parity fixture - the
   // only way the sweeps see the signed-in overview's markup at all. A 404 in
   // a checkout that has not run docs/parity/T4/make-fixture.py.

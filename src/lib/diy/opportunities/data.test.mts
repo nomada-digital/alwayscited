@@ -1,0 +1,132 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+import { expandFixture } from "../../tracking/fixture-mode.ts";
+import { addDays } from "../../tracking/figures.ts";
+import { promptsDb } from "../prompts/fake-prompts-db.mts";
+
+import { countOpenOpportunities, fixtureEntry, fixtureWorld, missingTable, readKeyPages, readWorld, type OppFixtureState } from "./data.ts";
+import { ENGINE_ORDER } from "./refresh.job.ts";
+import { headerCounts } from "./payload.ts";
+
+/**
+ * Opportunities' loader and fixture (13 Oct 2026, DIY P7; spec 10 sections
+ * 7.0 item 6 and 7.8, "Fixture states"): the fixture derives what the rules
+ * make of its made-up world with the tracking fixture's answers, exactly as
+ * the night does, so each state shows the exclusions working: `full` (40 and
+ * more rows across lenses and statuses, an unreadable read, the Shopify
+ * case, prompts added, two cited pages that are another fixture client's
+ * placements and do not appear), `dark` (nothing read, no rival's
+ * comparison page), `day0` (no citations: lists and own only), `capped` (10
+ * pursued) and `zero` (every cited page names you). The tolerant readers say
+ * so on a missing table and never read a failure as zero.
+ */
+
+const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
+const fx = expandFixture(JSON.parse(readFileSync(join(ROOT, "src/lib/tracking/fixture.json"), "utf8")));
+const file = JSON.parse(readFileSync(join(ROOT, "src/lib/diy/fixtures/opportunities.json"), "utf8")) as Record<string, OppFixtureState>;
+const t = { today: fx.today, engines: ENGINE_ORDER, answers: fx.data.answers.filter((a) => a.run_date >= addDays(fx.today, -27)), questions: fx.data.questions, clusters: fx.data.clusters, keywords: fx.data.keywords, domain: fx.client.domain };
+const world = (state: "full" | "dark" | "day0" | "zero" | "capped") => fixtureWorld(fixtureEntry(file, state), t, "fixture");
+const lenses = (w: ReturnType<typeof world>) => new Set(w.rows.map((r) => r.lens));
+
+test("full: 40 and more rows across every tab lens and status, page reads with an unreadable one, the Shopify case, prompts added", () => {
+  const w = world("full");
+  assert.ok(w.rows.length >= 40, `${w.rows.length} rows`);
+  for (const l of ["cited", "lists", "threads", "profiles", "own", "logged"]) assert.ok(lenses(w).has(l as never), l);
+  const statuses = new Set(w.rows.map((r) => r.status));
+  for (const s of ["new", "pursuing", "pitched", "won", "declined", "dismissed"]) assert.ok(statuses.has(s as never), s);
+  assert.ok([...w.reads.values()].some((f) => f.status === "error" && f.http === 403), "a page we could not read");
+  assert.ok(fixtureEntry(file, "full").kinds!.some((k) => k.key === "d:shopify.example" && k.domain_type === "platform"));
+  assert.ok(w.rows.some((r) => r.domain === "shopify.example"), "a platform's page is listed");
+  assert.ok(w.rows.some((r) => r.promptId !== null), "prompts added from pursued pages");
+  assert.ok(w.rows.some((r) => r.route === "send_correction"));
+  assert.ok(w.rows.some((r) => r.lens === "own" && r.route === "refresh_own"));
+});
+
+test("full: the two cited pages that are another fixture client's placements appear nowhere; the client's own placements do", () => {
+  const w = world("full");
+  const placed = fixtureEntry(file, "full").placed!;
+  assert.equal(placed.length, 2);
+  const cited = new Set(t.answers.flatMap((a) => a.citations.map((c) => c.url)));
+  assert.ok(cited.has(`https://${placed[0]}`), "one is cited in the tracking fixture's own answers");
+  for (const k of placed) assert.ok(!w.rows.some((r) => r.urlKey === k), k);
+  assert.ok(!JSON.stringify(w.rows).includes(placed[1]!));
+  assert.ok(w.rows.some((r) => r.urlKey === "ownerledger.co/guides/switching-accounting-software"), "this client's own placement is unaffected");
+});
+
+test("full: competitors' own pages never appear - a vendor, and a rival's 'X vs Y'", () => {
+  const w = world("full");
+  assert.ok(!w.rows.some((r) => r.domain === "ledgerline.com"));
+  assert.ok(!w.rows.some((r) => r.domain === "brightbook.example"));
+});
+
+test("dark: nothing read or classified; the rival's comparison page and the unclassified Shopify page are left out; rows still render from citations", () => {
+  const w = world("dark");
+  assert.equal(w.reads.size, 0);
+  assert.ok(!w.rows.some((r) => r.domain === "brightbook.example"), "an unclassified rival's own comparison page");
+  assert.ok(!w.rows.some((r) => r.domain === "shopify.example"), "Shopify unclassified fails closed");
+  assert.ok(w.rows.filter((r) => r.lens === "cited" && r.status === "new").length >= 10);
+  assert.equal(fixtureEntry(file, "dark").canned, null);
+});
+
+test("day0: no citations, so only best-of lists on Google and the client's own pages", () => {
+  const w = world("day0");
+  assert.deepEqual([...lenses(w)].sort(), ["lists", "own"]);
+  assert.equal(headerCounts(w.rows).total, 0);
+});
+
+test("capped: 10 pages in Pursuing or Pitched, the most at once", () => {
+  const w = world("capped");
+  assert.equal(w.rows.filter((r) => r.status === "pursuing" || r.status === "pitched").length, 10);
+});
+
+test("zero: every cited page names you, so no cited row", () => {
+  const w = world("zero");
+  assert.ok(!w.rows.some((r) => r.lens === "cited" || r.lens === "threads" || r.lens === "profiles"));
+  assert.ok([...w.reads.values()].some((f) => f.namesClient === true));
+});
+
+test("the tolerant readers: key pages absent is an empty list; a failed count is null, never 0", async () => {
+  assert.ok(missingTable({ code: "42P01", message: "relation \"key_pages\" does not exist" }));
+  assert.ok(missingTable({ code: "PGRST205", message: "Could not find the table 'public.key_pages' in the schema cache" }));
+  assert.ok(!missingTable({ message: "timeout" }));
+  const absent = promptsDb({});
+  absent.failNext("key_pages", "Could not find the table 'public.key_pages' in the schema cache", "PGRST205");
+  assert.deepEqual(await readKeyPages(absent.db, "c1"), []);
+  const broken = promptsDb({});
+  broken.failNext("key_pages", "permission denied");
+  await assert.rejects(readKeyPages(broken.db, "c1"), /permission denied/);
+  const here = promptsDb({ key_pages: [{ client_domain_id: "c1", url: "https://tallyroo.com/invoicing", cluster_ids: ["k1"], removed_on: null }, { client_domain_id: "c1", url: "https://tallyroo.com/old", cluster_ids: [], removed_on: "2026-10-01" }] });
+  assert.deepEqual(await readKeyPages(here.db, "c1"), [{ url: "https://tallyroo.com/invoicing", clusterIds: ["k1"] }]);
+  const counted = promptsDb({ opportunities: [{ id: "a", client_domain_id: "c1", status: "new", live: true, cluster_id: "k1", page_type: "best_of" }, { id: "b", client_domain_id: "c1", status: "new", live: false, cluster_id: "k1", page_type: "best_of" }, { id: "c", client_domain_id: "c1", status: "pursuing", live: true, cluster_id: "k1", page_type: "best_of" }] });
+  assert.equal(await countOpenOpportunities(counted.db, "c1", { clusterId: "k1", pageTypes: ["best_of"] }), 1);
+  const failing = promptsDb({});
+  failing.failNext("opportunities", "relation \"opportunities\" does not exist", "42P01");
+  assert.equal(await countOpenOpportunities(failing.db, "c1"), null);
+});
+
+test("readWorld: other clients' placements subtracted at read time, and a subtraction that cannot be read fails the section", async () => {
+  const rows = [
+    { id: "a", client_domain_id: "c1", lens: "cited", url: "https://kept.example/x", url_key: "kept.example/x", domain: "kept.example", route: "ask_added", status: "new", evidence: {}, live: true, last_seen: "2026-11-14", history: [] },
+    { id: "b", client_domain_id: "c1", lens: "cited", url: "https://placed.example/x", url_key: "placed.example/x", domain: "placed.example", route: "ask_added", status: "pursuing", evidence: {}, live: true, last_seen: "2026-11-14", history: [] },
+  ];
+  const ok = promptsDb({ opportunities: rows, page_reads: [], placements: [{ id: "p1", client_domain_id: "other", url_key: "placed.example/x" }, { id: "p2", client_domain_id: "c1", url_key: "kept.example/x" }], diy_jobs: [] });
+  const w = await readWorld(ok.db, "c1");
+  assert.deepEqual(w.rows.map((r) => r.id), ["a"], "another client's placement goes, whatever this client's status on it; this client's own stays");
+  assert.equal(w.refreshedTo, "2026-11-14");
+  const bad = promptsDb({ opportunities: rows, page_reads: [], diy_jobs: [] });
+  bad.failNext("placements", "connection reset");
+  await assert.rejects(readWorld(bad.db, "c1"), /connection reset/);
+});
+
+test("origins.opportunity.json: P7's opportunity prompt is merged after P2's, and points at a fixture opportunity", async () => {
+  const { readOriginsFiles, fixtureOriginMap } = await import("../prompts/origins.ts");
+  const rows = await readOriginsFiles(join(ROOT, "src", "lib", "diy", "fixtures"), "full");
+  const m = fixtureOriginMap(rows, fx.data.questions, []);
+  const o = m.get("q1-5");
+  assert.equal(o?.kind, "opportunity");
+  assert.ok(world("full").rows.some((r) => r.id === o?.ref && r.promptId === "q1-5"), "the chip links to an opportunity that carries the prompt");
+});

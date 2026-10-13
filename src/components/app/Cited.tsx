@@ -13,6 +13,9 @@ import type { Compare, OverviewData } from "@/lib/tracking/overview-data";
 import type { PlacementRow } from "@/lib/tracking/placement-figures";
 import { runNote } from "@/lib/tracking/run-note";
 import { answerHref, citedEvidence } from "@/lib/tracking/evidence";
+import OppStyle from "@/components/app/opportunities/OppStyle";
+import type { CitedFacts } from "@/lib/diy/opportunities/cited";
+import { DOMAIN_TYPE_LABEL, type DomainType } from "@/lib/diy/opportunities/types";
 
 import ChipRow from "./ChipRow";
 import { ClearFilters, ClearSearch } from "./ClearLinks";
@@ -31,12 +34,25 @@ import { appPath } from "@/lib/app-host";
  * (2 Oct 2026): `?q=` searches host and path, a GET form like Clusters'.
  * DB-2 (9 Oct 2026): each prompt under an open row opens the latest answer in
  * the range that cited the page, on its day and engine (evidence.ts).
+ *
+ * 13 Oct 2026, DIY P7 (spec 10 section 4.5, facts only): two columns, Kind
+ * (the site's type) and Page type, from the rules and the cached types, a
+ * blank reading "not classified yet"; `?type=` narrows to one kind of site
+ * (`?kind=` is unchanged: yours, others or all); `?leaves=1` keeps the pages
+ * whose latest read found you not named and which were cited in answers
+ * naming another brand, less every page where another client has been placed,
+ * each with "Open in Opportunities" when it has one; and a page we could not
+ * read says so on its row. The unfiltered list is the pages the engines cite,
+ * as before, with no advice. Below 1100px the two columns fold into a line
+ * under the page.
  */
 
 export type CitedKind = "all" | "yours" | "others";
 
 const HEAD = { fontSize: "12px", fontWeight: 600, color: T.soft } as const;
 const GRID = "minmax(0, 1fr) 96px 120px 84px 128px";
+/** With the Kind and Page type columns (DIY P7). */
+const GRID_TYPES = "minmax(0, 1fr) 104px 112px 96px 120px 84px 128px";
 const PILL = (on: boolean) =>
   ({ display: "inline-flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 14px", borderRadius: "999px", border: `1px solid ${on ? T.washLine : T.line}`, background: on ? T.wash : T.surface, color: T.ink, fontSize: "13px", fontWeight: 600, textDecoration: "none", whiteSpace: "nowrap" }) as const;
 const TAG = { padding: "1px 8px", borderRadius: "999px", fontSize: "11px", fontWeight: 700, whiteSpace: "nowrap" } as const;
@@ -57,6 +73,7 @@ export default function Cited({
   all,
   open,
   q,
+  diy,
 }: {
   domain: string;
   engines: readonly Engine[];
@@ -75,6 +92,12 @@ export default function Cited({
   open: string | null;
   /** DS20: the search, already cut to APP_LIMITS.search; matches host and path. */
   q: string;
+  /**
+   * DIY P7: the page facts, the `?type=` and `?leaves=1` filters, and where a
+   * page's opportunity opens. `facts` is null when they could not be read:
+   * the columns read "not classified yet" and "Leaves you out" says so.
+   */
+  diy?: { facts: CitedFacts | null; type: DomainType | null; leaves: boolean; oppHref: (id: string) => string };
 }) {
   // 8 Oct 2026 (audit data-10): the comparison the Overview reads - the first week for a young client.
   // The first week's first day, from started_on and the prompts - the date picker is handed the same day.
@@ -93,7 +116,13 @@ export default function Cited({
     domain,
   ).filter((p) => kind === "all" || (kind === "yours") === p.yours);
   const term = q.trim().toLowerCase();
-  const rows = term ? filtered.filter((p) => p.page.toLowerCase().includes(term)) : filtered;
+  const facts = diy?.facts ?? null;
+  const typeOn = diy?.type ?? null;
+  const leavesOn = diy?.leaves === true;
+  const narrowed = filtered.filter((p) => (!typeOn || facts?.kinds.get(p.page)?.domainType === typeOn) && (!leavesOn || (facts?.leaves.has(p.page) ?? false)));
+  const rows = term ? narrowed.filter((p) => p.page.toLowerCase().includes(term)) : narrowed;
+  const kindsSeen = facts ? [...new Set(filtered.map((p) => facts.kinds.get(p.page)?.domainType).filter((t): t is DomainType => !!t))] : [];
+  const grid = diy ? GRID_TYPES : GRID;
   const live = new Map(placements.filter((p) => p.status === "live" && p.url_key).map((p) => [p.url_key, p.cluster_id]));
 
   const where = new Map<string, { clusterId: string; keyword: string; index: number }>();
@@ -101,7 +130,7 @@ export default function Cited({
   const text = new Map(data.questions.map((q) => [q.id, q.text]));
 
   const base: Record<string, string> = { from: range.from, to: range.to, ...(compareMode === "prev" ? {} : { compare: compareMode }) };
-  const state = { ...base, ...(picked ? { cluster: picked.id } : {}), ...(engine ? { engine } : {}), ...(kind === "all" ? {} : { kind }), ...(term ? { q } : {}), ...(all ? { all: "1" } : {}) };
+  const state = { ...base, ...(picked ? { cluster: picked.id } : {}), ...(engine ? { engine } : {}), ...(kind === "all" ? {} : { kind }), ...(typeOn ? { type: typeOn } : {}), ...(leavesOn ? { leaves: "1" } : {}), ...(term ? { q } : {}), ...(all ? { all: "1" } : {}) };
   const href = (over: Record<string, string | null>) => {
     const q: Record<string, string> = { ...state };
     for (const [k, v] of Object.entries(over)) if (v === null) delete q[k];
@@ -114,11 +143,12 @@ export default function Cited({
   const span = (p: { first: Day; last: Day }) => (p.first === p.last ? formatDay(p.first) : `${formatDay(p.first)} - ${formatDay(p.last)}`);
   // Audit mobile-4 (8 Oct 2026): the headline said nothing of the filters, whose chips load out of sight
   // on a phone - "5 pages cited 47 times." for one cluster on one engine read as the whole account.
-  const filters = `${picked ? ` in the "${picked.keyword ?? picked.name}" cluster` : ""}${engine ? `, ${ENGINE_SPECS[engine].label} only` : ""}${kind === "yours" ? ", your site only" : kind === "others" ? ", other sites only" : ""}`;
-  const filteredView = Boolean(picked || engine || kind !== "all" || term);
+  const filters = `${picked ? ` in the "${picked.keyword ?? picked.name}" cluster` : ""}${engine ? `, ${ENGINE_SPECS[engine].label} only` : ""}${kind === "yours" ? ", your site only" : kind === "others" ? ", other sites only" : ""}${typeOn ? `, ${DOMAIN_TYPE_LABEL[typeOn].toLowerCase()} sites only` : ""}${leavesOn ? ", leaving you out" : ""}`;
+  const filteredView = Boolean(picked || engine || kind !== "all" || term || typeOn || leavesOn);
 
   return (
     <div className="app-col" style={{ display: "flex", flexDirection: "column", gap: "20px", minWidth: 0 }}>
+      {diy ? <OppStyle /> : null}
       <header style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: "24px", flexWrap: "wrap" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
           <h1 style={{ margin: 0, fontSize: "28px", fontWeight: 700, letterSpacing: "-0.03em", color: T.ink }}>Cited pages</h1>
@@ -176,6 +206,21 @@ export default function Cited({
             </Link>
           ))}
         </ChipRow>
+        {diy ? (
+          <ChipRow label="Filter by kind of site" current={typeOn ?? (leavesOn ? "leaves" : "")}>
+            <Link href={href({ leaves: leavesOn ? null : "1", open: null })} aria-current={leavesOn ? "true" : undefined} style={PILL(leavesOn)}>
+              Leaves you out
+            </Link>
+            <Link href={href({ type: null, open: null })} aria-current={!typeOn ? "true" : undefined} style={PILL(!typeOn)}>
+              Every kind
+            </Link>
+            {kindsSeen.map((t) => (
+              <Link key={t} href={href({ type: t, open: null })} aria-current={typeOn === t ? "true" : undefined} style={PILL(typeOn === t)}>
+                {DOMAIN_TYPE_LABEL[t]}
+              </Link>
+            ))}
+          </ChipRow>
+        ) : null}
         <form method="get" role="search" className="app-search" style={{ display: "flex", alignItems: "center", gap: "8px", width: "320px", maxWidth: "100%", height: "44px", boxSizing: "border-box", padding: "0 12px", border: `1px solid ${T.line}`, borderRadius: "12px", background: T.surface }}>
           <input id="ct-from" type="hidden" name="from" value={range.from} />
           <input id="ct-to" type="hidden" name="to" value={range.to} />
@@ -183,6 +228,8 @@ export default function Cited({
           {picked ? <input id="ct-cluster" type="hidden" name="cluster" value={picked.id} /> : null}
           {engine ? <input id="ct-engine" type="hidden" name="engine" value={engine} /> : null}
           {kind === "all" ? null : <input id="ct-kind" type="hidden" name="kind" value={kind} />}
+          {typeOn ? <input id="ct-type" type="hidden" name="type" value={typeOn} /> : null}
+          {leavesOn ? <input id="ct-leaves" type="hidden" name="leaves" value="1" /> : null}
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={T.soft} strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7" />
             <path d="M20 20l-4-4" />
@@ -208,10 +255,20 @@ export default function Cited({
           </h2>
           {filteredView ? <ClearFilters href={`?${new URLSearchParams(base)}`} /> : null}
         </div>
-        {rows.length ? (
+        {leavesOn && !facts ? (
+          <p role="status" style={{ margin: 0, padding: "0 24px 20px", fontSize: "14px", color: T.ink }}>
+            We couldn&apos;t read which pages leave you out just now. The rest of the page is up to date.
+          </p>
+        ) : rows.length ? (
           <>
-            <div className="app-ct-grid app-hide-sm" style={{ display: "grid", gridTemplateColumns: GRID, gap: "16px", padding: "10px 24px", borderTop: `1px solid ${T.line}` }}>
+            <div className={`app-ct-grid app-hide-sm${diy ? " opp-ct-grid" : ""}`} style={{ display: "grid", gridTemplateColumns: grid, gap: "16px", padding: "10px 24px", borderTop: `1px solid ${T.line}` }}>
               <span style={HEAD}>Page</span>
+              {diy ? (
+                <>
+                  <span className="opp-ct-col" style={HEAD}>Kind</span>
+                  <span className="opp-ct-col" style={HEAD}>Page type</span>
+                </>
+              ) : null}
               <span style={{ ...HEAD, textAlign: "right" }}>Times cited</span>
               <span style={HEAD}>Engines</span>
               <span style={{ ...HEAD, textAlign: "right" }}>Prompts</span>
@@ -225,7 +282,7 @@ export default function Cited({
                 const opens = isOpen ? citedEvidence({ answers: data.answers, range, page: p.page, only, engine, engines }) : null;
                 return (
                   <li key={p.page} style={{ borderTop: `1px solid ${T.line}`, background: p.yours ? T.wash : undefined }}>
-                    <div className="app-ct-grid" style={{ display: "grid", gridTemplateColumns: GRID, gap: "16px", alignItems: "center", padding: "14px 24px" }}>
+                    <div className={`app-ct-grid${diy ? " opp-ct-grid" : ""}`} style={{ display: "grid", gridTemplateColumns: grid, gap: "16px", alignItems: "center", padding: "14px 24px" }}>
                       <span style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flexWrap: "wrap" }}>
                         <Link href={href({ open: isOpen ? null : p.page })} scroll={false} aria-expanded={isOpen} style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, fontSize: "14px", fontWeight: 600, color: T.ink, textDecoration: "none" }}>
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={T.soft} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, transform: isOpen ? "rotate(90deg)" : undefined }}>
@@ -240,7 +297,29 @@ export default function Cited({
                             <span className="sr-only">{` on ${p.page}`}</span>
                           </Link>
                         ) : null}
+                        {leavesOn && facts?.opps.get(p.page) ? (
+                          <Link href={diy!.oppHref(facts.opps.get(p.page)!)} className="app-tap" style={{ ...TAG, background: T.wash, border: `1px solid ${T.washLine}`, color: T.accent, textDecoration: "none" }}>
+                            Open in Opportunities
+                            <span className="sr-only">{` for ${p.page}`}</span>
+                          </Link>
+                        ) : null}
+                        {diy ? (
+                          <span className="opp-ct-inline" style={{ width: "100%", fontSize: "12px", color: T.soft }}>
+                            {`${facts?.kinds.get(p.page)?.kind ?? "not classified yet"} · ${facts?.kinds.get(p.page)?.type ?? "not classified yet"}`}
+                          </span>
+                        ) : null}
+                        {facts?.unreadable.get(p.page) ? (
+                          <span data-ct-unread="" style={{ width: "100%", fontSize: "12px", color: T.soft }}>
+                            {facts.unreadable.get(p.page)}
+                          </span>
+                        ) : null}
                       </span>
+                      {diy ? (
+                        <>
+                          <span className="opp-ct-col" style={{ fontSize: "13px", color: T.soft }}>{facts?.kinds.get(p.page)?.kind ?? "not classified yet"}</span>
+                          <span className="opp-ct-col" style={{ fontSize: "13px", color: T.soft }}>{facts?.kinds.get(p.page)?.type ?? "not classified yet"}</span>
+                        </>
+                      ) : null}
                       <span className="app-ct-count" style={{ textAlign: "right", fontSize: "14px", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                         {p.count.toLocaleString("en-GB")}
                         <span className="app-show-sm" style={{ fontWeight: 400, color: T.soft }}>{" times"}</span>
@@ -293,7 +372,7 @@ export default function Cited({
           <p style={{ margin: 0, padding: "0 24px 20px", fontSize: "14px", color: T.soft }}>
             {term && filtered.length
               ? `No cited page matches "${q.trim()}". Clear the search or try part of a site name.`
-              : picked || engine || kind !== "all"
+              : picked || engine || kind !== "all" || typeOn || leavesOn
                 ? "No pages match these filters in this range. Clear a filter or pick another range."
                 : // DS78 (2 Oct 2026, R173 pass 13, uncited cold read): answered checks that cited nothing said the figures would fill in from the first check; Overview's next step.
                   data.answers.some((a) => a.answered && a.run_date >= range.from && a.run_date <= range.to)

@@ -367,7 +367,8 @@ test("placed: the origin basis line names the prompts added from placements and 
   const { ctx, page } = await open(HOME);
   const line = await page.evaluate(() => document.querySelector('[data-basis="origins"]')?.textContent ?? "");
   // Two of the three are live: the third, a link insertion retried after the switch went on, is first asked tomorrow.
-  assert.match(line, /^Includes 2 prompts added from placements\. /);
+  // 13 Oct 2026, DIY P7: and one added from a pursued page (src/lib/diy/fixtures/origins.opportunity.json, q1-5), so the line names both.
+  assert.match(line, /^Includes 3 prompts added from placements and opportunities\. /);
   const href = await page.evaluate(() => document.querySelector<HTMLAnchorElement>('[data-basis="origins"] a')!.getAttribute("href")!);
   assert.match(href, /\/tallyroo\/ai\?.*origin=chosen/);
   await resolves([href]);
