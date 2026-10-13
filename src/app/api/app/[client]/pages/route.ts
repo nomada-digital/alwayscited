@@ -12,7 +12,7 @@ import { deepRow, insertCheck, ownCheck } from "@/lib/diy/pages/check";
 import { pagesFixture, readPagesPart, readPagesSerp } from "@/lib/diy/pages/data";
 import { type CallResult, EXAMPLE_SCHEMA, EXAMPLE_SYSTEM, draftExample, exampleMessage, exampleState, openingOf } from "@/lib/diy/pages/example";
 import { ADD_ANCHOR, pagePath, pagesPath, readBack, readTarget } from "@/lib/diy/pages/paths";
-import { type PagesDone, type PagesWhy, isPagesDo } from "@/lib/diy/pages/toast";
+import { PAGES_WHY, type PagesDone, type PagesWhy, isPagesDo } from "@/lib/diy/pages/toast";
 import { addChecksFixture, addPage, addPageFixture, examplePending, finishExample, finishExampleFixture, insertExample, insertExampleFixture, removePageFixture } from "@/lib/diy/pages/write";
 import { removeKeyPage } from "@/lib/diy/pages/key-pages";
 import { actCandidate } from "@/lib/diy/pages/act";
@@ -187,10 +187,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
         const deep = await readPageDeep(rctx, page.url);
         if (deep.kind === "read") await insertCheck(db!, deepRow({ clientId: client.id, page, trigger: "on_demand", now: Date.now(), page_: deep.value.page, microdata: deep.value.microdata, readId: deep.readId }));
         else if (deep.kind === "failed") await insertCheck(db!, deepRow({ clientId: client.id, page, trigger: "on_demand", now: Date.now(), page_: null, microdata: null, readId: deep.readId }));
-        return "checked";
+        // Our own read is stored either way; a refused JavaScript read is said as its refusal, never as "up to date".
+        return deep.kind === "refused" ? deep.refusal.code : "checked";
       });
       if (!ans.ok) return back("refused", ans.code === "allowance" ? "checks_out" : ans.code, page.id);
-      if (ans.deferred || ans.value !== "checked") return back("refused", ans.deferred ? "failed" : "readonly", page.id);
+      if (ans.deferred) return back("refused", "failed", page.id);
+      if (ans.value !== "checked") {
+        const code = ans.value;
+        return back("refused", code === "allowance" ? "checks_out" : (PAGES_WHY as readonly string[]).includes(code) ? (code as PagesWhy) : "failed", page.id);
+      }
       if (db) await recordPagesUsage(db, { clientId: client.id, email, today, event: "page_check" });
       return back("checked", null, page.id);
     }
