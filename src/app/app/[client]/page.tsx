@@ -18,6 +18,7 @@ import { trackingRepo } from "@/lib/tracking/repo";
 import { needsSetup, setupOutstanding, setupPath } from "@/lib/tracking/setup-landing";
 import { refuseRole } from "@/lib/tracking/stop";
 import { appPath } from "@/lib/app-host";
+import { recentRange } from "@/lib/diy/changes/diff";
 
 export const dynamic = "force-dynamic";
 
@@ -59,13 +60,24 @@ export default async function ClientDashboard({
   // ON-3 (9 Oct 2026, LB8): the activation checklist, for a client in its trial or first weeks only, so only they pay its two reads.
   // Settings' team read (member scoping applied there) and the usage rows a report or CSV leaves; a failed read leaves the list out.
   const checklist = activationShown({ status: client.status, startedOn: client.started_on, today, trialEndsAt: client.trial_ends_at ?? null, now: Date.now() });
-  const [data, upgrade, rows, confirmed, team, reportOpened] = await Promise.all([
+  // 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 5): "Since last check" reads the last week of checks whatever the
+  // range shows. A range that holds that week (the default does) has read it already; any other takes one narrow read,
+  // and a failed one is that section's failure alone - it says so, and the rest of the page draws.
+  const week = recentRange(today);
+  const holdsWeek = range.from <= week.from && range.to >= today;
+  const [data, upgrade, rows, confirmed, team, reportOpened, weekRead] = await Promise.all([
     repo.loadOverview(client.id, range, compare),
     repo.upgradeContext(client.id, email, today),
     repo.placements(client.id),
     needsSetup(client) || fixtureMode() ? repo.setupConfirmed(client.id) : null,
     checklist ? repo.settings(client.id).catch((err: unknown) => (console.warn(`[app] activation: the team was not read: ${err instanceof Error ? err.message : String(err)}`), null)) : null,
     checklist ? repo.reportOpened(client.id) : null,
+    holdsWeek
+      ? null
+      : repo.loadOverview(client.id, week, "none").then(
+          (d) => ({ ok: true as const, data: d }),
+          (err: unknown) => (console.warn(`[diy] since-last-check: ${err instanceof Error ? err.message : String(err)}`), { ok: false as const }),
+        ),
   ]);
   // DS10: a member who left setup before confirming gets back to it from here. Only a client that needs setup pays the read.
   const outstanding = setupOutstanding(client, confirmed, fixtureMode());
@@ -130,6 +142,7 @@ export default async function ClientDashboard({
           canWrite={canWrite}
           ended={client.status === "ended"}
           lead={steps ? <Activation steps={steps} /> : null}
+          recent={weekRead ?? { ok: true, data }}
         />
       </div>
     </div>

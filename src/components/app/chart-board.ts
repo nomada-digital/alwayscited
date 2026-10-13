@@ -73,3 +73,44 @@ export function boardDayAt(frac: number, n: number): number {
   const step = (X1 - X0) / (n - 1);
   return Math.max(0, Math.min(n - 1, Math.round((frac * W - X0) / step)));
 }
+
+/**
+ * Work markers on a chart (13 Oct 2026, DIY P4; spec 10 section 4.1 row 8 and
+ * 4.2 row 3): a dated tick per piece of work - an Actions item started or
+ * done, a placement gone live, a prompt added - under the plot of the cluster
+ * chart and the share-over-time chart. Pure, so the census below holds every
+ * marker and its readout inside the plot at every width it is drawn.
+ */
+export type MarkKind = "started" | "done" | "placement" | "prompt";
+export type ChartMark = { date: string; kind: MarkKind; label: string; href?: string };
+export type PlacedMark = ChartMark & { i: number };
+
+/** The words before a marker's label: "Started: <title>", "Done: <title>" (section 4.1 row 8). */
+export const MARK_WORDS: Record<MarkKind, string> = { started: "Started", done: "Done", placement: "Placement live", prompt: "Prompt added" };
+
+/** A marker's hit box (WCAG 2.5.8's 24px) and its readout's width, in pixels. */
+export const MARK_BOX = 24;
+export const MARK_READOUT_W = 220;
+
+/** Marks on a chart's days, by ISO date; a mark on a day the chart does not draw is left off. Ordered by day, then as given. */
+export function placeMarks(days: readonly string[], marks: readonly ChartMark[]): PlacedMark[] {
+  const at = new Map(days.map((d, i) => [d, i]));
+  return marks
+    .map((m, k) => ({ m, k, i: at.get(m.date) }))
+    .filter((x): x is { m: ChartMark; k: number; i: number } => x.i !== undefined)
+    .sort((a, b) => a.i - b.i || a.k - b.k)
+    .map(({ m, i }) => ({ ...m, i }));
+}
+
+/**
+ * Where a box `box` px wide centred on board x goes, kept inside the plot: as
+ * CSS, so it holds with JS off and at any width (`clamp` over the plot's own
+ * percentage), and as the pixels that CSS resolves to on a plot `plotW` wide,
+ * which the census checks. `w` is the board's viewBox width.
+ */
+export function markLeftCss(x: number, w: number, box: number): string {
+  return `clamp(0px, calc(${((x / w) * 100).toFixed(3)}% - ${box / 2}px), calc(100% - ${box}px))`;
+}
+export function markLeftPx(x: number, w: number, box: number, plotW: number): number {
+  return Math.min(Math.max(0, (x / w) * plotW - box / 2), plotW - box);
+}

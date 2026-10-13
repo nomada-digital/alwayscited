@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { READOUT_W, W, X0, X1, boardDayAt, boardX, dayStrip, readoutAt } from "./chart-board.ts";
+import { MARK_BOX, MARK_READOUT_W, READOUT_W, W, X0, X1, boardDayAt, boardX, dayStrip, markLeftCss, markLeftPx, placeMarks, readoutAt } from "./chart-board.ts";
 
 /**
  * The Overview board's readout and slide (8 Oct 2026, audit mobile-2 and its
@@ -85,4 +85,58 @@ test("a point along the plot picks the day whose button covers it", () => {
     assert.equal(boardDayAt(1, n), n - 1);
     assert.equal(boardDayAt(1.5, n), n - 1);
   }
+});
+
+/**
+ * 13 Oct 2026, DIY P4 (spec 10 section 4.1 row 8): work markers and their
+ * readouts stay inside the plot at every width each chart is drawn at - the
+ * Overview board from 880px to its 1056, the cluster chart from the phone's
+ * 560px break to its 1056 (its own geometry, X0 44 and X1 1040) - for every
+ * day of every range length, and the CSS the charts draw resolves to the
+ * pixels checked.
+ */
+test("work markers and their readouts stay inside the plot at every width", () => {
+  const boards = [
+    { name: "overview", x0: X0, x1: X1, widths: PLOTS },
+    { name: "cluster", x0: 44, x1: 1040, widths: Array.from({ length: W - 560 + 1 }, (_, i) => 560 + i) },
+  ];
+  let placed = 0;
+  for (const b of boards) {
+    for (const plotW of b.widths) {
+      for (const n of LENGTHS) {
+        for (let i = 0; i < n; i++) {
+          const x = b.x0 + i * (n > 1 ? (b.x1 - b.x0) / (n - 1) : 0);
+          for (const box of [MARK_BOX, MARK_READOUT_W]) {
+            const left = markLeftPx(x, W, box, plotW);
+            assert.ok(left >= 0 && left + box <= plotW, `${b.name} plot ${plotW}, day ${i + 1} of ${n}: a ${box}px box at ${left}`);
+            placed++;
+          }
+          // The marker's own box covers the day's line wherever it is not held in at an edge.
+          const hit = markLeftPx(x, W, MARK_BOX, plotW);
+          const line = (x / W) * plotW;
+          assert.ok(hit <= line && line <= hit + MARK_BOX, `${b.name} plot ${plotW}, day ${i + 1} of ${n}: the marker does not cover its day`);
+        }
+      }
+    }
+  }
+  assert.equal(placed, 2 * 236 * (PLOTS.length + (W - 560 + 1)), `${placed} placements checked`);
+  assert.equal(markLeftCss(528, W, MARK_BOX), "clamp(0px, calc(50.000% - 12px), calc(100% - 24px))");
+});
+
+test("marks are placed on the chart's days, by date; a mark on a day not drawn is left off", () => {
+  const days = ["2026-10-01", "2026-10-02", "2026-10-03"];
+  const marks = [
+    { date: "2026-10-03", kind: "done" as const, label: "Add Organization schema to your homepage" },
+    { date: "2026-09-30", kind: "started" as const, label: "Before the range" },
+    { date: "2026-10-01", kind: "placement" as const, label: "smallbizstack.example" },
+    { date: "2026-10-03", kind: "started" as const, label: "Pitch the round-up" },
+  ];
+  assert.deepEqual(
+    placeMarks(days, marks).map((m) => [m.i, m.kind]),
+    [
+      [0, "placement"],
+      [2, "done"],
+      [2, "started"],
+    ],
+  );
 });

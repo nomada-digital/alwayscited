@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { ClusterCard, ClusterPrompt } from "./cluster-figures.ts";
-import { neverNamedFacts, offPageOneFacts } from "./upgrade-facts.ts";
-import { pickPrompt, promptCopy } from "./upgrade-prompts.ts";
+import { neverNamedFacts, offPageOneFacts, offPageOneReadings, stalledFacts } from "./upgrade-facts.ts";
+import { pickPrompt, pickRow, promptCopy } from "./upgrade-prompts.ts";
 
 const r = (num: number, den: number) => ({ num, den, pct: den ? Math.round((100 * num) / den) : null });
 const prompt = (id: string, num: number, den: number, stoppedOn: string | null = null): ClusterPrompt => ({ id, text: id, angle: null, now: r(num, den), before: null, namedBy: [], daysChecked: 0, daysNamed: [], stoppedOn, fixed: den > 0 , pending: false});
@@ -97,4 +97,32 @@ test("the facts feed the rules: a tracked client with 3 never-named prompts is o
   // No cited host read: the "pages like" sentence is left out rather than invented.
   assert.ok(c.lead.startsWith("Getting placed on the pages they cite"));
   assert.equal(c.why, "Shown because 3 of your 4 prompts named you in none of their 60 answers this period.");
+});
+
+test("13 Oct 2026, DIY P4 - U6: a keyword's last 28 readings at #11 to #20, a day not read not being one", () => {
+  const serp = Array.from({ length: 40 }, (_, i) => ({ run_date: `2026-09-${String((i % 30) + 1).padStart(2, "0")}`, keyword_id: i < 30 ? "k1" : "k2", position: i < 8 ? 9 : i < 30 ? 14 : 3 }));
+  // k1 read on 30 days (1-30 Sep): the latest 28 are 3-30 Sep, 22 of them at #14 and 6 at #9.
+  assert.deepEqual(offPageOneReadings(serp, "k1"), { offPage1: 22, readings: 28 });
+  assert.deepEqual(offPageOneReadings(serp, "k2"), { offPage1: 0, readings: 10 });
+  assert.deepEqual(offPageOneReadings([...serp, { run_date: "2026-09-30", keyword_id: "k1", position: null }], "k1"), { offPage1: 22, readings: 28 }, "one reading a day");
+  assert.deepEqual(offPageOneReadings(serp, "k9"), { offPage1: 0, readings: 0 });
+});
+
+test("13 Oct 2026, DIY P4 - U4: opportunity items in Doing 21 days or more, since the latest of them", () => {
+  const today = "2026-09-30";
+  const items = [
+    { opportunity: true, doing: true, statusAt: "2026-09-01" },
+    { opportunity: true, doing: true, statusAt: "2026-09-09" },
+    { opportunity: true, doing: true, statusAt: "2026-09-05" },
+    { opportunity: true, doing: true, statusAt: "2026-09-10" }, // 20 days: not yet
+    { opportunity: false, doing: true, statusAt: "2026-08-01" }, // a schema fix, not an opportunity
+    { opportunity: true, doing: false, statusAt: "2026-08-01" }, // to do, not doing
+  ];
+  const s = stalledFacts(items, today)!;
+  assert.deepEqual(s, { items: 3, since: "2026-09-09" });
+  assert.equal(stalledFacts(items.slice(3), today), null);
+  // Fed to the rules: U4 on a tracked client.
+  const f = { tier: "tracked" as const, mode: "nomada" as const, state: "ok" as const, startedOn: "2026-08-01", today, hidden: new Set<never>(), stalled: s };
+  assert.equal(pickRow(f), "U4");
+  assert.equal(promptCopy("mentioned", f)!.title, "3 items have been in Doing for 3 weeks");
 });

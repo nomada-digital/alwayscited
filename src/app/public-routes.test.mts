@@ -70,6 +70,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/app/[client]/named": "every brand named in one client's tracked answers; private, same membership 404",
   // 1 Oct 2026, R144 (BRIEF-4 P4).
   "/app/[client]/cited": "every page cited in one client's tracked answers; private, same membership 404",
+  // 13 Oct 2026, DIY P4: AI visibility (spec 10 section 4.2), a new private page with the overview's rules.
+  "/app/[client]/ai": "one client's AI visibility by engine and by prompt; private, same membership 404",
   // 1 Oct 2026, R145 (BRIEF-4 P5).
   "/app/[client]/reports": "one client's monthly figures and CSV downloads; private, same membership 404",
   "/app/[client]/placements": "one client's placements and where the cluster stood; private, same membership 404, and a 404 for a client with no placed tier and no placement",
