@@ -186,19 +186,28 @@ export async function POST(req: Request) {
   // into a visitor turned away. But it is spend, on the free tool the two
   // ceilings above exist to bound, and unlogged it looked exactly like a domain
   // nobody had scanned before.
-  const { data: cached, error: cacheErr } = await db
-    .from("scans")
-    .select("public_token, brand_name, topic, topic_variants, market, status, engines")
-    .eq("domain", domain)
-    .eq("market", market)
-    .eq("status", "complete")
-    .eq("is_tracking_run", false)
-    .is("campaign_id", null)
-    .is("unlocked_at", null)
-    .gte("completed_at", cacheSince)
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  //
+  // A domain on app_settings.scan_cache_exempt_domains skips the cache
+  // altogether (Danny, 15 Oct 2026): a prospect's domain re-run to show a
+  // different category, prompts or market has to be a new reading, not the
+  // last one handed back. Every ceiling above still applied to get here.
+  const cacheExempt = settings.scan_cache_exempt_domains.includes(domain);
+  if (cacheExempt) console.log(`[scan] ${domain} is cache-exempt, so this runs fresh`);
+  const { data: cached, error: cacheErr } = cacheExempt
+    ? { data: null, error: null }
+    : await db
+        .from("scans")
+        .select("public_token, brand_name, topic, topic_variants, market, status, engines")
+        .eq("domain", domain)
+        .eq("market", market)
+        .eq("status", "complete")
+        .eq("is_tracking_run", false)
+        .is("campaign_id", null)
+        .is("unlocked_at", null)
+        .gte("completed_at", cacheSince)
+        .order("completed_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
   if (cacheErr) {
     console.warn(

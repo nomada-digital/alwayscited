@@ -59,6 +59,16 @@ export type Settings = {
    */
   coverage_ceiling_exempt_domains: string[];
   /**
+   * Domains the free scan's domain cache does not apply to (Danny, 15 Oct
+   * 2026), so a prospect's domain can be re-run with a different category,
+   * prompts or market instead of being handed the last reading of it. Every
+   * other ceiling still applies - the daily count, the dollar cap, the model
+   * call cap and the IP allowance - so this can only cost what those allow.
+   * Lowercased and de-duplicated on the way in; a domain is never typed into
+   * this repo, only into the row.
+   */
+  scan_cache_exempt_domains: string[];
+  /**
    * Domains refused on public forms on top of `work-email.ts`'s built-in list
    * (Danny, 8 Oct 2026), so one can be added without a deploy. Stored as
    * comma-separated text, empty by default; split by `parseBlockedExtra`.
@@ -81,6 +91,7 @@ export const SETTINGS_FALLBACK: Settings = {
   // turned off the first time it did.
   anthropic_calls_per_day: 2500,
   coverage_ceiling_exempt_domains: [],
+  scan_cache_exempt_domains: [],
   work_email_blocked_extra: [],
 };
 
@@ -239,6 +250,7 @@ export function mergeSettings(
     scan_engines_free: [...SETTINGS_FALLBACK.scan_engines_free],
     scan_engines_gated: [...SETTINGS_FALLBACK.scan_engines_gated],
     coverage_ceiling_exempt_domains: [...SETTINGS_FALLBACK.coverage_ceiling_exempt_domains],
+    scan_cache_exempt_domains: [...SETTINGS_FALLBACK.scan_cache_exempt_domains],
     work_email_blocked_extra: [...SETTINGS_FALLBACK.work_email_blocked_extra],
   };
 
@@ -264,7 +276,7 @@ export function mergeSettings(
       continue;
     }
 
-    if (key === "coverage_ceiling_exempt_domains") {
+    if (key === "coverage_ceiling_exempt_domains" || key === "scan_cache_exempt_domains") {
       out[key] = mergeDomainList(key, row.value, warn);
       continue;
     }
