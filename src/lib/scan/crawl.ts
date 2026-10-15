@@ -3,7 +3,7 @@ import "server-only";
 import { outboundLinks } from "../coverage/draft";
 
 import { checkHost } from "./address";
-import { decodeEntities, toProse } from "./prose";
+import { decodeEntities, stripNonProse, toProse } from "./prose";
 
 /** Paths worth reading beyond the homepage, in the order we prefer them. */
 const INTERESTING =
@@ -25,7 +25,40 @@ function pageRank(path: string): number {
   return 3;
 }
 
-const PAGE_BYTE_CAP = 200 * 1024;
+/**
+ * How much of a page is kept, measured after script, style, noscript, svg and
+ * comments are stripped - not how much is read.
+ *
+ * It was a cap on raw bytes until 15 Oct 2026, and on a Wix site that is a cap
+ * on CSS: thelabjamaica.com's first 300KB is inline style and script, its
+ * `<title>` is at byte 220,446 and its body at 309,232. The crawl read 200KB,
+ * kept nothing a person wrote, and found no links to follow. Page builders do
+ * this as a matter of course - Wix, Squarespace and their kind are a large
+ * share of the small firms who type their address in here.
+ */
+const PAGE_KEPT_CAP = 200 * 1024;
+
+/**
+ * The memory guard the old byte cap was for (see bodyUpTo): no page is read
+ * past this, whatever it is made of. Ten times the old cap, read once.
+ */
+const PAGE_RAW_CAP = 2 * 1024 * 1024;
+
+/** Raw bytes between measurements of what is kept, so the strip runs a few times per page, not per chunk. */
+const KEPT_CHECK_EVERY = 256 * 1024;
+
+/**
+ * Below this many characters of homepage prose, an about page is fetched
+ * whatever else is linked (Danny, 15 Oct 2026). A homepage that says little
+ * says it in a hero line and a slogan; the about page is where a small firm
+ * says what it does and for whom. It ranks last otherwise, by design - see
+ * pageRank - and on a thin homepage last is where it gets crowded out.
+ */
+const THIN_HOMEPAGE = 1_500;
+
+/** Tried directly when a thin homepage links no about page at all. */
+const ABOUT_GUESSES = ["/about", "/about-us"];
+
 const TOTAL_BUDGET_MS = 8_000;
 const MAX_EXTRA_PAGES = 6;
 
@@ -190,6 +223,60 @@ function decodeBody(bytes: Uint8Array, contentType: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+/** A streaming decoder for the declared charset, falling back to utf-8 as decodeBody does. */
+function decoderFor(contentType: string): TextDecoder {
+  const declared = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(contentType)?.[1];
+  if (declared) {
+    try {
+      return new TextDecoder(declared);
+    } catch {
+      // Not a label TextDecoder knows. utf-8 below.
+    }
+  }
+  return new TextDecoder();
+}
+
+/**
+ * The page with its non-prose blocks stripped, read until PAGE_KEPT_CAP of
+ * that is in hand or PAGE_RAW_CAP has been read, whichever comes first.
+ *
+ * Stripped here rather than only in toProse because the cap is the point: it
+ * has to measure what will be kept. The links sameHostLinks wants are tags,
+ * and tags survive the strip. Decoded as it streams, with `stream: true`, so a
+ * character straddling two chunks is not split; the reader is cancelled at the
+ * cap, so the transfer stops there as it did under bodyUpTo.
+ */
+async function readPage(body: ReadableStream<Uint8Array>, contentType: string): Promise<string> {
+  const reader = body.getReader();
+  const decoder = decoderFor(contentType);
+  let raw = "";
+  let bytes = 0;
+  let checkedAt = 0;
+  let finished = false;
+  try {
+    while (bytes < PAGE_RAW_CAP) {
+      const { done, value } = await reader.read();
+      if (done) {
+        finished = true;
+        break;
+      }
+      if (!value?.byteLength) continue;
+      const room = PAGE_RAW_CAP - bytes;
+      const chunk = value.byteLength > room ? value.subarray(0, room) : value;
+      raw += decoder.decode(chunk, { stream: true });
+      bytes += chunk.byteLength;
+      if (bytes - checkedAt >= KEPT_CHECK_EVERY) {
+        checkedAt = bytes;
+        if (stripNonProse(raw).length >= PAGE_KEPT_CAP) break;
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  if (finished) raw += decoder.decode();
+  return stripNonProse(raw).slice(0, PAGE_KEPT_CAP);
+}
+
 /**
  * Fetch one page, following redirects by hand so that every hop is checked.
  *
@@ -257,8 +344,7 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
     }
     if (!res.body) return { ok: true, html: "", url: current };
 
-    // The cap is on bytes, so a multi-byte character straddling it decodes to
-    // one replacement character at the very end of 200KB of prose.
+    // readPage strips and caps what is kept; see PAGE_KEPT_CAP.
     //
     // Wrapped, because the headers arriving is not the body arriving. The only
     // try/catch in here was around fetch(), which resolves as soon as the
@@ -275,7 +361,7 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
     // logged through describeAnthropicError and wrote a model-call debit for a
     // call that was never made.
     try {
-      return { ok: true, html: decodeBody(await bodyUpTo(res.body, PAGE_BYTE_CAP), type), url: current };
+      return { ok: true, html: await readPage(res.body, type), url: current };
     } catch {
       return FAILED_NETWORK;
     }
@@ -296,7 +382,7 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
  * the apex, and a relative href resolved a directory too high. Both halves are
  * the same argument, and it holds for both now.
  */
-function sameHostLinks(html: string, domain: string, base: string): string[] {
+function sameHostLinks(html: string, domain: string, base: string, thinHomepage: boolean): string[] {
   const out = new Set<string>();
   for (const m of html.matchAll(/href\s*=\s*["']([^"']+)["']/gi)) {
     /**
@@ -341,11 +427,34 @@ function sameHostLinks(html: string, domain: string, base: string): string[] {
     out.add(url.toString());
   }
   // Stable sort: within a rank, the order the links appear on the page.
-  return [...out]
+  const ranked = [...out]
     .map((u, i) => ({ u, i, r: pageRank(new URL(u).pathname) }))
     .sort((a, b) => a.r - b.r || a.i - b.i)
-    .map((x) => x.u)
-    .slice(0, MAX_EXTRA_PAGES);
+    .map((x) => x.u);
+  const picked = ranked.slice(0, MAX_EXTRA_PAGES);
+  if (!thinHomepage || picked.some(isAbout)) return picked;
+
+  // A thin homepage gets an about page whatever it ranks (see THIN_HOMEPAGE):
+  // the first one it links, or the usual addresses tried blind when it links
+  // none. A guess that 404s is dropped like any other failed extra read.
+  const linked = ranked.find(isAbout);
+  const about = linked ? [linked] : ABOUT_GUESSES.map((p) => new URL(p, base).toString());
+  return [...picked.slice(0, MAX_EXTRA_PAGES - about.length), ...about];
+}
+
+/** `<meta name="description">`, or og:description, in either attribute order; "" when neither is there. */
+function metaDescription(html: string): string {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    if (!/\b(?:name|property)\s*=\s*["'](?:og:)?description["']/i.test(tag)) continue;
+    const content = /\bcontent\s*=\s*"([^"]*)"|\bcontent\s*=\s*'([^']*)'/i.exec(tag);
+    const text = decodeEntities(content?.[1] ?? content?.[2] ?? "").replace(/\s+/g, " ").trim();
+    if (text) return text.slice(0, 500);
+  }
+  return "";
+}
+
+function isAbout(url: string): boolean {
+  return /\/about/i.test(new URL(url).pathname);
 }
 
 /**
@@ -450,8 +559,14 @@ export async function readSite(domain: string): Promise<string> {
       const prose = toProse(page);
       return prose ? "Page: " + url + "\n" + prose : "";
     };
-    const parts = [labelled(base, html)];
-    const links = sameHostLinks(html, domain, base);
+    // The meta description, where the homepage has one, ahead of its prose. It
+    // is a tag, so toProse drops it - and on a thin homepage it is often the one
+    // sentence that says what the firm does (15 Oct 2026: a Wix agency homepage
+    // whose copy was a slogan, and whose description named the business).
+    const description = metaDescription(html);
+    const home = labelled(base, html);
+    const parts = [description && home ? home.replace("\n", "\nDescription: " + description + "\n") : home];
+    const links = sameHostLinks(html, domain, base, toProse(html).length < THIN_HOMEPAGE);
 
     // Remaining pages share whatever is left of the budget, in parallel.
     //

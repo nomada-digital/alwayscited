@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { decodeEntities, toProse } from "./prose.ts";
+import { decodeEntities, stripNonProse, toProse } from "./prose.ts";
 
 /**
  * Every case here is something that has actually gone wrong in this file or
@@ -135,4 +135,39 @@ test("an empty or tag-only document is empty prose, not a crash", () => {
   // is a page that answered. This is the function that has to produce it.
   assert.equal(toProse(""), "");
   assert.equal(toProse("<html><head></head><body></body></html>"), "");
+});
+
+test("a block cut off before it closes carries nothing into the prose (15 Oct 2026)", () => {
+  // The defect: the crawl's cut landed inside an open <style>, the pair
+  // pattern needs the closing tag, and the CSS reached the brand read.
+  assert.equal(toProse("<p>Right Co</p><style>.a{width:100%}.b{display:flex"), "Right Co");
+  assert.equal(toProse("<p>Right Co</p><script>var a = 'Wrong Co'"), "Right Co");
+  assert.equal(toProse("<p>Right Co</p><noscript>Wrong Co"), "Right Co");
+  assert.equal(toProse("<p>Right Co</p><!-- Wrong Co"), "Right Co");
+  // A closed block before an open one: only the open one runs to the end.
+  assert.equal(toProse("<style>.x{}</style><p>Right Co</p><style>.y{"), "Right Co");
+  // svg closes itself as often as not, so an unclosed one is not a cut.
+  assert.equal(toProse('<svg viewBox="0 0 1 1"/><p>Right Co</p>'), "Right Co");
+});
+
+test("a page-builder homepage keeps its copy and its links once the CSS is stripped", () => {
+  // The shape that found it: hundreds of KB of inline style and script ahead
+  // of the title, the nav and every word of copy. Synthetic - no real domain
+  // in a fixture.
+  const css = "<style>" + ".a{width:100%;height:100%;display:block}".repeat(9_000) + "</style>";
+  const js = "<script>" + "window.x=function(){return 1};".repeat(4_000) + "</script>";
+  const page =
+    "<html><head>" + css + js + css + "<title>Example Studio | Creative Agency</title></head>" +
+    '<body><nav><a href="/aboutus">about us</a><a href="/services">services</a></nav>' +
+    "<h1>We build brands and create entertainment</h1></body></html>";
+  assert.ok(page.length > 600_000, "the page is the size that broke it");
+  assert.ok(page.indexOf("<title>") > 200 * 1024, "the title sits past the old raw cap");
+
+  const kept = stripNonProse(page);
+  assert.ok(kept.length < 2_000, "what is kept is the page, not its CSS");
+  assert.match(kept, /href="\/aboutus"/, "links survive the strip, so the crawl can follow them");
+  assert.equal(
+    toProse(page),
+    "Example Studio | Creative Agency about us services We build brands and create entertainment",
+  );
 });

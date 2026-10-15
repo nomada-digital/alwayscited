@@ -205,16 +205,38 @@ export function decodeEntities(input: string): string {
  * whatever prose followed it - the page's own text deleting the page's own
  * text. Keep the decode last.
  */
+/**
+ * The markup with every block that carries no prose taken out: script, style,
+ * noscript, svg and comments. Tags and their text stay, so links survive it.
+ *
+ * Exported because crawl.ts runs it while the page is still streaming in, and
+ * caps what is kept rather than what was read (15 Oct 2026).
+ *
+ * The defect, thelabjamaica.com on 15 Oct 2026. A Wix homepage is 800KB, and
+ * its first 300KB is inline CSS and JavaScript. The crawl kept the first 200KB
+ * of bytes, which ended inside an open `<style>`. The pair patterns below need
+ * the closing tag, so that block was never removed: 3,473 characters of CSS
+ * reached the brand read as the company's prose, cleared the too_thin check,
+ * and the title, the nav and every word of copy sat past the cut.
+ *
+ * So a block opened and never closed is dropped to the end of the string. A
+ * page cut mid-script is a page whose remainder is script, and keeping it is
+ * the one wrong answer. svg is left out of that rule: `<svg ... />` closes
+ * itself, and treating it as open would throw away the rest of the page.
+ */
+export function stripNonProse(html: string): string {
+  return html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(?:script|style|noscript)\b[\s\S]*$/i, " ")
+    .replace(/<!--[\s\S]*$/, " ");
+}
+
 export function toProse(html: string): string {
-  return decodeEntities(
-    html
-      .replace(/<script\b[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style\b[\s\S]*?<\/style>/gi, " ")
-      .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, " ")
-      .replace(/<svg\b[\s\S]*?<\/svg>/gi, " ")
-      .replace(/<!--[\s\S]*?-->/g, " ")
-      .replace(/<[^>]+>/g, " "),
-  )
+  return decodeEntities(stripNonProse(html).replace(/<[^>]+>/g, " "))
     // Collapsed after the decode, because `&nbsp;` and `&#10;` are whitespace
     // the page wrote and a run of them should read as one space like any other.
     .replace(/\s+/g, " ")

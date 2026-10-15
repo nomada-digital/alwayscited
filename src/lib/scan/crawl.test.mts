@@ -76,7 +76,9 @@ test("readSite resolves links against what answered, not against what it asked f
   // later edit cannot quietly reintroduce the apex by passing something else.
   assert.match(
     SRC,
-    /sameHostLinks\(\s*html\s*,\s*domain\s*,\s*base\s*\)/,
+    // A fourth argument, whether the homepage is thin, joined on 15 Oct 2026.
+    // base is still the third, which is the fact this holds.
+    /sameHostLinks\(\s*html\s*,\s*domain\s*,\s*base\s*[,)]/,
     "sameHostLinks must resolve against base",
   );
 });
@@ -107,4 +109,46 @@ test("an interesting link is recognised by its resolved path, not by its raw hre
     /INTERESTING\.test\(\s*url\.pathname\s*\)/,
     "INTERESTING must be tested against the resolved pathname",
   );
+});
+
+test("the page cap measures what is kept, not what is read (15 Oct 2026)", () => {
+  /**
+   * The defect. getText kept the first 200KB of raw bytes. On a Wix homepage
+   * that is all inline CSS and script - the title sat at byte 220,446 and the
+   * body at 309,232 on the site that found it - so the cut landed inside an
+   * open <style>, the brand read was handed CSS as the company's prose, and no
+   * nav link was ever seen to follow.
+   *
+   * getText now reads through readPage, which strips as it streams and caps
+   * the stripped result. bodyUpTo stays for guardedRead, whose callers want
+   * bytes as they came (robots.txt, llms.txt); fetch.test.mts holds that.
+   */
+  const getText = SRC.slice(SRC.indexOf("async function getText"), SRC.indexOf("function sameHostLinks"));
+  assert.match(getText, /await readPage\(res\.body, type\)/, "getText reads through readPage");
+  assert.doesNotMatch(getText, /bodyUpTo\(/, "getText must not cap raw bytes");
+
+  const readPage = SRC.slice(SRC.indexOf("async function readPage"), SRC.indexOf("async function getText"));
+  assert.match(readPage, /stripNonProse\(raw\)\.length >= PAGE_KEPT_CAP/, "the stop condition is on kept text");
+  assert.match(readPage, /while \(bytes < PAGE_RAW_CAP\)/, "a raw ceiling still bounds the read");
+  assert.match(readPage, /reader\.cancel\(\)/, "the transfer is stopped at the cap");
+  assert.match(SRC, /const PAGE_RAW_CAP = 2 \* 1024 \* 1024;/);
+});
+
+test("a thin homepage always gets an about page (Danny, 15 Oct 2026)", () => {
+  assert.match(SRC, /sameHostLinks\(html, domain, base, toProse\(html\)\.length < THIN_HOMEPAGE\)/);
+  const links = SRC.slice(SRC.indexOf("function sameHostLinks"), SRC.indexOf("function isAbout"));
+  assert.match(links, /if \(!thinHomepage \|\| picked\.some\(isAbout\)\) return picked;/);
+  assert.match(links, /ranked\.find\(isAbout\)/, "a linked about page is preferred to a guess");
+  assert.match(links, /ABOUT_GUESSES\.map/, "and guessed when none is linked");
+  assert.match(links, /picked\.slice\(0, MAX_EXTRA_PAGES - about\.length\)/, "never more than the cap");
+});
+
+test("the homepage's meta description reaches the brand read (15 Oct 2026)", () => {
+  // A tag, so toProse drops it; on a thin homepage it is often the one
+  // sentence that says what the firm does.
+  assert.match(SRC, /const description = metaDescription\(html\);/);
+  assert.match(SRC, /"\\nDescription: " \+ description/);
+  const fn = SRC.slice(SRC.indexOf("function metaDescription"), SRC.indexOf("function isAbout"));
+  assert.match(fn, /\(\?:og:\)\?description/, "og:description counts too");
+  assert.match(fn, /decodeEntities\(/, "decoded like the prose beside it");
 });
