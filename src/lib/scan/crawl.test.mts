@@ -42,7 +42,9 @@ test("a successful fetch reports the address that answered", () => {
   // merely unfixed.
   assert.match(
     SRC,
-    /\{\s*ok:\s*true;\s*html:\s*string;\s*url:\s*string\s*\}/,
+    // `stop` and `scripts` joined on 16 Oct 2026: how the read ended, which a
+    // too_thin is logged with. `url` is still required, which is the fact held.
+    /\{\s*ok:\s*true;\s*html:\s*string;\s*url:\s*string;\s*stop:\s*ReadStop;\s*scripts:\s*number\s*\}/,
     "the ok variant of Fetched must carry the url that answered",
   );
 
@@ -127,11 +129,26 @@ test("the page cap measures what is kept, not what is read (15 Oct 2026)", () =>
   assert.match(getText, /await readPage\(res\.body, type\)/, "getText reads through readPage");
   assert.doesNotMatch(getText, /bodyUpTo\(/, "getText must not cap raw bytes");
 
-  const readPage = SRC.slice(SRC.indexOf("async function readPage"), SRC.indexOf("async function getText"));
+  // readPage moved to page-read.ts on 16 Oct 2026, so page-read.test.mts can
+  // stream a real page through it; the raw ceiling went from 2MB to 3MB and a
+  // per-page clock joined it. The behaviour is tested there; this holds the shape.
+  const PR = read("src/lib/scan/page-read.ts");
+  const readPage = PR.slice(PR.indexOf("export async function readPage"), PR.indexOf("export function pageTitle"));
   assert.match(readPage, /stripNonProse\(raw\)\.length >= PAGE_KEPT_CAP/, "the stop condition is on kept text");
   assert.match(readPage, /while \(bytes < PAGE_RAW_CAP\)/, "a raw ceiling still bounds the read");
   assert.match(readPage, /reader\.cancel\(\)/, "the transfer is stopped at the cap");
-  assert.match(SRC, /const PAGE_RAW_CAP = 2 \* 1024 \* 1024;/);
+  assert.match(readPage, /Promise\.race\(\[reader\.read\(\), timeUp\]\)/, "and a clock");
+  assert.match(PR, /export const PAGE_RAW_CAP = 3 \* 1024 \* 1024;/);
+});
+
+test("a site with no title, no description and no body text is refused, not reported (16 Oct 2026)", () => {
+  // Checked before the brand read, which is what picks the keyword: a page
+  // that gave us nothing never reaches it.
+  const site = SRC.slice(SRC.indexOf("export async function readSite"), SRC.indexOf("export type GuardedRead"));
+  const gate = site.indexOf("const thin = thinReason(");
+  assert.ok(gate > 0, "readSite judges what it read");
+  assert.match(site, /if \(thin\) throw new UnreachableDomain\(domain, "too_thin", undefined, \{ detail: thin, url: base \}\);/);
+  assert.ok(gate < site.indexOf("return text;"), "before anything is returned");
 });
 
 test("a thin homepage always gets an about page (Danny, 15 Oct 2026)", () => {
@@ -148,7 +165,9 @@ test("the homepage's meta description reaches the brand read (15 Oct 2026)", () 
   // sentence that says what the firm does.
   assert.match(SRC, /const description = metaDescription\(html\);/);
   assert.match(SRC, /"\\nDescription: " \+ description/);
-  const fn = SRC.slice(SRC.indexOf("function metaDescription"), SRC.indexOf("function isAbout"));
+  // metaDescription moved to page-read.ts on 16 Oct 2026; page-read.test.mts runs it.
+  const PR = read("src/lib/scan/page-read.ts");
+  const fn = PR.slice(PR.indexOf("export function metaDescription"), PR.indexOf("export function bodyText"));
   assert.match(fn, /\(\?:og:\)\?description/, "og:description counts too");
   assert.match(fn, /decodeEntities\(/, "decoded like the prose beside it");
 });

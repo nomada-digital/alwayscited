@@ -4,6 +4,7 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { describeAnthropicError, QUESTION_COUNT, readBrand, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
 import { checkCeilings } from "@/lib/scan/ceilings";
 import { type ReadFailure, readSite, UnreachableDomain } from "@/lib/scan/crawl";
+import type { ThinReason } from "@/lib/scan/page-read";
 import { isMarket, isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
 import { readRankingFootprint } from "@/lib/scan/dataforseo";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
@@ -35,7 +36,7 @@ function fail(status: number, code: string, message: string) {
  */
 const SITE_READ_FAILURE: Record<
   ReadFailure,
-  (domain: string, status?: number) => { http: number; code: string; message: string }
+  (domain: string, status?: number, detail?: ThinReason) => { http: number; code: string; message: string }
 > = {
   dns: (d) => ({
     http: 422,
@@ -72,11 +73,26 @@ const SITE_READ_FAILURE: Record<
     code: "not_public",
     message: `${d} does not resolve to a public web server, so there is nothing for us to read.`,
   }),
-  too_thin: (d) => ({
+  /**
+   * Said plainly, and said instead of a report (16 Oct 2026). On 15 Oct a Wix
+   * homepage came back as CSS, cleared the old check and was shown as a normal
+   * report built from nothing - the worst answer there is, because it looks
+   * like a real one. The cause is in the sentence where we know it.
+   */
+  too_thin: (d, _status, detail) => ({
     http: 502,
     code: "too_little_text",
-    message: `We reached ${d} but found too little text to read. If the page loads its words with JavaScript, that is the likely cause.`,
+    message:
+      `We reached ${d} but couldn't read this site's content, so we haven't produced a report rather than show you an empty one. ` +
+      THIN_CAUSE[detail ?? "empty"],
   }),
+};
+
+const THIN_CAUSE: Record<ThinReason, string> = {
+  js_only: "The page seems to load its words with JavaScript, which our reader does not run.",
+  raw_cap: "The page is too large for our reader to reach its text.",
+  time: "The page was too slow to send its text. Please try again in a moment.",
+  empty: "We found no title, description or body text on it.",
 };
 
 export async function POST(req: Request) {
@@ -253,9 +269,10 @@ export async function POST(req: Request) {
       // step one - anything behind a WAF, anything slower than the budget -
       // was indistinguishable in the log from people mistyping a domain.
       console.warn(
-        `[scan] site read failed for ${domain}: ${err.reason}${err.status ? ` ${err.status}` : ""}`,
+        `[scan] site read failed for ${domain}: ${err.reason}${err.status ? ` ${err.status}` : ""}` +
+          `${err.detail ? ` (${err.detail})` : ""}${err.url ? ` url=${err.url}` : ""}`,
       );
-      const told = SITE_READ_FAILURE[err.reason](domain, err.status);
+      const told = SITE_READ_FAILURE[err.reason](domain, err.status, err.detail);
       return fail(told.http, told.code, told.message);
     }
     // Logged rather than swallowed. These two failures look identical to a

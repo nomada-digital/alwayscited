@@ -3,7 +3,8 @@ import "server-only";
 import { outboundLinks } from "../coverage/draft";
 
 import { checkHost } from "./address";
-import { decodeEntities, stripNonProse, toProse } from "./prose";
+import { bodyText, metaDescription, type ReadStop, readPage, type ThinReason, thinReason, whyThin } from "./page-read";
+import { decodeEntities, toProse } from "./prose";
 
 /** Paths worth reading beyond the homepage, in the order we prefer them. */
 const INTERESTING =
@@ -24,28 +25,6 @@ function pageRank(path: string): number {
   if (/case-stud|our-work|work|portfolio|results|clients/i.test(path)) return 2;
   return 3;
 }
-
-/**
- * How much of a page is kept, measured after script, style, noscript, svg and
- * comments are stripped - not how much is read.
- *
- * It was a cap on raw bytes until 15 Oct 2026, and on a Wix site that is a cap
- * on CSS: thelabjamaica.com's first 300KB is inline style and script, its
- * `<title>` is at byte 220,446 and its body at 309,232. The crawl read 200KB,
- * kept nothing a person wrote, and found no links to follow. Page builders do
- * this as a matter of course - Wix, Squarespace and their kind are a large
- * share of the small firms who type their address in here.
- */
-const PAGE_KEPT_CAP = 200 * 1024;
-
-/**
- * The memory guard the old byte cap was for (see bodyUpTo): no page is read
- * past this, whatever it is made of. Ten times the old cap, read once.
- */
-const PAGE_RAW_CAP = 2 * 1024 * 1024;
-
-/** Raw bytes between measurements of what is kept, so the strip runs a few times per page, not per chunk. */
-const KEPT_CHECK_EVERY = 256 * 1024;
 
 /**
  * Below this many characters of homepage prose, an about page is fetched
@@ -109,12 +88,22 @@ export class UnreachableDomain extends Error {
   readonly reason: ReadFailure;
   /** The status it refused us with, where there was one. */
   readonly status?: number;
+  /**
+   * For a too_thin, why the page gave us nothing (16 Oct 2026): the raw
+   * ceiling, the clock, a page rendered in the browser, or a page with nothing
+   * in it. Logged, and chosen between in what the visitor is told.
+   */
+  readonly detail?: ThinReason;
+  /** The address that answered, where one did. Logged beside the reason. */
+  readonly url?: string;
 
-  constructor(domain: string, reason: ReadFailure, status?: number) {
-    super(`could not read ${domain}: ${reason}`);
+  constructor(domain: string, reason: ReadFailure, status?: number, more?: { detail?: ThinReason; url?: string }) {
+    super(`could not read ${domain}: ${reason}${more?.detail ? ` (${more.detail})` : ""}`);
     this.name = "UnreachableDomain";
     this.reason = reason;
     this.status = status;
+    this.detail = more?.detail;
+    this.url = more?.url;
   }
 }
 
@@ -142,7 +131,7 @@ type Fetched =
    * assembled in steps, where a later step invalidates a value an earlier one
    * produced and nothing carries the correction forward.
    */
-  | { ok: true; html: string; url: string }
+  | { ok: true; html: string; url: string; stop: ReadStop; scripts: number }
   | { ok: false; why: "status"; status: number }
   | { ok: false; why: "not_html" }
   | { ok: false; why: "private" }
@@ -155,7 +144,10 @@ const FAILED_PRIVATE: Fetched = { ok: false, why: "private" };
 const FAILED_NOT_HTML: Fetched = { ok: false, why: "not_html" };
 
 /**
- * The first PAGE_BYTE_CAP bytes, and no more of them read than that.
+ * The first `cap` bytes, and no more of them read than that. guardedRead's
+ * reader, for the DIY platform, whose callers want the page as it came -
+ * scripts included, because JSON-LD lives in one. The scan reads through
+ * readPage in page-read.ts instead.
  *
  * `await res.arrayBuffer()` and then slicing capped the *decode* and not the
  * read: the whole response was pulled into memory first, so the cap bounded
@@ -223,60 +215,6 @@ function decodeBody(bytes: Uint8Array, contentType: string): string {
   return new TextDecoder().decode(bytes);
 }
 
-/** A streaming decoder for the declared charset, falling back to utf-8 as decodeBody does. */
-function decoderFor(contentType: string): TextDecoder {
-  const declared = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(contentType)?.[1];
-  if (declared) {
-    try {
-      return new TextDecoder(declared);
-    } catch {
-      // Not a label TextDecoder knows. utf-8 below.
-    }
-  }
-  return new TextDecoder();
-}
-
-/**
- * The page with its non-prose blocks stripped, read until PAGE_KEPT_CAP of
- * that is in hand or PAGE_RAW_CAP has been read, whichever comes first.
- *
- * Stripped here rather than only in toProse because the cap is the point: it
- * has to measure what will be kept. The links sameHostLinks wants are tags,
- * and tags survive the strip. Decoded as it streams, with `stream: true`, so a
- * character straddling two chunks is not split; the reader is cancelled at the
- * cap, so the transfer stops there as it did under bodyUpTo.
- */
-async function readPage(body: ReadableStream<Uint8Array>, contentType: string): Promise<string> {
-  const reader = body.getReader();
-  const decoder = decoderFor(contentType);
-  let raw = "";
-  let bytes = 0;
-  let checkedAt = 0;
-  let finished = false;
-  try {
-    while (bytes < PAGE_RAW_CAP) {
-      const { done, value } = await reader.read();
-      if (done) {
-        finished = true;
-        break;
-      }
-      if (!value?.byteLength) continue;
-      const room = PAGE_RAW_CAP - bytes;
-      const chunk = value.byteLength > room ? value.subarray(0, room) : value;
-      raw += decoder.decode(chunk, { stream: true });
-      bytes += chunk.byteLength;
-      if (bytes - checkedAt >= KEPT_CHECK_EVERY) {
-        checkedAt = bytes;
-        if (stripNonProse(raw).length >= PAGE_KEPT_CAP) break;
-      }
-    }
-  } finally {
-    await reader.cancel().catch(() => {});
-  }
-  if (finished) raw += decoder.decode();
-  return stripNonProse(raw).slice(0, PAGE_KEPT_CAP);
-}
-
 /**
  * Fetch one page, following redirects by hand so that every hop is checked.
  *
@@ -342,9 +280,9 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
       await res.body?.cancel().catch(() => {});
       return FAILED_NOT_HTML;
     }
-    if (!res.body) return { ok: true, html: "", url: current };
+    if (!res.body) return { ok: true, html: "", url: current, stop: "end", scripts: 0 };
 
-    // readPage strips and caps what is kept; see PAGE_KEPT_CAP.
+    // readPage strips and caps what is kept; see PAGE_KEPT_CAP in page-read.ts.
     //
     // Wrapped, because the headers arriving is not the body arriving. The only
     // try/catch in here was around fetch(), which resolves as soon as the
@@ -361,7 +299,8 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
     // logged through describeAnthropicError and wrote a model-call debit for a
     // call that was never made.
     try {
-      return { ok: true, html: await readPage(res.body, type), url: current };
+      const page = await readPage(res.body, type);
+      return { ok: true, html: page.html, url: current, stop: page.stop, scripts: page.scripts };
     } catch {
       return FAILED_NETWORK;
     }
@@ -442,17 +381,6 @@ function sameHostLinks(html: string, domain: string, base: string, thinHomepage:
   return [...picked.slice(0, MAX_EXTRA_PAGES - about.length), ...about];
 }
 
-/** `<meta name="description">`, or og:description, in either attribute order; "" when neither is there. */
-function metaDescription(html: string): string {
-  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
-    if (!/\b(?:name|property)\s*=\s*["'](?:og:)?description["']/i.test(tag)) continue;
-    const content = /\bcontent\s*=\s*"([^"]*)"|\bcontent\s*=\s*'([^']*)'/i.exec(tag);
-    const text = decodeEntities(content?.[1] ?? content?.[2] ?? "").replace(/\s+/g, " ").trim();
-    if (text) return text.slice(0, 500);
-  }
-  return "";
-}
-
 function isAbout(url: string): boolean {
   return /\/about/i.test(new URL(url).pathname);
 }
@@ -528,6 +456,8 @@ export async function readSite(domain: string): Promise<string> {
     if (where === "unresolved") throw failureFor(domain, controller.signal, null);
 
     let html: string | null = null;
+    // How the homepage read stopped, for the reason a too_thin is logged with.
+    let homeRead: { stop: ReadStop; scripts: number } = { stop: "end", scripts: 0 };
     let base = `https://${domain}/`;
     let firstFailure: Exclude<Fetched, { ok: true }> | null = null;
 
@@ -536,6 +466,7 @@ export async function readSite(domain: string): Promise<string> {
       const got = await getText(url, controller.signal, domain);
       if (got.ok) {
         html = got.html;
+        homeRead = { stop: got.stop, scripts: got.scripts };
         // The address that answered, not the one we asked for. See Fetched.
         base = got.url;
         break;
@@ -579,12 +510,27 @@ export async function readSite(domain: string): Promise<string> {
     const extra = await Promise.allSettled(links.map((u) => getText(u, controller.signal, domain)));
     // Each page headed with its address, so the brand read can tell a case
     // study from the homepage. `links` and `extra` share an index.
+    let bodyChars = bodyText(html).length;
     extra.forEach((page, i) => {
-      if (page.status === "fulfilled" && page.value.ok) parts.push(labelled(links[i], page.value.html));
+      if (page.status !== "fulfilled" || !page.value.ok) return;
+      parts.push(labelled(links[i], page.value.html));
+      bodyChars += bodyText(page.value.html).length;
     });
 
+    /**
+     * Fail loudly rather than build a report from nothing (16 Oct 2026). No
+     * title, no meta description and under 200 characters of body text across
+     * every page read is a site we reached and could not read, and the brand
+     * read - which picks the keyword every question is built on - is never
+     * handed it. The measure is body text, not `text` below: that carries the
+     * "Page: <url>" labels, and on 15 Oct the CSS that got past the cap counted
+     * towards it too.
+     */
+    const thin = thinReason({ html, ...homeRead }, bodyChars);
+    if (thin) throw new UnreachableDomain(domain, "too_thin", undefined, { detail: thin, url: base });
+
     const text = parts.filter(Boolean).join("\n\n").slice(0, 60_000);
-    if (text.length < 200) throw new UnreachableDomain(domain, "too_thin");
+    if (text.length < 200) throw new UnreachableDomain(domain, "too_thin", undefined, { detail: whyThin(homeRead), url: base });
     return text;
   } finally {
     clearTimeout(timer);
