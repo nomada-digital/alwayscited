@@ -347,6 +347,16 @@ test("every own-domain URL in the structured data is a real route", (t) => {
       JSON.parse(readFileSync(join(BUILD_DIR, "app-path-routes-manifest.json"), "utf8")) as Record<string, string>,
     ),
   );
+  // 16 Oct 2026: the manifest above names a dynamic route by its pattern
+  // (`/case-studies/[id]`, `/blog/[slug]`), so the page a feed-published study
+  // or hub blog post prerenders to was "not a route" while the build was
+  // serving it - the first published case study tripped this before any hub
+  // post existed. A path the build prerendered is a route it serves; read them
+  // off the prerender manifest, exact paths only, nothing pattern-matched.
+  const prerendered = Object.keys(
+    (JSON.parse(readFileSync(join(BUILD_DIR, "prerender-manifest.json"), "utf8")) as { routes: Record<string, unknown> }).routes,
+  );
+  for (const r of prerendered) routes.add(r);
 
   const pages: Page[] = sweptPages();
   const bad: string[] = [];

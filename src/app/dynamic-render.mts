@@ -147,6 +147,18 @@ export const STATES: Record<string, State> = {
     urls: [],
     blocked: "renders only a study published on the agency hub; with none published it 404s, and the not-found page is swept under its own name",
   },
+  // 16 Oct 2026: posts published from the agency hub's CMS, read from its feed
+  // (lib/hub-posts.ts). None is live yet, so the route has no URL to render;
+  // once one is, it is prerendered and swept as a page, like a case study.
+  "/blog/[slug]": {
+    urls: [],
+    blocked: "renders only a post published on the agency hub; with none published it 404s, and the not-found page is swept under its own name",
+  },
+  // Its draft preview: needs a post's preview key, which only the hub holds. Noindex, and a wrong key 404s.
+  "/blog-preview/[slug]/[key]": {
+    urls: [],
+    blocked: "needs an unpublished hub post and its preview key, which only the agency hub can read",
+  },
   "/coverage-check/[token]": {
     urls: [],
     blocked: "needs a campaign row and its token; 404s without a database",

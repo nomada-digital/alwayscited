@@ -5,6 +5,7 @@ import { ROBOTS_AGENTS } from "@/config/robots-agents";
 import { appHost, appOrigin, internalPath, isAppHost, stripPrefix } from "@/lib/app-host";
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
+import { previewPath } from "@/lib/hub-preview";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -138,6 +139,14 @@ export function proxy(request: NextRequest) {
       // appOrigin: https for the real host, http for app.localhost in a local run.
       return NextResponse.redirect(new URL(`${bare}${search}`, appOrigin(request.nextUrl.origin)), 308);
     }
+  }
+
+  // 16 Oct 2026: a hub post's draft link, /blog/<slug>?preview=<key>, renders its preview route, never indexed.
+  const preview = previewPath(pathname, request.nextUrl.searchParams.get("preview"));
+  if (preview) {
+    const res = NextResponse.rewrite(new URL(preview, request.url));
+    res.headers.set("x-robots-tag", "noindex, nofollow");
+    return res;
   }
 
   return NextResponse.next();

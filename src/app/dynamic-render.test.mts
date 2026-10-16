@@ -176,6 +176,10 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
   // Nine since 4 Oct 2026: /case-studies/[id], studies published from the
   // Nomada agency hub. Not auth: it has no URL until one is published, and
   // then it is prerendered and swept like any page.
+  // Eleven since 16 Oct 2026: /blog/[slug], posts published from the agency
+  // hub's CMS - same reason as the case studies, no URL until one is live -
+  // and its draft preview /blog-preview/[slug]/[key], which needs a preview
+  // key only the hub holds.
   assert.deepEqual(blocked, [
     "/admin/emails",
     "/admin/funnel",
@@ -183,6 +187,8 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/admin/tracking",
     "/admin/tracking/[client]/placements",
     "/admin/tracking/usage",
+    "/blog-preview/[slug]/[key]",
+    "/blog/[slug]",
     "/case-studies/[id]",
     "/coverage-check/[token]",
     "/scan/[token]",

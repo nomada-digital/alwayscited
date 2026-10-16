@@ -46,7 +46,8 @@ import { ROBOTS_AGENTS } from "@/config/robots-agents";
  * `/checkout` is an order in progress (R91, 29 Sep 2026): the order form and,
  * after payment, its confirmation. Closed the same way as `/app`.
  */
-const CLOSED = ["/scan/", "/coverage-check/", "/api/", "/admin/", "/app", "/checkout"];
+// `/blog-preview/` (16 Oct 2026) is a hub blog post's draft, reachable only by its preview key.
+const CLOSED = ["/scan/", "/coverage-check/", "/blog-preview/", "/api/", "/admin/", "/app", "/checkout"];
 
 // The named crawlers, shared with the dashboard host's robots.txt in proxy.ts (8 Oct 2026).
 const AGENTS = ROBOTS_AGENTS;

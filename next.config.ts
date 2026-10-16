@@ -129,6 +129,17 @@ const APP_HOSTNAME = (process.env.APP_HOST ?? "").trim().toLowerCase().split(":"
 
 const nextConfig: NextConfig = {
   /**
+   * 16 Oct 2026: the one remote image source - the agency hub's blog-images
+   * bucket, for posts published from it (lib/hub-posts.ts HUB_IMAGE_ROOT).
+   * Served through next/image, so the browser only ever loads them from this
+   * origin and the CSP's img-src stays 'self' blob: data:.
+   */
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "qpsrvmnmtozvailsyqqz.supabase.co", port: "", pathname: "/storage/v1/object/public/blog-images/**", search: "" },
+    ],
+  },
+  /**
    * Off because it was shipping a stale stylesheet to production.
    *
    * Next 16.3 puts content-addressed assets under /_next/static/immutable/,
@@ -254,6 +265,8 @@ const nextConfig: NextConfig = {
       { source: "/api/:path*", headers: [noIndex] },
       { source: "/scan/:path+", headers: [noIndex] },
       { source: "/coverage-check/:path+", headers: [noIndex] },
+      // A hub blog post's draft, read by its preview key (16 Oct 2026, lib/hub-posts.ts).
+      { source: "/blog-preview/:path+", headers: [noIndex] },
       { source: "/admin/:path*", headers: [noIndex] },
       // The client dashboard (T3, 29 Sep 2026). `:path*` so /app itself is covered.
       { source: "/app/:path*", headers: [noIndex] },

@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import { OG_IMAGE } from "@/config/og";
 import Link from "next/link";
 
-import { formatPostDate, POSTS, type PostKind } from "@/config/posts";
+import { formatPostDate, postBySlug, POSTS } from "@/config/posts";
 import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import { ORG_REF, ld } from "@/config/schema";
+import { listed, publishedHubPosts } from "@/lib/hub-posts";
 
 /**
  * The writing index, from BlogIndex.dc.html.
@@ -64,9 +65,14 @@ export default async function BlogIndexPage({
   searchParams: Promise<{ kind?: string }>;
 }) {
   const { kind } = await searchParams;
-  const kinds = Array.from(new Set(POSTS.map((p) => p.kind))) as PostKind[];
+  // The registered posts and the ones published from the agency hub (lib/hub-posts.ts, 16 Oct 2026), newest
+  // first; a stable sort keeps the registry's order on a tie, and a hub slug a registered post already uses is
+  // that post's, not a second card.
+  const hub = (await publishedHubPosts()).filter((p) => !postBySlug(p.slug)).map(listed);
+  const posts = [...POSTS, ...hub].sort((a, b) => b.date.localeCompare(a.date));
+  const kinds = Array.from(new Set(posts.map((p) => p.kind)));
   const active = kinds.find((k) => k === kind) ?? null;
-  const shown = active ? POSTS.filter((p) => p.kind === active) : POSTS;
+  const shown = active ? posts.filter((p) => p.kind === active) : posts;
   const lead = shown[0];
   const rest = shown.slice(1);
 

@@ -100,6 +100,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/scan": "the GET form target, noindex and deliberately headerless - see HEADERLESS_ON_PURPOSE",
   "/scan/[token]": "somebody's own scan result, reachable only by holding the token",
   "/coverage-check/[token]": "somebody's own campaign reading, reachable only by holding the token",
+  // 16 Oct 2026: a hub blog post before it is live (lib/hub-posts.ts), reached from the agency hub's preview link.
+  "/blog-preview/[slug]/[key]": "an unpublished blog post, reachable only by holding the preview key the agency hub issues",
 };
 
 /**

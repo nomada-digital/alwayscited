@@ -118,8 +118,29 @@ function schemaText(value: unknown): string | undefined {
  */
 function postSlugs(): string[] {
   return readdirSync(join("src", "app", "blog"), { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    // 16 Oct 2026: `[slug]` is the route for posts published from the agency
+    // hub (lib/hub-posts.ts), not a post. Its posts have no directory of their
+    // own; they are read off the prerender instead, by hubPrerenders below.
+    .filter((e) => e.isDirectory() && !e.name.startsWith("["))
     .map((e) => e.name)
+    .sort();
+}
+
+/**
+ * Hub posts that prerendered: every blog/<slug>.html the build wrote that no
+ * post directory accounts for. None while none is published, and each one
+ * then joins the first test below, so a hub post's node is held to the page's
+ * description by the same check as the four written in TSX. The second test
+ * reads source per directory and has nothing to read for these: both of a hub
+ * post's surfaces come from `description()` in `blog/[slug]/post.tsx`.
+ */
+function hubPrerenders(): string[] {
+  const dir = join(PRERENDER, "blog");
+  if (!existsSync(dir)) return [];
+  const written = new Set(postSlugs());
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".html") && !written.has(f.slice(0, -5)))
+    .map((f) => f.slice(0, -5))
     .sort();
 }
 
@@ -131,8 +152,10 @@ test("every BlogPosting node describes the post with the description the page pu
 
   const slugs = postSlugs();
   assert.ok(slugs.length >= 3, "no post directories found - the walk has stopped matching");
+  const hub = hubPrerenders();
+  t.diagnostic(`${slugs.length} written posts, ${hub.length} from the hub`);
 
-  for (const slug of slugs) {
+  for (const slug of [...slugs, ...hub]) {
     const file = join(PRERENDER, "blog", slug + ".html");
     assert.ok(existsSync(file), slug + " has no prerender at blog/" + slug + ".html");
     const html = readFileSync(file, "utf8");

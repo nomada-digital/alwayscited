@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 
 import { SITE_URL as BASE_URL } from "@/config/schema";
+import { postBySlug } from "@/config/posts";
+import { publishedHubPosts } from "@/lib/hub-posts";
 
 /**
  * The sitemap.
@@ -102,11 +104,25 @@ const ENTRIES: Entry[] = [
   ["/contact", "2026-09-20", "yearly", 0.5],
 ];
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  return ENTRIES.map(([path, lastModified, changeFrequency, priority]) => ({
+/**
+ * 16 Oct 2026: posts published from the agency hub (lib/hub-posts.ts) join the
+ * list from its feed, dated by the post's own updated or published date - a
+ * date the hub records, not a build time. Re-read with the feed, so a post is
+ * offered within five minutes of going live and dropped when it comes down.
+ * They are not in ENTRIES, so `llms.test.mts`, which compares the two typed
+ * lists, is untouched; llms.txt adds the same posts from the same feed.
+ */
+export const revalidate = 300;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const typed: MetadataRoute.Sitemap = ENTRIES.map(([path, lastModified, changeFrequency, priority]) => ({
     url: BASE_URL + path,
     lastModified: new Date(lastModified),
     changeFrequency,
     priority,
   }));
+  const hub: MetadataRoute.Sitemap = (await publishedHubPosts())
+    .filter((p) => !postBySlug(p.slug))
+    .map((p) => ({ url: BASE_URL + "/blog/" + p.slug, lastModified: new Date(p.updated ?? p.date), changeFrequency: "monthly", priority: 0.6 }));
+  return [...typed, ...hub];
 }

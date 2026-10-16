@@ -32,7 +32,7 @@ export const H2 = ({ id, children }: { id?: string; children: React.ReactNode })
   </h2>
 );
 
-const BODY: React.CSSProperties = { fontSize: "16px", lineHeight: 1.75, color: "#3f4451" };
+export const BODY: React.CSSProperties = { fontSize: "16px", lineHeight: 1.75, color: "#3f4451" };
 
 export const P = ({ children }: { children: React.ReactNode }) => (
   <p style={{ margin: "10px 0 0", ...BODY }}>{children}</p>
@@ -112,7 +112,8 @@ function Contents({
 }
 
 export default function PostShell(p: {
-  post: Post;
+  // A registered post, or one from the hub (lib/hub-posts.ts), whose kind can be one this registry does not list yet.
+  post: Pick<Post, "title" | "date" | "readMinutes"> & { kind: string };
   standfirst: string;
   sections: { id: string; label: string }[];
   children: React.ReactNode;
