@@ -33,7 +33,7 @@ export const TRADE_CITATIONS_RATIO = 5;
 
 /**
  * alwaysmentioned's placements, as pricing.ts's own include line says it
- * ("3 placements a month on one topic"). Typed here because pricing.ts cannot
+ * ("3 placements a month on one keyword cluster"). Typed here because pricing.ts cannot
  * load under node --test; upgrade-prompts.test.mts pins the two together.
  */
 export const MENTIONED_PLACEMENTS = "3 placements a month";

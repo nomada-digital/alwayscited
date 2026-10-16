@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { OG_IMAGE } from "@/config/og";
 import PackagePage from "@/components/PackagePage";
 import { listIf } from "@/config/capabilities";
-import { priceProse, TIERS } from "@/config/pricing";
+import { MONTHLY_CLUSTERS_WORKED, MONTHLY_INSERTIONS_MIN, MONTHLY_PLACEMENTS, priceProse, TIERS } from "@/config/pricing";
 
 const tier = TIERS.find((t) => t.id === "cited")!;
 const price = priceProse(tier);
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   title: "AI citations and rankings for agencies",
   description:
     "Placements in the sources AI engines cite, plus schema work and link insertions aimed at the Google position." +
-    (price ? ` ${price}, priced per topic.` : ""),
+    (price ? ` ${price}, priced per cluster.` : ""),
   openGraph: { url: "https://alwayscited.com/alwayscited", images: OG_IMAGE },
   alternates: { canonical: "https://alwayscited.com/alwayscited" },
 };
@@ -20,6 +20,12 @@ export default function Page() {
   return (
     <PackagePage
       tier={tier}
+      monthly={[
+        { figure: String(MONTHLY_PLACEMENTS), label: "placements a month" },
+        { figure: `${MONTHLY_INSERTIONS_MIN}+`, label: "link insertions a month, inside existing ranking articles" },
+        { figure: "Schema", label: "on the target pages" },
+        { figure: String(MONTHLY_CLUSTERS_WORKED), label: "keyword cluster, worked for both the AI citation and the Google position" },
+      ]}
       headline="Get cited,"
       headlineAccent="and rank for it."
       standfirst="Everything in alwaysmentioned, then we go after the ranking directly. Schema work on your client's pages and link insertions from the placements, so the same coverage that wins the AI answer also moves the keyword."
@@ -34,7 +40,7 @@ export default function Page() {
         ...listIf("reportBranding", "White-label reporting with your logo"),
       ]}
       notIncluded={{
-        text: "One topic, one market. For several markets, several brands, or a dedicated strategist, that is",
+        text: "One cluster, one market. For several markets, several brands, or a dedicated strategist, that is",
         upgradeTo: "everywhere",
         href: "/alwayseverywhere",
       }}

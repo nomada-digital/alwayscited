@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import { OG_IMAGE } from "@/config/og";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 import CoverageForm from "@/components/coverage/CoverageForm";
-import { CARD, GRID12, H2, MICRO, SHELL, T } from "@/config/tokens";
+import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import { FREE_ENGINE_COUNT, FREE_ENGINE_LABELS, listOf } from "@/config/scan-shape";
 import { COVERAGE_PROMPT_COUNT, MAX_AGENCY_PROMPTS, PLACEHOLDER, coveragePrompts } from "@/lib/coverage/prompts";
 import { MAX_COVERAGE_URLS } from "@/lib/coverage/csv";
@@ -144,19 +145,22 @@ export default function CoverageCheckPage() {
       />
 
       <section>
-        <div className="board-head" style={{ ...GRID12, marginBottom: "14px" }}>
-          <h2 style={{ ...H2, gridColumn: "span 4" }}>These are the {COVERAGE_PROMPT_COUNT} we ask by default</h2>
-          <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
+        <SectionHead
+          style={{ marginBottom: "14px" }}
+          title={<>These are the {COVERAGE_PROMPT_COUNT} we ask by default</>}
+          intro={
+            <>
             {/* This read "you would get to edit them before anything ran" while
-                the form was a stub, describing a board rather than a build. The
-                run path does not offer that, and a fixed set is the better
-                promise anyway: a question that changes between two readings
-                makes a change in the answer unreadable. */}
+            the form was a stub, describing a board rather than a build. The
+            run path does not offer that, and a fixed set is the better
+            promise anyway: a question that changes between two readings
+            makes a change in the answer unreadable. */}
             Built from the brand and what you want the client referenced for, not from your headlines. Supply your
             own {MAX_AGENCY_PROMPTS} instead if you track a prompt set already - either way the wording is frozen onto
             the reading, so the same questions can be asked again after the campaign and the two compared.
-          </p>
-        </div>
+            </>
+          }
+        />
 
         {/* CoverageCheck.dc.html staggers this list at .07s, where Journey
             uses .09s. The property inherits, so declaring it on the card is
@@ -178,13 +182,16 @@ export default function CoverageCheckPage() {
       </section>
 
       <section>
-        <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-          <h2 style={{ ...H2, gridColumn: "span 4" }}>Three things it tells you</h2>
-          <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
+        <SectionHead
+          style={{ marginBottom: "16px" }}
+          title="Three things it tells you"
+          intro={
+            <>
             All three are readable today, from what is published. None of them needs a tag on the client&apos;s site,
             and none of them claims the campaign caused anything.
-          </p>
-        </div>
+            </>
+          }
+        />
 
         <div className="three-up">
           {PROMISES.map((p) => (

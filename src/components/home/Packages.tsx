@@ -1,4 +1,5 @@
 import { MarketCta, MarketPrice, MarketToggle, PackLine, SectorPrice, SelectionCta } from "@/components/SectorPrice";
+import SectionHead from "@/components/SectionHead";
 import TierEngines from "@/components/TierEngines";
 import PkgScroll from "@/components/home/PkgScroll";
 import TierName, { TierText, type TierKey } from "@/components/TierName";
@@ -152,15 +153,13 @@ export default function Packages({ full = false }: { full?: boolean }) {
         }}
       >
         <div style={SHELL}>
-          <div className="ways-head">
-            <Heading style={{ margin: 0, fontSize: "clamp(26px, 3.4vw, 34px)", fontWeight: 700, letterSpacing: "-0.03em", color: T.surface, flexShrink: 0 }}>
-              {full ? "Packages and pricing" : "Packages"}
-            </Heading>
-            <p style={{ margin: 0, fontSize: "15px", lineHeight: 1.6, color: D.muted, maxWidth: "56ch" }}>
-              Monthly, no minimum term. The price is here because you should not have to sit through a
-              call to find out.
-            </p>
-          </div>
+          <SectionHead
+            as={Heading}
+            title={full ? "Packages and pricing" : "Packages"}
+            titleStyle={{ fontSize: "clamp(26px, 3.4vw, 34px)", letterSpacing: "-0.03em", color: T.surface }}
+            intro="Monthly, no minimum term. The price is here because you should not have to sit through a call to find out."
+            introStyle={{ fontSize: "15px", color: D.muted }}
+          />
           <div style={{ marginTop: "20px" }}>
             <p style={{ margin: 0, fontSize: "17px", fontWeight: 700, letterSpacing: "-0.02em", color: T.surface }}>{ALWAYS_ON.packages}</p>
             <p style={{ margin: "4px 0 0", fontSize: "14px", lineHeight: 1.6, color: D.muted, maxWidth: "64ch" }}>{ALWAYS_ON_SUPPORT}</p>

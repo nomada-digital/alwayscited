@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import PageScanBox from "@/components/scan/PageScanBox";
 import { OG_IMAGE } from "@/config/og";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 import EngineLogo from "@/components/EngineLogo";
 import { D } from "@/components/home/dark";
@@ -102,14 +103,12 @@ export default function SeoAgenciesPage() {
       </div>
 
       <section style={{ marginTop: "72px" }}>
-        <div className="board-head" style={{ display: "flex", alignItems: "baseline", gap: "40px" }}>
-          <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 700, letterSpacing: "-0.03em", flexShrink: 0, color: T.ink }}>
-            One placement, two jobs
-          </h2>
-          <p style={{ margin: 0, fontSize: "15px", lineHeight: 1.55, color: T.soft }}>
-            The article Google reads as a link is the article the engines read as a source.
-          </p>
-        </div>
+        <SectionHead
+          title="One placement, two jobs"
+          titleStyle={{ fontSize: "28px", letterSpacing: "-0.03em" }}
+          intro="The article Google reads as a link is the article the engines read as a source."
+          introStyle={{ fontSize: "15px", lineHeight: 1.55 }}
+        />
 
         <div className="seo-beat">
           <div style={{ ...CARD, borderRadius: "18px", padding: "20px 22px" }}>

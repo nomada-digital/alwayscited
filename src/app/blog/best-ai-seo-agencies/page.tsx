@@ -190,7 +190,7 @@ export default function Post() {
           </li>
           <li>
             <B>It places where the engines already read.</B> The placement tiers put your brand into the
-            third-party pages the engines are already citing for your topic, so you are named inside the answer
+            third-party pages the engines are already citing for your keyword cluster, so you are named inside the answer
             rather than ranked in the links under it.
           </li>
           <li>

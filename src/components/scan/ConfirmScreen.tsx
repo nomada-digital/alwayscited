@@ -517,7 +517,7 @@ export default function ConfirmScreen(p: {
 
       {keyword ? (
         <section>
-          <div className="board-head confirm-head confirm-75" style={{ marginBottom: "14px" }}>
+          <div className="board-head confirm-head" style={{ marginBottom: "14px" }}>
             <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink }}>
               The Google keyword
             </h2>
@@ -558,7 +558,7 @@ export default function ConfirmScreen(p: {
       ) : null}
 
       <section>
-        <div className="board-head confirm-head confirm-75" style={{ marginBottom: "14px" }}>
+        <div className="board-head confirm-head" style={{ marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink }}>
             Your five prompts
           </h2>
@@ -573,7 +573,7 @@ export default function ConfirmScreen(p: {
           <div className="q-row q-head" style={{ background: "#fbfbfc", borderBottom: "1px solid " + T.line }}>
             <div style={MICRO}>#</div>
             <div style={MICRO}>Prompt</div>
-            <div style={MICRO}>Topic</div>
+            <div style={MICRO}>Cluster</div>
             <div style={MICRO}>Intent</div>
             <div />
           </div>

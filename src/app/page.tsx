@@ -12,7 +12,7 @@ import { SHELL, T } from "@/config/tokens";
 export const metadata: Metadata = {
   title: "AI SEO agency | AI visibility tools - alwayscited",
   description:
-    "Check whether AI engines name your client. A free scan shows who Google AI Overviews and ChatGPT cite for a topic. Then get placed in them.",
+    "Check whether AI engines name your client. A free scan shows who Google AI Overviews and ChatGPT cite for a keyword cluster. Then get placed in them.",
   alternates: { canonical: "https://alwayscited.com" },
   openGraph: {
     images: OG_IMAGE,

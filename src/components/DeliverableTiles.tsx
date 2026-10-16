@@ -70,7 +70,8 @@ function TileCard({ tile, open, onToggle }: { tile: Tile; open: boolean; onToggl
   );
 }
 
-export default function DeliverableTiles({ tiles, included }: { tiles: Tile[]; included: string[] }) {
+/** `included` is optional: the package pages draw two grids above the cards with no list under them. */
+export default function DeliverableTiles({ tiles, included }: { tiles: Tile[]; included?: string[] }) {
   // Open on the server and without script; closed once there is script to open it.
   const [open, setOpen] = useState<Record<string, boolean> | null>(null);
   useEffect(() => setOpen({}), []);
@@ -83,6 +84,7 @@ export default function DeliverableTiles({ tiles, included }: { tiles: Tile[]; i
           <TileCard key={t.key} tile={t} open={isOpen(t.key)} onToggle={() => setOpen((o) => ({ ...o, [t.key]: !isOpen(t.key) }))} />
         ))}
       </div>
+      {included?.length ? (
       <div className="ac-row" style={{ marginTop: "18px" }}>
         <div style={{ fontSize: "13px", fontWeight: 600, color: T.ink, marginBottom: "10px" }}>Also included</div>
         <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexWrap: "wrap", gap: "8px" }}>
@@ -112,6 +114,7 @@ export default function DeliverableTiles({ tiles, included }: { tiles: Tile[]; i
           ))}
         </ul>
       </div>
+      ) : null}
     </>
   );
 }

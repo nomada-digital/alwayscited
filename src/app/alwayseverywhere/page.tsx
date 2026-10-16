@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { OG_IMAGE } from "@/config/og";
 import PackagePage from "@/components/PackagePage";
+import TierName from "@/components/TierName";
 import { onlyIf } from "@/config/capabilities";
-import { TIERS } from "@/config/pricing";
+import { MONTHLY_INSERTIONS_MIN, MONTHLY_PLACEMENTS, TIERS } from "@/config/pricing";
 
 const tier = TIERS.find((t) => t.id === "everywhere")!;
 
@@ -30,6 +31,11 @@ export default function Page() {
   return (
     <PackagePage
       tier={tier}
+      monthly={[
+        { figure: <TierName tier="cited" />, label: `Everything in it, on one cluster: ${MONTHLY_PLACEMENTS} placements, ${MONTHLY_INSERTIONS_MIN}+ link insertions, schema` },
+        { figure: "Brand PR", label: "For earned media, run by our senior team" },
+        { figure: "Tracked", label: "URL for URL into the answers" },
+      ]}
       headline="Earned media,"
       headlineAccent="then the answers."
       standfirst="For brands that want coverage as well as placements. Everything in the alwayscited plan, plus brand PR for earned media, run by our senior team and tracked into the answers the same way as every placement."

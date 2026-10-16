@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import PageScanBox from "@/components/scan/PageScanBox";
 import { OG_IMAGE } from "@/config/og";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 import DarkClosing from "@/components/DarkClosing";
 import { D, LIFT } from "@/components/home/dark";
 import { word } from "@/components/home/EngineDemo";
 import { FREE_ENGINE_COUNT, QUESTIONS } from "@/config/scan-shape";
 import { TIERS, TRACKED_BASIS } from "@/config/pricing";
-import { CARD, GRID12, MICRO, SHELL, T } from "@/config/tokens";
+import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import { ORG_REF, SITE_URL, ld } from "@/config/schema";
 import { LAUNCH_VIDEO, LAUNCH_VIDEO_SUMMARY } from "@/config/video";
 
@@ -107,10 +108,7 @@ const LEDE: React.CSSProperties = { margin: 0, fontSize: "15px", lineHeight: 1.6
 
 function Head({ title, lede }: { title: string; lede: string }) {
   return (
-    <div className="board-head" style={{ ...GRID12, marginTop: "80px" }}>
-      <h2 style={{ ...H2_BIG, gridColumn: "span 5" }}>{title}</h2>
-      <p style={{ ...LEDE, gridColumn: "span 7" }}>{lede}</p>
-    </div>
+    <SectionHead style={{ marginTop: "80px" }} title={title} titleStyle={H2_BIG} intro={lede} introStyle={LEDE} />
   );
 }
 
@@ -157,13 +155,12 @@ export default function HowItWorksPage() {
             visitors read instead. The summary is visually hidden so a crawler
             and a screen reader get the argument without playing it. */}
         <section id="video" style={{ scrollMarginTop: "2rem", marginTop: "72px" }}>
-          <div className="board-head" style={{ display: "flex", alignItems: "baseline", gap: "40px" }}>
-            <h2 style={{ ...H2_BIG, flexShrink: 0 }}>The 60-second version</h2>
-            <p style={LEDE}>
-              One buyer prompt, the brands the engines name instead, and the four tiers that get a brand into the
-              answer.
-            </p>
-          </div>
+          <SectionHead
+            title="The 60-second version"
+            titleStyle={H2_BIG}
+            intro="One buyer prompt, the brands the engines name instead, and the four tiers that get a brand into the answer."
+            introStyle={LEDE}
+          />
           <video
             controls
             playsInline

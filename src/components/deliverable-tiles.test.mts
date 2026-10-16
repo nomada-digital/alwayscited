@@ -11,8 +11,11 @@ const tiles = read("./DeliverableTiles.tsx");
 const TIER_PAGES = ["alwaystracked", "alwaysmentioned", "alwayscited", "alwayseverywhere"];
 
 test("the figure tiles read their numbers from pricing.ts, never a literal", () => {
-  const fn = page.slice(page.indexOf("function tilesFor"), page.indexOf("export default function PackagePage"));
-  assert.ok(fn.length > 200, "tilesFor was not found");
+  // 16 Oct 2026: tilesFor split into trackedTiles (the alwaystracked block
+  // every plan includes) and sectionTiles (the cards), when the paid pages
+  // gained a block of their own monthly deliverables between them.
+  const fn = page.slice(page.indexOf("function trackedTiles"), page.indexOf("export default function PackagePage"));
+  assert.ok(fn.length > 200, "trackedTiles was not found");
   // Clusters and prompts replaced the question tile on 29 Sep 2026 (R112/R115).
   assert.match(fn, /figure: String\(TRACKED_CLUSTERS\)/);
   assert.match(fn, /figure: String\(TRACKED_PROMPTS\)/);
@@ -25,7 +28,10 @@ test("the figure tiles read their numbers from pricing.ts, never a literal", () 
 test("every section on the four tier pages has a short word figure, never a number", () => {
   let n = 0;
   for (const t of TIER_PAGES) {
-    const src = read(`../app/${t}/page.tsx`);
+    // The cards only: since 16 Oct 2026 the paid pages also pass `monthly`,
+    // whose figures have no heading and are checked in the test below.
+    const all = read(`../app/${t}/page.tsx`);
+    const src = all.slice(all.indexOf("sections={"));
     const figures = [...src.matchAll(/figure: "([^"]*)"/g)].map((m) => m[1]);
     const headings = [...src.matchAll(/heading: "/g)].length;
     assert.equal(figures.length, headings, `${t}: every section needs a figure`);
@@ -36,6 +42,20 @@ test("every section on the four tier pages has a short word figure, never a numb
     }
   }
   assert.ok(n >= 17, `only ${n} section figures found - the walk stopped matching`);
+});
+
+test("the monthly block's numbers come from pricing.ts, never a literal (16 Oct 2026)", () => {
+  let n = 0;
+  for (const t of TIER_PAGES.slice(1)) {
+    const all = read(`../app/${t}/page.tsx`);
+    const block = all.slice(all.indexOf("monthly={["), all.indexOf("]}", all.indexOf("monthly={[")));
+    assert.ok(block.length > 100, `${t}: the monthly block was not found`);
+    // A count is written String(NAME) or in a template; a quoted figure is a word.
+    for (const m of block.matchAll(/figure: "([^"]*)"/g)) assert.doesNotMatch(m[1], /\d/, `${t}: "${m[1]}" types a number`);
+    for (const m of block.matchAll(/label: "([^"]*)"/g)) assert.doesNotMatch(m[1], /\d/, `${t}: "${m[1]}" types a number`);
+    n += [...block.matchAll(/figure: /g)].length;
+  }
+  assert.ok(n >= 11, `only ${n} monthly figures found - the walk stopped matching`);
 });
 
 test("the detail is open on the server and stays in the DOM when closed", () => {

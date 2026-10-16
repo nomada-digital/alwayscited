@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 import DarkClosing from "@/components/DarkClosing";
 import HeroScanArea from "@/components/home/HeroScanArea";
@@ -11,7 +12,7 @@ import { OG_IMAGE } from "@/config/og";
 import { PLAN_ENGINES, TIERS, TRACKED_BASIS } from "@/config/pricing";
 import { FREE_ANSWERS, FREE_ENGINE_COUNT, FREE_ENGINE_LABELS, QUESTIONS, listOf } from "@/config/scan-shape";
 import { ld, ORG_REF, SITE_REF } from "@/config/schema";
-import { CARD, GRID12, H2, MICRO, SHELL, T } from "@/config/tokens";
+import { CARD, H2, MICRO, SHELL, T } from "@/config/tokens";
 import { ENGINE_SPECS, FREE_ENGINES } from "@/lib/scan/engines";
 import { scanReady } from "@/lib/scan/readiness";
 
@@ -58,7 +59,7 @@ const CHECKS: { t: string; b: string }[] = [
 
 const STEPS = [
   { t: "Enter your domain", b: "The field above. No card and no email." },
-  { t: "Confirm the topic and prompts", b: "We read your site and propose the category, the keyword and the prompts. Change them if they are wrong." },
+  { t: "Confirm the cluster and prompts", b: "We read your site and propose the category, the keyword and the prompts. Change them if they are wrong." },
   { t: "Read the answers", b: "About two minutes later, every answer from every engine, with the pages behind it." },
 ];
 
@@ -128,13 +129,16 @@ export default function LlmVisibilityChecker() {
 
       <div style={{ ...SHELL, paddingTop: "44px", paddingBottom: "44px", display: "flex", flexDirection: "column", gap: "40px" }}>
         <section>
-          <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-            <h2 style={{ ...H2, gridColumn: "span 4" }}>What it checks</h2>
-            <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
+          <SectionHead
+            style={{ marginBottom: "16px" }}
+            title="What it checks"
+            intro={
+              <>
               An AI visibility checker should show you the answers, not a score. This one puts the prompts your buyers
               use to the engines and shows you what came back - your LLM brand visibility, prompt by prompt.
-            </p>
-          </div>
+              </>
+            }
+          />
           <div className="three-up">
             {CHECKS.map((c) => (
               <div key={c.t} style={{ ...CARD, padding: "22px" }}>
@@ -146,12 +150,15 @@ export default function LlmVisibilityChecker() {
         </section>
 
         <section>
-          <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-            <h2 style={{ ...H2, gridColumn: "span 4" }}>How it works</h2>
-            <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
+          <SectionHead
+            style={{ marginBottom: "16px" }}
+            title="How it works"
+            intro={
+              <>
               Three steps, and nothing runs until you have seen the prompts.
-            </p>
-          </div>
+              </>
+            }
+          />
           <div className="three-up">
             {STEPS.map((s, i) => (
               <div key={s.t} style={{ ...CARD, padding: "22px" }}>
@@ -189,9 +196,10 @@ export default function LlmVisibilityChecker() {
         </section>
 
         <section id="faq">
-          <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-            <h2 style={{ ...H2, gridColumn: "span 4" }}>Questions</h2>
-          </div>
+          <SectionHead
+            style={{ marginBottom: "16px" }}
+            title="Questions"
+          />
           <div style={{ ...CARD, overflow: "hidden" }}>
             {FAQS.map((f, i) => (
               <div key={f.q} style={{ padding: "18px 26px", borderTop: i ? `1px solid ${T.hair}` : undefined }}>

@@ -5,9 +5,10 @@ import { FREE_ENGINE_COUNT, QUESTIONS } from "@/config/scan-shape";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, TRACKED_CLUSTERS, TRACKED_PROMPTS, TRACKING_PACK_PRICE } from "@/config/pricing";
 import { MAX_CLUSTERS } from "@/config/sector-pricing";import { PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
 import { word } from "./EngineDemo";
-import { CARD, GRID12, H2, MICRO, SHELL, T } from "@/config/tokens";
+import { CARD, GRID12, MICRO, SHELL, T } from "@/config/tokens";
 import { ORG_REF, SITE_REF, ld } from "@/config/schema";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 /**
  * FAQ and the closing scan - HomeFaq.dc.html.
@@ -118,12 +119,11 @@ export default function HomeFaq() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(faqSchema) }} />
 
       <section id="faq" style={{ ...SHELL, marginTop: "44px" }}>
-        <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-          <h2 style={{ ...H2, gridColumn: "span 4" }}>Questions we get asked</h2>
-          <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-            Answered here rather than on a call, because the whole point is that you should not need one.
-          </p>
-        </div>
+        <SectionHead
+          style={{ marginBottom: "16px" }}
+          title="Questions we get asked"
+          intro="Answered here rather than on a call, because the whole point is that you should not need one."
+        />
 
         <div style={{ ...CARD, overflow: "hidden" }}>
           {FAQS.map((f) => (

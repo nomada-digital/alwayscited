@@ -73,6 +73,16 @@ export const TRACKED_CLUSTERS = 10;
 export const TRACKED_PROMPTS = 50;
 export const TRACKED_KEYWORDS = 10;
 
+/**
+ * What the paid tiers deliver each month on one keyword cluster, as the
+ * package pages' "On top, each month" block states it (Danny, 16 Oct 2026):
+ * one cluster worked per plan (more are added at checkout), placements on alwaysmentioned and up, and at least this many link
+ * insertions on alwayscited and up, written "2+".
+ */
+export const MONTHLY_CLUSTERS_WORKED = 1;
+export const MONTHLY_PLACEMENTS = 3;
+export const MONTHLY_INSERTIONS_MIN = 2;
+
 /** What one +$49 pack adds (spec section 1, re-cut as clusters by R112). */
 export const PACK_CLUSTERS = 5;
 export const PACK_PROMPTS = 25;
@@ -207,7 +217,7 @@ export const TIERS: Tier[] = [
     positioning: "Get named when AI recommends",
     href: "/alwaysmentioned",
     includes: [
-      "3 placements a month on one topic",
+      "3 placements a month on one keyword cluster",
       "Placed in sources the engines already cite",
       `Everything in ${TIER_PLAIN.tracked}`,
     ],
