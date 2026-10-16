@@ -1,5 +1,6 @@
 import { FREE_ENGINE_COUNT } from "@/config/scan-shape";
 import { CARD, SHELL, T } from "@/config/tokens";
+import SectionHead from "../SectionHead";
 import TierName from "../TierName";
 
 /**
@@ -36,15 +37,17 @@ const pill: React.CSSProperties = {
 export default function TwoWays() {
   return (
     <section style={{ ...SHELL, paddingTop: "clamp(56px, 7vw, 88px)" }}>
-      <div className="ways-head">
-        <h2 style={{ margin: 0, fontSize: "clamp(26px, 3.4vw, 34px)", fontWeight: 700, letterSpacing: "-0.03em", color: T.ink, flexShrink: 0 }}>
-          Two ways into an answer
-        </h2>
-        <p style={{ margin: 0, fontSize: "15px", lineHeight: 1.6, color: T.soft, maxWidth: "52ch" }}>
-          Both are placements on sites we do not own, the pages the answers are built from. The{" "}
-          <TierName tier="cited" /> plan adds on-site work on top of them.
-        </p>
-      </div>
+      <SectionHead
+        title="Two ways into an answer"
+        titleStyle={{ fontSize: "clamp(26px, 3.4vw, 34px)", letterSpacing: "-0.03em" }}
+        introStyle={{ fontSize: "15px" }}
+        intro={
+          <>
+            Both are placements on sites we do not own, the pages the answers are built from. The{" "}
+            <TierName tier="cited" /> plan adds on-site work on top of them.
+          </>
+        }
+      />
 
       <div className="ways-grid" role="group" aria-label="Illustrative example">
         <div style={{ ...CARD, padding: "28px" }}>

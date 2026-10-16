@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { OG_IMAGE } from "@/config/og";
 import Link from "next/link";
+import SectionHead from "@/components/SectionHead";
 
 import EngineLogo from "@/components/EngineLogo";
 import TierName from "@/components/TierName";
@@ -186,14 +187,12 @@ export default function PrAgenciesPage() {
       </section>
 
       <div style={{ ...SHELL, paddingTop: "72px", paddingBottom: "64px" }}>
-        <div className="board-head" style={{ display: "flex", alignItems: "baseline", gap: "40px" }}>
-          <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 700, letterSpacing: "-0.03em", flexShrink: 0, color: T.ink }}>
-            What changes for a PR team
-          </h2>
-          <p style={{ margin: 0, fontSize: "15px", lineHeight: 1.55, color: T.soft }}>
-            Nothing about how you work. Which titles you go after, and what goes in the report.
-          </p>
-        </div>
+        <SectionHead
+          title="What changes for a PR team"
+          titleStyle={{ fontSize: "28px", letterSpacing: "-0.03em" }}
+          intro="Nothing about how you work. Which titles you go after, and what goes in the report."
+          introStyle={{ fontSize: "15px", lineHeight: 1.55 }}
+        />
 
         <div className="three-up" style={{ gap: "16px", marginTop: "24px" }}>
           {CHANGES.map((c) => (

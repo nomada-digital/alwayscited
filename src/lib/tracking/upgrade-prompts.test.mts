@@ -141,7 +141,8 @@ test("the placements phrase is pricing.ts's own alwaysmentioned line", () => {
   // Deliberate difference from the board ("3 guest posts a month per
   // cluster"): the count and noun come from the tier's include line.
   const pricing = readFileSync("src/config/pricing.ts", "utf8");
-  assert.ok(pricing.includes(`"${MENTIONED_PLACEMENTS} on one topic"`));
+  // "topic" became "keyword cluster" site-wide on 16 Oct 2026 (Danny).
+  assert.ok(pricing.includes(`"${MENTIONED_PLACEMENTS} on one keyword cluster"`));
 });
 
 // ---- 13 Oct 2026, DIY P4 (spec 10 section 2.7): U1-U8 as rules and words, drawn by the pages that gather their facts.

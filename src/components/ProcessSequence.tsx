@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useLayoutEffect, useState } from "react";
 
 import EngineLogo from "@/components/EngineLogo";
+import SectionHead from "@/components/SectionHead";
 import TierName, { TierText, type TierKey } from "@/components/TierName";
 import { TIERS, TRACKED_CLUSTERS, TRACKED_PROMPTS } from "@/config/pricing";
 import { FREE_ENGINE_COUNT } from "@/config/scan-shape";
@@ -134,7 +135,7 @@ const BEATS: Beat[] = [
   {
     tier: "mentioned",
     headline: "We place you in the answers.",
-    line: "Placements in the pages the engines already cite, links included. Three a month, on one topic.",
+    line: "Placements in the pages the engines already cite, links included. Three a month, on one keyword cluster.",
     alt: `The pages the engines cite for one buyer question, and the answers that now name ${SUBJECT}.`,
   },
   {
@@ -675,16 +676,13 @@ export default function ProcessSequence(p: {
       style={{ ["--proc-step" as string]: STEP_S + "s", ["--proc-first" as string]: FIRST_STEP_S + "s" } as React.CSSProperties}
     >
       {p.heading ? (
-        <div className="proc-head">
-          <h2 style={{ margin: 0, fontSize: "34px", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.1 }}>
-            {p.heading}
-          </h2>
-          {p.standfirst ? (
-            <p style={{ margin: 0, fontSize: "15px", lineHeight: 1.6, color: T.soft, maxWidth: "46ch" }}>
-              {p.standfirst}
-            </p>
-          ) : null}
-        </div>
+        <SectionHead
+          style={{ marginBottom: "26px" }}
+          title={p.heading}
+          titleStyle={{ fontSize: "34px", letterSpacing: "-0.03em", lineHeight: 1.1 }}
+          intro={p.standfirst}
+          introStyle={{ fontSize: "15px" }}
+        />
       ) : null}
 
       {/* The rail. It is gone rather than dead when motion is off, because all

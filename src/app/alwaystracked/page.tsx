@@ -55,7 +55,7 @@ export default function Page() {
       included={[
         "Daily AI visibility readings on your clusters: each keyword joined to the prompts buyers ask about it",
         "The category leaderboard, and where your client sits in it",
-        "The sources the engines cite for your topic, ranked by how often",
+        "The sources the engines cite for your clusters, ranked by how often",
         ...listIf("coverageUpload", "Coverage matching: upload a campaign, see which pieces are cited"),
         onlyIf("hostArticleRankings", "Google positions for the host article and the client page, tracked separately") ?? "Google positions for the client page",
         ...listIf("reportBranding", "White-label reports with your logo, not ours"),
@@ -70,7 +70,7 @@ export default function Page() {
         {
           figure: "Names",
           heading: "Who the engines name",
-          body: `Every brand ${ENGINE_NAMES} mention when buyers ask about your client's topic, ranked by share of voice. You see the competitors ahead of your client by name, not a score out of a hundred.`,
+          body: `Every brand ${ENGINE_NAMES} mention when buyers ask about your client's cluster, ranked by share of voice. You see the competitors ahead of your client by name, not a score out of a hundred.`,
         },
         {
           figure: "Sources",

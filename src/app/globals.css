@@ -1029,24 +1029,20 @@ html[data-motion="on"] .ac-stamp.in-view {
 .confirm-12 > :nth-child(1) { grid-column: span 7; }
 .confirm-12 > :nth-child(2) { grid-column: span 5; }
 
-/* Section heading and its description share a line, heading 4, description 8. */
-.confirm-head {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  column-gap: 24px;
-  align-items: baseline;
+/* A section's heading with its description directly under it, left-aligned,
+   8px apart, the description held to 640px (Danny, 16 Oct 2026). These drew
+   heading 4 and description 8 on the twelve columns - 7 and 5 on the confirm
+   screen (R36) - which left a wide gap between the two at desktop widths.
+   `!important` on the gap because each child carries an inline `margin: 0`.
+   `.section-head` is the shared component's (components/SectionHead.tsx);
+   `.confirm-head` is the same arrangement for the heads not yet moved to it. */
+.confirm-head,
+.section-head {
+  display: block;
 }
-.confirm-head > h2 { grid-column: span 4; }
-.confirm-head > p  { grid-column: span 8; }
-/* The evidence index opens with a micro and an h1 in one div, which took a
-   single twelfth and set the h1 one word a line (Q18, 26 Sep 2026). */
-.confirm-head > div { grid-column: span 4; }
-/* On the confirm screen the section heads take the top's 7 and 5, so each
-   description starts on the card's edge. The board draws them 4 and 8, which
-   put the clusters intro on neither column above it; Danny asked for the
-   one two-column grid (R36, 27 Sep 2026). */
-.confirm-head.confirm-75 > h2 { grid-column: span 7; }
-.confirm-head.confirm-75 > p  { grid-column: span 5; }
+.confirm-head > * + * { margin-top: 8px !important; }
+.confirm-head > p,
+.section-head > p { max-width: 640px; }
 
 /* A study card on the evidence index: the board reverses .confirm-top, text 5
    and figures 7, so the three stat cells hold "#83 to #4" on one line. */
@@ -1192,7 +1188,6 @@ html[data-motion="on"] .seq-rise { animation: seqRise 1s cubic-bezier(.2,.7,.3,1
 /* -- The four-tier sequence's own layout (25 Sep site brief) ------ */
 /* Two columns: the argument, then the screen you would get. One column on a
    phone, with the panel under the claim it is evidence for. */
-.proc-head { display: grid; gap: 14px; margin-bottom: 26px; }
 /* minmax(0, 1fr), not the implicit auto column: auto sized the one column to
    its widest panel, 333px in a 272px box at 320, and the page scrolled
    sideways (WCAG 2.2 1.4.10, docs/parity/r151-reflow-320.mjs, 3 Oct 2026).
@@ -1206,7 +1201,6 @@ html[data-motion="on"] .seq-rise { animation: seqRise 1s cubic-bezier(.2,.7,.3,1
 .proc-schema { margin: 8px 0 0; font-size: 11px; line-height: 1.6; color: var(--soft); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; overflow-x: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 @media (min-width: 900px) {
-  .proc-head { grid-template-columns: 1.1fr 1fr; align-items: start; gap: 40px; }
   .proc-stage { grid-template-columns: 1fr 1.15fr; gap: 48px; }
   .proc-headline { font-size: 46px; }
 }
@@ -1594,11 +1588,8 @@ html[data-motion="on"] .demo-verdict { animation: demo-verdict 12s infinite both
    two cards, one column below 860px. The settled frame - Tallyroo placed at
    3, Pennywell at 4, the new page drawn with both pills - is the unscoped
    state. The board's 9s loop plays only under html[data-motion="on"]. */
-.ways-head { display: flex; align-items: baseline; gap: 40px; }
 .ways-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin-top: 36px; }
 @media (max-width: 860px) {
-  .ways-head { display: block; }
-  .ways-head > p { margin-top: 10px !important; }
   .ways-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 24px; }
   .ways-grid > div { padding: 22px !important; }
 }

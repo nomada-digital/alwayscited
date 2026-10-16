@@ -1,10 +1,11 @@
+import SectionHead from "@/components/SectionHead";
 import TierName from "@/components/TierName";
 import {
   CHATGPT_VISIBILITY,
   KEYWORD_EIGHT_WEEKS,
   KEYWORD_FOUR_MONTHS,
 } from "@/config/client-results";
-import { CARD, GRID12, H2, MICRO, SHELL, T } from "@/config/tokens";
+import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import Link from "next/link";
 
 /**
@@ -71,16 +72,12 @@ const FACTS = [
 export default function Results() {
   return (
     <section id="proof" style={{ ...SHELL, marginTop: "44px" }}>
-      <div className="board-head" style={{ ...GRID12, marginBottom: "16px" }}>
-        <div style={{ gridColumn: "span 4" }}>
-          <div style={MICRO}>Results</div>
-          <h2 style={{ ...H2, marginTop: "8px" }}>One placement, on a page already ranking.</h2>
-        </div>
-        <p style={{ gridColumn: "span 8", margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-          One campaign, one placement. The eight-week readings are what it produced; the money keyword kept
-          climbing after that.
-        </p>
-      </div>
+      <SectionHead
+        style={{ marginBottom: "16px" }}
+        micro="Results"
+        title="One placement, on a page already ranking."
+        intro="One campaign, one placement. The eight-week readings are what it produced; the money keyword kept climbing after that."
+      />
 
       <div style={{ ...CARD, padding: "24px 26px" }}>
         <p style={{ ...MICRO, color: T.accent, margin: 0 }}>Vibe Retail · US retail SaaS</p>

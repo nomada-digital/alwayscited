@@ -1,11 +1,13 @@
 import { MarketCta, MarketPrice, MarketToggle, PackLine, SectorPrice, SelectionCta } from "@/components/SectorPrice";
 import DeliverableTiles, { type Tile } from "@/components/DeliverableTiles";
 import NextSteps from "@/components/NextSteps";
+import SectionHead from "@/components/SectionHead";
 import TierEngines from "@/components/TierEngines";
 import WalkthroughForm from "@/components/scan/WalkthroughForm";
 import TierName, { TierText, type TierKey } from "@/components/TierName";
 import { ALWAYS_ON, ALWAYS_ON_SUPPORT } from "@/config/always-on";
 import { onlyIf } from "@/config/capabilities";
+import { MAX_CLUSTERS } from "@/config/sector-pricing";
 import { CLUSTERS_LINE, CONTACT_URL, TIERS, TRACKED_BASIS, TRACKED_CLUSTERS, TRACKED_KEYWORDS, TRACKED_PROMPTS, checkoutUrlFor, contactUrlFor, enginesFor, type Tier } from "@/config/pricing";
 import { ld } from "@/config/schema";
 import { trialLine } from "@/config/trial";
@@ -30,10 +32,10 @@ export type PackageSection = { figure: string; heading: string; body: string };
  * per section. Every number is read from pricing.ts or engines.ts; the engine
  * tile draws the tier's own marks, four on alwaystracked and five above it.
  */
-function tilesFor(tier: Tier, sections: PackageSection[]): Tile[] {
+function trackedTiles(tier: Tier, clustersLabel = "keyword clusters"): Tile[] {
   const engines = enginesFor(tier.key).length;
   return [
-    { key: "clusters", figure: String(TRACKED_CLUSTERS), label: "keyword clusters" },
+    { key: "clusters", figure: String(TRACKED_CLUSTERS), label: clustersLabel },
     { key: "prompts", figure: String(TRACKED_PROMPTS), label: "prompts checked daily" },
     { key: "keywords", figure: String(TRACKED_KEYWORDS), label: "keywords ranked on Google daily" },
     {
@@ -47,9 +49,18 @@ function tilesFor(tier: Tier, sections: PackageSection[]): Tile[] {
       ),
       label: engines > 4 ? "engines, Claude included" : "engines",
     },
-    ...sections.map((x) => ({ key: x.heading, figure: x.figure, label: x.heading, detail: x.body })),
   ];
 }
+
+function sectionTiles(sections: PackageSection[]): Tile[] {
+  return sections.map((x) => ({ key: x.heading, figure: x.figure, label: x.heading, detail: x.body }));
+}
+
+/** One of the deliverables a paid tier adds each month: a short figure and its label. */
+export type MonthlyDeliverable = { figure: React.ReactNode; label: string };
+
+/** The label over each block of "What lands each month". */
+const BLOCK_LABEL: React.CSSProperties = { margin: "0 0 10px", fontSize: "14px", fontWeight: 700, letterSpacing: "-0.01em", color: T.ink };
 
 /** The board's "/mo per client" treatment: a qualifier beside the figure, small and soft. */
 const PRICE_UNIT: React.CSSProperties = { fontSize: "15px", fontWeight: 600, color: T.soft, letterSpacing: 0 };
@@ -93,6 +104,7 @@ export default function PackagePage({
   sections,
   notIncluded,
   beat,
+  monthly,
 }: {
   tier: Tier;
   /** Kept in the signature: the four pages still pass them. */
@@ -109,6 +121,12 @@ export default function PackagePage({
   notIncluded?: { text: string; upgradeTo?: TierKey; href?: string };
   /** A tier's own beat, directly under the header. Only /alwaystracked has one (R25). */
   beat?: React.ReactNode;
+  /**
+   * What the paid tiers add each month on one keyword cluster (Danny, 16 Oct
+   * 2026). Given, the section draws the alwaystracked block, this block, then
+   * the cards; /alwaystracked passes none and keeps the section as it was.
+   */
+  monthly?: MonthlyDeliverable[];
 }) {
   return (
     <section style={{ ...SHELL, paddingTop: "40px", display: "flex", flexDirection: "column", gap: "28px" }}>
@@ -225,16 +243,48 @@ export default function PackagePage({
       {beat}
 
       <div>
-        <div className="board-head confirm-head" style={{ marginBottom: "14px" }}>
-          <h2 className="ac-row" style={{ margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink }}>
-            What lands each month
-          </h2>
-          <p className="ac-row" style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-            Stated as deliverables rather than adjectives, so you can hold us to it.
-          </p>
-        </div>
+        {monthly ? (
+          <>
+            <SectionHead
+              className="ac-row"
+              style={{ marginBottom: "18px" }}
+              title="What lands each month"
+              intro={
+                <TierText>
+                  {"Every plan includes the full alwaystracked data. On top of it, this plan delivers the work below each month, on one keyword cluster. Stated as deliverables rather than adjectives, so you can hold us to it."}
+                </TierText>
+              }
+            />
 
-        <DeliverableTiles tiles={tilesFor(tier, sections)} included={included} />
+            <h3 className="ac-row" style={BLOCK_LABEL}>
+              Included in every plan: <TierName tier="tracked" />
+            </h3>
+            <DeliverableTiles tiles={trackedTiles(tier, "keyword clusters tracked")} />
+
+            <h3 className="ac-row" style={{ ...BLOCK_LABEL, marginTop: "24px" }}>
+              On top, each month: one keyword cluster, worked on
+            </h3>
+            <DeliverableTiles tiles={monthly.map((m) => ({ key: m.label, figure: m.figure, label: m.label }))} />
+            <p className="ac-row" style={{ margin: "12px 0 24px", fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
+              {/* alwayseverywhere has no checkout: its button books a call. */}
+              {tier.key === "everywhere"
+                ? "Working more than one cluster? We'll scope it on the call."
+                : `Working more than one cluster? Add them at checkout, up to ${MAX_CLUSTERS}.`}
+            </p>
+
+            <DeliverableTiles tiles={sectionTiles(sections)} included={included} />
+          </>
+        ) : (
+          <>
+            <SectionHead
+              className="ac-row"
+              style={{ marginBottom: "14px" }}
+              title="What lands each month"
+              intro="Stated as deliverables rather than adjectives, so you can hold us to it."
+            />
+            <DeliverableTiles tiles={[...trackedTiles(tier), ...sectionTiles(sections)]} included={included} />
+          </>
+        )}
 
         {notIncluded ? (
           <p style={{ margin: "14px 0 0", fontSize: "14px", lineHeight: 1.65, color: T.soft }}>
@@ -283,14 +333,12 @@ export default function PackagePage({
       </div>
 
       <div>
-        <div className="board-head confirm-head" style={{ marginBottom: "14px" }}>
-          <h2 className="ac-row" style={{ margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink }}>
-            Where it sits
-          </h2>
-          <p className="ac-row" style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-            Each tier contains the one below it. Nothing here is a different product.
-          </p>
-        </div>
+        <SectionHead
+          className="ac-row"
+          style={{ marginBottom: "14px" }}
+          title="Where it sits"
+          intro="Each tier contains the one below it. Nothing here is a different product."
+        />
 
         <div style={{ ...CARD, display: "flex", overflow: "hidden", flexWrap: "wrap" }}>
           {TIERS.map((t, i) => {
