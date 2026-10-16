@@ -266,7 +266,10 @@ export default function PackagePage({
             </h3>
             <DeliverableTiles tiles={monthly.map((m) => ({ key: m.label, figure: m.figure, label: m.label }))} />
             <p className="ac-row" style={{ margin: "12px 0 24px", fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-              Working more than one cluster? Add them at checkout, up to {MAX_CLUSTERS}.
+              {/* alwayseverywhere has no checkout: its button books a call. */}
+              {tier.key === "everywhere"
+                ? "Working more than one cluster? We'll scope it on the call."
+                : `Working more than one cluster? Add them at checkout, up to ${MAX_CLUSTERS}.`}
             </p>
 
             <DeliverableTiles tiles={sectionTiles(sections)} included={included} />

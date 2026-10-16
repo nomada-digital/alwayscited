@@ -41,7 +41,10 @@ test("every section on the four tier pages has a short word figure, never a numb
       n++;
     }
   }
-  assert.ok(n >= 17, `only ${n} section figures found - the walk stopped matching`);
+  // 17 -> 13 on 16 Oct 2026: the cards that repeated a monthly tile went
+  // (Screened and Replaced on alwaysmentioned, Schema on alwayscited, Tracked
+  // on alwayseverywhere), Danny's call.
+  assert.ok(n >= 13, `only ${n} section figures found - the walk stopped matching`);
 });
 
 test("the monthly block's numbers come from pricing.ts, never a literal (16 Oct 2026)", () => {

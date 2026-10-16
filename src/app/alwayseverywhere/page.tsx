@@ -40,9 +40,6 @@ export default function Page() {
       headlineAccent="then the answers."
       standfirst="For brands that want coverage as well as placements. Everything in the alwayscited plan, plus brand PR for earned media, run by our senior team and tracked into the answers the same way as every placement."
       included={[
-        "Everything in alwayscited",
-        "Brand PR for earned media, run by our senior team",
-        "Each piece of coverage matched against the sources behind the answers",
         "The same locked question set as the rest of the plan",
         "Sold to your brand direct, under our name",
       ]}
@@ -54,11 +51,6 @@ export default function Page() {
           figure: "Earned media",
           heading: "Coverage, then the answers",
           body: "The placements in the alwayscited plan are paid. Earned media is the part you cannot buy: coverage in the publications your buyers already read. We pitch it, then read which pieces the engines pick up, so coverage is judged by whether it reaches the answer rather than by a clippings count.",
-        },
-        {
-          figure: "Tracked",
-          heading: "Tracked the same way as everything else",
-          body: "Each piece of coverage is matched URL for URL against the sources behind the answers, on the same locked questions as the rest of the plan. A change in the reading is a change in the answers, not a change in what we asked.",
         },
         {
           figure: "Direct",
