@@ -272,6 +272,12 @@ const nextConfig: NextConfig = {
       { source: "/app/:path*", headers: [noIndex] },
       // The order form and its confirmation (R91, 29 Sep 2026): an order in progress.
       { source: "/checkout/:path*", headers: [noIndex] },
+      // dashboards.alwayscited.com's tree (17 Oct 2026, src/lib/dash/host.ts). The proxy 404s it on any other host and
+      // sets noindex on everything it rewrites there; this covers the internal path the same way /app is covered.
+      { source: "/dashboards/:path*", headers: [noIndex] },
+      // The dashboards host itself: a client's figures, never framed, never indexed. Last-but-one so it overrides the
+      // site-wide CSP above, as the APP_HOST rule below does.
+      { source: "/:path*", has: [{ type: "host" as const, value: "dashboards\\.alwayscited\\.com" }], headers: [{ key: "content-security-policy", value: CSP.replace("frame-ancestors 'self'", "frame-ancestors 'none'") }, noIndex] },
       /**
        * The dashboard's own host (APP_HOST, 8 Oct 2026): nothing on it is
        * meant to be framed, the marketing site included, so frame-ancestors

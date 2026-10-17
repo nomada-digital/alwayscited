@@ -191,6 +191,18 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/blog/[slug]",
     "/case-studies/[id]",
     "/coverage-check/[token]",
+    // Twenty-one since 17 Oct 2026: the dashboards host's signed-in pages, which need a member session and the
+    // database (its /login and /auth are swept, asked for under that host's name).
+    "/dashboards",
+    "/dashboards/[client]",
+    "/dashboards/[client]/ai",
+    "/dashboards/[client]/clusters",
+    "/dashboards/[client]/clusters/[cluster]",
+    "/dashboards/[client]/google",
+    "/dashboards/[client]/integrations",
+    "/dashboards/[client]/opportunities",
+    "/dashboards/[client]/plan",
+    "/dashboards/[client]/sources",
     "/scan/[token]",
   ]);
 

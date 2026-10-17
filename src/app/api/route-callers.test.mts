@@ -235,6 +235,18 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/components/app/Sidebar.tsx"), "utf8").includes('action="/api/app/logout"'),
   },
   {
+    route: "/api/dash/auth",
+    method: "POST",
+    why: "Posted by the plain HTML form on the dashboards host's /auth (the login link's button, 17 Oct 2026), which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/app/dashboards/auth/page.tsx"), "utf8").includes('action="/api/dash/auth"'),
+  },
+  {
+    route: "/api/dash/logout",
+    method: "POST",
+    why: "Posted by the plain HTML Sign out form in the dashboards host's sidebar (17 Oct 2026), which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/components/dash/Shell.tsx"), "utf8").includes('action="/api/dash/logout"'),
+  },
+  {
     route: "/api/app/[client]/stop",
     method: "POST",
     // BRIEF-3 T6 part 2b, 30 Sep 2026: stop and Undo on the Clusters page.

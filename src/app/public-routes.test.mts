@@ -91,6 +91,20 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/app/[client]/[...rest]": "any /app/[client] address no page matches; private, same membership 404, then the dashboard's own 404",
   "/app/auth": "where a single-use login link lands; the token in its URL is private",
   "/app/login": "the dashboard login form; nothing on it is meant to be found by search",
+  // 17 Oct 2026: dashboards.alwayscited.com's tree, served only on that host (src/lib/dash/host.ts).
+  "/dashboards": "the dashboards host's root, which only redirects - to the member's first site, or to sign in",
+  "/dashboards/[client]": "one client's overview on the dashboards host; private, behind its sign-in, a 404 for a client outside the member's list",
+  "/dashboards/[client]/ai": "one client's AI answers; private, same membership 404",
+  "/dashboards/[client]/clusters": "one client's clusters and their editor; private, same membership 404",
+  "/dashboards/[client]/clusters/[cluster]": "one cluster's keyword groups, keywords and prompts; private, same membership 404",
+  "/dashboards/[client]/google": "one client's Google positions; private, same membership 404",
+  "/dashboards/[client]/integrations": "one client's connections; private, same membership 404",
+  "/dashboards/[client]/opportunities": "one client's opportunities; private, same membership 404",
+  "/dashboards/[client]/plan": "one client's plan and allowances; private, same membership 404",
+  "/dashboards/[client]/sources": "the sites the engines cite for one client; private, same membership 404",
+  "/dashboards/auth": "the dashboards host's sign-in link button; nothing on it is meant to be found",
+  "/dashboards/login": "the dashboards host's sign-in form; nothing on it is meant to be found by search",
+
   // T4, 29 Sep 2026: renders only in a local checkout that has generated the
   // uncommitted fixture file, and 404s on Vercel whatever else is true.
   "/app/parity": "the T4 parity fixture; a 404 in production, local builds only, reads a file under docs/ and no database",

@@ -245,10 +245,23 @@ export type PromptRow = {
  * With `opts.allowance = "placement"` (DIY P2) the rows go into a cluster in the placement allowance: counted
  * against PLACEMENT_PROMPTS_PER_CLIENT, and never against the angle slots or the client's cluster_limit x 5.
  */
-export async function insertPrompts(db: SupabaseClient, clientId: string, clusterId: string | null, rows: PromptRow[], opts: { allowance?: "placement" } = {}): Promise<Written> {
+/**
+ * 17 Oct 2026 (the dashboards host, src/lib/dash): `opts.pooled` counts the batch
+ * against the client's whole allowance only (cluster_limit x 5), not the
+ * cluster's 5 angle slots - the dashboards host splits a cluster into keyword
+ * groups, each with its own prompts, drawn from one client-wide pool. The
+ * client's total, and so the daily check's cost, is the same either way.
+ * `opts.groupId` writes the prompt's keyword group (20261017000000).
+ */
+export async function insertPrompts(db: SupabaseClient, clientId: string, clusterId: string | null, rows: PromptRow[], opts: { allowance?: "placement"; pooled?: boolean; groupId?: string | null } = {}): Promise<Written> {
   if (!rows.length) return { ok: true, ids: [] };
   const placement = opts.allowance === "placement";
-  if (placement) {
+  if (opts.pooled && !placement) {
+    const read = await readPromptRoom(db, clientId, null);
+    if (typeof read === "string") return { ok: false, message: read };
+    const refused = refusePrompts(read.limits, rows.length);
+    if (refused) return { ok: false, message: refused };
+  } else if (placement) {
     if (!clusterId) return { ok: false, message: "A placement prompt goes in its placement's cluster." };
     const live = await livePromptCount(db, "client_domain_id", clientId, "placement");
     if (typeof live === "string") return { ok: false, message: live };
@@ -262,7 +275,7 @@ export async function insertPrompts(db: SupabaseClient, clientId: string, cluste
   }
   const { data, error } = await db
     .from("tracked_questions")
-    .insert(rows.map((r) => ({ ...withoutAllowance(r), ...(placement ? { allowance: "placement" } : {}), client_domain_id: clientId, cluster_id: clusterId })))
+    .insert(rows.map((r) => ({ ...withoutAllowance(r), ...(placement ? { allowance: "placement" } : {}), ...(opts.groupId ? { group_id: opts.groupId } : {}), client_domain_id: clientId, cluster_id: clusterId })))
     .select("id");
   // ON-1 review (9 Oct 2026): the room and text reads above are not a lock. Two saves of a cluster's drafts at once -
   // a double click before the page hydrates, or setup and Clusters in two tabs - both pass them, and one cluster would
@@ -281,8 +294,15 @@ function withoutAllowance(r: PromptRow): Omit<PromptRow, "allowance"> {
 
 export type KeywordRow = { keyword: string; added_on: string; added_by: string; search_volume?: number | null; intent?: string | null };
 
-/** Insert a keyword, ungrouped or as a cluster's one keyword (linked through `tracked_clusters.keyword_id`). */
-export async function insertKeyword(db: SupabaseClient, clientId: string, clusterId: string | null, row: KeywordRow): Promise<Written> {
+/**
+ * Insert a keyword, ungrouped or as a cluster's one keyword (linked through `tracked_clusters.keyword_id`).
+ *
+ * 17 Oct 2026 (the dashboards host, src/lib/dash): with `opts.pooled` the keyword joins the cluster beside any it
+ * already has, counted against the client's cluster_limit x 1 only; it is stated on the keyword
+ * (`cluster_id`, and `group_id` for its keyword group, 20261017000000), and becomes the cluster's own
+ * keyword_id only when the cluster has none live.
+ */
+export async function insertKeyword(db: SupabaseClient, clientId: string, clusterId: string | null, row: KeywordRow, opts: { pooled?: boolean; groupId?: string | null } = {}): Promise<Written> {
   const clusterLimit = await clusterLimitOf(db, clientId);
   if (typeof clusterLimit === "string") return { ok: false, message: clusterLimit };
   const clientLive = await liveCount(db, "tracked_keywords", "client_domain_id", clientId);
@@ -298,11 +318,12 @@ export async function insertKeyword(db: SupabaseClient, clientId: string, cluste
       clusterHasLive = !!k && k.stopped_on === null;
     }
   }
-  const refused = refuseKeyword({ clientLive, clusterHasLive, clusterLimit });
+  const refused = refuseKeyword({ clientLive, clusterHasLive: opts.pooled ? null : clusterHasLive, clusterLimit });
   if (refused) return { ok: false, message: refused };
-  const { data, error } = await db.from("tracked_keywords").insert({ ...row, client_domain_id: clientId }).select("id").single();
+  const placed = opts.pooled && clusterId ? { cluster_id: clusterId, ...(opts.groupId ? { group_id: opts.groupId } : {}) } : {};
+  const { data, error } = await db.from("tracked_keywords").insert({ ...row, ...placed, client_domain_id: clientId }).select("id").single();
   if (error) return { ok: false, message: `Could not add the keyword: ${error.message}` };
-  if (clusterId) {
+  if (clusterId && (!opts.pooled || !clusterHasLive)) {
     const { error: lErr } = await db.from("tracked_clusters").update({ keyword_id: data.id }).eq("id", clusterId);
     if (lErr) return { ok: false, message: `Keyword added, but not linked to its cluster: ${lErr.message}` };
   }

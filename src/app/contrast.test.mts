@@ -410,7 +410,16 @@ function stylesheet(): string | null {
   };
   walk(staticDir);
   assert.ok(sheets.length > 0, "no stylesheet in the build, so the rules below read nothing");
-  return sheets.join("\n");
+  /**
+   * 17 Oct 2026: the dashboards host's sheet (app/dashboards/dash.css) is left to
+   * app/dashboards/dash-css.test.mts, which measures every text colour in it on
+   * every ground it can land on rather than recording each rule here. Exactly one
+   * sheet is set aside, by a selector only that sheet has, so this cannot quietly
+   * drop the site's own.
+   */
+  const dash = sheets.filter((css) => css.includes(".dash-side{"));
+  assert.ok(dash.length <= 1, `expected at most one dashboards stylesheet, found ${dash.length}`);
+  return sheets.filter((css) => !dash.includes(css)).join("\n");
 }
 
 const CSS_COLOURS: Record<string, string> = {

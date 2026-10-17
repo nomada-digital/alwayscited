@@ -11,6 +11,7 @@ import { sendLoginLink } from "@/lib/tracking/login-mail";
 import { safeNext } from "@/lib/tracking/next-path";
 import { LOGIN_SENT, LOGIN_TTL_MS, LOGIN_PER_EMAIL_PER_HOUR, hashToken, mayRequestLink, newToken } from "@/lib/tracking/session";
 import { appOrigin, appPath } from "@/lib/app-host";
+import { dashLinkOrigin, isDashHost } from "@/lib/dash/host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -95,7 +96,11 @@ export async function POST(req: Request) {
   if (member?.length) {
     // R164: the page a signed-out visitor was on rides the link, validated again on every hop.
     const next = safeNext(body.next);
-    const link = `${appOrigin(siteUrl())}${appPath("/auth")}?token=${token}` + (next ? `&next=${encodeURIComponent(next)}` : "");
+    // 17 Oct 2026: a request from the dashboards host gets a link back to it, where its own session cookie lives.
+    const onDash = isDashHost(req.headers.get("host"));
+    const link = onDash
+      ? `${dashLinkOrigin(req.headers.get("host"))}/auth?token=${token}`
+      : `${appOrigin(siteUrl())}${appPath("/auth")}?token=${token}` + (next ? `&next=${encodeURIComponent(next)}` : "");
     await sendLoginLink({ memberEmail: member[0]!.email as string, link });
   }
   return answer({ ok: true, message: LOGIN_SENT });

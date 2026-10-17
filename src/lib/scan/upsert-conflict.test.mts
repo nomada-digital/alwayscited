@@ -301,6 +301,8 @@ test("the upsert sites are the ones we think they are", () => {
       // stores one pull per client per day on keyword_footprints' unique
       // (client_domain_id, pulled_on), so the worker's stale reclaim running
       // it twice writes one row (keywords/footprint.job.ts).
+      // 17 Oct 2026: an integration request on the dashboards host, one row per client and provider (20261017000000).
+      "integration_connections:client_domain_id,provider",
       "keyword_footprints:client_domain_id,pulled_on",
       // 30 Sep 2026, R91: the Stripe webhook's one orders row per completed
       // Session (checkout/signup.ts writeOrder), on the unique column in

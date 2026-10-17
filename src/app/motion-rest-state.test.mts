@@ -718,10 +718,10 @@ function animationValue(body: string): string | null {
   return m ? m[1]!.trim() : null;
 }
 
-type Stylesheet = { name: string; rules: CssRule[] };
+type Stylesheet = { name: string; rules: CssRule[]; text: string };
 
 function analyse(name: string, source: string): Stylesheet {
-  return { name, rules: cssRules(source.replace(/\/\*[\s\S]*?\*\//g, "")) };
+  return { name, rules: cssRules(source.replace(/\/\*[\s\S]*?\*\//g, "")), text: source };
 }
 
 const animating = (s: Stylesheet) =>
@@ -773,13 +773,21 @@ test("every animating class is taken back under reduced motion", () => {
     const stop = neutralising(sheet);
     // Floors. A parse that found nothing is the same green as a clean
     // stylesheet, and this file's own prose names most of these classes.
-    assert.ok(sheet.rules.length >= 150, `${sheet.name}: expected 150+ rules, parsed ${sheet.rules.length}`);
-    assert.ok(anim.length >= 15, `${sheet.name}: expected 15+ animating rules, found ${anim.length}`);
-    assert.ok(stop.length >= 15, `${sheet.name}: expected 15+ neutralising rules, found ${stop.length}`);
-    assert.ok(
-      anim.some((r) => r.selector.includes(".seq-")),
-      `${sheet.name}: no .seq-* rule is animating, so this has stopped covering the waiting sequence`,
-    );
+    // 17 Oct 2026: the dashboards host's own sheet (app/dashboards/dash.css) is
+    // small and has one animation of its own; its floors are its own below, and
+    // the coverage rule after them applies to it unchanged.
+    if (sheet.text.includes(".dash-side{") || sheet.text.includes(".dash-side {")) {
+      assert.ok(sheet.rules.length >= 100, `${sheet.name}: expected 100+ rules in the dashboards sheet, parsed ${sheet.rules.length}`);
+      assert.ok(anim.length >= 1, `${sheet.name}: the dashboards sheet's toast animates, and none was found`);
+    } else {
+      assert.ok(sheet.rules.length >= 150, `${sheet.name}: expected 150+ rules, parsed ${sheet.rules.length}`);
+      assert.ok(anim.length >= 15, `${sheet.name}: expected 15+ animating rules, found ${anim.length}`);
+      assert.ok(stop.length >= 15, `${sheet.name}: expected 15+ neutralising rules, found ${stop.length}`);
+      assert.ok(
+        anim.some((r) => r.selector.includes(".seq-")),
+        `${sheet.name}: no .seq-* rule is animating, so this has stopped covering the waiting sequence`,
+      );
+    }
 
     assert.deepEqual(
       anim.filter((r) => covering(sheet, r).length === 0).map((r) => r.selector),

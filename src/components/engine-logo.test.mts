@@ -20,7 +20,8 @@ const walk = (dir: string): string[] =>
 const files = walk(SRC).map((f) => ({ path: f.slice(SRC.length), text: readFileSync(f, "utf8") }));
 
 /** The dashboard: the routes beneath app/app/layout.tsx, and the components only they draw (held in the second test). */
-const DASHBOARD = /^(app\/app\/|components\/app\/)/;
+// 17 Oct 2026: the dashboards host's tree mounts the sprite too (app/dashboards/layout.tsx).
+const DASHBOARD = /^(app\/app\/|components\/app\/|app\/dashboards\/|components\/dash\/)/;
 
 /** Each file's EngineLogo tags; every one is self-closing. */
 const tags = (text: string) => [...text.matchAll(/<EngineLogo\b[\s\S]*?\/>/g)].map((m) => m[0]);
@@ -36,6 +37,10 @@ const SPRITE_FILES = [
   "components/app/Placements.tsx",
   "components/app/Sidebar.tsx",
   "components/app/ai/AiVisibility.tsx",
+  // 17 Oct 2026, dashboards.alwayscited.com: rendered under app/dashboards/layout.tsx, which mounts the sprite.
+  "app/dashboards/[client]/ai/page.tsx",
+  "app/dashboards/[client]/sources/page.tsx",
+  "components/dash/Figures.tsx",
 ];
 const INLINE_FILES = [
   "app/pr-agencies/page.tsx",
@@ -104,9 +109,10 @@ test("every file that draws a sprite logo, itself or through what it imports, is
   assert.ok(reach.has("app/app/[client]/named/page.tsx") && reach.has("app/app/parity/page.tsx"), "the walk stopped following imports");
 });
 
-test("the sprite is mounted once, in app/app/layout.tsx, painted, and under the ids the logos use", () => {
+test("the sprite is mounted once per dashboard tree - app/app/layout.tsx and app/dashboards/layout.tsx - painted, and under the ids the logos use", () => {
   const mounts = files.flatMap((f) => [...f.text.matchAll(/<EngineSprite\b/g)].map(() => f.path));
-  assert.deepEqual(mounts, ["app/app/layout.tsx"]);
+  // 17 Oct 2026: the dashboards host's layout mounts its own; no page renders under both layouts.
+  assert.deepEqual(mounts.sort(), ["app/app/layout.tsx", "app/dashboards/layout.tsx"]);
   const logo = files.find((f) => f.path === "components/EngineLogo.tsx")!.text;
   const sprite = logo.slice(logo.indexOf("export function EngineSprite("), logo.indexOf("\n}\n", logo.indexOf("export function EngineSprite(")));
   assert.ok(sprite.length > 100, "EngineSprite not found");

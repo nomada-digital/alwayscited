@@ -47,7 +47,7 @@ import { ROBOTS_AGENTS } from "@/config/robots-agents";
  * after payment, its confirmation. Closed the same way as `/app`.
  */
 // `/blog-preview/` (16 Oct 2026) is a hub blog post's draft, reachable only by its preview key.
-const CLOSED = ["/scan/", "/coverage-check/", "/blog-preview/", "/api/", "/admin/", "/app", "/checkout"];
+const CLOSED = ["/scan/", "/coverage-check/", "/blog-preview/", "/api/", "/admin/", "/app", "/checkout", "/dashboards"];
 
 // The named crawlers, shared with the dashboard host's robots.txt in proxy.ts (8 Oct 2026).
 const AGENTS = ROBOTS_AGENTS;

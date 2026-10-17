@@ -84,6 +84,10 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 13 Oct 2026: read by components/DplGuard.tsx, which the build replaces
   // with the deployment id Vercel sets; a build without one renders nothing.
   NEXT_DEPLOYMENT_ID: "set by the platform at build; absent means no deployment-id guard is needed",
+  // 17 Oct 2026: the dashboards host (src/lib/dash/host.ts). Unset is dashboards.alwayscited.com, the real value.
+  DASH_HOST: "optional: unset means dashboards.alwayscited.com; set only for a preview or an e2e host",
+  // 17 Oct 2026: a local run of the dashboards host on a snapshot (src/lib/dash/fixture.ts); production refuses it.
+  DASH_FIXTURE_TIER: "local runs only: which tier the snapshot is drawn as; read only while DASH_FIXTURE is set, which production refuses",
 };
 
 /**

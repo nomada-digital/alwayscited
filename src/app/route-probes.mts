@@ -89,9 +89,12 @@ export function probePath(route: string): string {
  */
 export function noindexHeaderRules(manifest: string): { source: string; regex: RegExp }[] {
   const parsed = JSON.parse(manifest) as {
-    headers?: { source: string; regex: string; headers: { key: string; value: string }[] }[];
+    headers?: { source: string; regex: string; headers: { key: string; value: string }[]; has?: { type: string }[] }[];
   };
   return (parsed.headers ?? [])
+    // 17 Oct 2026: a rule conditioned on another host (the dashboards host's, and APP_HOST's once it is set) never
+    // answers on the marketing host, which is the only host these routes are probed on.
+    .filter((rule) => !(rule.has ?? []).some((h) => h.type === "host"))
     .filter((rule) => rule.headers.some((h) => h.key.toLowerCase() === "x-robots-tag" && /noindex/.test(h.value)))
     .map((rule) => ({ source: rule.source, regex: new RegExp(rule.regex) }));
 }

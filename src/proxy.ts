@@ -6,6 +6,7 @@ import { appHost, appOrigin, internalPath, isAppHost, stripPrefix } from "@/lib/
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
+import { dashInternal, dashStrip, isDashHost } from "@/lib/dash/host";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -93,6 +94,28 @@ export function proxy(request: NextRequest) {
   if (skip(pathname)) return NextResponse.next();
 
   const host = request.headers.get("host");
+
+  /**
+   * dashboards.alwayscited.com (17 Oct 2026, src/lib/dash/host.ts): the new
+   * customer dashboard, its own host and its own tree. Nothing else is served
+   * there, and its tree is served nowhere else.
+   */
+  if (isDashHost(host)) {
+    if (ADMIN(pathname)) return new NextResponse(null, { status: 404 });
+    if (pathname === "/robots.txt") {
+      return new NextResponse(`${ROBOTS_AGENTS.map((a) => `User-Agent: ${a}\nDisallow: /`).join("\n\n")}\n`, {
+        headers: { "content-type": "text/plain; charset=utf-8", "x-robots-tag": "noindex, nofollow" },
+      });
+    }
+    const bare = dashStrip(pathname);
+    if (bare !== null) return NextResponse.redirect(new URL(`${bare}${search}`, request.url), 308);
+    const res = NextResponse.rewrite(new URL(`${dashInternal(pathname)}${search}`, request.url));
+    res.headers.set("x-robots-tag", "noindex, nofollow");
+    return res;
+  }
+  // On the marketing host /dashboards is the same tree, for a signed-in member only (pageData 404s anyone else)
+  // and noindex by next.config.ts's header rule: a preview until the subdomain's DNS exists.
+
   const onApp = isAppHost(host);
   if (ADMIN(pathname)) {
     // The operations page is not served from the dashboard's host at all.

@@ -1,0 +1,198 @@
+/**
+ * The dashboards host's data, as stored (Raw) and as drawn (Workspace).
+ *
+ * Raw is one client's rows, read in one pass (load.ts) or from a snapshot in a
+ * local run (fixture.ts). Workspace is everything a page draws, derived from
+ * Raw by model.ts with no I/O, so the same derivation runs on the server, in
+ * the browser after an optimistic edit, and under `node --test`.
+ */
+
+export type Day = string;
+export type Engine = "google_aio" | "chatgpt" | "gemini" | "perplexity" | "claude";
+export type TierKey = "tracked" | "mentioned" | "cited" | "everywhere";
+
+export type RawClient = {
+  id: string;
+  slug: string;
+  domain: string;
+  brand: string | null;
+  market: string;
+  tier: TierKey;
+  status: string;
+  started_on: Day | null;
+  cluster_limit: number;
+  trial_ends_at: string | null;
+  payment_status: string | null;
+  brand_aliases: string[];
+};
+
+export type RawCluster = { id: string; name: string; keyword_id: string | null; tier: string; started_on: Day; stopped_on: Day | null };
+export type RawGroup = { id: string; cluster_id: string; name: string; note: string | null; terms: string[]; position: number; stopped_on: Day | null };
+export type RawKeyword = {
+  id: string;
+  keyword: string;
+  search_volume: number | null;
+  intent: string | null;
+  added_on: Day;
+  stopped_on: Day | null;
+  cluster_id: string | null;
+  group_id: string | null;
+};
+export type RawPrompt = {
+  id: string;
+  text: string;
+  cluster_id: string | null;
+  group_id: string | null;
+  angle: string | null;
+  added_on: Day;
+  stopped_on: Day | null;
+  origin_kind?: string | null;
+  /** 'placement' for a prompt in the placement allowance (limits.ts), counted apart from the plan's. */
+  allowance?: string | null;
+};
+export type RawRun = { run_date: Day; status: string; engines: string[] };
+export type RawSerp = { run_date: Day; keyword_id: string; position: number | null; url: string | null };
+export type Citation = { url: string; title?: string | null; source_domain?: string | null; position?: number | null };
+export type RawAnswer = {
+  run_date: Day;
+  question_id: string;
+  engine: Engine;
+  answered: boolean;
+  named: boolean;
+  brands?: string[] | null;
+  citations?: Citation[] | null;
+};
+/** keyword_footprints.rows: k keyword, p position, u url, v volume, i intent. */
+export type FootRow = { k: string; p: number | null; u: string | null; v: number | null; i?: string | null };
+export type RawOpportunity = {
+  id?: string;
+  cluster_id: string | null;
+  lens: string;
+  url: string;
+  domain: string;
+  title: string | null;
+  route: string | null;
+  status: string;
+  evidence: { engines?: string[]; answers?: number; competitors?: string[]; last_cited?: string; prompt_count?: number } | null;
+};
+export type RawPlacement = {
+  id: string;
+  cluster_id: string;
+  kind: "guest_post" | "link_insertion" | "on_site" | "coverage";
+  url: string;
+  domain: string;
+  status: "pitched" | "writing" | "scheduled" | "live" | "removed";
+  scheduled_on: Day | null;
+  live_on: Day | null;
+  anchor_text: string | null;
+};
+export type Provider = "ga4" | "gsc" | "bing";
+export type RawConnection = { provider: Provider; status: string; property: string | null; requested_at: string | null; connected_at: string | null; last_synced_at: string | null };
+export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };
+
+export type Raw = {
+  client: RawClient;
+  role: string;
+  today: Day;
+  clusters: RawCluster[];
+  groups: RawGroup[];
+  keywords: RawKeyword[];
+  prompts: RawPrompt[];
+  runs: RawRun[];
+  serp: RawSerp[];
+  answers: RawAnswer[];
+  footprint: { pulled_on: Day; rows: FootRow[] } | null;
+  opportunities: RawOpportunity[];
+  placements: RawPlacement[];
+  connections: RawConnection[];
+  consoleRows: RawConsoleRow[];
+  /** False until 20261017000000 is applied: no groups table, no group_id columns. Groups are then read-only and empty. */
+  groupsReady: boolean;
+};
+
+// ---------------------------------------------------------------- derived
+
+export type Allowance = { used: number; limit: number };
+export type Allowances = { clusters: Allowance; prompts: Allowance; keywords: Allowance };
+
+export type ConsoleFig = { clicks: number; impr: number; ctr: number; pos: number | null };
+
+export type KeywordView = {
+  id: string | null;
+  keyword: string;
+  volume: number | null;
+  /** tracked: checked daily, counts against the plan. footprint: from the monthly ranking snapshot, free. */
+  src: "tracked" | "footprint";
+  pos: number | null;
+  change: number | null;
+  url: string | null;
+  hist: [Day, number | null][];
+  console: { gsc: ConsoleFig | null; bing: ConsoleFig | null };
+  addedOn: Day | null;
+};
+
+export type PromptView = {
+  id: string;
+  text: string;
+  angle: string | null;
+  addedOn: Day;
+  measured: boolean;
+  /** Named / answered across engines on the latest reading, 0..1, or null before the first. */
+  rate: number | null;
+  /** One cell per engine on the latest reading: named, not named, no answer, or not read. */
+  cells: Partial<Record<Engine, "named" | "missed" | "none" | null>>;
+  /** Engine x day verdicts, oldest first, for the strip. */
+  days: Partial<Record<Engine, ("named" | "missed" | "none" | null)[]>>;
+};
+
+export type GroupView = {
+  id: string | null;
+  name: string;
+  note: string | null;
+  terms: string[];
+  keywords: KeywordView[];
+  prompts: PromptView[];
+  discovered: { gsc: (ConsoleFig & { q: string })[]; bing: (ConsoleFig & { q: string })[] };
+};
+
+export type ClusterView = {
+  id: string;
+  name: string;
+  tier: string;
+  startedOn: Day;
+  headKeyword: string | null;
+  headVolume: number | null;
+  headPos: number | null;
+  headChange: number | null;
+  rate: number | null;
+  rateTrend: (number | null)[];
+  groups: GroupView[];
+  /** Keywords and prompts with no group: the cluster's own. */
+  own: GroupView;
+  trackedKeywords: number;
+  prompts: number;
+  placements: RawPlacement[];
+};
+
+export type Workspace = {
+  client: RawClient;
+  role: string;
+  canWrite: boolean;
+  today: Day;
+  engines: Engine[];
+  dates: Day[];
+  lastRun: RawRun | null;
+  allowances: Allowances;
+  clusters: ClusterView[];
+  /** Prompts and keywords on no cluster (admin-made, still read daily). */
+  loose: { prompts: PromptView[]; keywords: KeywordView[] };
+  rate: number | null;
+  rateTrend: (number | null)[];
+  brands: { name: string; answers: number; you: boolean }[];
+  sources: { domain: string; answers: number; urls: number; you: boolean; engines: Engine[] }[];
+  opportunities: RawOpportunity[];
+  connections: Partial<Record<Provider, RawConnection>>;
+  consoleLive: { gsc: boolean; bing: boolean };
+  footprintOn: Day | null;
+  groupsReady: boolean;
+};

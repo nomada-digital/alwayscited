@@ -107,6 +107,12 @@ export type State = {
   urls: string[];
   discover?: (html: string) => string[];
   blocked?: string;
+  /**
+   * The Host header the URLs are asked with (17 Oct 2026): the dashboards
+   * tree answers only on its own host and 404s everywhere else, so its URLs
+   * are its public paths, asked of `dashboards.localhost`.
+   */
+  host?: string;
 };
 
 /** Every distinct `?kind=` the rendered filter pills link to. */
@@ -169,6 +175,21 @@ export const STATES: Record<string, State> = {
   },
   // 29 Sep 2026, T3: the client dashboard. The two pages a stranger reaches
   // render here; the two behind a session cannot.
+  // 17 Oct 2026: dashboards.alwayscited.com (src/lib/dash/host.ts). Only its own host serves this tree,
+  // so the two pages a stranger reaches are asked for there; every other host 404s it, which the blocked
+  // probes below measure.
+  "/dashboards/login": { host: "dashboards.localhost", urls: ["/login", "/login?link=expired", "/login?out=1"] },
+  "/dashboards/auth": { host: "dashboards.localhost", urls: ["/auth", "/auth?token=0000000000000000000000000000000000000000000000000000000000000000"] },
+  "/dashboards": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/ai": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/clusters": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/clusters/[cluster]": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/google": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/integrations": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/opportunities": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/plan": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/sources": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/app/login": { urls: ["/app/login", "/app/login?link=expired"] },
   // 29 Sep 2026, R91: the order form. Tracked, a placements tier before a
   // sector is picked, one priced with an error back from the route, and one
@@ -298,7 +319,7 @@ export async function capture(port = 4311): Promise<Capture[]> {
   const captured: Capture[] = [];
   try {
     for (const route of unswept) {
-      const { urls, blocked, discover } = STATES[route]!;
+      const { urls, blocked, discover, host } = STATES[route]!;
 
       if (!urls.length) {
         // Rendered anyway, so the claim in `blocked` is measured rather than
@@ -327,7 +348,7 @@ export async function capture(port = 4311): Promise<Capture[]> {
         if (seen.has(url)) continue;
         seen.add(url);
 
-        const res = await fetch("http://127.0.0.1:" + port + url);
+        const res = await fetch("http://127.0.0.1:" + port + url, host ? { headers: { host: `${host}:${port}` } } : undefined);
         const html = await res.text();
         if (res.status !== 200) {
           throw new Error(
