@@ -22,7 +22,7 @@ export default function PlanCard({ ws, slug, base }: { ws: Workspace; slug: stri
       </div>
       {up ? (
         <p className="intro" style={{ marginTop: 14 }}>
-          Next up: <TierName tier={up} /> - {tierInfo(up).positioning.toLowerCase()}. <a href={`${SITE_ORIGIN}${tierInfo(up).href}`} style={{ color: "var(--accent)", fontWeight: 600 }}>See what it adds</a>
+          Next up: <TierName tier={up} />. {tierInfo(up).positioning}. <a href={`${SITE_ORIGIN}${tierInfo(up).href}`} style={{ color: "var(--accent)", fontWeight: 600 }}>See what it adds</a>
         </p>
       ) : null}
     </div>
