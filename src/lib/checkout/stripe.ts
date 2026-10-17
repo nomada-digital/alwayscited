@@ -69,3 +69,33 @@ export function readSubscription(id: string, fetchImpl: typeof fetch = fetch): P
 export function cancelAtPeriodEnd(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
   return subscriptionCall(id, new URLSearchParams({ cancel_at_period_end: "true" }), fetchImpl);
 }
+
+/**
+ * A Stripe customer portal session (17 Oct 2026, the dashboards host's
+ * Billing): invoices, the card, and cancelling at the end of the period, as
+ * the portal is configured in Stripe. It charges nothing; the portal itself
+ * is where any change is made, on Stripe's page. Same refusal shape as a
+ * checkout session, and the same rule: only a Stripe URL is followed.
+ */
+export async function createPortalSession(customer: string, returnUrl: string, fetchImpl: typeof fetch = fetch): Promise<SessionResult> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { ok: false, reason: "no_key" };
+  if (!/^cus_[A-Za-z0-9]{1,200}$/.test(customer)) return { ok: false, reason: "refused" };
+  let res: Response;
+  try {
+    res = await fetchImpl("https://api.stripe.com/v1/billing_portal/sessions", {
+      method: "POST",
+      headers: { authorization: `Bearer ${key}`, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ customer, return_url: returnUrl }).toString(),
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+  const body = (await res.json().catch(() => null)) as { url?: unknown; error?: { code?: unknown; type?: unknown } } | null;
+  if (!res.ok || typeof body?.url !== "string" || !body.url.startsWith("https://billing.stripe.com/")) {
+    const code = body?.error?.code ?? body?.error?.type;
+    return { ok: false, reason: "refused", status: res.status, code: typeof code === "string" ? code : undefined };
+  }
+  return { ok: true, url: body.url };
+}

@@ -129,6 +129,10 @@ export type KeywordView = {
   hist: [Day, number | null][];
   console: { gsc: ConsoleFig | null; bing: ConsoleFig | null };
   addedOn: Day | null;
+  /** Google ranked a different page of the site for it in the last 14 days (model.ts pageChangeOf). */
+  pageChange: { from: string; to: string; on: Day } | null;
+  /** The page ranking for it is the homepage. */
+  homepage: boolean;
 };
 
 export type PromptView = {

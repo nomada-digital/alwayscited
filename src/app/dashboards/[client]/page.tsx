@@ -7,6 +7,7 @@ import { PageHead } from "@/components/dash/Shell";
 import { fullness } from "@/lib/dash/allowance";
 import { clusterKeywords } from "@/lib/dash/model";
 import { pageData } from "@/lib/dash/page-data";
+import { checkTime, nextCheckAt } from "@/lib/tracking/check-time";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Overview", robots: { index: false, follow: false } };
@@ -21,10 +22,13 @@ export default async function Overview({ params }: { params: Promise<{ client: s
   const full = (["clusters", "keywords", "prompts"] as const).filter((k) => fullness(ws.allowances[k]) !== "calm");
   const first = ws.rateTrend.find((r) => r !== null) ?? null;
   const delta = ws.rate !== null && first !== null ? Math.round((ws.rate - first) * 100) : null;
+  // When the next reading lands, in the client's own zone - so an edit made now has a time it shows up by.
+  const tracking = ws.clusters.some((c) => c.prompts > 0) || ws.loose.prompts.length > 0;
+  const next = tracking ? checkTime(new Date(nextCheckAt(Date.now())).toISOString().slice(0, 10), ws.client.market) : null;
   return (
     <>
       <PageHead
-        micro={<>Overview{ws.lastRun ? <> · last check {longDay(ws.lastRun.run_date)}</> : null}<EngineHeads engines={ws.engines} /></>}
+        micro={<>Overview{ws.lastRun ? <> · last check {longDay(ws.lastRun.run_date)}</> : null}{next ? <> · next {next}</> : null}<EngineHeads engines={ws.engines} /></>}
         title={ws.client.brand ?? ws.client.domain}
         intro="Whether AI names you when buyers ask, and where you rank on Google for the same searches - checked every morning."
       />

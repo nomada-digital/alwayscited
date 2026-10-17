@@ -241,6 +241,12 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/app/dashboards/auth/page.tsx"), "utf8").includes('action="/api/dash/auth"'),
   },
   {
+    route: "/api/dash/[client]/billing",
+    method: "POST",
+    why: "Posted by the plain HTML Open billing form on the dashboards host's Plan page (17 Oct 2026), which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/plan/page.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/billing`} method=\"post\">"),
+  },
+  {
     route: "/api/dash/logout",
     method: "POST",
     why: "Posted by the plain HTML Sign out form in the dashboards host's sidebar (17 Oct 2026), which the fetch scanner does not read.",

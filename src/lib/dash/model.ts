@@ -51,6 +51,39 @@ function addDaysIso(d: Day, n: number): Day {
   return new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 }
 
+/** A URL's path, "/" for the homepage; null for no URL. */
+export function pathOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url, "https://x.invalid");
+    return u.pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The latest change of ranking page in a keyword's daily positions within
+ * `days` of its last reading, or null. A swap is the number most likely to
+ * look wrong to a customer - the position moves because a different page is
+ * being ranked - so it is said beside the position rather than left for them
+ * to find. Days with no URL (not in the top 100) are not a swap.
+ */
+export function pageChangeOf(hist: readonly [Day, number | null, string | null][], days = 14): { from: string; to: string; on: Day } | null {
+  const last = hist.at(-1);
+  if (!last) return null;
+  const since = addDaysIso(last[0], -days);
+  let prev: string | null = null;
+  let found: { from: string; to: string; on: Day } | null = null;
+  for (const [d, , url] of hist) {
+    const p = pathOf(url);
+    if (!p) continue;
+    if (prev !== null && p !== prev && d >= since) found = { from: prev, to: p, on: d };
+    prev = p;
+  }
+  return found;
+}
+
 export function hostOf(url: string): string | null {
   try {
     return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
@@ -155,6 +188,8 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       hist: hist.slice(-30).map(([d, p]) => [d, p]),
       console: consoleFor(k.keyword, k.search_volume, curPos),
       addedOn: k.added_on,
+      pageChange: pageChangeOf(hist),
+      homepage: pathOf(cur?.[2] ?? null) === "/",
     };
   };
 
@@ -175,7 +210,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     if (!g) continue;
     const l = footBy.get(g.id) ?? [];
     if (l.length >= FOOTPRINT_PER_GROUP) continue;
-    l.push({ id: null, keyword: r.k, volume: r.v, src: "footprint", pos: r.p, change: null, url: r.u, hist: [], console: consoleFor(r.k, r.v, r.p), addedOn: null });
+    l.push({ id: null, keyword: r.k, volume: r.v, src: "footprint", pos: r.p, change: null, url: r.u, hist: [], console: consoleFor(r.k, r.v, r.p), addedOn: null, pageChange: null, homepage: pathOf(r.u) === "/" });
     footBy.set(g.id, l);
   }
 

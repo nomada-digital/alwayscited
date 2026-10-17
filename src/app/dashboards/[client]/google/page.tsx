@@ -20,7 +20,7 @@ export default async function Google({ params }: { params: Promise<{ client: str
     <>
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
       <div className="dash-card">
-        <div className="dash-card-head"><div><h2>Tracked daily</h2><p className="intro">{tracked.length} keywords. Change is against 7 days ago.</p></div></div>
+        <div className="dash-card-head"><div><h2>Tracked daily</h2><p className="intro">{tracked.length} keywords. Change is against 7 days ago. When Google switches which of your pages it ranks, the position can jump with it - those are marked, so a move is not mistaken for a gain or a loss.</p></div></div>
         {tracked.length ? (
           <div className="tbl-wrap">
             <table className="tbl">
@@ -33,7 +33,11 @@ export default async function Google({ params }: { params: Promise<{ client: str
                     <td className="r"><Pos pos={k.pos} /></td>
                     <td className="r"><Change n={k.change} /></td>
                     <td><Spark values={k.hist.map(([, p]) => p)} invert width={80} height={22} /></td>
-                    <td className="muted" style={{ fontSize: 12.5, maxWidth: 260, overflowWrap: "anywhere" }}>{host(k.url)}</td>
+                    <td className="muted" style={{ fontSize: 12.5, maxWidth: 260, overflowWrap: "anywhere" }}>
+                      {host(k.url)}
+                      {k.pageChange ? <div className="sub"><span className="pill warn" title="Google ranked a different page of your site for this keyword. The position moved with the page, not only the ranking.">Page changed {longDay(k.pageChange.on)}</span> from {k.pageChange.from}</div> : null}
+                      {k.homepage && !k.pageChange ? <div className="sub">Your homepage ranks for this</div> : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>

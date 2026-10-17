@@ -1,6 +1,9 @@
 import BrandMark from "@/components/BrandMark";
 import TierName from "@/components/TierName";
+import { SITE_ORIGIN } from "@/lib/app-host";
+import { CONTACT_EMAIL } from "@/config/contact";
 import type { Workspace } from "@/lib/dash/types";
+import type { PlanBanner } from "@/lib/tracking/plan-banner";
 
 import { Meter } from "./Figures";
 import { ClientSwitch, Nav } from "./Nav";
@@ -10,7 +13,7 @@ import { ClientSwitch, Nav } from "./Nav";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, banner = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; banner?: PlanBanner | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -44,6 +47,10 @@ export default function Shell({ ws, others, base, demo = false, children }: { ws
             <Meter label="Keywords" used={a.keywords.used} limit={a.keywords.limit} />
             <Meter label="Prompts" used={a.prompts.used} limit={a.prompts.limit} />
           </div>
+          <div className="dash-help">
+            <a href={`${SITE_ORIGIN}/help`}>Help centre</a>
+            <a href={`mailto:${CONTACT_EMAIL}`}>Email us</a>
+          </div>
           {demo ? null : (
             <form action="/api/dash/logout" method="post">
               <button type="submit">Sign out</button>
@@ -54,7 +61,18 @@ export default function Shell({ ws, others, base, demo = false, children }: { ws
       {/* A shared demo link (17 Oct 2026): said on every page, and edits there stay in the browser (useOps). */}
       {demo ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">Demo, read-only</span> : null}
       <div className="dash-main" id="dash-content">
-        <div className="dash-inner">{children}</div>
+        <div className="dash-inner">
+          {banner ? (
+            <div className={`banner${banner.tone === "trial" ? "" : " warn"}`} style={{ marginBottom: 16 }} role={banner.tone === "trial" ? "status" : "alert"}>
+              <span>{banner.text}</span>
+              {banner.link ? <a className="btn sm" href={banner.link.href} {...(banner.link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{banner.link.label}</a> : null}
+            </div>
+          ) : null}
+          {!ws.canWrite && !demo ? (
+            <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>You can view this dashboard. An owner or editor can change what is tracked.</p>
+          ) : null}
+          {children}
+        </div>
       </div>
     </div>
   );

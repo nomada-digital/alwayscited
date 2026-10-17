@@ -51,6 +51,9 @@
 .dash-nav a svg { flex: none; }
 .dash-nav .n { margin-left: auto; font-size: 11.5px; font-weight: 700; color: var(--soft); }
 .dash-side-foot { margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
+.dash-help { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.dash-help a { font-size: 12.5px; color: var(--soft); text-decoration: none; padding: 2px 0; }
+.dash-help a:hover { color: var(--ink); }
 .dash-side-foot form button { font: inherit; font-size: 12.5px; color: var(--soft); background: none; border: 0; padding: 4px 10px; cursor: pointer; text-align: left; }
 .dash-side-foot form button:hover { color: var(--ink); }
 

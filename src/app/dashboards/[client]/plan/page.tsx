@@ -11,9 +11,17 @@ import { TIER_ORDER, packLine, tierInfo } from "@/lib/dash/plan";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Plan", robots: { index: false, follow: false } };
 
-export default async function Plan({ params }: { params: Promise<{ client: string }> }) {
+const BILLING_WHY: Record<string, string> = {
+  owner: "Only the account owner can open billing.",
+  none: "There is no card subscription on this site yet. Email us and we will sort it.",
+  failed: "Billing did not open just now. Try again in a minute, or email us.",
+};
+
+export default async function Plan({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
-  const { ws } = await pageData(slug);
+  const sp = await searchParams;
+  const { ws, demo } = await pageData(slug);
+  const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
   const a = ws.allowances;
   const at = TIER_ORDER.indexOf(ws.client.tier);
   return (
@@ -37,6 +45,22 @@ export default async function Plan({ params }: { params: Promise<{ client: strin
             <a className="btn" href={`${SITE_ORIGIN}/help`}>How allowances work</a>
           </div>
         </div>
+      </div>
+      <div className="dash-card" id="billing">
+        <div className="dash-card-head">
+          <div>
+            <h2>Billing</h2>
+            <p className="intro">Invoices, your card, and cancelling are on Stripe&rsquo;s secure billing page. Cancelling stops at the end of the period you have paid for.</p>
+          </div>
+          {ws.role === "owner" && !demo ? (
+            <form action={`/api/dash/${slug}/billing`} method="post">
+              <button type="submit" className="btn">Open billing</button>
+            </form>
+          ) : (
+            <span className="muted" style={{ fontSize: 12.5 }}>{demo ? "Billing is not available on a demo." : "The account owner manages billing."}</span>
+          )}
+        </div>
+        {billingWhy ? <div className="field-err" role="alert">{billingWhy}</div> : null}
       </div>
       <div className="dash-card">
         <h2>The four plans</h2>

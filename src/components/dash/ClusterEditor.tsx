@@ -66,7 +66,7 @@ export default function ClusterEditor({ slug, base, demo = false, clusterId, ini
           <div>
             <h2 className="dash-h2">Keyword groups</h2>
             <p className="intro" style={{ margin: "2px 0 0", color: "var(--soft)", fontSize: 13 }}>
-              The searches in this cluster that mean the same thing, with the prompts that ask it of AI. Drag a keyword or prompt to move it.
+              The searches in this cluster that mean the same thing, with the prompts that ask it of AI. Move a keyword or prompt by dragging it, or from its ⋯ menu.
             </p>
           </div>
           <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -259,6 +259,7 @@ function KeywordRow({ k, g, ctx }: { k: KeywordView; g: GroupView; ctx: Ctx }) {
           {tracked ? <span title="Checked on Google every day">Tracked daily</span> : <span title="From your ranking snapshot; not checked daily">Ranking snapshot</span>}
           {k.volume ? <span>{k.volume.toLocaleString("en-GB")}/mo</span> : null}
           {k.addedOn && k.addedOn > ctx.ws.today ? <span className="pill accent" style={{ padding: "0 7px" }}>First check tomorrow</span> : null}
+          {k.pageChange ? <span className="pill warn" style={{ padding: "0 7px" }} title={`Google now ranks ${k.pageChange.to} instead of ${k.pageChange.from}`}>Ranking page changed</span> : null}
         </div>
       </div>
       <div className="side">
@@ -405,14 +406,33 @@ function Discovered({ g, ctx }: { g: GroupView; ctx: Ctx }) {
   );
 }
 
-/** A starting prompt for an empty group, from its first keyword - offered, never added without a click. */
+/**
+ * Starting prompts for an empty group - offered, never added without a click.
+ * Built from the group's own words in the cluster's context: a tracked keyword
+ * first, else the most-searched keyword in the group that shares most words
+ * with the cluster keyword ("life sciences staffing agencies" in a life
+ * sciences cluster), so a suggestion never drops the market the cluster is
+ * about ("Who is the best staffing agency?" asks about every staffing agency).
+ */
+export function suggestionKeyword(g: GroupView, clusterKeyword: string | null): string | null {
+  const tracked = g.keywords.find((k) => k.src === "tracked");
+  if (tracked) return tracked.keyword.toLowerCase();
+  const stem = (w: string) => w.toLowerCase().replace(/(ies|s)$/, "");
+  const head = new Set((clusterKeyword ?? "").split(/\s+/).filter(Boolean).map(stem));
+  const scored = g.keywords
+    // Job-seeker searches bring applicants, not buyers: never a prompt to track.
+    .filter((k) => k.src === "footprint" && k.keyword.split(/\s+/).length >= 2 && !/\b(jobs?|careers?|salar(y|ies)|near me|vacanc(y|ies))\b/i.test(k.keyword))
+    .map((k) => ({ k: k.keyword.toLowerCase(), shared: k.keyword.split(/\s+/).filter((w) => head.has(stem(w))).length, v: k.volume ?? 0 }))
+    .filter((x) => x.shared > 0)
+    .sort((x, y) => y.shared - x.shared || y.v - x.v);
+  return scored[0]?.k ?? (g.id ? null : clusterKeyword?.toLowerCase() ?? null);
+}
+
 function Suggest({ g, ctx }: { g: GroupView; ctx: Ctx }) {
-  // A tracked keyword, else the group's own name: snapshot keywords are whatever the site ranks for, often not a buyer's words.
-  const kw = (g.keywords.find((k) => k.src === "tracked")?.keyword ?? (g.id ? g.name : ctx.cluster.headKeyword))?.toLowerCase();
-  if (!kw || !ctx.canWrite) return <div className="empty-sm">No prompts in {g.id ? "this group" : "the cluster"} yet.</div>;
-  const one = kw.replace(/ies$/, "y").replace(/(?<!s)s$/, "");
-  const many = one === kw ? kw.replace(/y$/, "ies").replace(/([^s])$/, "$1s") : kw;
-  const ideas = [`Who is the best ${one}?`, `Which ${many} do people recommend?`];
+  const kw = suggestionKeyword(g, ctx.cluster.headKeyword);
+  if (!kw || !ctx.canWrite) return <div className="empty-sm">No prompts in {g.id ? "this group" : "the cluster"} yet. Add one the way a buyer would ask it.</div>;
+  // Phrasings that read right around any noun phrase, singular, plural or uncountable ("executive recruitment").
+  const ideas = [`Who would you recommend for ${kw}?`, `What are the best options for ${kw}?`];
   return (
     <div className="empty-sm">
       No prompts yet. Try:
