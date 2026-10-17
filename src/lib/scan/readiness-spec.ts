@@ -84,6 +84,12 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 13 Oct 2026: read by components/DplGuard.tsx, which the build replaces
   // with the deployment id Vercel sets; a build without one renders nothing.
   NEXT_DEPLOYMENT_ID: "set by the platform at build; absent means no deployment-id guard is needed",
+  // 15 Oct 2026, Danny approved GA4 with a consent banner in chat: the
+  // Measurement Protocol secret the Stripe webhook sends the purchase with
+  // (lib/checkout/ga4.ts). Server only, never NEXT_PUBLIC. Unset, the purchase
+  // is not sent to GA4 and nothing else changes; while GA_MEASUREMENT_ID is
+  // the placeholder it is not sent either way.
+  GA4_API_SECRET: "optional: unset means no server-side purchase event reaches GA4; checkout and signup are unchanged",
 };
 
 /**

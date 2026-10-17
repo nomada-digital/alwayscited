@@ -3,6 +3,7 @@ import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ConsentBanner from "@/components/ConsentBanner";
 import { DplGuard } from "@/components/DplGuard";
 import Motion from "@/components/Motion";
 import SiteChrome from "@/components/SiteChrome";
@@ -103,6 +104,9 @@ export default function RootLayout({
         <main id="main" tabIndex={-1} className="flex-1 outline-none">{children}</main>
         <SiteChrome>
           <Footer />
+          {/* GA4 behind a consent question (Danny, 15 Oct 2026). Inside the
+              chrome so /app never mounts it; renders nothing on the server. */}
+          <ConsentBanner />
         </SiteChrome>
       </body>
     </html>

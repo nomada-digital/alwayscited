@@ -19,6 +19,8 @@ import {
 } from "@/config/sector-pricing";
 import { SELECTION_DEFAULT, isCall, parseSelection, withSelection, type Selection } from "@/config/sector-selection";
 import { T } from "@/config/tokens";
+import { track } from "@/lib/analytics";
+import { TIER_PLAIN } from "@/lib/tier-text";
 
 /**
  * The price tiles' live half - section 4 of docs/pricing-spec-2026-09-27.md
@@ -303,11 +305,16 @@ export function SectorPrice({
  * the US default (R148 journey pass, 1 Oct 2026). Before mount, and for the
  * default market, the plain href.
  */
-export function MarketCta({ href, className, style, children }: { href: string; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
+export function MarketCta({ tier, href, className, style, children }: { tier: TierKey; href: string; className?: string; style?: React.CSSProperties; children: React.ReactNode }) {
   const m = useMarket();
   const mounted = useMounted();
   return (
-    <a href={mounted ? withSelection(href, { ...SELECTION_DEFAULT, market: m }) : href} className={className} style={style}>
+    <a
+      href={mounted ? withSelection(href, { ...SELECTION_DEFAULT, market: m }) : href}
+      onClick={() => track("select_plan", { plan: TIER_PLAIN[tier], market: m })}
+      className={className}
+      style={style}
+    >
       {children}
     </a>
   );
@@ -332,7 +339,7 @@ export function SelectionCta({
   const sel = mounted ? selectionOf(tier, m) : SELECTION_DEFAULT;
   const to = isCall(tier, sel) ? withSelection(contactUrlFor(tier), sel) : withSelection(href, sel);
   return (
-    <a href={to} className={className} style={style}>
+    <a href={to} onClick={() => track("select_plan", { plan: TIER_PLAIN[tier], market: m })} className={className} style={style}>
       {children}
     </a>
   );

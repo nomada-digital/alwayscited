@@ -194,7 +194,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         return;
       }
       setDone(data.message ?? (kind === "video" ? "Thanks. Luke will send your Loom." : "Thanks. Danny will be in touch."));
-      track("walkthrough_requested", { kind });
+      track("generate_lead", { lead_type: "walkthrough", kind });
     } catch {
       setErr("We could not reach the checker. Please try again.");
     } finally {

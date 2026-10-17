@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { onCheckoutCompleted, onSubscriptionDeleted, onSubscriptionUpdated, onTrialWillEnd } from "@/lib/checkout/signup";
 import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
+import { sendGa4Purchase } from "@/lib/checkout/ga4";
 import { handleWebhook } from "@/lib/checkout/webhook";
 
 export const runtime = "nodejs";
@@ -34,7 +35,14 @@ export async function POST(req: Request) {
       const { error } = await supabaseAdmin().from("stripe_events").delete().eq("id", id);
       if (error) console.error(`[stripe] could not forget ${id}: ${error.message}`);
     },
-    completed: (order, eventId) => onCheckoutCompleted(supabaseAdmin(), order, eventId),
+    // GA4's purchase (or start_trial) after the order is set up, once per
+    // event: a replay is answered as a duplicate before this runs. Never fatal
+    // and bounded by a 3s timeout (lib/checkout/ga4.ts, 15 Oct 2026).
+    completed: async (order, eventId) => {
+      const done = await onCheckoutCompleted(supabaseAdmin(), order, eventId);
+      if (done) await sendGa4Purchase(order);
+      return done;
+    },
     updated: (sub, previous, at) => onSubscriptionUpdated(supabaseAdmin(), sub, previous, at),
     deleted: (sub, at) => onSubscriptionDeleted(supabaseAdmin(), sub, at),
     trialWillEnd: (sub) => onTrialWillEnd(supabaseAdmin(), sub),

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { CookieSettingsButton } from "@/components/ConsentBanner";
 import TierName, { TierText } from "@/components/TierName";
 import { OG_IMAGE } from "@/config/og";
 
@@ -24,9 +25,15 @@ export const metadata: Metadata = {
  *    is, and the nightly job clears nothing (api/cron/purge-responses).
  *    Danny's decision, 24 September 2026. The response_retention_days row is
  *    still in app_settings and nothing reads it
- *  - the only third-party script the browser loads is Cloudflare Turnstile
- *  - the app sets no cookies of its own: no document.cookie, no cookies()
- *  - there is no analytics of any kind installed
+ *  - the third-party scripts the browser can load are Cloudflare Turnstile and,
+ *    only after a yes on the cookie banner, Google Analytics (15 Oct 2026,
+ *    Danny approved GA4 with a consent banner in chat; it was "the only
+ *    third-party script is Turnstile" and "no analytics of any kind" before)
+ *  - apart from GA's own cookies, set only after that yes, the site sets one
+ *    cookie, the dashboard's login: document.cookie is touched by
+ *    lib/analytics.ts alone, and cookies() by the dashboard session alone
+ *  - GA never loads on the dashboard, nothing is sent before consent, and
+ *    neither a scanned domain nor anything typed into a form is sent to it
  *
  * All five are executable now, and a claim on this page that is not executable
  * is a claim that rots: `analytics-claim.test.mts` holds the analytics one,
@@ -83,7 +90,8 @@ const SECTIONS: Section[] = [
         card and billing details, and we keep your email address and the Stripe references for your order, never the card
         number. The contact form collects what you type into it. We also
         store a salted one-way hash of your IP address, to stop one visitor running the scan hundreds of times - the
-        address itself is never written down, and the hash cannot be turned back into it.
+        address itself is never written down, and the hash cannot be turned back into it. If you accept analytics,
+        Google Analytics also records how you use the site - see cookies and tracking below.
       </>
     ),
   },
@@ -123,7 +131,8 @@ const SECTIONS: Section[] = [
         writes the questions. Cloudflare runs the robot check in front of a scan, and we pass it your IP address so it
         can do that. Email is sent through Resend. Hosting is Vercel, and the database is Supabase, in London. To
         say how hard each placement on a report would be to land, we look up the cited sites&apos; domains on a
-        link marketplace - only those domains, nothing about you.
+        link marketplace - only those domains, nothing about you. If you accept analytics, Google runs Google
+        Analytics for us, as described under cookies and tracking.
       </>
     ),
   },
@@ -132,12 +141,21 @@ const SECTIONS: Section[] = [
     title: "Cookies and tracking",
     body: (
       <>
-        This site sets no cookies of its own, with one exception: when a client signs in to their <TierName tier="tracked" />{" "}
+        The site loads two third-party scripts, and one of them only if you say yes. Cloudflare Turnstile checks you are
+        not a robot before a scan runs - usually without showing anything - and it sets storage of its own to do that.
+        Google Analytics shows us how the site is used, and it is not loaded at all until you accept the cookie banner;
+        decline and it never is. With your yes it records the pages you view, where your visit came from, your approximate
+        location and device, and actions such as scans started, plans selected and checkouts begun. It never sees what you
+        type into a form or the domains you scan, and it is never loaded on the client dashboard. It sets two cookies, _ga
+        and _ga_ followed by our property&apos;s id, which last two years. When a plan is bought, our server also tells
+        Google Analytics the plan and the amount, joined to your visit only if you accepted, and nothing else about you.
+        Our basis for analytics is your consent. Its advertising signals are switched off, and there is no advertising
+        pixel. You can change your choice at any time with <CookieSettingsButton style={{ fontWeight: 600, color: T.accent }} />
+        , here or at the foot of every page; declining after accepting deletes those cookies. Apart from those, this site
+        sets no cookies of its own, with one exception: when a client signs in to their <TierName tier="tracked" />{" "}
         dashboard, we set one login cookie so they stay signed in. It holds a random key and nothing else, lasts 30
-        days, is cleared when they log out, and is never set on any other visit. The site runs no third-party analytics - there is
-        no Google Analytics, no tag manager, and no advertising pixel. The dashboard's feature counts, described above, are
-        our own and go to no third party. The one third-party script the page loads is Cloudflare Turnstile, which checks you are not
-        a robot before a scan runs - usually without showing anything - and it sets storage of its own to do that.
+        days, is cleared when they log out, and is never set on any other visit. The dashboard's feature counts, described
+        above, are our own and go to no third party.
       </>
     ),
   },

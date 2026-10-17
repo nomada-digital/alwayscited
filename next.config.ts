@@ -103,15 +103,23 @@ const isDev = process.env.NODE_ENV === "development";
  * today.
  *
  * challenges.cloudflare.com is Turnstile on the scan form - its script and
- * the widget's iframe. It is the site's only third-party origin.
+ * the widget's iframe.
+ *
+ * The Google origins are GA4 (15 Oct 2026, Danny approved GA4 with a consent
+ * banner in chat): gtag.js from www.googletagmanager.com, and the hits and
+ * pixel it sends to www.google-analytics.com, region1.google-analytics.com and
+ * www.googletagmanager.com. Explicit hosts, no wildcard - privacy-claims holds
+ * that. Nothing requests them until a visitor accepts the banner
+ * (components/ConsentBanner.tsx), and the dashboard's policy below has them
+ * taken out, so client data never has a door to GA from /app.
  */
 const CSP = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com https://www.googletagmanager.com`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' blob: data:",
+  "img-src 'self' blob: data: https://www.google-analytics.com https://www.googletagmanager.com",
   "font-src 'self'",
-  `connect-src 'self' https://challenges.cloudflare.com${isDev ? " ws:" : ""}`,
+  `connect-src 'self' https://challenges.cloudflare.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com${isDev ? " ws:" : ""}`,
   "frame-src https://challenges.cloudflare.com",
   "worker-src 'self' blob:",
   "manifest-src 'self'",
@@ -123,6 +131,19 @@ const CSP = [
   // what a localhost dev server wants.
   ...(isDev ? [] : ["upgrade-insecure-requests"]),
 ].join("; ");
+
+/** GA4's origins, as they appear in CSP above. */
+const GA_ORIGINS = ["https://www.googletagmanager.com", "https://www.google-analytics.com", "https://region1.google-analytics.com"];
+
+/**
+ * The dashboard's policy (/app, /admin and the app host): the site's, with
+ * every GA origin removed (15 Oct 2026). GA never loads there - the banner is
+ * not mounted on /app and refuses the app host - and this makes that a
+ * browser rule rather than only a code path.
+ */
+const APP_CSP = CSP.split("; ")
+  .map((d) => d.split(" ").filter((src) => !GA_ORIGINS.includes(src)).join(" "))
+  .join("; ");
 
 /** The dashboard's host name, without a port, when APP_HOST names one (src/lib/app-host.ts). */
 const APP_HOSTNAME = (process.env.APP_HOST ?? "").trim().toLowerCase().split(":")[0] || null;
@@ -231,6 +252,7 @@ const nextConfig: NextConfig = {
     const baseline = BASELINE.map(([key, value]) => ({ key, value }));
     const csp = { key: "content-security-policy", value: CSP };
     const noIndex = { key: "x-robots-tag", value: "noindex, nofollow" };
+    const appCsp = { key: "content-security-policy", value: APP_CSP };
 
     /**
      * `/coverage-check/:path+` and `/admin/:path*` joined this list on
@@ -254,9 +276,10 @@ const nextConfig: NextConfig = {
       { source: "/api/:path*", headers: [noIndex] },
       { source: "/scan/:path+", headers: [noIndex] },
       { source: "/coverage-check/:path+", headers: [noIndex] },
-      { source: "/admin/:path*", headers: [noIndex] },
+      // After the site-wide rule, so the GA-free policy replaces it (15 Oct 2026).
+      { source: "/admin/:path*", headers: [appCsp, noIndex] },
       // The client dashboard (T3, 29 Sep 2026). `:path*` so /app itself is covered.
-      { source: "/app/:path*", headers: [noIndex] },
+      { source: "/app/:path*", headers: [appCsp, noIndex] },
       // The order form and its confirmation (R91, 29 Sep 2026): an order in progress.
       { source: "/checkout/:path*", headers: [noIndex] },
       /**
@@ -268,7 +291,7 @@ const nextConfig: NextConfig = {
        * The proxy could not do this - this header is applied after it runs.
        */
       ...(APP_HOSTNAME
-        ? [{ source: "/:path*", has: [{ type: "host" as const, value: APP_HOSTNAME.replace(/\./g, "\\.") }], headers: [{ key: "content-security-policy", value: CSP.replace("frame-ancestors 'self'", "frame-ancestors 'none'") }, noIndex] }]
+        ? [{ source: "/:path*", has: [{ type: "host" as const, value: APP_HOSTNAME.replace(/\./g, "\\.") }], headers: [{ key: "content-security-policy", value: APP_CSP.replace("frame-ancestors 'self'", "frame-ancestors 'none'") }, noIndex] }]
         : []),
     ];
   },

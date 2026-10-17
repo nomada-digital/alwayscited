@@ -193,7 +193,7 @@ export default function PackagePage({
               {tier.action}
             </SelectionCta>
           ) : (
-            <MarketCta href={tier.key === "tracked" ? checkoutUrlFor("tracked") : contactUrlFor(tier.key)} className="btn-primary" style={CTA_STYLE}>
+            <MarketCta tier={tier.key} href={tier.key === "tracked" ? checkoutUrlFor("tracked") : contactUrlFor(tier.key)} className="btn-primary" style={CTA_STYLE}>
               {/* The tier's own verb from pricing.ts (R79). alwayseverywhere's
                   still goes to /contact as a call - only the label moved. The
                   market picked on the page travels with it (R148), and the tier

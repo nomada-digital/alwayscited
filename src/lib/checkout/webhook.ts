@@ -80,6 +80,8 @@ export type CompletedOrder = {
   currency: string | null;
   /** The trial's length when checkout gave one (config/trial.ts), else null. */
   trialDays: number | null;
+  /** The buyer's GA client id, set at checkout only after a yes to analytics (15 Oct 2026), else null. */
+  gaClientId: string | null;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -110,6 +112,7 @@ export function completedOrder(session: Record<string, unknown>): CompletedOrder
     amountTotal: typeof session.amount_total === "number" ? session.amount_total : null,
     currency: str(session.currency) || null,
     trialDays: /^\d{1,2}$/.test(str(m.trial_days)) ? Number(str(m.trial_days)) : null,
+    gaClientId: /^\d{1,12}\.\d{1,12}$/.test(str(m.ga_client_id)) ? str(m.ga_client_id) : null,
   };
 }
 
