@@ -39,6 +39,10 @@ const SPRITE_FILES = [
   "components/app/ai/AiVisibility.tsx",
   // 17 Oct 2026, dashboards.alwayscited.com: rendered under app/dashboards/layout.tsx, which mounts the sprite.
   "app/dashboards/[client]/ai/page.tsx",
+  // 17 Oct 2026: the click-through views and the AI tab's prompt manager, all under app/dashboards/layout.tsx.
+  "app/dashboards/[client]/ai/[prompt]/page.tsx",
+  "app/dashboards/[client]/sources/[domain]/page.tsx",
+  "components/dash/PromptManager.tsx",
   "app/dashboards/[client]/sources/page.tsx",
   "components/dash/Figures.tsx",
 ];

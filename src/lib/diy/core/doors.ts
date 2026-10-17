@@ -16,7 +16,10 @@ import {
   readDiyContentParsing,
   readDiyInstantPage,
   readDiyMicrodata,
+  readDiyKeywordDifficulty,
+  readDiyKeywordSuggestions,
   readDiyRankedKeywords,
+  readDiyRelatedKeywords,
   readDiyRelevantPages,
   readLabsStatus,
 } from "@/lib/scan/dataforseo";
@@ -51,6 +54,10 @@ import {
   microdataRequest,
   type ParsedPage,
   type RankedKeywords,
+  type ResearchedKeyword,
+  keywordDifficultyRequest,
+  keywordSuggestionsRequest,
+  relatedKeywordsRequest,
   rankedKeywordsRequest,
   type RelevantPage,
   relevantPagesRequest,
@@ -106,6 +113,21 @@ function marketOf(ctx: ReadCtx): Market {
 /** Every keyword the client ranks for in Google's top 100, by estimated traffic (P6's footprint). Up to 1000 rows. */
 export function readRankedKeywords(ctx: ReadCtx, opts: { limit?: number } = {}): Promise<ReadResult<RankedKeywords>> {
   return diyRead(ctx, "labs", rankedKeywordsRequest({ target: ctx.client.domain, market: marketOf(ctx), limit: opts.limit }), readDiyRankedKeywords);
+}
+
+/** 17 Oct 2026, keyword research: keywords containing the seed, in the client's market (lib/dash/research.ts). */
+export function readKeywordSuggestions(ctx: ReadCtx, seed: string): Promise<ReadResult<ResearchedKeyword[]>> {
+  return diyRead(ctx, "labs", keywordSuggestionsRequest({ seed, market: marketOf(ctx) }), readDiyKeywordSuggestions);
+}
+
+/** Keywords searched alongside the seed, in the client's market. */
+export function readRelatedKeywords(ctx: ReadCtx, seed: string): Promise<ReadResult<ResearchedKeyword[]>> {
+  return diyRead(ctx, "labs", relatedKeywordsRequest({ seed, market: marketOf(ctx) }), readDiyRelatedKeywords);
+}
+
+/** Difficulty for up to 100 keywords, in the client's market. */
+export function readKeywordDifficulty(ctx: ReadCtx, keywords: readonly string[]): Promise<ReadResult<{ keyword: string; kd: number | null }[]>> {
+  return diyRead(ctx, "labs", keywordDifficultyRequest({ keywords, market: marketOf(ctx) }), readDiyKeywordDifficulty);
 }
 
 /** The client's pages by estimated traffic (P8's key pages). */

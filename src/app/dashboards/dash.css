@@ -74,13 +74,15 @@
 .dash-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .dash-grid { display: grid; gap: 16px; }
 .dash-grid.k4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.dash-grid.k5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 .dash-grid.k3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .dash-grid.k2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dash-grid.side { grid-template-columns: minmax(0, 1fr) 340px; align-items: start; }
 
 /* ---- figures ---- */
 .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; display: flex; flex-direction: column; gap: 4px; min-height: 118px; }
-.kpi .l { font-size: 12px; font-weight: 600; color: var(--soft); }
+.kpi .l { font-size: 12px; font-weight: 600; color: var(--soft); min-width: 0; overflow-wrap: anywhere; }
+.kpi { min-width: 0; }
 .kpi .v { font-size: 30px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .kpi .v small { font-size: 14px; font-weight: 600; color: var(--soft); letter-spacing: 0; margin-left: 3px; }
 .kpi .s { font-size: 12.5px; color: var(--soft); margin-top: auto; }
@@ -245,7 +247,7 @@
 .auth .dash-card { width: 100%; max-width: 400px; padding: 28px; }
 
 /* A shared demo link's badge (17 Oct 2026): on every page, above everything but the toasts. */
-.demo-badge { position: fixed; top: 12px; right: 16px; z-index: 50; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-fg); pointer-events: auto; }
+.demo-badge { position: fixed; bottom: 16px; right: 16px; z-index: 50; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-fg); pointer-events: auto; }
 
 /* ---- small screens: the sidebar becomes a top bar ---- */
 @media (max-width: 900px) {
@@ -257,14 +259,14 @@
   .dash-nav a svg, .dash-nav .n { display: none; }
   .dash-side-foot { display: none; }
   .dash-main { padding: 20px 16px 64px; }
-  .dash-grid.k4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-grid.k4, .dash-grid.k5 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dash-grid.k3, .dash-grid.k2, .dash-grid.side { grid-template-columns: minmax(0, 1fr); }
   .grp-body { grid-template-columns: minmax(0, 1fr); }
   .grp-col + .grp-col { border-left: 0; border-top: 1px solid var(--hair); }
   .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .item .acts { opacity: 1; }
   .dash-head h1 { font-size: 24px; }
-  .demo-badge { top: auto; bottom: 16px; right: 12px; }
+  .demo-badge { right: 12px; }
 }
 @media (max-width: 480px) {
   .ladder { grid-template-columns: minmax(0, 1fr); }
@@ -275,3 +277,27 @@
 body:has([data-dash-tree]) .site-chrome { display: none; }
 .btn.primary .tier-name__accent, .toast .tier-name__accent { color: inherit; }
 .kpi .v .num { font-size: 14px; letter-spacing: 0; }
+/* Click-through views (17 Oct 2026): the date control, an answer's words and its marks, the history strip. */
+.datectl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.datectl .field { padding: 5px 8px; font-size: 13px; max-width: 100%; }
+.answer { font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+.answer p { margin: 0 0 10px; }
+.answer ul, .answer ol { margin: 0 0 10px; padding-left: 20px; }
+.answer mark { border-radius: 4px; padding: 0 2px; }
+.answer mark.hl-you { background: var(--wash); color: var(--accent); font-weight: 700; box-shadow: inset 0 -2px 0 var(--accent); }
+.answer mark.hl-rival { background: var(--chip); color: var(--ink); box-shadow: inset 0 -2px 0 var(--soft); }
+.hist { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+.hist-row { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.hist-row a, .hist-row span { flex: none; width: 14px; height: 22px; border-radius: 4px; background: var(--chip); display: block; position: relative; }
+.hist-row .named { background: var(--accent); }
+.hist-row .missed { background: var(--line); }
+.hist-row .none { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.hist-row .sel { outline: 2px solid var(--ink); outline-offset: 1px; }
+.hist-row .cites::after { content: ""; position: absolute; left: 4px; bottom: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--surface); }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cites-list { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.cites-list a { color: var(--ink); text-decoration: none; overflow-wrap: anywhere; }
+.cites-list a:hover { color: var(--accent); }
+@media (max-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr); } }
+.seg .seg-link { font-size: 12.5px; font-weight: 600; color: var(--soft); padding: 5px 11px; border-radius: 8px; text-decoration: none; }
+.seg .seg-link[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent); }

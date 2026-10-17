@@ -104,7 +104,7 @@ const fallback = (c: ReadCtx) =>
   paidRead(c, { door: "onpage", endpoint: "content_parsing", estimate: 0.00015, params: { url: "https://roundup.example/best" } }, async () => ({ value: "parsed", cost: 0.00015, rows: 1, partial: false }));
 
 test("13 Oct 2026: a free-first action still runs while dark, mid-run or at a cap; only its paid fallback is refused, and nothing is written", async () => {
-  assert.deepEqual(FREE_FIRST, { page_check: false, example: false, verify: true, link_check: true, log: true });
+  assert.deepEqual(FREE_FIRST, { page_check: false, example: false, verify: true, link_check: true, log: true, keyword_research: false });
   const cases: [string, ReturnType<typeof world>, string][] = [
     ["dark", world({ settings: { diy_enabled: false } }), "disabled"],
     ["a tracking run", world({ runs: [{ id: "r1", status: "running", started_at: new Date(NOW - 60_000).toISOString() }] }), "tracking_running"],
@@ -148,7 +148,8 @@ test("13 Oct 2026: a paused or ended client is refused every action before anyth
 });
 
 test("each action draws on its own allowance; a logged site has none of its own", () => {
-  assert.deepEqual(ACTION_ALLOWANCE, { page_check: "page_checks", example: "examples", verify: "link_checks", link_check: "link_checks", log: null });
+  // 17 Oct 2026: keyword research is counted by the labs door's on-demand daily count and the month budget.
+  assert.deepEqual(ACTION_ALLOWANCE, { page_check: "page_checks", example: "examples", verify: "link_checks", link_check: "link_checks", log: null, keyword_research: null });
 });
 
 test("on the fixture the state decides, and fn gets a ctx whose doors refuse", async () => {

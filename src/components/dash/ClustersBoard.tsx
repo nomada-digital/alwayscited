@@ -11,6 +11,7 @@ import type { Raw } from "@/lib/dash/types";
 import { InlineText, Menu } from "./ClusterEditor";
 import { Change, Pos, Rate, Spark } from "./Figures";
 import Icon from "./Icon";
+import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
 
 /** Every cluster, with add, rename and remove in place (17 Oct 2026). */
@@ -28,7 +29,7 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
         <span className="muted"><b style={{ color: "var(--ink)" }}>{a.clusters.used}</b> of {a.clusters.limit} clusters in use</span>
         {ws.canWrite ? (
           full ? (
-            <Link className="btn primary" href={`${base}/${slug}/plan`} style={{ marginLeft: "auto" }}>Add more clusters</Link>
+            <span style={{ marginLeft: "auto" }}><PackButton slug={slug} owner={ws.role === "owner"} demo={demo} label="Add 5 more clusters" /></span>
           ) : (
             <button className="btn primary" style={{ marginLeft: "auto" }} onClick={() => setAdding(true)}><Icon name="plus" size={14} />New cluster</button>
           )

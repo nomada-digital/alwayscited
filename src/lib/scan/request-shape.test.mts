@@ -530,6 +530,9 @@ test("a request DataForSEO refused whole says why, and an account's 'not now' is
  * right one.
  */
 const DIY_DOORS = [
+  "readDiyKeywordSuggestions",
+  "readDiyRelatedKeywords",
+  "readDiyKeywordDifficulty",
   "readDiyRankedKeywords",
   "readDiyRelevantPages",
   "readDiyCompetitorsDomain",
@@ -539,12 +542,13 @@ const DIY_DOORS = [
   "readLabsStatus",
   "readBacklinksFilters",
 ];
-const DIY_BUILDERS = ["rankedKeywordsRequest", "relevantPagesRequest", "competitorsDomainRequest", "instantPagesRequest", "microdataRequest", "contentParsingRequest"];
+const DIY_BUILDERS = ["rankedKeywordsRequest", "relevantPagesRequest", "competitorsDomainRequest", "instantPagesRequest", "microdataRequest", "contentParsingRequest", "keywordSuggestionsRequest", "relatedKeywordsRequest", "keywordDifficultyRequest"];
 
 test("each DIY launch path is built in one module", async () => {
   const { DIY_PATHS, DIY_FREE_PATHS } = await import("./dataforseo-request.ts");
   const paths = [...Object.values(DIY_PATHS), ...Object.values(DIY_FREE_PATHS)].map((p) => p.replace(/^\/v3\//, ""));
-  assert.equal(paths.length, 8, "six paid paths (microdata rides on instant_pages) and two free ones");
+  // 17 Oct 2026: nine paid, with keyword research's three Labs reads.
+  assert.equal(paths.length, 11, "nine paid paths (microdata rides on instant_pages) and two free ones");
   const where: Record<string, string[]> = Object.fromEntries(paths.map((p) => [p, []]));
   for (const file of sourceFiles(ROOT)) {
     const src = code(readFileSync(join(ROOT, file), "utf8"));
@@ -569,7 +573,7 @@ test("each DIY door lives in dataforseo.ts and is referenced from doors.ts alone
 test("the DIY row ceilings: 100 by default, 1000 only for ranked_keywords, anything higher refused in code", async () => {
   const { DIY_LIMIT_CEILING, DIY_LIMIT_DEFAULT, rankedKeywordsRequest, relevantPagesRequest, competitorsDomainRequest } = await import("./dataforseo-request.ts");
   assert.equal(DIY_LIMIT_DEFAULT, 100);
-  assert.deepEqual(DIY_LIMIT_CEILING, { ranked_keywords: 1000, relevant_pages: 100, competitors_domain: 100 });
+  assert.deepEqual(DIY_LIMIT_CEILING, { ranked_keywords: 1000, relevant_pages: 100, competitors_domain: 100, keyword_suggestions: 100, related_keywords: 100, keyword_difficulty: 100 });
   assert.equal(rankedKeywordsRequest({ target: "tallyroo.com", market: "UK" }).rows, 1000);
   assert.throws(() => rankedKeywordsRequest({ target: "tallyroo.com", market: "UK", limit: 1001 }));
   for (const req of [relevantPagesRequest({ target: "tallyroo.com", market: "UK" }), competitorsDomainRequest({ target: "tallyroo.com", market: "US" })]) {

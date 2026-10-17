@@ -9,7 +9,7 @@ import { mintReadCtx, pool, realSleep } from "./ctx.ts";
 import { diyFixtureState, readDiyFixture } from "./fixture.ts";
 import type { OnDemandAction, ReadCtx } from "./jobs.ts";
 import { readDiySpend, utcDayStart } from "./ledger.ts";
-import { type Door, DFS_PRICES, modelEstimate } from "./prices.ts";
+import { type Door, DFS_PRICES, dfsEstimate, modelEstimate } from "./prices.ts";
 import { readDiySettings } from "./settings.ts";
 import { type CoreFixture, type UsageKey, countLedger, countUsage } from "./usage-meter.ts";
 
@@ -86,6 +86,8 @@ export const ACTION_ALLOWANCE: Record<OnDemandAction, AllowanceKey | null> = {
   verify: "link_checks",
   link_check: "link_checks",
   log: null,
+  // Counted by the labs door's on-demand daily count and the month budget, not a plan allowance.
+  keyword_research: null,
 };
 
 /** Each action's door and the largest read it makes, for the preflight. An example's input is about 11k tokens (section 5.3). */
@@ -95,6 +97,7 @@ export const ACTION_READ: Record<OnDemandAction, { door: Door; estimate: number 
   verify: { door: "onpage", estimate: DFS_PRICES.contentParsing },
   link_check: { door: "onpage", estimate: DFS_PRICES.contentParsing },
   log: { door: "onpage", estimate: DFS_PRICES.contentParsing },
+  keyword_research: { door: "labs", estimate: dfsEstimate("keyword_suggestions", 50) },
 };
 
 /** The actions whose first step is a free own fetch, with a paid `content_parsing` fallback (spec 10 sections 3.6 and 4.8). */
@@ -104,6 +107,7 @@ export const FREE_FIRST: Record<OnDemandAction, boolean> = {
   verify: true,
   link_check: true,
   log: true,
+  keyword_research: false,
 };
 
 /** How long an inline action may take, and a deferred one (the pages route's maxDuration is 180). */

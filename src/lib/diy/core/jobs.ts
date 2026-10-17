@@ -29,7 +29,8 @@ export type JobOutcome = "ok" | "skipped" | "deferred" | "failed";
 export type ReadTrigger = "scheduled" | "on_demand" | "onboarding";
 
 /** The on-demand actions a member can spend on (`diy_reads.action`). */
-export type OnDemandAction = "page_check" | "example" | "verify" | "link_check" | "log";
+/** 17 Oct 2026: `keyword_research` is the dashboards host's "Find keywords" (lib/dash/research.ts). */
+export type OnDemandAction = "page_check" | "example" | "verify" | "link_check" | "log" | "keyword_research";
 
 declare const READ_CTX: unique symbol;
 

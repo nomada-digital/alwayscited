@@ -41,7 +41,7 @@ export type Op =
   | { op: "group.edit"; id: string; name?: string; note?: string | null; terms?: string[] }
   | { op: "group.remove"; id: string }
   | { op: "group.restore"; id: string; keywords: string[]; prompts: string[] }
-  | { op: "keyword.add"; tempId: string; clusterId: string; groupId: string | null; keyword: string }
+  | { op: "keyword.add"; tempId: string; clusterId: string; groupId: string | null; keyword: string; volume?: number | null; intent?: string | null }
   | { op: "keyword.remove"; id: string }
   | { op: "keyword.restore"; id: string }
   | { op: "keyword.move"; id: string; clusterId: string; groupId: string | null }
@@ -116,7 +116,11 @@ export function readOp(b: unknown): Op | null {
     }
     case "keyword.add": {
       const tempId = id(o.tempId), clusterId = id(o.clusterId), groupId = idOrNull(o.groupId ?? null), keyword = str(o.keyword, 200);
-      return tempId && clusterId && groupId !== undefined && keyword !== null ? { op: o.op, tempId, clusterId, groupId, keyword } : null;
+      if (!tempId || !clusterId || groupId === undefined || keyword === null) return null;
+      // From keyword research: the volume and intent it showed, kept on the tracked keyword (vendor estimates).
+      const volume = typeof o.volume === "number" && Number.isInteger(o.volume) && o.volume >= 0 && o.volume < 1e9 ? o.volume : null;
+      const intent = typeof o.intent === "string" && ["informational", "navigational", "commercial", "transactional"].includes(o.intent) ? o.intent : null;
+      return { op: o.op, tempId, clusterId, groupId, keyword, ...(volume !== null ? { volume } : {}), ...(intent ? { intent } : {}) };
     }
     case "prompt.add": {
       const tempId = id(o.tempId), clusterId = id(o.clusterId), groupId = idOrNull(o.groupId ?? null), text = str(o.text, 600);
@@ -386,7 +390,7 @@ export function applyOp(raw: Raw, op: Op, ctx: { by: string; newId?: (tempId: st
       for (const p of op.prompts) if (next.prompts.some((r) => r.id === p && r.group_id === null)) set(next.prompts, p, { group_id: op.id });
       break;
     case "keyword.add":
-      next.keywords.push(newKeyword(op.tempId, op.keyword, op.clusterId, op.groupId));
+      next.keywords.push({ ...newKeyword(op.tempId, op.keyword, op.clusterId, op.groupId), search_volume: op.volume ?? null, intent: op.intent ?? null });
       break;
     case "keyword.remove":
       set(next.keywords, op.id, { stopped_on: day });

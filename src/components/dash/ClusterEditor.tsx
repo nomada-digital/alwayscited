@@ -10,6 +10,7 @@ import type { ClusterView, ConsoleFig, Engine, GroupView, KeywordView, PromptVie
 
 import { Cells, Change, Pos, Rate, Spark, pct } from "./Figures";
 import Icon from "./Icon";
+import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
 
 /**
@@ -57,7 +58,7 @@ export default function ClusterEditor({ slug, base, demo = false, clusterId, ini
   }
 
   const others = ws.clusters.filter((c) => c.id !== cluster.id);
-  const ctx: Ctx = { base, run, ws, cluster, others, engines: ws.engines, canWrite: ws.canWrite, drag, setDrag, source: showConsole ? source : "off", sample: sample && !anyLive, groupsReady: ws.groupsReady };
+  const ctx: Ctx = { base, demo, run, ws, cluster, others, engines: ws.engines, canWrite: ws.canWrite, drag, setDrag, source: showConsole ? source : "off", sample: sample && !anyLive, groupsReady: ws.groupsReady };
 
   return (
     <>
@@ -118,6 +119,7 @@ export default function ClusterEditor({ slug, base, demo = false, clusterId, ini
 
 type Ctx = {
   base: string;
+  demo: boolean;
   run: (op: Op, label?: string | null, opts?: { undoable?: boolean }) => string | null;
   ws: ReturnType<typeof buildWorkspace>;
   cluster: ClusterView;
@@ -276,6 +278,7 @@ function KeywordRow({ k, g, ctx }: { k: KeywordView; g: GroupView; ctx: Ctx }) {
               <Menu label={`Options for ${k.keyword}`}>
                 {(close) => (
                   <>
+                    <a href={`${ctx.base}/${ctx.ws.client.slug}/google/${k.id}`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }}>Every Google reading</a>
                     <MoveTargets ctx={ctx} current={g.id} onPick={(cid, gid, name) => { close(); run({ op: "keyword.move", id: k.id!, clusterId: cid, groupId: gid }, `Moved to ${name}.`); }} />
                     <hr />
                     <button onClick={() => { close(); run({ op: "keyword.remove", id: k.id! }, `Stopped tracking “${k.keyword}”.`); }} style={{ color: "var(--bad-fg)" }}>Stop tracking</button>
@@ -333,6 +336,7 @@ function PromptRow({ p, g, ctx }: { p: PromptView; g: GroupView; ctx: Ctx }) {
             <Menu label="Prompt options">
               {(close) => (
                 <>
+                  <a href={`${ctx.base}/${ctx.ws.client.slug}/ai/${p.id}`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }}>Open every answer</a>
                   <button onClick={() => { close(); setEditing(true); }}>Edit</button>
                   <MoveTargets ctx={ctx} current={g.id} onPick={(cid, gid, name) => { close(); run({ op: "prompt.move", id: p.id, clusterId: cid, groupId: gid }, `Moved to ${name}.`); }} />
                   <hr />
@@ -466,7 +470,7 @@ function Adder({ kind, g, ctx }: { kind: "keyword" | "prompt"; g: GroupView; ctx
   if (full) {
     return (
       <div className="empty-sm" style={{ marginTop: 6 }}>
-        All {a.limit} {kind}s on your plan are in use. <a href={`${ctx.base}/${ctx.ws.client.slug}/plan`} style={{ color: "var(--accent)", fontWeight: 600 }}>Add more</a>
+        All {a.limit} {kind}s on your plan are in use. <PackButton slug={ctx.ws.client.slug} owner={ctx.ws.role === "owner"} demo={ctx.demo} label="Add more" small />
       </div>
     );
   }

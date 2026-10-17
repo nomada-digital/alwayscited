@@ -5,6 +5,7 @@ import { siteUrl } from "@/lib/scan/verify-email";
 import { appUrl } from "@/lib/app-host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
 import { clustersToMake, orderEmailText, orderRow, packsOn, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
+import { livePacks } from "@/lib/checkout/packs";
 import { readSubscription } from "@/lib/checkout/stripe";
 import { afterSubscription } from "@/lib/checkout/payment";
 import { clientOfSubscription, recordPayment } from "@/lib/checkout/subscription-events";
@@ -333,9 +334,15 @@ export async function onSubscriptionUpdated(db: SupabaseClient, sub: Record<stri
   if (trialConverted(sub, previous)) console.info(`[stripe] trial converted to paid: ${String(sub.id)} client ${client?.id ?? "none"}`);
   if (!client) return true;
   const trialEndsAt = trialEndsAtAfter(sub, previous);
+  // 17 Oct 2026: packs bought through Checkout are their own subscriptions (packs.ts); the limit counts both.
+  const bought = await livePacks(db, client.id);
+  if (typeof bought === "string") {
+    console.error(`[stripe] ${bought}`);
+    return false;
+  }
   const { error } = await db
     .from("client_domains")
-    .update({ cluster_limit: clusterLimitFor(packsOn(sub)), ...(trialEndsAt === undefined ? {} : { trial_ends_at: trialEndsAt }) })
+    .update({ cluster_limit: clusterLimitFor(packsOn(sub) + bought), ...(trialEndsAt === undefined ? {} : { trial_ends_at: trialEndsAt }) })
     .eq("id", client.id);
   if (error) {
     console.error(`[stripe] cluster_limit${trialEndsAt === undefined ? "" : " and trial_ends_at"} not set: ${error.message}`);

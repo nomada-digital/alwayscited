@@ -36,6 +36,16 @@ import type {
   Workspace,
 } from "./types.ts";
 
+/** A URL as host and path, lower-cased with no trailing slash: how two readings of one page are matched. */
+export function pathKey(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "").toLowerCase()}${u.pathname.replace(/\/+$/, "").toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
+
 export const ENGINE_ORDER: readonly Engine[] = ["google_aio", "chatgpt", "gemini", "perplexity", "claude"];
 /** Readings drawn in a strip or trend. */
 export const STRIP_DAYS = 14;

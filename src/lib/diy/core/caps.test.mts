@@ -26,7 +26,8 @@ const check = (over: Partial<ReserveCheck> = {}): ReserveCheck => ({
 test("DOOR_DAILY is the spec's table: scheduled and on-demand counted apart", () => {
   assert.deepEqual(DOOR_DAILY, {
     scheduled: { labs: 3, backlinks: 15, onpage: 120, content: 2, model: 4 },
-    on_demand: { labs: 0, backlinks: 0, onpage: 20, content: 0, model: 6 },
+    // 17 Oct 2026: labs 0 -> 30 on demand, the dashboards host's keyword research (lib/dash/research.ts).
+    on_demand: { labs: 30, backlinks: 0, onpage: 20, content: 0, model: 6 },
   });
   // The heaviest night's onpage reads, sized in the spec: 40 + 10 + 30 + 20 = 100, under 120.
   assert.ok(40 + 10 + 30 + 20 < DOOR_DAILY.scheduled.onpage);
@@ -81,7 +82,9 @@ test("4. door daily: scheduled and onboarding share the scheduled count; on-dema
     "a heavy night never uses up a member's first Check this page now",
   );
   assert.equal(decideReservation(check({ door: "onpage", trigger: "on_demand", estimate: 0.0015, spend: spend({ "on_demand:onpage": 20 }) }))?.code, "door_daily");
-  assert.equal(decideReservation(check({ door: "labs", trigger: "on_demand" }))?.code, "door_daily", "no on-demand Labs read at all");
+  // 17 Oct 2026: on-demand Labs reads are keyword research, 30 a client a day; the 31st is refused.
+  assert.equal(decideReservation(check({ door: "labs", trigger: "on_demand", allowance: { out: false }, spend: spend({ "on_demand:labs": 29 }) })), null, "the 30th search of the day goes");
+  assert.equal(decideReservation(check({ door: "labs", trigger: "on_demand", allowance: { out: false }, spend: spend({ "on_demand:labs": 30 }) }))?.code, "door_daily", "the 31st is refused");
 });
 
 test("5. the month budgets by trigger class, on the trial keys in the trial", () => {

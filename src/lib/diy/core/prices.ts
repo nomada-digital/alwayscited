@@ -40,6 +40,10 @@ export const DIY_ENDPOINTS = [
   "backlinks_page_gap",
   "backlinks_competitors",
   "content_search",
+  // 17 Oct 2026, the dashboards host's keyword research: Labs, on demand (lib/dash/research.ts).
+  "keyword_suggestions",
+  "related_keywords",
+  "keyword_difficulty",
 ] as const;
 export type DiyEndpoint = (typeof DIY_ENDPOINTS)[number];
 
@@ -66,6 +70,9 @@ export const DOOR_OF: Record<DiyEndpoint, Door> = {
   backlinks_page_gap: "backlinks",
   backlinks_competitors: "backlinks",
   content_search: "content",
+  keyword_suggestions: "labs",
+  related_keywords: "labs",
+  keyword_difficulty: "labs",
 };
 
 /**
@@ -98,6 +105,11 @@ export function dfsEstimate(endpoint: DiyEndpoint, rows: number): number {
     case "ranked_keywords":
     case "relevant_pages":
     case "competitors_domain":
+    // 17 Oct 2026: keyword research is a Labs standard read like the three above - its request and every row up to
+    // its limit ([VERIFY] on the first task.cost; bulk_keyword_difficulty bills per keyword, here per row).
+    case "keyword_suggestions":
+    case "related_keywords":
+    case "keyword_difficulty":
       return round5(DFS_PRICES.labs.request + Math.max(0, rows) * DFS_PRICES.labs.row);
     case "instant_pages":
       return DFS_PRICES.instantPagesJs;

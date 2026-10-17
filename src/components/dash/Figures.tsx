@@ -72,7 +72,7 @@ export function Strip({ days }: { days: ("named" | "missed" | "none" | null)[] }
 }
 
 /** A sparkline of 0..1 rates, or of positions (lower is better) with `invert`. */
-export function Spark({ values, width = 96, height = 26, invert = false, max }: { values: (number | null)[]; width?: number; height?: number; invert?: boolean; max?: number }) {
+export function Spark({ values, width = 96, height = 26, invert = false, max, fluid = false }: { values: (number | null)[]; width?: number; height?: number; invert?: boolean; max?: number; fluid?: boolean }) {
   const pts = values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] !== null);
   if (pts.length < 2) return <svg width={width} height={height} aria-hidden="true" />;
   const hi = max ?? (invert ? Math.max(...pts.map((p) => p[1]), 10) : 1);
@@ -85,8 +85,8 @@ export function Spark({ values, width = 96, height = 26, invert = false, max }: 
   const d = pts.map(([i, v], n) => `${n ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join(" ");
   const last = pts[pts.length - 1]!;
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true" style={{ display: "block", overflow: "visible" }}>
-      <path d={d} fill="none" stroke="var(--accent)" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
+    <svg width={fluid ? "100%" : width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio={fluid ? "none" : undefined} aria-hidden="true" style={{ display: "block", overflow: "visible" }}>
+      <path d={d} fill="none" stroke="var(--accent)" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
       <circle cx={x(last[0])} cy={y(last[1])} r={2.4} fill="var(--accent)" />
     </svg>
   );
