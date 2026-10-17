@@ -596,7 +596,7 @@ export default function ScanFlow(p: {
           setProgress(RUN_STEPS.length);
           setTeaser(await loadTeaser());
           setPhase("result");
-          track("scan_completed", { cached: false });
+          track("free_scan_complete", { cached: false });
           return;
         }
         if (data.status === "failed") {
@@ -647,7 +647,7 @@ export default function ScanFlow(p: {
             setTeaser(t);
             setFull(asFull(await res.json()));
             setPartial(false);
-            track("scan_completed", { cached: false });
+            track("free_scan_complete", { cached: false });
             return;
           }
         }
@@ -783,7 +783,7 @@ export default function ScanFlow(p: {
          * nothing to serve.
          */
         setPhase("result");
-        track("scan_completed", { cached: true });
+        track("free_scan_complete", { cached: true });
         return null;
       }
       setProgress(0);
@@ -799,7 +799,8 @@ export default function ScanFlow(p: {
       setOffer(false);
       mailAt.current = null;
       setPhase("running");
-      track("scan_confirmed", { topic: input.topic, market: input.market, questions: input.questions.length });
+      // No topic: a category in the visitor's own words can identify them (15 Oct 2026).
+      track("scan_confirmed", { market: input.market, questions: input.questions.length });
       return null;
     } catch {
       return "We could not reach the checker. Please try again.";
@@ -842,7 +843,8 @@ export default function ScanFlow(p: {
         return;
       }
       setMailNote(data.message ?? OFFER_COPY.queued);
-      track("scan_report_email_requested", {});
+      // A lead: mark free_scan_email as a key event in GA4. Never the address.
+      track("free_scan_email", { lead_type: "scan_email" });
     } catch {
       setMailErr("We could not reach the checker. Please try again.");
     } finally {

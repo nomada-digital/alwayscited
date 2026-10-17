@@ -90,6 +90,12 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 17 Oct 2026: shareable read-only demo links on the dashboards host (src/lib/dash/host.ts). Unset means none open.
   DASH_DEMO_LINKS: "optional: token:slug pairs for read-only demo links; unset means no demo link opens",
   DASH_FIXTURE_TIER: "local runs only: which tier the snapshot is drawn as; read only while DASH_FIXTURE is set, which production refuses",
+  // 15 Oct 2026, Danny approved GA4 with a consent banner in chat: the
+  // Measurement Protocol secret the Stripe webhook sends the purchase with
+  // (lib/checkout/ga4.ts). Server only, never NEXT_PUBLIC. Unset, the purchase
+  // is not sent to GA4 and nothing else changes; while GA_MEASUREMENT_ID is
+  // the placeholder it is not sent either way.
+  GA4_API_SECRET: "optional: unset means no server-side purchase event reaches GA4; checkout and signup are unchanged",
 };
 
 /**

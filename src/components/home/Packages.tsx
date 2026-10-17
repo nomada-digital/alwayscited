@@ -290,7 +290,7 @@ export default function Packages({ full = false }: { full?: boolean }) {
                         {t.action}
                       </SelectionCta>
                     ) : (
-                      <MarketCta href={CTA_HREF[t.key] ?? t.href} className="pkg-btn" style={ctaStyle(t.emphasis)}>
+                      <MarketCta tier={t.key} href={CTA_HREF[t.key] ?? t.href} className="pkg-btn" style={ctaStyle(t.emphasis)}>
                         {t.action}
                       </MarketCta>
                     )}

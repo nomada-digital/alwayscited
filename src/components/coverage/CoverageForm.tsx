@@ -9,6 +9,7 @@ import { CARD, GRID12, H2, MICRO, T } from "@/config/tokens";
 import { MAX_COVERAGE_BYTES, MAX_COVERAGE_ROWS, MAX_COVERAGE_URLS, parseCoverageCsv } from "@/lib/coverage/csv";
 import { type DraftRow, runBlocker, tickedRows } from "@/lib/coverage/draft";
 import { MAX_AGENCY_PROMPTS } from "@/lib/coverage/prompts";
+import { track } from "@/lib/analytics";
 import { count } from "@/lib/plural";
 import { isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
 
@@ -324,6 +325,7 @@ export default function CoverageForm({ intro }: { intro: React.ReactNode }) {
         setError(json.message ?? "We could not start that benchmark. Please try again.");
         return;
       }
+      track("coverage_check_start", { market });
       router.push(`/coverage-check/${json.token}`);
     } catch {
       setError("We could not reach the benchmark. Check your connection and try again.");

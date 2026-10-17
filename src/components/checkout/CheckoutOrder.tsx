@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { MarketToggle, useSeededMarket } from "@/components/SectorPrice";
 import { CHECKOUT_LIMITS } from "@/config/contact";
 import { TRACKED_PRICE, contactUrlFor } from "@/config/pricing";
 import { TRIAL_CTA, trialLine } from "@/config/trial";
-import { MARKETS, MAX_CLUSTERS, SECTORS, formatPrice, quoteFor, type Market } from "@/config/sector-pricing";
+import { CURRENCY, MARKETS, MAX_CLUSTERS, SECTORS, formatPrice, quoteFor, type Market } from "@/config/sector-pricing";
 import { withSelection, type Selection } from "@/config/sector-selection";
 import { CARD, MICRO, T } from "@/config/tokens";
+import { gaClientId, track } from "@/lib/analytics";
 import type { CheckoutTier } from "@/lib/checkout/session";
+import { TIER_PLAIN } from "@/lib/tier-text";
 
 /**
  * The order summary card (Danny, 1 Oct 2026, danny.md lines 156-157): plan,
@@ -73,12 +75,12 @@ type Props = {
   error?: string;
 };
 
-function priceFor(tier: CheckoutTier, sel: Selection): { price: string | null; call: boolean } {
-  if (tier === "tracked") return { price: `${formatPrice(TRACKED_PRICE[sel.market], sel.market)}/mo`, call: false };
-  if (sel.qty > MAX_CLUSTERS) return { price: null, call: true };
-  if (!sel.sector) return { price: null, call: false };
+function priceFor(tier: CheckoutTier, sel: Selection): { price: string | null; amount: number | null; call: boolean } {
+  if (tier === "tracked") return { price: `${formatPrice(TRACKED_PRICE[sel.market], sel.market)}/mo`, amount: TRACKED_PRICE[sel.market], call: false };
+  if (sel.qty > MAX_CLUSTERS) return { price: null, amount: null, call: true };
+  if (!sel.sector) return { price: null, amount: null, call: false };
   const quote = quoteFor(sel.sector, sel.market, tier, sel.qty);
-  return quote.kind === "call" ? { price: null, call: true } : { price: `${formatPrice(quote.amount, sel.market)}/mo`, call: false };
+  return quote.kind === "call" ? { price: null, amount: null, call: true } : { price: `${formatPrice(quote.amount, sel.market)}/mo`, amount: quote.amount, call: false };
 }
 
 export default function CheckoutOrder({ tier, tierPlain, plan, tierPage, includes, initial, scan, keyword, website, error }: Props) {
@@ -102,7 +104,9 @@ export default function CheckoutOrder({ tier, tierPlain, plan, tierPage, include
 
   const perCluster = tier !== "tracked";
   const sel: Selection = { sector, qty, market };
-  const { price, call } = priceFor(tier, sel);
+  const { price, amount, call } = priceFor(tier, sel);
+  // The GA client id, filled at submit and only after a yes to analytics (lib/analytics.ts).
+  const gaField = useRef<HTMLInputElement>(null);
   const base = `/checkout?tier=${tierPlain}${scan ? `&scan=${scan}` : ""}`;
   const links = Object.fromEntries(MARKETS.map((m) => [m, withSelection(base, { ...sel, market: m as Market })])) as Record<Market, string>;
 
@@ -194,13 +198,19 @@ export default function CheckoutOrder({ tier, tierPlain, plan, tierPage, include
           method="post"
           action="/api/checkout"
           onSubmit={(e) => {
-            if (busy) e.preventDefault();
-            else setBusy(true);
+            if (busy) {
+              e.preventDefault();
+              return;
+            }
+            setBusy(true);
+            if (gaField.current) gaField.current.value = gaClientId() ?? "";
+            track("begin_checkout", { plan: TIER_PLAIN[tier], market, currency: CURRENCY[market].code, value: amount ?? undefined });
           }}
           style={rule}
         >
           <input type="hidden" id="checkout-tier" name="tier" value={tier} maxLength={CHECKOUT_LIMITS.tier} />
           <input type="hidden" id="checkout-market" name="market" value={market} maxLength={CHECKOUT_LIMITS.market} />
+          <input type="hidden" ref={gaField} id="checkout-ga" name="ga_client_id" defaultValue="" maxLength={CHECKOUT_LIMITS.gaClientId} />
           {scan ? <input type="hidden" id="checkout-scan" name="scan" value={scan} maxLength={CHECKOUT_LIMITS.scan} /> : null}
           {perCluster ? (
             <>

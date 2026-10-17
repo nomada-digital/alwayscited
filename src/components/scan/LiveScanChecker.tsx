@@ -103,7 +103,7 @@ export default function LiveScanChecker({
     /**
      * An address that cannot be one is answered here, in the start route's own
      * words, before anything is spent: no round trip, no token used, no
-     * scan_started event for an empty field. The route still checks it.
+     * analytics event for an empty field. The route still checks it.
      */
     if (!isPlausibleDomain(normalizeDomain(domain))) {
       setError("That does not look like a website address. Try example.com.");
@@ -114,7 +114,6 @@ export default function LiveScanChecker({
     setStep(0);
     stopSteps();
     timers.current = [setTimeout(() => setStep(1), 1500), setTimeout(() => setStep(2), 3500)];
-    track("scan_started", { domain });
 
     /**
      * Wait for Turnstile rather than posting without it (4 Oct 2026). The
@@ -166,6 +165,13 @@ export default function LiveScanChecker({
       // and a field that goes live again for half a second invites a second
       // submission of the same domain. The steps stop where they are.
       stopSteps();
+      // Once the scan exists, not on the click (15 Oct 2026). The market the
+      // route picked, and which field started it - never the domain, which can
+      // name a business and is kept out of GA.
+      track("free_scan_start", {
+        market: typeof data.market === "string" ? data.market : undefined,
+        cta_location: box ? "card" : "hero",
+      });
       router.push("/scan/" + data.token);
     } catch {
       stopSteps();
