@@ -13,6 +13,37 @@
  */
 const ENV_DASH_HOST = process.env.DASH_HOST;
 
+/**
+ * Shareable read-only demo links (17 Oct 2026): `token:slug` pairs, comma
+ * separated, set in Vercel and never committed - the token is the only thing
+ * that opens a demo, and this repository is public. Literal access for the
+ * reason above.
+ */
+const ENV_DEMO_LINKS = process.env.DASH_DEMO_LINKS;
+
+/** A demo link opens only with a token this long: unguessable, not merely obscure. */
+export const DEMO_TOKEN_MIN = 32;
+
+/** The request header the proxy sets on a verified demo request; any copy a client sends is stripped first. */
+export const DEMO_HEADER = "x-dash-demo";
+
+/** The client slug a demo token opens, or null. */
+export function demoSlug(token: string | null | undefined, env?: { DASH_DEMO_LINKS?: string }): string | null {
+  if (!token || token.length < DEMO_TOKEN_MIN || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+  const raw = (env ? env.DASH_DEMO_LINKS : ENV_DEMO_LINKS) ?? "";
+  for (const pair of raw.split(",")) {
+    const [t, slug] = pair.trim().split(":");
+    if (t && slug && t.length >= DEMO_TOKEN_MIN && t === token && /^[a-z0-9-]{1,80}$/.test(slug)) return slug;
+  }
+  return null;
+}
+
+/** `/demo/<token>/<rest>` split apart, or null for any other path. */
+export function demoPath(pathname: string): { token: string; rest: string } | null {
+  const m = /^\/demo\/([^/]+)(\/.*)?$/.exec(pathname);
+  return m ? { token: m[1]!, rest: m[2] ?? "" } : null;
+}
+
 /** The production host. DASH_HOST overrides it (a preview, or `dashboards.localhost:3100` in e2e). */
 export const DASH_HOST_DEFAULT = "dashboards.alwayscited.com";
 

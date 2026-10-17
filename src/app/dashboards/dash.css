@@ -241,6 +241,9 @@
 .auth { min-height: 100vh; width: 100%; display: flex; align-items: center; justify-content: center; padding: 24px 16px; }
 .auth .dash-card { width: 100%; max-width: 400px; padding: 28px; }
 
+/* A shared demo link's badge (17 Oct 2026): on every page, above everything but the toasts. */
+.demo-badge { position: fixed; top: 12px; right: 16px; z-index: 50; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--warn-bg); color: var(--warn-fg); border: 1px solid var(--warn-fg); pointer-events: auto; }
+
 /* ---- small screens: the sidebar becomes a top bar ---- */
 @media (max-width: 900px) {
   .dash { flex-direction: column; }
@@ -258,6 +261,7 @@
   .ladder { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .item .acts { opacity: 1; }
   .dash-head h1 { font-size: 24px; }
+  .demo-badge { top: auto; bottom: 16px; right: 12px; }
 }
 @media (max-width: 480px) {
   .ladder { grid-template-columns: minmax(0, 1fr); }

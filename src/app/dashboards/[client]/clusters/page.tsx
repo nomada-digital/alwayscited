@@ -11,11 +11,11 @@ export const metadata: Metadata = { title: "Clusters", robots: { index: false, f
 
 export default async function Clusters({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { raw, base } = await pageData(slug);
+  const { raw, base, demo } = await pageData(slug);
   return (
     <>
       <PageHead micro="Clusters" title="What you track" intro="A cluster is one search you want to win, split into the groups of keywords that mean the same thing, with the prompts buyers ask AI about it." />
-      <ClustersBoard slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} />
+      <ClustersBoard slug={slug} base={base} demo={demo} initial={trimRaw(raw)} plan={planShape()} />
     </>
   );
 }

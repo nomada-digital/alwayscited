@@ -10,7 +10,7 @@ import { ClientSwitch, Nav } from "./Nav";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -44,11 +44,15 @@ export default function Shell({ ws, others, base, children }: { ws: Workspace; o
             <Meter label="Keywords" used={a.keywords.used} limit={a.keywords.limit} />
             <Meter label="Prompts" used={a.prompts.used} limit={a.prompts.limit} />
           </div>
-          <form action="/api/dash/logout" method="post">
-            <button type="submit">Sign out</button>
-          </form>
+          {demo ? null : (
+            <form action="/api/dash/logout" method="post">
+              <button type="submit">Sign out</button>
+            </form>
+          )}
         </div>
       </aside>
+      {/* A shared demo link (17 Oct 2026): said on every page, and edits there stay in the browser (useOps). */}
+      {demo ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">Demo, read-only</span> : null}
       <div className="dash-main" id="dash-content">
         <div className="dash-inner">{children}</div>
       </div>

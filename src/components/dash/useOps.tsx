@@ -37,7 +37,11 @@ function remap(op: Op, ids: Record<string, string>): Op {
   return out as Op;
 }
 
-export function useOps(slug: string, initial: Raw, plan: PlanShape) {
+/**
+ * `demo` (a shared demo link, 17 Oct 2026): every op is judged and drawn as usual, then kept in the browser -
+ * nothing is sent, the page is not refreshed under it, and each toast says the change is not saved.
+ */
+export function useOps(slug: string, initial: Raw, plan: PlanShape, demo = false) {
   const router = useRouter();
   const [confirmed, setConfirmed] = useState(initial);
   const [pending, setPending] = useState<Pending[]>([]);
@@ -67,7 +71,13 @@ export function useOps(slug: string, initial: Raw, plan: PlanShape) {
     async (p: Pending, label: string | null, undoOf: ((ids: Record<string, string>, replaced?: string) => Op[] | null) | null) => {
       const op = remap(p.op, idsRef.current);
       let answer: Answer;
-      try {
+      if (demo) {
+        // Each new row gets a stable local id; nothing leaves the page.
+        const local: Record<string, string> = {};
+        const t = (op as { tempId?: string }).tempId;
+        if (t) for (const k of [t, `${t}-k`]) local[k] = `demo-${k}`;
+        answer = { ok: true, ids: local };
+      } else try {
         const r = await fetch(`/api/dash/${slug}/ops`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op) });
         answer = (await r.json().catch(() => ({ ok: false, message: `The server answered ${r.status}.` }))) as Answer;
         if (r.status === 401) answer = { ok: false, message: "Your session has ended. Sign in again to save changes." };
@@ -82,16 +92,16 @@ export function useOps(slug: string, initial: Raw, plan: PlanShape) {
         setPending((l) => l.filter((x) => x.key !== p.key));
         if (label) {
           const undo = undoOf ? undoOf(got, answer.replaced) : null;
-          toast({ text: label, tone: "ok", ...(undo && undo.length ? { undo } : {}) });
+          toast({ text: demo ? `${label} (Demo: not saved.)` : label, tone: "ok", ...(undo && undo.length ? { undo } : {}) });
         }
       } else {
         setPending((l) => l.filter((x) => x.key !== p.key));
         toast({ text: answer.message, tone: "err" });
       }
       inFlight.current -= 1;
-      if (inFlight.current === 0) router.refresh();
+      if (inFlight.current === 0 && !demo) router.refresh();
     },
-    [slug, toast, router],
+    [slug, toast, router, demo],
   );
 
   /** Judge, draw, then save one op. Returns the refusal, or null when it went ahead. */

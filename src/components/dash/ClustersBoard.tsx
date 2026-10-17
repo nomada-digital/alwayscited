@@ -14,8 +14,8 @@ import Icon from "./Icon";
 import { Toasts, tempId, useOps } from "./useOps";
 
 /** Every cluster, with add, rename and remove in place (17 Oct 2026). */
-export default function ClustersBoard({ slug, base, initial, plan }: { slug: string; base: string; initial: Raw; plan: PlanShape }) {
-  const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan);
+export default function ClustersBoard({ slug, base, initial, plan, demo = false }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo?: boolean }) {
+  const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
   const [adding, setAdding] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);

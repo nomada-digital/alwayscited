@@ -87,6 +87,8 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 17 Oct 2026: the dashboards host (src/lib/dash/host.ts). Unset is dashboards.alwayscited.com, the real value.
   DASH_HOST: "optional: unset means dashboards.alwayscited.com; set only for a preview or an e2e host",
   // 17 Oct 2026: a local run of the dashboards host on a snapshot (src/lib/dash/fixture.ts); production refuses it.
+  // 17 Oct 2026: shareable read-only demo links on the dashboards host (src/lib/dash/host.ts). Unset means none open.
+  DASH_DEMO_LINKS: "optional: token:slug pairs for read-only demo links; unset means no demo link opens",
   DASH_FIXTURE_TIER: "local runs only: which tier the snapshot is drawn as; read only while DASH_FIXTURE is set, which production refuses",
 };
 

@@ -26,6 +26,8 @@ type Props = {
   slug: string;
   /** The link prefix on this host (host.ts dashBase). */
   base: string;
+  /** A shared demo link: edits are kept in the browser (useOps). */
+  demo?: boolean;
   clusterId: string;
   initial: Raw;
   plan: PlanShape;
@@ -33,8 +35,8 @@ type Props = {
   integrationsHref: string;
 };
 
-export default function ClusterEditor({ slug, base, clusterId, initial, plan, consoleLive, integrationsHref }: Props) {
-  const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan);
+export default function ClusterEditor({ slug, base, demo = false, clusterId, initial, plan, consoleLive, integrationsHref }: Props) {
+  const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const anyLive = consoleLive.gsc || consoleLive.bing;
   const [source, setSource] = useState<Source>(consoleLive.gsc ? "gsc" : consoleLive.bing ? "bing" : "off");
   const [sample, setSample] = useState(false);

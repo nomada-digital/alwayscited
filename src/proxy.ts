@@ -6,7 +6,7 @@ import { appHost, appOrigin, internalPath, isAppHost, stripPrefix } from "@/lib/
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
-import { dashInternal, dashStrip, isDashHost } from "@/lib/dash/host";
+import { DEMO_HEADER, dashInternal, dashStrip, demoPath, demoSlug, isDashHost } from "@/lib/dash/host";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -109,8 +109,23 @@ export function proxy(request: NextRequest) {
     }
     const bare = dashStrip(pathname);
     if (bare !== null) return NextResponse.redirect(new URL(`${bare}${search}`, request.url), 308);
-    const res = NextResponse.rewrite(new URL(`${dashInternal(pathname)}${search}`, request.url));
+    // The demo header is the proxy's to set: whatever a client sent under that name is dropped.
+    const headers = new Headers(request.headers);
+    headers.delete(DEMO_HEADER);
+    let target = dashInternal(pathname);
+    // A read-only demo link (17 Oct 2026): /demo/<token>/... is one client's pages, opened by the token alone.
+    const demo = demoPath(pathname);
+    if (demo) {
+      const slug = demoSlug(demo.token);
+      if (!slug) return new NextResponse(null, { status: 404, headers: { "x-robots-tag": "noindex, nofollow" } });
+      headers.set(DEMO_HEADER, demo.token);
+      // The pages link as `${base}/${slug}/...`, so a demo path may carry the slug again; it is the same page.
+      const rest = demo.rest === `/${slug}` || demo.rest.startsWith(`/${slug}/`) ? demo.rest.slice(slug.length + 1) : demo.rest;
+      target = `/dashboards/${slug}${rest}`;
+    }
+    const res = NextResponse.rewrite(new URL(`${target}${search}`, request.url), { request: { headers } });
     res.headers.set("x-robots-tag", "noindex, nofollow");
+    if (demo) res.headers.set("referrer-policy", "no-referrer");
     return res;
   }
   // On the marketing host /dashboards is the same tree, for a signed-in member only (pageData 404s anyone else)

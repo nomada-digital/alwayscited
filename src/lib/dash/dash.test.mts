@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { allowanceLimits, allowances, fullness } from "./allowance.ts";
-import { dashBase, dashInternal, dashLinkOrigin, dashStrip, isDashHost } from "./host.ts";
+import { dashBase, dashInternal, dashLinkOrigin, dashStrip, demoPath, demoSlug, isDashHost } from "./host.ts";
 import { buildWorkspace, matchesTerms, trimRaw } from "./model.ts";
 import { applyOp, cleanTerms, inverseOp, readOp, refuseOp, undoAdd, type Op } from "./ops.ts";
 import { sampleConsole } from "./sample.ts";
@@ -71,6 +71,27 @@ test("host: bare paths map into /dashboards, the prefixed form is stripped, and 
   assert.equal(dashLinkOrigin("evil.example", {}), "https://dashboards.alwayscited.com");
   assert.equal(dashBase("dashboards.alwayscited.com", {}), "", "own host: bare paths");
   assert.equal(dashBase("alwayscited.com", {}), "/dashboards", "the marketing host's preview keeps the prefix");
+});
+
+test("demo links: only a configured token of 32+ safe characters opens one client, and the path splits cleanly", () => {
+  const tok = "a".repeat(40);
+  const env = { DASH_DEMO_LINKS: `${tok}:acme-com, ${"b".repeat(10)}:short-com` };
+  assert.equal(demoSlug(tok, env), "acme-com");
+  assert.equal(demoSlug("a".repeat(39), env), null, "a different token");
+  assert.equal(demoSlug("b".repeat(10), env), null, "a short token never opens, even when configured");
+  assert.equal(demoSlug(tok, {}), null, "nothing configured, nothing opens");
+  assert.equal(demoSlug(`${tok}/..`, env), null);
+  assert.equal(demoSlug(tok, { DASH_DEMO_LINKS: `${tok}:Bad Slug` }), null);
+  assert.deepEqual(demoPath(`/demo/${tok}`), { token: tok, rest: "" });
+  assert.deepEqual(demoPath(`/demo/${tok}/clusters/x`), { token: tok, rest: "/clusters/x" });
+  assert.equal(demoPath("/demox/abc"), null);
+});
+
+test("demo links: the token is never committed - only the env var names the pairs", () => {
+  const host = readFileSync(join(ROOT, "src", "lib", "dash", "host.ts"), "utf8");
+  assert.match(host, /process\.env\.DASH_DEMO_LINKS/);
+  const proxy = readFileSync(join(ROOT, "src", "proxy.ts"), "utf8");
+  assert.match(proxy, /headers\.delete\(DEMO_HEADER\)/, "the proxy drops a client-sent demo header before deciding");
 });
 
 // ---------------------------------------------------------------- allowances

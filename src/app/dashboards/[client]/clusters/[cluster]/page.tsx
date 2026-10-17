@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Cluster", robots: { index: false, fo
 
 export default async function Cluster({ params }: { params: Promise<{ client: string; cluster: string }> }) {
   const { client: slug, cluster: id } = await params;
-  const { raw, ws, base } = await pageData(slug);
+  const { raw, ws, base, demo } = await pageData(slug);
   const c = ws.clusters.find((x) => x.id === id);
   if (!c) notFound();
   const tracked = [...c.groups.flatMap((g) => g.keywords), ...c.own.keywords].filter((k) => k.src === "tracked");
@@ -25,7 +25,7 @@ export default async function Cluster({ params }: { params: Promise<{ client: st
     <>
       <PageHead
         micro={<><Link href={`${base}/${slug}/clusters`}>Clusters</Link><span>/</span><span>{c.headKeyword ?? "cluster"}</span></>}
-        title={<ClusterTitle slug={slug} id={c.id} name={c.name} canWrite={ws.canWrite} />}
+        title={<ClusterTitle slug={slug} id={c.id} name={c.name} canWrite={ws.canWrite} demo={demo} />}
         intro={c.headKeyword ? <>Started {fullDay(c.startedOn)}. Its keyword is <b>{c.headKeyword}</b>{c.headVolume ? `, ${c.headVolume.toLocaleString("en-GB")} searches a month` : ""}.</> : `Started ${fullDay(c.startedOn)}.`}
       />
       <div className="dash-grid k4" style={{ marginBottom: 16 }}>
@@ -34,7 +34,7 @@ export default async function Cluster({ params }: { params: Promise<{ client: st
         <Kpi label="Tracked keywords on page 1" value={top10} unit={`of ${tracked.length}`} />
         <Kpi label="Groups" value={c.groups.length} sub={`${c.prompts} prompts across them`} />
       </div>
-      <ClusterEditor slug={slug} base={base} clusterId={c.id} initial={trimRaw(raw)} plan={planShape()} consoleLive={ws.consoleLive} integrationsHref={`${base}/${slug}/integrations`} />
+      <ClusterEditor slug={slug} base={base} demo={demo} clusterId={c.id} initial={trimRaw(raw)} plan={planShape()} consoleLive={ws.consoleLive} integrationsHref={`${base}/${slug}/integrations`} />
       <div style={{ marginTop: 16 }}><Delivery ws={ws} cluster={c} /></div>
     </>
   );

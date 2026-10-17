@@ -28,7 +28,7 @@ const INFO: Record<Provider, { name: string; what: string; gives: string[] }> = 
  * (integration_connections) and the card says it is queued; the data model
  * behind it - connections and search_console_queries - is in place.
  */
-export default function IntegrationCard({ slug, provider, conn, canWrite }: { slug: string; provider: Provider; conn: RawConnection | null; canWrite: boolean }) {
+export default function IntegrationCard({ slug, provider, conn, canWrite, demo = false }: { slug: string; provider: Provider; conn: RawConnection | null; canWrite: boolean; demo?: boolean }) {
   const [state, setState] = useState<string | null>(conn?.status ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -38,6 +38,8 @@ export default function IntegrationCard({ slug, provider, conn, canWrite }: { sl
     setErr(null);
     const was = state;
     setState("requested");
+    // A demo link shows the requested state and sends nothing.
+    if (demo) { setBusy(false); return; }
     const r = await fetch(`/api/dash/${slug}/integrations`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider }) }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
     if (!j?.ok) { setState(was); setErr(j?.message ?? "That did not save. Try again."); }
