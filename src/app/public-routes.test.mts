@@ -99,6 +99,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/[client]/clusters/[cluster]": "one cluster's keyword groups, keywords and prompts; private, same membership 404",
   "/dashboards/[client]/google": "one client's Google positions; private, same membership 404",
   "/dashboards/[client]/integrations": "one client's connections; private, same membership 404",
+  "/dashboards/[client]/managed": "one client's managed clusters and this month's delivery on them (paid plans, 17 Oct 2026); private, same membership 404",
   "/dashboards/[client]/opportunities": "one client's opportunities; private, same membership 404",
   "/dashboards/[client]/plan": "one client's plan and allowances; private, same membership 404",
   "/dashboards/[client]/sources": "the sites the engines cite for one client; private, same membership 404",

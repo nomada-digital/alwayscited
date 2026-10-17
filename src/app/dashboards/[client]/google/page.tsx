@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Change, Pos, Spark, longDay } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
+import Nudges from "@/components/dash/Nudges";
+import { KEYWORD_GUIDES } from "@/config/guidance";
+import { keywordSituation } from "@/lib/dash/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { clusterKeywords } from "@/lib/dash/model";
 import { pageData } from "@/lib/dash/page-data";
@@ -11,20 +15,22 @@ export const metadata: Metadata = { title: "Search positions", robots: { index: 
 
 export default async function Google({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { ws, base } = await pageData(slug);
+  const { ws, base, nudge } = await pageData(slug);
   const rows = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c })));
   const tracked = rows.filter((r) => r.src === "tracked").sort((a, b) => (a.pos ?? 999) - (b.pos ?? 999));
   const also = rows.filter((r) => r.src === "footprint").sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, 40);
+  const situations = [...new Set(tracked.map((k) => keywordSituation(k)))];
   const host = (u: string | null) => (u ? u.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "") || "/" : "-");
   return (
     <>
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-cited"]} />
       <div className="dash-card">
         <div className="dash-card-head"><div><h2>Tracked daily</h2><p className="intro">{tracked.length} keywords. Change is against 7 days ago. When Google switches which of your pages it ranks, the position can jump with it - those are marked, so a move is not mistaken for a gain or a loss.</p></div></div>
         {tracked.length ? (
           <div className="tbl-wrap">
             <table className="tbl">
-              <thead><tr><th>Keyword</th><th className="r">Volume</th><th className="r">Position</th><th className="r">7 days</th><th>Trend</th><th>Ranking page</th></tr></thead>
+              <thead><tr><th>Keyword</th><th className="r">Volume</th><th className="r">Position</th><th className="r">7 days</th><th>Trend</th><th>Ranking page</th><th>Next step</th></tr></thead>
               <tbody>
                 {tracked.map((k) => (
                   <tr key={k.id ?? k.keyword}>
@@ -38,12 +44,19 @@ export default async function Google({ params }: { params: Promise<{ client: str
                       {k.pageChange ? <div className="sub"><span className="pill warn" title="Google ranked a different page of your site for this keyword. The position moved with the page, not only the ranking.">Page changed {longDay(k.pageChange.on)}</span> from {k.pageChange.from}</div> : null}
                       {k.homepage && !k.pageChange ? <div className="sub">Your homepage ranks for this</div> : null}
                     </td>
+                    <td><a href={`#guide-${keywordSituation(k)}`} style={{ fontSize: 12.5, fontWeight: 600, color: "var(--accent)" }}>{KEYWORD_GUIDES[keywordSituation(k)].label}</a></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         ) : <div className="empty"><b>No keywords tracked</b>Add one to a cluster and it is checked from tomorrow.</div>}
+        {situations.length ? (
+          <div style={{ marginTop: 16 }}>
+            <h3 className="dash-micro" style={{ margin: "0 0 8px" }}>Doing it yourself</h3>
+            {situations.map((s) => <GuideBox key={s} id={`guide-${s}`} guide={KEYWORD_GUIDES[s]} />)}
+          </div>
+        ) : null}
       </div>
       <div className="dash-card">
         <div className="dash-card-head"><div><h2>Also ranking, in your groups</h2><p className="intro">From the ranking snapshot of {longDay(ws.footprintOn)}. Track any of them from its cluster.</p></div></div>

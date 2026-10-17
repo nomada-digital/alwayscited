@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 
 import EngineLogo from "@/components/EngineLogo";
 import { engineLabel } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
 import { PageHead } from "@/components/dash/Shell";
+import { SOURCES_GUIDE } from "@/config/guidance";
 import { pageData } from "@/lib/dash/page-data";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +17,7 @@ export default async function Sources({ params }: { params: Promise<{ client: st
   return (
     <>
       <PageHead micro="Sources" title="What AI reads" intro="The sites the engines cite when they answer your prompts, last 7 readings. Being named on the ones at the top is how you get named in the answer." />
+      <div style={{ marginBottom: 16 }}><GuideBox guide={SOURCES_GUIDE} /></div>
       <div className="dash-card">
         {ws.sources.length ? (
           <div className="tbl-wrap">

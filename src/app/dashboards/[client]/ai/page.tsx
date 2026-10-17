@@ -3,6 +3,9 @@ import Link from "next/link";
 
 import EngineLogo from "@/components/EngineLogo";
 import { Cells, EngineHeads, Rate, Strip, engineLabel, longDay, pct } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
+import Nudges from "@/components/dash/Nudges";
+import { PROMPTS_GUIDE } from "@/config/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { pageData } from "@/lib/dash/page-data";
 
@@ -11,7 +14,7 @@ export const metadata: Metadata = { title: "AI visibility", robots: { index: fal
 
 export default async function Ai({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { ws, base } = await pageData(slug);
+  const { ws, base, nudge } = await pageData(slug);
   const rows = ws.clusters.flatMap((c) => [...c.groups.map((g) => ({ c, g })), { c, g: c.own }].flatMap(({ c, g }) => g.prompts.map((p) => ({ p, c, group: g.id ? g.name : "" }))));
   // Per engine: named / answered on each prompt's latest reading.
   const byEngine = ws.engines.map((e) => {
@@ -21,6 +24,7 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
   return (
     <>
       <PageHead micro={<>AI visibility{ws.lastRun ? <> · {longDay(ws.lastRun.run_date)}</> : null}</>} title="Does AI name you?" intro="Every prompt you track, asked of every engine each morning. A filled mark is an answer that names you; an empty one gave no answer." />
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-everywhere"]} />
       <div className="dash-grid k4" style={{ gridTemplateColumns: `repeat(${Math.min(5, byEngine.length || 1)}, minmax(0, 1fr))` }}>
         {byEngine.map(({ e, rate, n }) => (
           <div key={e} className="kpi">
@@ -35,6 +39,7 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
           <div><h2>Prompts</h2><p className="intro">Latest reading by engine, then the last {ws.dates.length} readings for each.</p></div>
           <EngineHeads engines={ws.engines} />
         </div>
+        <div style={{ marginBottom: 12 }}><GuideBox guide={PROMPTS_GUIDE} /></div>
         {rows.length ? (
           <div className="tbl-wrap">
             <table className="tbl">

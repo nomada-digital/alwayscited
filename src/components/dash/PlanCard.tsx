@@ -62,7 +62,7 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
               <div className="l">{d.label}</div>
               {got ? (
                 <>
-                  <div className="v">{got.live}<span className="muted" style={{ fontSize: 14, fontWeight: 600 }}> of {d.target}{d.unit.startsWith("or more") ? "+" : ""}</span></div>
+                  <div className="v">{got.live}{d.target ? <span className="muted" style={{ fontSize: 14, fontWeight: 600 }}> of {d.target}{d.unit.startsWith("or more") ? "+" : ""}</span> : <span className="muted" style={{ fontSize: 14, fontWeight: 600 }}> done</span>}</div>
                   <div className="faint" style={{ fontSize: 12 }}>{got.inFlight ? `${got.inFlight} in progress` : "live this month"}</div>
                 </>
               ) : (
@@ -79,7 +79,7 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
             <tbody>
               {cluster.placements.map((p) => (
                 <tr key={p.id}>
-                  <td><a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
+                  <td>{p.sample ? <span>{p.domain} <span className="pill sample">Sample</span></span> : <a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>}{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
                   <td>{p.kind.replace("_", " ")}</td>
                   <td><span className={`pill${p.status === "live" ? " good" : ""}`}>{p.status}</span></td>
                   <td className="r num">{p.live_on ?? "-"}</td>

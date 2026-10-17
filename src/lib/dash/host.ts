@@ -27,15 +27,26 @@ export const DEMO_TOKEN_MIN = 32;
 /** The request header the proxy sets on a verified demo request; any copy a client sends is stripped first. */
 export const DEMO_HEADER = "x-dash-demo";
 
-/** The client slug a demo token opens, or null. */
-export function demoSlug(token: string | null | undefined, env?: { DASH_DEMO_LINKS?: string }): string | null {
+/** The plan states a demo link can show a client as (17 Oct 2026), for reviewing each plan's experience. */
+export const DEMO_STATES = ["tracked-trial", "tracked", "mentioned", "cited", "everywhere"] as const;
+export type DemoState = (typeof DEMO_STATES)[number];
+
+/** A demo token's link: the client it opens and, optionally, the plan state it shows the client as. */
+export function demoLink(token: string | null | undefined, env?: { DASH_DEMO_LINKS?: string }): { slug: string; state: DemoState | null } | null {
   if (!token || token.length < DEMO_TOKEN_MIN || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
   const raw = (env ? env.DASH_DEMO_LINKS : ENV_DEMO_LINKS) ?? "";
-  for (const pair of raw.split(",")) {
-    const [t, slug] = pair.trim().split(":");
-    if (t && slug && t.length >= DEMO_TOKEN_MIN && t === token && /^[a-z0-9-]{1,80}$/.test(slug)) return slug;
+  for (const entry of raw.split(",")) {
+    const [t, slug, state] = entry.trim().split(":");
+    if (!t || !slug || t.length < DEMO_TOKEN_MIN || t !== token || !/^[a-z0-9-]{1,80}$/.test(slug)) continue;
+    if (state !== undefined && !(DEMO_STATES as readonly string[]).includes(state)) return null;
+    return { slug, state: (state as DemoState | undefined) ?? null };
   }
   return null;
+}
+
+/** The client slug a demo token opens, or null. */
+export function demoSlug(token: string | null | undefined, env?: { DASH_DEMO_LINKS?: string }): string | null {
+  return demoLink(token, env)?.slug ?? null;
 }
 
 /** `/demo/<token>/<rest>` split apart, or null for any other path. */

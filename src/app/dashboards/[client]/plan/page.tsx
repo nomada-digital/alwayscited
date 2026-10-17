@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 
 import TierName from "@/components/TierName";
 import { Meter } from "@/components/dash/Figures";
+import Nudges from "@/components/dash/Nudges";
+import PackBuy from "@/components/dash/PackBuy";
+import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, trackingPackPrice } from "@/config/pricing";
 import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { SITE_ORIGIN } from "@/lib/app-host";
@@ -20,13 +23,14 @@ const BILLING_WHY: Record<string, string> = {
 export default async function Plan({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { ws, demo } = await pageData(slug);
+  const { ws, demo, base, nudge } = await pageData(slug);
   const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
   const a = ws.allowances;
   const at = TIER_ORDER.indexOf(ws.client.tier);
   return (
     <>
       <PageHead micro="Plan" title={<TierName tier={ws.client.tier} />} intro={tierInfo(ws.client.tier).positioning} />
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-cited", "to-everywhere"]} />
       <div className="dash-grid k2">
         <div className="dash-card">
           <h2>Allowances</h2>
@@ -37,12 +41,18 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
             <Meter label="Prompts, asked of every engine daily" used={a.prompts.used} limit={a.prompts.limit} />
           </div>
         </div>
-        <div className="dash-card">
-          <h2>Need more room?</h2>
-          <p className="intro">An extra tracking pack: {packLine(ws.client.market)}, with their keywords and prompts. Ask us and we add it to your subscription.</p>
-          <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
-            <a className="btn primary" href={`${SITE_ORIGIN}/contact?tier=${encodeURIComponent("alwaystracked")}`}>Ask for a pack</a>
-            <a className="btn" href={`${SITE_ORIGIN}/help`}>How allowances work</a>
+        <div className="dash-card" id="pack">
+          <h2>Track more</h2>
+          <p className="intro">An extra tracking pack: {packLine(ws.client.market)}, with their keywords and prompts. Add as many as you need; each one is monthly with your plan.</p>
+          <div style={{ marginTop: 16 }}>
+            <PackBuy
+              slug={slug}
+              price={trackingPackPrice(ws.client.market)}
+              adds={`${PACK_CLUSTERS} more clusters, ${PACK_KEYWORDS} keywords and ${PACK_PROMPTS} prompts`}
+              trial={!!ws.client.trial_ends_at && !ws.client.payment_status}
+              canBuy={ws.role === "owner"}
+              demo={demo}
+            />
           </div>
         </div>
       </div>

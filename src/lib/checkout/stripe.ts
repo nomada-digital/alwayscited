@@ -99,3 +99,60 @@ export async function createPortalSession(customer: string, returnUrl: string, f
   }
   return { ok: true, url: body.url };
 }
+
+export type PackResult = { ok: true; packs: number } | { ok: false; reason: "no_key" | "no_product" | "refused" | "unreachable"; status?: number; code?: string };
+
+/**
+ * Add one extra tracking pack to a subscription (17 Oct 2026, the dashboards
+ * host's self-serve pack). The pack is a subscription item marked
+ * metadata[kind]=pack, which webhook.ts packsOn already counts, so Stripe's
+ * customer.subscription.updated raises cluster_limit with no new path. An
+ * existing pack item has its quantity raised instead of a second item added.
+ * The price is pricing.ts's, passed in; the product is STRIPE_PACK_PRODUCT.
+ * Prorations go on the next invoice (Stripe's default), so nothing is charged
+ * here and a trial is charged nothing until it ends.
+ */
+export async function addPack(subscription: string, price: { currency: "usd" | "gbp"; amount: number }, fetchImpl: typeof fetch = fetch): Promise<PackResult> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  const product = process.env.STRIPE_PACK_PRODUCT;
+  if (!key) return { ok: false, reason: "no_key" };
+  if (!product || !/^prod_[A-Za-z0-9]{1,200}$/.test(product)) return { ok: false, reason: "no_product" };
+  if (!/^sub_[A-Za-z0-9]{1,200}$/.test(subscription)) return { ok: false, reason: "refused" };
+  const call = async (path: string, form: URLSearchParams | null) => {
+    const res = await fetchImpl(`https://api.stripe.com/v1/${path}`, {
+      method: form ? "POST" : "GET",
+      headers: { authorization: `Bearer ${key}`, ...(form ? { "content-type": "application/x-www-form-urlencoded" } : {}) },
+      body: form ? form.toString() : undefined,
+      signal: AbortSignal.timeout(15_000),
+    });
+    return { res, body: (await res.json().catch(() => null)) as Record<string, unknown> | null };
+  };
+  try {
+    const items = await call(`subscription_items?subscription=${subscription}&limit=20`, null);
+    if (!items.res.ok) return { ok: false, reason: "refused", status: items.res.status };
+    const data = ((items.body?.data ?? []) as { id: string; quantity?: number; metadata?: Record<string, string> }[]);
+    const pack = data.find((i) => i.metadata?.kind === "pack");
+    const done = pack
+      ? await call(`subscription_items/${pack.id}`, new URLSearchParams({ quantity: String((pack.quantity ?? 1) + 1), proration_behavior: "create_prorations" }))
+      : await call(
+          "subscription_items",
+          new URLSearchParams({
+            subscription,
+            quantity: "1",
+            proration_behavior: "create_prorations",
+            "metadata[kind]": "pack",
+            "price_data[currency]": price.currency,
+            "price_data[product]": product,
+            "price_data[unit_amount]": String(Math.round(price.amount * 100)),
+            "price_data[recurring][interval]": "month",
+          }),
+        );
+    if (!done.res.ok) {
+      const err = (done.body?.error ?? {}) as { code?: string; type?: string };
+      return { ok: false, reason: "refused", status: done.res.status, code: err.code ?? err.type };
+    }
+    return { ok: true, packs: Number(done.body?.quantity ?? 1) };
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+}

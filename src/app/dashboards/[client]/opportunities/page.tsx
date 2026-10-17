@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
+import GuideBox from "@/components/dash/GuideBox";
 import { PageHead } from "@/components/dash/Shell";
+import { ROUTE_GUIDES } from "@/config/guidance";
 import { pageData } from "@/lib/dash/page-data";
 
 export const dynamic = "force-dynamic";
@@ -34,6 +36,7 @@ export default async function Opportunities({ params }: { params: Promise<{ clie
         return (
           <div key={k} className="dash-card">
             <div className="dash-card-head"><div><h2>{title} <span className="pill" style={{ marginLeft: 6 }}>{list.length}</span></h2><p className="intro">{why}</p></div></div>
+            {ROUTE_GUIDES[k] ? <div style={{ marginBottom: 12 }}><GuideBox guide={{ ...ROUTE_GUIDES[k]!, title: "How to do this yourself" }} /></div> : null}
             <div className="tbl-wrap">
               <table className="tbl">
                 <thead><tr><th>Page</th><th className="r">Answers citing it</th><th>Names instead</th></tr></thead>

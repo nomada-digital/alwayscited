@@ -20,6 +20,7 @@ import { brandKey, subjectKeys } from "../scan/brand-name.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
 import { sampleConsole } from "./sample.ts";
+import { MANAGED_TIERS } from "./types.ts";
 import type {
   ClusterView,
   ConsoleFig,
@@ -35,6 +36,17 @@ import type {
   RawPrompt,
   Workspace,
 } from "./types.ts";
+
+
+/** A URL as host and path, lower-cased with no trailing slash: how a placement's page is matched to a citation. */
+export function pathKey(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, "").toLowerCase()}${u.pathname.replace(/\/+$/, "").toLowerCase()}`;
+  } catch {
+    return null;
+  }
+}
 
 export const ENGINE_ORDER: readonly Engine[] = ["google_aio", "chatgpt", "gemini", "perplexity", "claude"];
 /** Readings drawn in a strip or trend. */
@@ -111,6 +123,8 @@ export type BuildOpts = { plan: PlanShape; sample?: boolean };
 export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const dates = [...new Set(raw.answers.map((a) => a.run_date))].sort();
   const strip = dates.slice(-STRIP_DAYS);
+  const recent = new Set(dates.slice(-7));
+  const own = raw.client.domain.replace(/^www\./, "").toLowerCase();
   const latest = dates[dates.length - 1] ?? null;
   const lastRun = [...raw.runs].sort((a, b) => a.run_date.localeCompare(b.run_date)).at(-1) ?? null;
   const seen = new Set(raw.answers.map((a) => a.engine));
@@ -257,6 +271,12 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       discovered: { gsc: [], bing: [] },
     };
     const ids = new Set(ps.map((p) => p.id));
+    const headHist = head ? (serpBy.get(head.id) ?? []) : [];
+    const firstRate = dates.map((d) => rateOf(answersOn(ids, d))).find((r) => r !== null) ?? null;
+    const placed = raw.placements.filter((p) => p.cluster_id === c.id && p.status === "live").map((p) => pathKey(p.url)).filter((k): k is string => !!k);
+    const placementCitations = placed.length
+      ? raw.answers.filter((a) => recent.has(a.run_date) && (a.citations ?? []).some((ct) => placed.includes(pathKey(ct.url) ?? ""))).length
+      : 0;
     return {
       id: c.id,
       name: c.name,
@@ -273,6 +293,10 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       trackedKeywords: kws.length,
       prompts: ps.length,
       placements: raw.placements.filter((p) => p.cluster_id === c.id),
+      managed: raw.client.tier !== "tracked" && (MANAGED_TIERS as readonly string[]).includes(c.tier),
+      startPos: headHist.find(([, p]) => p !== null)?.[1] ?? null,
+      startRate: firstRate,
+      placementCitations,
     };
   });
 
@@ -283,7 +307,6 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const allIds = new Set(livePrompts.map((p) => p.id));
 
   // Brands and sources over the last 7 readings.
-  const recent = new Set(dates.slice(-7));
   const window = raw.answers.filter((a) => recent.has(a.run_date) && allIds.has(a.question_id));
   const subject = subjectKeys(raw.client.brand ?? raw.client.domain, raw.client.domain);
   for (const a of raw.client.brand_aliases ?? []) subject.add(brandKey(a));
@@ -300,7 +323,6 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     .map(([key, v]) => ({ name: v.name, answers: v.answers, you: subject.has(key) }))
     .sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name))
     .slice(0, 15);
-  const own = raw.client.domain.replace(/^www\./, "").toLowerCase();
   const srcCount = new Map<string, { answers: Set<string>; urls: Set<string>; engines: Set<Engine> }>();
   for (const a of window) {
     const key = `${a.run_date} ${a.question_id} ${a.engine}`;
@@ -334,6 +356,12 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     clusters,
     loose: { prompts: looseP, keywords: looseK },
     rate: latest ? rateOf(answersOn(allIds, latest)) : null,
+    window: {
+      readings: recent.size,
+      answers: window.filter((a) => a.answered).length,
+      named: window.filter((a) => a.answered && a.named).length,
+      cited: window.filter((a) => (a.citations ?? []).some((c) => { const h = hostOf(c.url); return !!h && (h === own || h.endsWith(`.${own}`)); })).length,
+    },
     rateTrend: strip.map((d) => rateOf(answersOn(allIds, d))),
     brands,
     sources,

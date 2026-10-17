@@ -45,7 +45,8 @@ export function deliverables(tier: TierKey): Deliverable[] {
 
 /** This month's delivery against a deliverable, read off the cluster's placements. */
 export function delivered(d: Deliverable, placements: readonly RawPlacement[], monthStart: string): { live: number; inFlight: number } | null {
-  const kinds = d.key === "placements" ? ["guest_post", "coverage", "on_site"] : d.key === "insertions" ? ["link_insertion"] : null;
+  // On-site work is the schema line, not a placement; coverage is the earned media alwayseverywhere adds.
+  const kinds = d.key === "placements" ? ["guest_post"] : d.key === "insertions" ? ["link_insertion"] : d.key === "schema" ? ["on_site"] : d.key === "pr" ? ["coverage"] : null;
   if (!kinds) return null;
   const mine = placements.filter((p) => kinds.includes(p.kind));
   return {
