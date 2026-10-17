@@ -1,4 +1,4 @@
-import { MONTHLY_INSERTIONS_MIN, MONTHLY_PLACEMENTS, TIERS, TRACKED_CLUSTERS, TRACKED_KEYWORDS, TRACKED_PROMPTS, PACK_CLUSTERS, trackingPackPrice } from "@/config/pricing";
+import { MONTHLY_INSERTIONS_MIN, MONTHLY_PLACEMENTS, PLAN_ENGINES, TIERS, TRACKED_CLUSTERS, TRACKED_KEYWORDS, TRACKED_PROMPTS, TRACKING_ENGINES, PACK_CLUSTERS, trackingPackPrice } from "@/config/pricing";
 
 import type { PlanShape } from "./allowance";
 import type { RawPlacement, TierKey } from "./types";
@@ -17,6 +17,32 @@ export const TIER_ORDER: readonly TierKey[] = ["tracked", "mentioned", "cited", 
 
 export function tierInfo(tier: TierKey) {
   return TIERS.find((t) => t.key === tier) ?? TIERS[0]!;
+}
+
+/**
+ * How the dashboard describes a plan to the customer already on it (Danny,
+ * 17 Oct 2026). The site's tier cards are written for a buyer choosing - and
+ * alwaystracked's line there, "Know what your coverage did", is the PR
+ * coverage checker's - so the dashboard says what the plan does for this
+ * customer, in the dashboard's own terms. The paid plans keep the site's
+ * words, which already describe the work. Figures still come from pricing.ts.
+ */
+export function planCopy(tier: TierKey): { positioning: string; includes: string[] } {
+  const info = tierInfo(tier);
+  if (tier !== "tracked") return { positioning: info.positioning, includes: info.includes };
+  return {
+    positioning: "See whether AI names you, and where you rank on Google, every day",
+    includes: [
+      `Your prompts asked of ${TRACKING_ENGINES.length} AI engines every morning`,
+      "Who is named instead of you, and the sources the answers cite",
+      "Google positions for every keyword you track",
+    ],
+  };
+}
+
+/** The engines a plan reads: alwaystracked's four, or every engine on the paid plans. */
+export function planEngineCount(tier: TierKey): number {
+  return (tier === "tracked" ? TRACKING_ENGINES : PLAN_ENGINES).length;
 }
 
 /** The next tier up, or null on the top one. */

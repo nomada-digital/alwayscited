@@ -36,7 +36,11 @@ import {
   parseInstantPage,
   parseLabsStatus,
   parseMicrodata,
+  parseKeywordDifficulty,
+  parseKeywordSuggestions,
   parseRankedKeywords,
+  parseRelatedKeywords,
+  type ResearchedKeyword,
   parseRelevantPages,
   type RankedKeywords,
   type RelevantPage,
@@ -286,6 +290,25 @@ export async function readDiyRankedKeywords(req: DiyRequest, budgetMs: number): 
   diyTask(req, DIY_PATHS.ranked_keywords);
   const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
   return { value: parseRankedKeywords(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+/** 17 Oct 2026, keyword research: Labs keyword_suggestions, related_keywords and bulk_keyword_difficulty. */
+export async function readDiyKeywordSuggestions(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<ResearchedKeyword[]>> {
+  diyTask(req, DIY_PATHS.keyword_suggestions);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseKeywordSuggestions(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+export async function readDiyRelatedKeywords(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<ResearchedKeyword[]>> {
+  diyTask(req, DIY_PATHS.related_keywords);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseRelatedKeywords(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
+}
+
+export async function readDiyKeywordDifficulty(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<{ keyword: string; kd: number | null }[]>> {
+  diyTask(req, DIY_PATHS.keyword_difficulty);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { value: parseKeywordDifficulty(task), cost: taskCost(task), rows: itemsOf(task.result), partial: task.partial === true };
 }
 
 export async function readDiyRelevantPages(req: DiyRequest, budgetMs: number): Promise<DiyAnswer<RelevantPage[]>> {

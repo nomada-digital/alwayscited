@@ -58,7 +58,9 @@ export function useOps(slug: string, initial: Raw, plan: PlanShape, demo = false
 
   const shown = useMemo(() => pending.reduce((r, p) => applyOp(r, remap(p.op, ids), { by: "" }), confirmed), [pending, confirmed, ids]);
   const shownRef = useRef(shown);
-  shownRef.current = shown;
+  useEffect(() => {
+    shownRef.current = shown;
+  }, [shown]);
 
   const toast = useCallback((t: Omit<Toast, "id">) => {
     const id = ++n.current;

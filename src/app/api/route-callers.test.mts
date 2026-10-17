@@ -247,6 +247,14 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/plan/page.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/billing`} method=\"post\">"),
   },
   {
+    route: "/api/dash/[client]/pack",
+    method: "POST",
+    why: "Posted by the plain HTML form PackButton draws wherever an allowance runs out, and by Plan's Track more (17 Oct 2026); it answers with Stripe Checkout. The fetch scanner does not read forms.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/components/dash/PackButton.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/pack`} method=\"post\"") &&
+      readFileSync(join(ROOT, "src/app/dashboards/[client]/plan/page.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/pack`} method=\"post\">"),
+  },
+  {
     route: "/api/dash/logout",
     method: "POST",
     why: "Posted by the plain HTML Sign out form in the dashboards host's sidebar (17 Oct 2026), which the fetch scanner does not read.",

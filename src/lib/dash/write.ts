@@ -150,7 +150,8 @@ export async function writeOp(db: SupabaseClient, raw: Raw, op: Op, by: string):
     }
     case "keyword.add": {
       // Before 20261017000000 there is no tracked_keywords.cluster_id to state the cluster on, so /app's rule holds: one keyword per cluster.
-      const k = await insertKeyword(db, cid, op.clusterId, { keyword: op.keyword.replace(/\s+/g, " ").trim(), added_on: day, added_by: by }, raw.groupsReady ? { pooled: true, groupId: op.groupId } : {});
+      const row = { keyword: op.keyword.replace(/\s+/g, " ").trim(), added_on: day, added_by: by, ...(op.volume != null ? { search_volume: op.volume } : {}), ...(op.intent ? { intent: op.intent } : {}) };
+      const k = await insertKeyword(db, cid, op.clusterId, row, raw.groupsReady ? { pooled: true, groupId: op.groupId } : {});
       return k.ok ? { ok: true, ids: { [op.tempId]: k.ids[0]! } } : fail(k.message);
     }
     case "keyword.remove":

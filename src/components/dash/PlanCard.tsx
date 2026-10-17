@@ -1,12 +1,12 @@
 import TierName from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
-import { deliverables, delivered, nextTier, tierInfo } from "@/lib/dash/plan";
+import { deliverables, delivered, nextTier, planCopy, tierInfo } from "@/lib/dash/plan";
 import type { ClusterView, Workspace } from "@/lib/dash/types";
 
 /** The plan the client is on and what it delivers, from pricing.ts (17 Oct 2026). */
 export default function PlanCard({ ws, slug, base }: { ws: Workspace; slug: string; base: string }) {
   const t = ws.client.tier;
-  const info = tierInfo(t);
+  const info = planCopy(t);
   const up = nextTier(t);
   const trial = ws.client.trial_ends_at && !ws.client.payment_status ? ws.client.trial_ends_at.slice(0, 10) : null;
   return (
@@ -22,7 +22,7 @@ export default function PlanCard({ ws, slug, base }: { ws: Workspace; slug: stri
       </div>
       {up ? (
         <p className="intro" style={{ marginTop: 14 }}>
-          Next up: <TierName tier={up} />. {tierInfo(up).positioning}. <a href={`${SITE_ORIGIN}${tierInfo(up).href}`} style={{ color: "var(--accent)", fontWeight: 600 }}>See what it adds</a>
+          Next up: <TierName tier={up} />. {planCopy(up).positioning}. <a href={`${SITE_ORIGIN}${tierInfo(up).href}`} style={{ color: "var(--accent)", fontWeight: 600 }}>See what it adds</a>
         </p>
       ) : null}
     </div>

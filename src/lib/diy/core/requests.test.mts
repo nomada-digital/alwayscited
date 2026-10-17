@@ -133,7 +133,8 @@ test("ranked_keywords: the client's domain in its market, top 100 by etv, organi
 
 test("the row ceilings: 100 by default, 1000 only for ranked_keywords", () => {
   assert.equal(DIY_LIMIT_DEFAULT, 100);
-  assert.deepEqual(DIY_LIMIT_CEILING, { ranked_keywords: 1000, relevant_pages: 100, competitors_domain: 100 });
+  // 17 Oct 2026: keyword research's three Labs reads take the default.
+  assert.deepEqual(DIY_LIMIT_CEILING, { ranked_keywords: 1000, relevant_pages: 100, competitors_domain: 100, keyword_suggestions: 100, related_keywords: 100, keyword_difficulty: 100 });
   assert.throws(() => diyLimit("relevant_pages", 101));
   assert.throws(() => diyLimit("competitors_domain", 1000));
   assert.throws(() => diyLimit("ranked_keywords", 1.5));

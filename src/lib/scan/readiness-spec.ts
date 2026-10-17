@@ -89,9 +89,6 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 17 Oct 2026: a local run of the dashboards host on a snapshot (src/lib/dash/fixture.ts); production refuses it.
   // 17 Oct 2026: shareable read-only demo links on the dashboards host (src/lib/dash/host.ts). Unset means none open.
   DASH_DEMO_LINKS: "optional: token:slug pairs for read-only demo links; unset means no demo link opens",
-  // 17 Oct 2026: the Stripe product extra tracking packs are sold under (lib/checkout/stripe.ts addPack). Unset means
-  // the dashboards host's Buy asks the client to email us instead; nothing is charged without it.
-  STRIPE_PACK_PRODUCT: "optional: unset means extra packs are added by us on request rather than bought self-serve",
   DASH_FIXTURE_TIER: "local runs only: which tier the snapshot is drawn as; read only while DASH_FIXTURE is set, which production refuses",
 };
 

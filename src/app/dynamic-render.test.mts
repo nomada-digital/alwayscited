@@ -196,14 +196,18 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/dashboards",
     "/dashboards/[client]",
     "/dashboards/[client]/ai",
+    // 17 Oct 2026: the click-through views, same reason.
+    "/dashboards/[client]/ai/[prompt]",
     "/dashboards/[client]/clusters",
     "/dashboards/[client]/clusters/[cluster]",
     "/dashboards/[client]/google",
+    "/dashboards/[client]/google/[keyword]",
     "/dashboards/[client]/integrations",
     "/dashboards/[client]/managed",
     "/dashboards/[client]/opportunities",
     "/dashboards/[client]/plan",
     "/dashboards/[client]/sources",
+    "/dashboards/[client]/sources/[domain]",
     "/scan/[token]",
   ]);
 

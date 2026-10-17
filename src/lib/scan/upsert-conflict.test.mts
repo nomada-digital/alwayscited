@@ -304,6 +304,8 @@ test("the upsert sites are the ones we think they are", () => {
       // 17 Oct 2026: an integration request on the dashboards host, one row per client and provider (20261017000000).
       "integration_connections:client_domain_id,provider",
       "keyword_footprints:client_domain_id,pulled_on",
+      // 17 Oct 2026: keyword research's shared 30-day cache (lib/dash/research.ts), one row per market, kind, seed and day.
+      "keyword_research:kind,market,read_on,seed",
       // 30 Sep 2026, R91: the Stripe webhook's one orders row per completed
       // Session (checkout/signup.ts writeOrder), on the unique column in
       // 20260930020000_orders.sql, so a replayed event writes nothing.
@@ -323,6 +325,8 @@ test("the upsert sites are the ones we think they are", () => {
       // per day, one answer per run, question and engine, one SERP per keyword.
       // The second tracking_runs site is T2's "Run now", same key.
       "tracking_answers:engine,question_id,run_id",
+      // 17 Oct 2026: an extra tracking pack's subscription, recorded and updated by the webhook (lib/checkout/packs.ts).
+      "tracking_packs:stripe_subscription_id",
       "tracking_runs:client_domain_id,run_date",
       "tracking_runs:client_domain_id,run_date",
       "tracking_serp:keyword_id,run_id",

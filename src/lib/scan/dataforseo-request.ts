@@ -437,6 +437,10 @@ export const DIY_PATHS = {
   instant_pages: "/v3/on_page/instant_pages",
   microdata: "/v3/on_page/microdata",
   content_parsing: "/v3/on_page/content_parsing/live",
+  // 17 Oct 2026, the dashboards host's keyword research (Search positions, "Find keywords"): Labs, on demand.
+  keyword_suggestions: "/v3/dataforseo_labs/google/keyword_suggestions/live",
+  related_keywords: "/v3/dataforseo_labs/google/related_keywords/live",
+  keyword_difficulty: "/v3/dataforseo_labs/google/bulk_keyword_difficulty/live",
 } as const;
 /** Every DIY paid path's key: the launch reads above and wave 3's Backlinks and Content Analysis reads (DIY_LINK_PATHS, below). */
 export type DiyPathKey = keyof typeof DIY_PATHS | DiyLinkPathKey;
@@ -447,7 +451,7 @@ export type DiyPathKey = keyof typeof DIY_PATHS | DiyLinkPathKey;
  * Labs read bills every row up to its limit, so the limit is the bill.
  */
 export const DIY_LIMIT_DEFAULT = 100;
-export const DIY_LIMIT_CEILING = { ranked_keywords: 1000, relevant_pages: DIY_LIMIT_DEFAULT, competitors_domain: DIY_LIMIT_DEFAULT } as const;
+export const DIY_LIMIT_CEILING = { ranked_keywords: 1000, relevant_pages: DIY_LIMIT_DEFAULT, competitors_domain: DIY_LIMIT_DEFAULT, keyword_suggestions: DIY_LIMIT_DEFAULT, related_keywords: DIY_LIMIT_DEFAULT, keyword_difficulty: DIY_LIMIT_DEFAULT } as const;
 
 export function diyLimit(endpoint: keyof typeof DIY_LIMIT_CEILING, asked: number): number {
   const ceiling = DIY_LIMIT_CEILING[endpoint];
@@ -1435,4 +1439,87 @@ export function parseContentSearch(task: Task): { total: number | null; rows: Me
     rows.push({ url, domain, title: text(c.main_title, 300) ?? text(c.title, 300), published: dayOrNull(c.date_published), snippet: text(c.snippet, 200) });
   }
   return { total: nonNeg(r.total_count), rows };
+}
+
+
+// ── keyword research (17 Oct 2026, the dashboards host's "Find keywords") ──
+
+/** One researched keyword: what Search positions shows beside "Track". Every figure is DataForSEO's estimate. */
+export type ResearchedKeyword = { keyword: string; volume: number | null; kd: number | null; cpc: number | null; intent: Intent | null };
+
+/** The longest seed keyword a search takes. */
+export const RESEARCH_SEED_MAX = 80;
+
+/** A seed as asked: lower-case, single-spaced, 2 to RESEARCH_SEED_MAX characters. Throws on anything else. */
+export function researchSeed(raw: string): string {
+  const s = keywordForm(raw).slice(0, RESEARCH_SEED_MAX);
+  if (s.length < 2) throw new Error("a seed keyword is 2 to 80 characters");
+  return s;
+}
+
+/** Keywords that contain the seed (Labs keyword_suggestions), most searched first. 50 rows is $0.018. */
+export function keywordSuggestionsRequest(p: { seed: string; market: Market; limit?: number }): DiyRequest {
+  const limit = diyLimit("keyword_suggestions", p.limit ?? 50);
+  return {
+    endpoint: "keyword_suggestions",
+    path: DIY_PATHS.keyword_suggestions,
+    timeoutMs: 30_000,
+    rows: limit,
+    body: [{ keyword: researchSeed(p.seed), ...location(p.market), limit, include_seed_keyword: true, order_by: ["keyword_info.search_volume,desc"] }],
+  };
+}
+
+/** Keywords searched alongside the seed (Labs related_keywords, depth 1), most searched first. */
+export function relatedKeywordsRequest(p: { seed: string; market: Market; limit?: number }): DiyRequest {
+  const limit = diyLimit("related_keywords", p.limit ?? 50);
+  return {
+    endpoint: "related_keywords",
+    path: DIY_PATHS.related_keywords,
+    timeoutMs: 30_000,
+    rows: limit,
+    body: [{ keyword: researchSeed(p.seed), ...location(p.market), depth: 1, limit, order_by: ["keyword_data.keyword_info.search_volume,desc"] }],
+  };
+}
+
+/** Difficulty for up to 100 keywords at once (Labs bulk_keyword_difficulty). */
+export function keywordDifficultyRequest(p: { keywords: readonly string[]; market: Market }): DiyRequest {
+  const keywords = [...new Set(p.keywords.map((k) => keywordForm(k)).filter((k) => k.length >= 2))].slice(0, DIY_LIMIT_CEILING.keyword_difficulty);
+  if (!keywords.length) throw new Error("difficulty needs at least one keyword");
+  return { endpoint: "keyword_difficulty", path: DIY_PATHS.keyword_difficulty, timeoutMs: 30_000, rows: keywords.length, body: [{ keywords, ...location(p.market) }] };
+}
+
+/** A Labs keyword record - suggestions' item, or related's keyword_data - as a ResearchedKeyword. */
+function researched(data: Obj): ResearchedKeyword | null {
+  const keyword = text(data.keyword, 120);
+  if (!keyword) return null;
+  const info = obj(data.keyword_info);
+  const intent = obj(data.search_intent_info).main_intent;
+  const kd = numOrNull(obj(data.keyword_properties).keyword_difficulty);
+  const cpc = numOrNull(info.cpc);
+  return {
+    keyword: keywordForm(keyword),
+    volume: numOrNull(info.search_volume),
+    kd: kd === null ? null : Math.max(0, Math.min(100, Math.round(kd))),
+    cpc: cpc === null ? null : Math.round(cpc * 100) / 100,
+    intent: (INTENTS as readonly string[]).includes(String(intent)) ? (intent as Intent) : null,
+  };
+}
+
+export function parseKeywordSuggestions(task: Task): ResearchedKeyword[] {
+  return arr(firstResult(task).items).map((i) => researched(obj(i))).filter((x): x is ResearchedKeyword => x !== null);
+}
+
+export function parseRelatedKeywords(task: Task): ResearchedKeyword[] {
+  return arr(firstResult(task).items).map((i) => researched(obj(obj(i).keyword_data))).filter((x): x is ResearchedKeyword => x !== null);
+}
+
+export function parseKeywordDifficulty(task: Task): { keyword: string; kd: number | null }[] {
+  return arr(firstResult(task).items)
+    .map((i) => {
+      const o = obj(i);
+      const keyword = text(o.keyword, 120);
+      const kd = numOrNull(o.keyword_difficulty);
+      return keyword ? { keyword: keywordForm(keyword), kd: kd === null ? null : Math.max(0, Math.min(100, Math.round(kd))) } : null;
+    })
+    .filter((x): x is { keyword: string; kd: number | null } => x !== null);
 }

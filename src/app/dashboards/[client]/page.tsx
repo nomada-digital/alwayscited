@@ -13,6 +13,11 @@ import { checkTime, nextCheckAt } from "@/lib/tracking/check-time";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Overview", robots: { index: false, follow: false } };
 
+/** The next daily check, in the client's zone. Read off the clock, so kept out of the component's render. */
+function nextCheckLabel(market: string): string {
+  return checkTime(new Date(nextCheckAt(Date.now())).toISOString().slice(0, 10), market);
+}
+
 export default async function Overview({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
   const { ws, base, nudge } = await pageData(slug);
@@ -25,7 +30,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
   const delta = ws.rate !== null && first !== null ? Math.round((ws.rate - first) * 100) : null;
   // When the next reading lands, in the client's own zone - so an edit made now has a time it shows up by.
   const tracking = ws.clusters.some((c) => c.prompts > 0) || ws.loose.prompts.length > 0;
-  const next = tracking ? checkTime(new Date(nextCheckAt(Date.now())).toISOString().slice(0, 10), ws.client.market) : null;
+  const next = tracking ? nextCheckLabel(ws.client.market) : null;
   return (
     <>
       <PageHead

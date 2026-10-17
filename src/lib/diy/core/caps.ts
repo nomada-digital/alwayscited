@@ -40,7 +40,9 @@ import type { DiySettings, MonthBudgets } from "./settings.ts";
  */
 export const DOOR_DAILY: { scheduled: Record<Door, number>; on_demand: Record<Door, number> } = {
   scheduled: { labs: 3, backlinks: 15, onpage: 120, content: 2, model: 4 },
-  on_demand: { labs: 0, backlinks: 0, onpage: 20, content: 0, model: 6 },
+  // 17 Oct 2026: labs 0 -> 30, the dashboards host's keyword research - 30 searches a client a day, about $0.54 at
+  // most, inside the per-client month budget. Repeat searches within 30 days are read from keyword_research free.
+  on_demand: { labs: 30, backlinks: 0, onpage: 20, content: 0, model: 6 },
 };
 
 /** The three month budgets a read is counted against. */

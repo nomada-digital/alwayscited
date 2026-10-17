@@ -233,11 +233,21 @@ export type WebhookDeps = {
   trialWillEnd: (sub: Record<string, unknown>) => Promise<boolean>;
   /** invoice.payment_failed (BL-2, 9 Oct 2026); the object is the Invoice. */
   paymentFailed: (invoice: Record<string, unknown>, at: number) => Promise<boolean>;
+  /** 17 Oct 2026: an extra tracking pack's Checkout completed (packs.ts onPackCompleted). Absent: acknowledged, nothing done. */
+  packCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
+  /** A pack subscription changed, or ended when `ended` (packs.ts onPackChanged). */
+  packChanged?: (sub: Record<string, unknown>, ended: boolean) => Promise<boolean>;
 };
 
 /** The event's created time; the moment it arrived when Stripe's is missing, so a write is never undated. */
 export function eventTime(event: { created?: unknown }, nowS: number = Math.floor(Date.now() / 1000)): number {
   return typeof event.created === "number" && Number.isInteger(event.created) && event.created > 0 ? event.created : nowS;
+}
+
+/** A session or subscription marked as an extra tracking pack (packs.ts PACK_KIND). Inline so this file stays dependency-free. */
+function isPackObject(o: Record<string, unknown>): boolean {
+  const m = o.metadata;
+  return !!m && typeof m === "object" && (m as Record<string, unknown>).kind === "pack";
 }
 
 export type WebhookAnswer = { status: number; body: { ok?: true; ignored?: string; error?: string } };
@@ -263,8 +273,16 @@ export async function handleWebhook(raw: string, signature: string | null, secre
   const obj = event.data.object;
   const type = event.type as HandledEvent;
   const at = eventTime(event, nowS);
-  const done =
-    type === "checkout.session.completed"
+  // 17 Oct 2026: an extra tracking pack (packs.ts) is its own subscription, marked kind=pack. It goes to its own
+  // handler before anything else is asked, so a pack never runs the signup path and never makes a client.
+  const pack = isPackObject(obj);
+  const done = pack
+    ? type === "checkout.session.completed"
+      ? await (deps.packCompleted?.(obj) ?? Promise.resolve(true))
+      : type === "customer.subscription.updated" || type === "customer.subscription.deleted"
+        ? await (deps.packChanged?.(obj, type === "customer.subscription.deleted") ?? Promise.resolve(true))
+        : true
+    : type === "checkout.session.completed"
       ? await deps.completed(completedOrder(obj), event.id)
       : type === "customer.subscription.updated"
         ? await deps.updated(obj, event.data.previous_attributes ?? {}, at)

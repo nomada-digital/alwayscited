@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { onCheckoutCompleted, onSubscriptionDeleted, onSubscriptionUpdated, onTrialWillEnd } from "@/lib/checkout/signup";
 import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
+import { onPackChanged, onPackCompleted } from "@/lib/checkout/packs";
 import { handleWebhook } from "@/lib/checkout/webhook";
 
 export const runtime = "nodejs";
@@ -39,6 +40,8 @@ export async function POST(req: Request) {
     deleted: (sub, at) => onSubscriptionDeleted(supabaseAdmin(), sub, at),
     trialWillEnd: (sub) => onTrialWillEnd(supabaseAdmin(), sub),
     paymentFailed: (invoice, at) => onInvoicePaymentFailed(supabaseAdmin(), invoice, at),
+    packCompleted: (session) => onPackCompleted(supabaseAdmin(), session),
+    packChanged: (sub, ended) => onPackChanged(supabaseAdmin(), sub, ended),
   });
   return Response.json(answer.body, { status: answer.status });
 }
