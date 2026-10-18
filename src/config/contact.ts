@@ -112,8 +112,10 @@ export const WAITLIST_LIMITS = { domain: 253, topic: 200, email: 254, website: 2
  * `task`: Add a task on Actions (13 Oct 2026, DIY P3) - plan_items.title's own check is 1 to 200
  * characters, and plan/transitions.ts readTitle refuses past it before the insert. A note on an
  * Actions item takes `note`, the same 200 as plan_items.note's check.
+ * `website`: the sign-in forms' honeypot (18 Oct 2026, LoginHoneypot); /api/app/login cuts it to this
+ * before it is read or logged, as CONTACT_LIMITS.website is.
  */
-export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200 };
+export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200, website: 200 };
 
 // `website`: asked only when the order has no scan (R158, 1 Oct 2026); a hostname's own bound.
 // gaClientId (15 Oct 2026): the GA client id, "<digits>.<digits>", passed to

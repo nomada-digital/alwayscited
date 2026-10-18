@@ -13,7 +13,7 @@ import { ClientSwitch, Nav } from "./Nav";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, banner = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; banner?: PlanBanner | null; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, banner = null, waiting = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; banner?: PlanBanner | null; waiting?: string | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -67,6 +67,9 @@ export default function Shell({ ws, others, base, demo = false, banner = null, c
               <span>{banner.text}</span>
               {banner.link ? <a className="btn sm" href={banner.link.href} {...(banner.link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>{banner.link.label}</a> : null}
             </div>
+          ) : null}
+          {waiting ? (
+            <div className="banner" style={{ marginBottom: 16 }} role="status"><span>{waiting}</span></div>
           ) : null}
           {!ws.canWrite && !demo ? (
             <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>You can view this dashboard. An owner or editor can change what is tracked.</p>
