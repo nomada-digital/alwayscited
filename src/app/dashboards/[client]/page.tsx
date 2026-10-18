@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Change, EngineHeads, Kpi, Pos, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
 import Nudges from "@/components/dash/Nudges";
@@ -9,6 +10,8 @@ import { fullness } from "@/lib/dash/allowance";
 import { clusterKeywords } from "@/lib/dash/model";
 import { pageData } from "@/lib/dash/page-data";
 import { checkTime, nextCheckAt } from "@/lib/tracking/check-time";
+import { loadSetupConfirmed } from "@/lib/tracking/setup-data";
+import { setupOutstanding } from "@/lib/tracking/setup-landing";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Overview", robots: { index: false, follow: false } };
@@ -20,7 +23,9 @@ function nextCheckLabel(market: string): string {
 
 export default async function Overview({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { ws, base, nudge } = await pageData(slug);
+  const { ws, raw, base, nudge, demo, viewAs } = await pageData(slug);
+  // 18 Oct 2026 brief 2d: a client not yet set up lands on setup, as /app's sign-in landing did (setup-landing.ts).
+  if (!demo && !viewAs && raw.role !== "viewer" && setupOutstanding({ started_on: raw.client.started_on }, await loadSetupConfirmed(raw.client.id))) redirect(`${base}/${slug}/setup`);
   const tracked = ws.clusters.flatMap((c) => clusterKeywords(c)).filter((k) => k.src === "tracked");
   const ranked = tracked.filter((k) => k.pos !== null);
   const top10 = ranked.filter((k) => (k.pos ?? 99) <= 10).length;

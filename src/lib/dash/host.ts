@@ -136,3 +136,24 @@ export function dashLinkOrigin(host: string | null, env?: { DASH_HOST?: string }
 export function dashBase(host: string | null | undefined, env?: { DASH_HOST?: string }): string {
   return isDashHost(host, env) ? "" : DASH_PREFIX;
 }
+
+/**
+ * Where an old /app address lives on the dashboards host (18 Oct 2026 brief 2d): the one
+ * customer dashboard is the dashboards host, and every /app URL - old emails, bookmarks,
+ * the app host - answers a 308 to its new equivalent. `bare` is the path without /app.
+ */
+const SAME = new Set(["setup", "settings", "clusters", "google", "ai", "opportunities", "plan"]);
+const MOVED: Record<string, string> = { cited: "ai", named: "ai", links: "sources", pages: "sources", placements: "managed", reports: "" };
+export function dashPathForApp(bare: string): string {
+  const parts = bare.split("/").filter(Boolean);
+  if (!parts.length || parts[0] === "parity") return "/";
+  if (parts[0] === "login" || parts[0] === "auth") return `/${parts[0]}`;
+  const [client, section, ...rest] = parts;
+  if (!/^[A-Za-z0-9-]{1,64}$/.test(client!)) return "/";
+  const root = `/${client}`;
+  if (!section) return root;
+  if (section === "clusters" && rest[0]) return `${root}/clusters/${encodeURIComponent(rest[0])}`;
+  if (SAME.has(section)) return `${root}/${section}`;
+  const to = MOVED[section];
+  return to ? `${root}/${to}` : root;
+}
