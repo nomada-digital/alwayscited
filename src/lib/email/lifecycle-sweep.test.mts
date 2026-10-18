@@ -239,10 +239,13 @@ test("one run mails each due email once, to live owners only, and a second run m
   assert.deepEqual(claims(t), ["c1 trial_mail_midpoint", "c2 trial_mail_ending", "c5 setup_mail_24h"], "one claim per email per client");
   assert.deepEqual(
     outbox.map((m) => `${m.to} ${m.mail.subject}`).sort(),
+    // The subjects moved with the redesign (18 Oct 2026, brief 2e): the brief's own lines, the trial's end said as its
+    // day in the client's zone (trialMoment's date), and a reminder to a client whose prompts are already read says
+    // its setup is unfinished rather than that its first reading waits.
     [
-      "owner1@example.com How your free trial of alwaystracked is going",
-      `owner3@example.com Your free trial of alwaystracked ends ${trialMoment(at(NOW + 2 * DAY + 14.5 * HOUR), "UK")}`,
-      "owner3@example.com Your clusters aren't set up yet",
+      "owner1@example.com Seven days in: here's what a week of readings shows",
+      `owner3@example.com Your trial ends on ${trialMoment(at(NOW + 2 * DAY + 14.5 * HOUR), "UK").split(",")[0]!.replace(/ \d{4}$/, "")}`,
+      "owner3@example.com Your setup isn't finished yet",
     ].sort(),
     "no removed owner, no viewer, no agency account, no cancelled trial, no confirmed or hand-made client",
   );
@@ -475,8 +478,9 @@ test("This week on a Monday: owners and the editors who see the client, once a M
     "no viewer, no removed editor, and the editor limited to w2 gets only w2's",
   );
   const w1 = outbox.find((m) => m.mail.subject.startsWith("This week for w1.com"))!.mail;
-  assert.ok(w1.text.includes(`Open your actions: ${actionsUrl("w1-com", ORIGIN)}`), "the button opens the client's Actions on the origin the sweep was handed");
-  assert.match(w1.text, /week of 19 Oct/);
+  // "Open your actions" until 18 Oct 2026: the approved design's button is "Open this week".
+  assert.ok(w1.text.includes(`Open this week: ${actionsUrl("w1-com", ORIGIN)}`), "the button opens the client's This week page on the origin the sweep was handed");
+  assert.match(w1.text, /Week of 19 Oct 2026/);
 
   const again = await sweepLifecycleMail(db, io, MONDAY + 2 * HOUR);
   assert.deepEqual(again, { sent: [], unsent: [], errors: [] }, "a second run the same Monday mails nobody");
@@ -518,4 +522,68 @@ test("This week with no content source is not built, whatever the flag says", as
   const out = await sweepLifecycleMail(db, io, MONDAY);
   assert.deepEqual(out, { sent: [], unsent: [], errors: [] });
   assert.equal(outbox.length, 0);
+});
+
+// ---- 18 Oct 2026, brief 2e: opt-outs, the per-recipient unsubscribe, and the week of readings ----
+
+test("This week: a member who switched it off is not mailed; each recipient gets their own unsubscribe link and header", async () => {
+  const t = weekFixture();
+  (t.dashboard_members.find((m) => m.id === "m-e") as Row).this_week_opt_out = true;
+  const { db } = fakeDb(t);
+  const w = weekIo();
+  w.io.unsubscribe = (email, clientId) => `https://dash.example/api/dash/unsubscribe?t=${clientId}.${email}`;
+  const out = await sweepLifecycleMail(db, w.io, MONDAY);
+  assert.deepEqual(out.sent.sort(), ["this_week w1", "this_week w2"]);
+  assert.deepEqual(w.outbox.map((m) => m.to).sort(), ["limited@example.com", "owner@example.com", "owner@example.com"], "the editor who switched it off gets neither client's");
+  for (const m of w.outbox) {
+    const url = `https://dash.example/api/dash/unsubscribe?t=${m.mail.subject.includes("w1.com") ? "w1" : "w2"}.${m.to}`;
+    assert.equal(m.mail.headers?.["List-Unsubscribe"], `<${url}>`, `${m.to}: their own link`);
+    assert.equal(m.mail.headers?.["List-Unsubscribe-Post"], "List-Unsubscribe=One-Click");
+    assert.ok(m.mail.text.includes(`Unsubscribe: ${url}`));
+  }
+});
+
+test("This week with the dashboard's rows: figures in the subject, and not before a week of readings", async () => {
+  const answers = (days: number) =>
+    Array.from({ length: days }, (_, i) => ({ run_date: new Date(MONDAY - (i + 1) * DAY).toISOString().slice(0, 10), question_id: "p", engine: "chatgpt" as const, answered: true, named: i % 2 === 0 }));
+  const merge = (days: number) => ({
+    raw: {
+      client: { id: "x", slug: "x", domain: "x.com", brand: null, market: "UK", tier: "tracked" as const, status: "active", started_on: null, cluster_limit: 10, trial_ends_at: null, payment_status: null, brand_aliases: [] },
+      role: "owner",
+      today: "2026-10-19",
+      clusters: [],
+      groups: [],
+      keywords: [],
+      prompts: [{ id: "p", text: "q", cluster_id: null, group_id: null, angle: null, added_on: "2026-10-01", stopped_on: null }],
+      runs: [],
+      serp: [],
+      answers: answers(days),
+      footprint: null,
+      opportunities: [],
+      placements: [],
+      connections: [],
+      consoleRows: [],
+      groupsReady: true,
+    },
+    forms: new Map(),
+    mode: "nomada" as const,
+    agency: null,
+    engines: ["ChatGPT"],
+  });
+  for (const [days, sends] of [
+    [6, false],
+    [14, true],
+  ] as const) {
+    const t = weekFixture();
+    const { db } = fakeDb(t);
+    const w = weekIo();
+    w.io.client = async () => merge(days);
+    const out = await sweepLifecycleMail(db, w.io, MONDAY);
+    if (!sends) {
+      assert.deepEqual(out, { sent: [], unsent: [], errors: [] }, "six readings: no Monday email yet");
+      continue;
+    }
+    assert.deepEqual(out.sent.sort(), ["this_week w1", "this_week w2"]);
+    assert.match(w.outbox[0]!.mail.subject, /^This week: named in \d+% of answers/);
+  }
 });

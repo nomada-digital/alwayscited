@@ -443,9 +443,11 @@ const OFF_PALETTE: Record<string, Entry> = {
       "prose is `#3f4451` at 9.74, so the departure over the board is 0.05 rather than the 5.11 the reason " +
       "reads as. No board draws this value. Second site (R159, 1 Oct 2026): `src/lib/email/lifecycle.ts`, the " +
       "lifecycle templates, which use the same mail palette but cannot import verify-email.ts's (it is " +
-      "server-only with `@/` imports, and the templates must render under node --test and the preview page).",
+      "server-only with `@/` imports, and the templates must render under node --test and the preview page). " +
+      "That site went on 18 Oct 2026 (brief 2e): the rebuilt templates draw the approved designs, whose body prose " +
+      "is `T.ink` and whose quiet text is `T.soft`, all from the tokens (email/design.ts), so this is one site again.",
     boards: 0,
-    sites: { "src/lib/scan/verify-email.ts": 1, "src/lib/email/lifecycle.ts": 1 },
+    sites: { "src/lib/scan/verify-email.ts": 1 },
   },
   "rgba(220,38,38,0.1)": {
     why: "the ops page's error panel ground. The last of the hand-rolled status set - its amber joined `T.warnFg` when blocked.md 9 was answered - in the one file no page sweep reaches.",

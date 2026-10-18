@@ -202,6 +202,19 @@ function allCalls(): Call[] {
  * stops meaning anything.
  */
 const NO_CALLER: { route: string; method: string; why: string; earns: () => boolean }[] = [
+  // 18 Oct 2026 (brief 2e): #7's one-click unsubscribe. Its callers are mail clients and readers of the email.
+  {
+    route: "/api/dash/unsubscribe",
+    method: "GET",
+    why: "Opened from the Monday email's footer link, which the lifecycle emails build with unsubscribeLink; nothing in the app links to it.",
+    earns: () => readFileSync(join(ROOT, "src/lib/email/unsubscribe.ts"), "utf8").includes("/api/dash/unsubscribe?t="),
+  },
+  {
+    route: "/api/dash/unsubscribe",
+    method: "POST",
+    why: "Posted by a mail client's RFC 8058 one-click (the List-Unsubscribe-Post header), or by the plain form the GET page draws, which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/app/api/dash/unsubscribe/route.ts"), "utf8").includes('<form method="post" action="/api/dash/unsubscribe?t='),
+  },
   {
     route: "/api/cron/purge-responses",
     method: "GET",

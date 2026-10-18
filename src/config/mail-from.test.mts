@@ -5,7 +5,8 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import { code, sendCalls } from "../lib/source-read.mts";
-import { MAIL_FROM_FALLBACK, mailFrom } from "./mail-from.ts";
+import { CONTACT_EMAIL } from "./contact.ts";
+import { addressOf, DANNY_NAME, MAIL_FROM_FALLBACK, MAIL_REPLY_TO, mailFrom } from "./mail-from.ts";
 
 /**
  * The address on the envelope of every message this product sends.
@@ -138,6 +139,25 @@ test("a variable set to nothing falls back rather than sending from nowhere", ()
     if (before === undefined) delete process.env.SCAN_FROM_EMAIL;
     else process.env.SCAN_FROM_EMAIL = before;
   }
+});
+
+test("Danny's emails carry his name on the same address; replies go to our own inbox (brief 2e, 18 Oct 2026)", () => {
+  const before = process.env.SCAN_FROM_EMAIL;
+  try {
+    process.env.SCAN_FROM_EMAIL = "alwayscited <hello@alwayscited.com>";
+    assert.equal(mailFrom(), "alwayscited <hello@alwayscited.com>");
+    assert.equal(mailFrom("team"), "alwayscited <hello@alwayscited.com>");
+    assert.equal(mailFrom("danny"), "Danny at alwayscited <hello@alwayscited.com>");
+    process.env.SCAN_FROM_EMAIL = "hello@alwayscited.com";
+    assert.equal(mailFrom("danny"), `${DANNY_NAME} <hello@alwayscited.com>`, "a bare address takes the name too");
+    delete process.env.SCAN_FROM_EMAIL;
+    assert.equal(mailFrom("danny"), `${DANNY_NAME} <${addressOf(MAIL_FROM_FALLBACK)}>`, "unset: the fallback's address, never a second one");
+  } finally {
+    if (before === undefined) delete process.env.SCAN_FROM_EMAIL;
+    else process.env.SCAN_FROM_EMAIL = before;
+  }
+  assert.equal(addressOf("A <b@c.d>"), "b@c.d");
+  assert.equal(MAIL_REPLY_TO, CONTACT_EMAIL);
 });
 
 // ------------------------------------------------- direction one: one copy
@@ -286,8 +306,10 @@ test("every send takes its From from the one reader", () => {
   // reliability-6, OP-1).
   assert.equal(all.length, 12, `expected 12 sends, the walk found ${all.length}`);
 
+  // 18 Oct 2026 (brief 2e): the lifecycle sender passes the rendered email's sender, so #3 and #12 go out under
+  // Danny's name on the same address. Still the one reader; the argument picks a display name, never an address.
   for (const s of all) {
-    assert.equal(s.from, "mailFrom()", `${s.file} sets its own From: ${s.from}`);
+    assert.ok(s.from === "mailFrom()" || (s.file === "src/lib/email/lifecycle-mail.ts" && s.from === "mailFrom(input.mail.sender)"), `${s.file} sets its own From: ${s.from}`);
   }
 });
 
@@ -347,7 +369,7 @@ const RECIPIENTS: { to: string; why: string }[] = [
   },
   {
     to: "input.memberEmail",
-    why: "a dashboard member's stored address (T3, 29 Sep 2026) - the login route reads it back from dashboard_members, which only Nomada writes through /admin/tracking, and passes that rather than the typed one. Since 1 Oct 2026 (R159 part 3) also the lifecycle sender's: the owner the Stripe webhook just stored from the paid Session's email, or the client's live owners read back with removed_at null",
+    why: "a dashboard member's stored address (T3, 29 Sep 2026) - the login route reads it back from dashboard_members, which only Nomada writes through /admin/tracking, and passes that rather than the typed one. Since 1 Oct 2026 (R159 part 3) also the lifecycle sender's: the owner the Stripe webhook just stored from the paid Session's email, or the client's live owners read back with removed_at null. Since 18 Oct 2026 (brief 2e) also payment_failed's live owners, and /admin/emails' Send test to me, whose only recipient is the fixed constant TEST_RECIPIENT in admin/emails/actions.ts, behind the admin's Basic auth",
   },
 ];
 

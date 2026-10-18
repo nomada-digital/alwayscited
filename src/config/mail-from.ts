@@ -1,3 +1,5 @@
+import { CONTACT_EMAIL } from "./contact.ts";
+
 /**
  * The address every message this product sends comes from, decided once.
  *
@@ -56,6 +58,30 @@ export const MAIL_FROM_FALLBACK = "alwayscited <onboarding@resend.dev>";
  * stops. An empty string is not an address, and the fallback exists for
  * exactly the case where the variable cannot be used.
  */
-export function mailFrom(): string {
-  return process.env.SCAN_FROM_EMAIL || MAIL_FROM_FALLBACK;
+export function mailFrom(sender: MailSender = "team"): string {
+  const from = process.env.SCAN_FROM_EMAIL || MAIL_FROM_FALLBACK;
+  return sender === "danny" ? `${DANNY_NAME} <${addressOf(from)}>` : from;
 }
+
+/**
+ * Who a customer email is from (brief item 2e, 18 Oct 2026). Every email is
+ * from the deployment's address as SCAN_FROM_EMAIL sets it - production is to
+ * set it to "alwayscited <hello@alwayscited.com>" - and #3 welcome and #12 plan
+ * ended carry Danny's name on that same address, so no second address is
+ * configured, typed or verified: "Danny at alwayscited <hello@alwayscited.com>".
+ */
+export type MailSender = "team" | "danny";
+
+export const DANNY_NAME = "Danny at alwayscited";
+
+/** The bare address inside a From value: "a <b@c>" is b@c, and a value with no angle brackets is itself. */
+export function addressOf(from: string): string {
+  const m = /<([^<>\s]+@[^<>\s]+)>\s*$/.exec(from);
+  return (m ? m[1]! : from).trim();
+}
+
+/**
+ * Where a reply to a customer email goes (brief 2e): our own inbox, the one
+ * address the site publishes, never a deployment value or a caller's string.
+ */
+export const MAIL_REPLY_TO = CONTACT_EMAIL;

@@ -37,8 +37,10 @@ export const CAPABILITIES: Readonly<Record<Capability, boolean>> = {
    * The dashboard and its sign-in mail carry the agency's name, logo and
    * colours and no mark of ours. Build item AG-2. Today `Sidebar.tsx`'s
    * Lockup draws the alwayscited mark and the alwaystracked name in every
-   * mode, `login-mail.ts` sends "Your alwaystracked login link", and nothing
-   * in src reads `accounts.agency_name`.
+   * mode, and `login-mail.ts` sends "Your alwayscited login link" under our
+   * own wordmark. Since 18 Oct 2026 (brief 2e) the client-facing invite email
+   * reads `accounts.agency_name` and prints it as "for <agency>" under our
+   * wordmark - a name, not branding: no logo, no colours, and our mark stays.
    */
   dashboardBranding: false,
   /**

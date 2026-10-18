@@ -1,6 +1,6 @@
 import "server-only";
 import { Resend } from "resend";
-import { mailFrom } from "@/config/mail-from";
+import { MAIL_REPLY_TO, mailFrom } from "@/config/mail-from";
 import { headerSafe } from "@/lib/email-header";
 import type { Rendered } from "@/lib/email/lifecycle";
 
@@ -28,6 +28,15 @@ import type { Rendered } from "@/lib/email/lifecycle";
  *   hands this function to lifecycle-sweep.ts): trial_midpoint,
  *   trial_ending and setup_reminder, each once per client.
  *
+ * - the signed Stripe webhook again (18 Oct 2026, brief 2e): payment_failed,
+ *   on invoice.payment_failed for a renewal, to the live owners, once per
+ *   invoice (payment-failed-mail.ts);
+ * - /admin/emails' "Send test to me", behind the admin's Basic auth, to the
+ *   one fixed test address TEST_RECIPIENT and nobody else (18 Oct 2026).
+ *
+ * From the deployment's address, or Danny's name on it for #3 and #12
+ * (mail-from.ts), with replies to our own inbox.
+ *
  * The invite asks lifecycleOn too, but goes through invite-mail.ts and its
  * owner caps. lifecycleOn lives in lifecycle-flag.ts, so the sweep can load
  * it under node --test, and is re-exported here for every send site.
@@ -44,11 +53,14 @@ export async function sendLifecycle(input: { memberEmail: string; mail: Rendered
   }
   try {
     const { error } = await new Resend(key).emails.send({
-      from: mailFrom(),
+      from: mailFrom(input.mail.sender),
       to: input.memberEmail,
+      replyTo: MAIL_REPLY_TO,
       subject: headerSafe(input.mail.subject),
       html: input.mail.html,
       text: input.mail.text,
+      // #7's List-Unsubscribe and List-Unsubscribe-Post (brief 2e, 18 Oct 2026); no other email carries any.
+      ...(input.mail.headers ? { headers: input.mail.headers } : {}),
     });
     if (error) {
       console.error("[mail] lifecycle email rejected", error);

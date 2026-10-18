@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { invite as inviteEmail } from "@/lib/email/lifecycle";
+import { dashOrigin } from "@/lib/dash/host";
+import { dashboardUrl, emailSettingsUrl, invite as inviteEmail } from "@/lib/email/lifecycle";
 import { lifecycleOn } from "@/lib/email/lifecycle-mail";
-import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
+import { engineNames } from "@/lib/email/merge-source";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { TIER_PLAIN, type TierKey } from "@/lib/tier-text";
 import { upsellMode } from "@/lib/tracking/ask";
@@ -66,7 +66,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
 
   const db = supabaseAdmin();
   // The account is read here, server-side only; clientsFor keeps account_id out of what pages get.
-  const { data: row, error: rowErr } = await db.from("client_domains").select("account_id").eq("id", client.id).maybeSingle();
+  const { data: row, error: rowErr } = await db.from("client_domains").select("account_id, brand_name").eq("id", client.id).maybeSingle();
   if (rowErr || !row) return refused(`could not read the client's account: ${rowErr?.message ?? "none"}`);
   const accountId = row.account_id as string;
   const team = await readTeam(db, accountId);
@@ -83,18 +83,23 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
 
   if (plan.op === "invite") {
     // Read before the write: agency mode must be known, or the mail could name a nomada tier.
-    const { data: account, error: aErr } = await db.from("accounts").select("upsell_mode").eq("id", accountId).maybeSingle();
+    const { data: account, error: aErr } = await db.from("accounts").select("upsell_mode, agency_name").eq("id", accountId).maybeSingle();
     if (aErr || !account) return refused(`could not read the account: ${aErr?.message ?? "none"}`);
     const r = await invite(db, { accountId, clientId: client.id, email: f.email, role: plan.role, by: email, scope: plan.scope, elsewhere: plan.elsewhere });
     if (!r.ok) return refused(r.message);
     const agency = upsellMode(account.upsell_mode) === "agency";
     // The mail says when they will see every client; an invite to one client names that client only.
     const everyClient = plan.scope === "account" && clientIds.length > 1 ? clientIds.length : null;
-    // The branded invite (R159) names alwayscited and the tier, so never in agency mode; off until its flag is on.
-    const mail =
-      !agency && (await lifecycleOn(db, "invite"))
-        ? inviteEmail({ tier: (client.tier in TIER_PLAIN ? client.tier : "tracked") as TierKey, domain: client.domain, link: appUrl("/login", siteUrl()), inviter: email, role: f.role!, everyClient })
-        : inviteMail({ inviter: email, domain: client.domain, role: f.role!, agency, everyClient });
+    // The designed invite (#8, brief 2e, 18 Oct 2026), off until its flag is on. Client-facing in every mode: no tier,
+    // no upsell, no nomada digital line; in agency mode the agency's name (accounts.agency_name) under the wordmark.
+    // Until 18 Oct 2026 the branded invite named the tier and so was never sent in agency mode.
+    const tier = (client.tier in TIER_PLAIN ? client.tier : "tracked") as TierKey;
+    const origin = dashOrigin();
+    const agencyName = agency && typeof account.agency_name === "string" ? account.agency_name : null;
+    const brand = typeof row.brand_name === "string" ? row.brand_name : null;
+    const mail = (await lifecycleOn(db, "invite"))
+      ? inviteEmail({ domain: client.domain, brand, link: dashboardUrl(slug, origin), inviter: email, role: f.role!, everyClient, agency: agencyName, engines: engineNames(tier), settings: emailSettingsUrl(slug, origin) })
+      : inviteMail({ inviter: email, domain: client.domain, role: f.role!, agency, everyClient });
     if (!(await sendInvite({ to: f.email, replyTo: email, ...mail }))) console.warn("[app] invite saved but the mail was not sent");
     return back("invited");
   }
