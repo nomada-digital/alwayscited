@@ -140,3 +140,14 @@ export function clusterGoogleTrio(
   if (c.status !== "chosen" || !c.keyword?.trim()) return { target_keyword: null, search_volume: null, keyword_rank: null };
   return { target_keyword: c.keyword, search_volume: c.volume, keyword_rank: c.rank };
 }
+
+/**
+ * Whether a scan's stored cluster keyword was read for this topic and market
+ * (18 Oct 2026). A keyword, its volume and its intent are a reading in one
+ * market for one topic: reused only for that same pair, never across markets.
+ * A row stored before the market was recorded (null) never fits, so it is read
+ * again rather than guessed.
+ */
+export function clusterKeywordFits(stored: { status: unknown; topic: unknown; market: unknown }, topic: string, market: string): boolean {
+  return Boolean(stored.status) && typeof stored.market === "string" && stored.market === market && stored.topic === topic;
+}

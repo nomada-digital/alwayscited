@@ -168,6 +168,23 @@ export function orderRow(o: CompletedOrder, clientId: string | null, trialEndsAt
 }
 
 /**
+ * The market a signup's client is tracked in (18 Oct 2026): the plan paid for,
+ * never the scan's. Checkout prices and charges the order's market on its own
+ * and never compared it with the scan the buyer came from, so a UK plan bought
+ * from a US scan's link made a US client, read in the US every day. The scan
+ * still names the site; its cluster keyword, volume and prompts were read in
+ * its own market, so they prefill the client only when that market is the one
+ * paid for (`useScan`). An order with no market of its own (none since
+ * checkout began recording it) falls back to the scan's.
+ */
+export function signupMarket(orderMarket: string, scanMarket: string | null): { market: "UK" | "US" | null; useScan: boolean } {
+  const paid = orderMarket === "uk" ? "UK" : orderMarket === "us" ? "US" : null;
+  const scan = scanMarket === "UK" || scanMarket === "US" ? scanMarket : null;
+  if (paid) return { market: paid, useScan: scan === paid };
+  return { market: scan, useScan: scan !== null };
+}
+
+/**
  * Where a signup picks up when Stripe retries it (R148 pass 8, 1 Oct 2026).
  * A run that fails after the first cluster is made (keyword or prompts
  * refused, owner not added) is retried; without this the retry made a second

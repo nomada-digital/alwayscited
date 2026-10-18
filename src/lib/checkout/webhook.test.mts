@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { checkoutRequest } from "./session.ts";
-import { clustersToMake, completedOrder, eventTime, HANDLED_EVENTS, handleWebhook, orderEmailText, orderRow, packsOn, signStripePayload, signupResume, subscriptionScanToken, trialEndsAtAfter, trialStillRunning, verifyStripeSignature, type WebhookDeps } from "./webhook.ts";
+import { clustersToMake, completedOrder, eventTime, HANDLED_EVENTS, handleWebhook, orderEmailText, orderRow, packsOn, signStripePayload, signupMarket, signupResume, subscriptionScanToken, trialEndsAtAfter, trialStillRunning, verifyStripeSignature, type WebhookDeps } from "./webhook.ts";
 import { invoiceSubscription } from "./payment.ts";
 
 /**
@@ -305,4 +305,14 @@ test("a retried signup reuses its first cluster and writes its keyword and promp
   assert.deepEqual(signupResume({ id: "c1", keywordId: null, livePrompts: 0 }), { clusterId: "c1", keyword: true, prompts: true }, "cluster made, keyword refused");
   assert.deepEqual(signupResume({ id: "c1", keywordId: "k1", livePrompts: 0 }), { clusterId: "c1", keyword: false, prompts: true }, "keyword made, prompts refused");
   assert.deepEqual(signupResume({ id: "c1", keywordId: "k1", livePrompts: 5 }), { clusterId: "c1", keyword: false, prompts: false }, "owner not added: only the rest runs");
+});
+
+test("a signup is tracked in the market paid for, and a scan from the other market prefills nothing (18 Oct 2026)", () => {
+  assert.deepEqual(signupMarket("uk", "US"), { market: "UK", useScan: false }, "UK plan from a US scan's link: tracked in the UK, the US keyword and prompts left behind");
+  assert.deepEqual(signupMarket("us", "UK"), { market: "US", useScan: false });
+  assert.deepEqual(signupMarket("uk", "UK"), { market: "UK", useScan: true }, "same market: the scan prefills as before");
+  assert.deepEqual(signupMarket("us", null), { market: "US", useScan: false }, "no scan: the paid market");
+  assert.deepEqual(signupMarket("", "US"), { market: "US", useScan: true }, "an order with no market of its own falls back to the scan's");
+  assert.deepEqual(signupMarket("", null), { market: null, useScan: false });
+  assert.deepEqual(signupMarket("fr", "XX"), { market: null, useScan: false }, "neither is a market we track");
 });

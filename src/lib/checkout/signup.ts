@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { siteUrl } from "@/lib/scan/verify-email";
 import { appUrl } from "@/lib/app-host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
-import { clustersToMake, orderEmailText, orderRow, packsOn, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
+import { clustersToMake, orderEmailText, orderRow, packsOn, signupMarket, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
 import { livePacks } from "@/lib/checkout/packs";
 import { readSubscription } from "@/lib/checkout/stripe";
 import { afterSubscription } from "@/lib/checkout/payment";
@@ -75,7 +75,9 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     if (sErr) return { ok: false, outcome: `could not read the scan: ${sErr.message}` };
     if (data && data.status === "complete" && (data.market === "UK" || data.market === "US")) scan = data as Scan;
   }
-  const market = scan ? scan.market : o.market === "uk" ? "UK" : o.market === "us" ? "US" : null;
+  // The plan paid for sets the market; a scan from the other market still names the site but prefills nothing (signupMarket).
+  const { market, useScan } = signupMarket(o.market, scan?.market ?? null);
+  const prefill = useScan ? scan : null;
   const domain = scan ? scan.domain : o.website;
   if (!domain || !market) {
     return {
@@ -109,7 +111,7 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     status: "active",
     tier,
     started_on: startedOn,
-    source_scan_id: scan?.id ?? null,
+    source_scan_id: prefill?.id ?? null,
   };
   let clientId: string;
   // The slug and cluster_limit come back for the welcome's links and the plan's room.
@@ -143,8 +145,8 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     }
   }
 
-  const chosen = scan?.cluster_keyword_status === "chosen" && typeof scan.cluster_keyword === "string" && scan.cluster_keyword.trim();
-  const clusterName = chosen ? (scan!.cluster_keyword as string).trim() : NEEDS_A_KEYWORD;
+  const chosen = prefill?.cluster_keyword_status === "chosen" && typeof prefill.cluster_keyword === "string" && prefill.cluster_keyword.trim();
+  const clusterName = chosen ? (prefill!.cluster_keyword as string).trim() : NEEDS_A_KEYWORD;
 
   // A Stripe retry of a signup that failed part way picks up where it stopped (signupResume).
   const { data: prior, error: pErr } = await db
@@ -172,17 +174,18 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   }
   if (chosen && resume.keyword) {
     const kw = await insertKeyword(db, clientId, clusterId, {
-      keyword: (scan!.cluster_keyword as string).trim(),
+      keyword: (prefill!.cluster_keyword as string).trim(),
       added_on: startedOn,
       added_by: "nomada",
-      search_volume: scan!.cluster_keyword_volume ?? null,
-      intent: scan!.cluster_keyword_intent ?? null,
+      search_volume: prefill!.cluster_keyword_volume ?? null,
+      intent: prefill!.cluster_keyword_intent ?? null,
     });
     if (!kw.ok) return { ok: false, outcome: `cluster made, keyword refused: ${kw.message}`, clientId };
   }
 
   let rows: { text: string; angle: string | null; source: string; added_on: string; added_by: string }[] = [];
-  if (scan) {
+  if (prefill) {
+    const scan = prefill;
     const { data: sq, error: qErr } = await db.from("scan_questions").select("idx, question, kind").eq("scan_id", scan.id).order("idx", { ascending: true });
     if (qErr) return { ok: false, outcome: `could not read the scan's prompts: ${qErr.message}`, clientId };
     // Each prompt keeps its scan kind as its angle (BRIEF-3 C3).
@@ -236,7 +239,7 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     ok: true,
     clientId,
     outcome:
-      `${scan ? "from the scan" : "no scan, from the website on the order"}: ${domain} at ${tier}, first check ${startedOn}; ` +
+      `${scan ? (prefill ? "from the scan" : `from a ${scan.market} scan, tracked in ${market} as paid, nothing prefilled from it`) : "no scan, from the website on the order"}: ${domain} at ${tier}, first check ${startedOn}; ` +
       `cluster 1 "${clusterName}" with ${rows.length} prompt(s)${clusters > 1 ? `, ${clusters - 1} more "${NEEDS_A_KEYWORD}"` : ""}` +
       `${chosen && rows.length && clusters === 1 ? "" : " - pick keywords and prompts in /admin/tracking"}; ${o.email} is owner; ${welcomeOn ? (trial ? "trial_started email" : "welcome email") : "login link"} ${sent ? "sent" : "NOT sent"}.`,
   };

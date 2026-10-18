@@ -10,7 +10,7 @@ import {
 } from "@/lib/scan/anthropic";
 import { readKeywordIntents, readKeywordVolumes } from "@/lib/scan/dataforseo";
 import { isMarket, type Market } from "@/lib/scan/domain";
-import { pickClusterKeyword } from "@/lib/scan/target-keyword";
+import { clusterKeywordFits, pickClusterKeyword } from "@/lib/scan/target-keyword";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -78,7 +78,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     // Neither counter is read here any more. The ceiling is decided by
     // note_preview_call inside the update, which is the only reading of
     // preview_calls that two concurrent requests cannot disagree about.
-    .select("id, status, domain, brand_name, positioning, topic, topic_variants, market, site_facts, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status")
+    .select("id, status, domain, brand_name, positioning, topic, topic_variants, market, site_facts, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
     .eq("public_token", token)
     .maybeSingle();
 
@@ -267,7 +267,9 @@ async function clusterKeywordFor(
   topic: string,
   market: Market,
 ): Promise<ClusterKeyword> {
-  if (scan.cluster_keyword_status && scan.topic === topic && scan.market === market) {
+  // Reused only for the topic and market it was read for (18 Oct 2026): scans.market and .topic are written by /confirm,
+  // not here, so comparing against them let a keyword read in one market come back after the market was switched twice.
+  if (clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)) {
     return {
       keyword: (scan.cluster_keyword as string | null) ?? null,
       volume: (scan.cluster_keyword_volume as number | null) ?? null,
@@ -299,7 +301,7 @@ async function clusterKeywordFor(
   }
   const { error: wErr } = await db
     .from("scans")
-    .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status })
+    .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status, cluster_keyword_market: market, cluster_keyword_topic: topic })
     .eq("id", scan.id as string);
   if (wErr) console.warn(`[scan] cluster keyword not stored for ${String(scan.id)}: ${wErr.message}`);
   if (dfsCalls || dfsCost || modelBilled.calls) {

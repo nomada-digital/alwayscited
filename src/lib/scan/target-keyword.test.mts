@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Intent } from "./dataforseo-request.ts";
-import { clusterGoogleTrio, normaliseCandidate, pickClusterKeyword, pickKeyword, stripFiller } from "./target-keyword.ts";
+import { clusterGoogleTrio, clusterKeywordFits, normaliseCandidate, pickClusterKeyword, pickKeyword, stripFiller } from "./target-keyword.ts";
 
 const CAT = "business cash flow finance";
 const NOUN = "providers";
@@ -104,4 +104,14 @@ test("clusterGoogleTrio: none_qualified and read_failed show no keyword, never o
       keyword_rank: null,
     });
   }
+});
+
+test("a stored cluster keyword is reused only for the topic and market it was read for, never across markets (18 Oct 2026)", () => {
+  const read = { status: "chosen", topic: "b2b seo agency", market: "UK" };
+  assert.ok(clusterKeywordFits(read, "b2b seo agency", "UK"));
+  assert.ok(!clusterKeywordFits(read, "b2b seo agency", "US"), "switched to the US: read again, never the UK keyword and volume");
+  assert.ok(!clusterKeywordFits(read, "seo agency", "UK"), "another topic: read again");
+  assert.ok(!clusterKeywordFits({ status: "chosen", topic: "b2b seo agency", market: null }, "b2b seo agency", "UK"), "stored before the market was recorded: never guessed");
+  assert.ok(!clusterKeywordFits({ status: null, topic: "b2b seo agency", market: "UK" }, "b2b seo agency", "UK"), "never checked");
+  assert.ok(clusterKeywordFits({ status: "none_qualified", topic: "b2b seo agency", market: "US" }, "b2b seo agency", "US"), "a 'none qualified' answer is a reading too, reused in its own market");
 });

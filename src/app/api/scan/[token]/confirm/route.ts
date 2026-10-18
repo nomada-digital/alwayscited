@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { SCAN_LIMITS } from "@/config/contact";
 import { QUESTION_COUNT, QUESTION_KINDS, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
 import { isMarket } from "@/lib/scan/domain";
+import { clusterKeywordFits } from "@/lib/scan/target-keyword";
 import { runScan } from "@/lib/scan/pipeline";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { isFreePassDead, reapStalledFreePass } from "@/lib/scan/stall";
@@ -73,7 +74,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   // it is the wrong one when the database simply did not answer.
   const { data: scan, error: readErr } = await db
     .from("scans")
-    .select("id, status, market, started_at, queued_at")
+    .select("id, status, market, started_at, queued_at, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
     .eq("public_token", token)
     .maybeSingle();
 
@@ -198,6 +199,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
        */
       queued_at: new Date().toISOString(),
       ...(variants ? { topic_variants: variants } : {}),
+      // A cluster keyword read for another market or topic than the one confirmed is dropped (18 Oct 2026): the scan would
+      // check its rank in this market, and signup would copy it and its volume onto a client tracked here.
+      ...(scan.cluster_keyword_status && !clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)
+        ? { cluster_keyword: null, cluster_keyword_volume: null, cluster_keyword_intent: null, cluster_keyword_status: null, cluster_keyword_market: null, cluster_keyword_topic: null }
+        : {}),
     })
     .eq("id", scan.id)
     .not("status", "in", "(queued,running,complete)")
