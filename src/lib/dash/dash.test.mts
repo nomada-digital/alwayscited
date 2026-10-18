@@ -356,3 +356,41 @@ test("a view-as path is a 64-hex token, a slug and the rest; anything else is no
   assert.equal(viewPath(`/view/${t}/Bad_Slug`), null);
   assert.equal(viewPath(`/demo/${t}/alwayscited-com`), null);
 });
+
+// ---------------------------------------------------------------- 18 Oct 2026 brief 2c: a keyword's plural rides free
+
+test("ops: a keyword's plural is added free beside it, never counted against the plan", () => {
+  const r = raw();
+  const add: Op = { op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "blue widget", pair: "blue widgets" };
+  assert.equal(refuseOp(r, add, PLAN), null);
+  const after = applyOp(r, add, { by: "x" });
+  const pair = after.keywords.find((k) => k.id === "t1-p");
+  assert.equal(pair?.keyword, "blue widgets");
+  assert.equal(pair?.form, "plural");
+  assert.equal(pair?.pair_of, "t1");
+  assert.deepEqual(allowances(after, PLAN).keywords, { used: 2, limit: 2 }, "two primaries; the plural is free");
+});
+
+test("ops: a plural is judged like any keyword - not the keyword itself, not one already tracked", () => {
+  const r = raw();
+  const add: Op = { op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "blue widget", pair: "Blue widget" };
+  assert.match(refuseOp(r, add, PLAN) ?? "", /same as the keyword/);
+  assert.match(refuseOp(r, { ...add, pair: "widgets" }, PLAN) ?? "", /The plural: you already track/);
+  assert.match(refuseOp(r, { op: "cluster.add", tempId: "c", name: "Gadgets", keyword: "gadget", pair: "x" }, PLAN) ?? "", /The plural/);
+});
+
+test("ops: removing a keyword stops its plural with it, and Undo brings both back", () => {
+  const r = raw({ keywords: [...raw().keywords, { id: "w2", keyword: "widget", search_volume: null, intent: null, added_on: "2026-10-01", stopped_on: null, cluster_id: "k1", group_id: null, form: "singular", pair_of: "w1" }] });
+  assert.deepEqual(allowances(r, PLAN).keywords, { used: 1, limit: 2 });
+  const gone = applyOp(r, { op: "keyword.remove", id: "w1" }, { by: "x" });
+  assert.equal(gone.keywords.find((k) => k.id === "w2")?.stopped_on, "2026-10-18");
+  const back = applyOp(gone, { op: "keyword.restore", id: "w1" }, { by: "x" });
+  assert.equal(back.keywords.find((k) => k.id === "w2")?.stopped_on, null);
+});
+
+test("ops: a posted pair is read as text or none; anything else is a bad body", () => {
+  assert.equal((readOp({ op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "a b", pair: "a bs" }) as { pair?: string }).pair, "a bs");
+  assert.equal("pair" in (readOp({ op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "a b", pair: null }) ?? {}), false);
+  assert.equal(readOp({ op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "a b", pair: 7 }), null);
+  assert.equal("pair" in (readOp({ op: "cluster.add", tempId: "t1", name: "n", keyword: null, pair: "x" }) ?? {}), false, "no keyword, no pair");
+});

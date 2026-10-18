@@ -7,6 +7,7 @@ import type { PlanShape } from "@/lib/dash/allowance";
 import { buildWorkspace } from "@/lib/dash/model";
 import { KEYWORD_MAX, NAME_MAX } from "@/lib/dash/ops";
 import type { Raw } from "@/lib/dash/types";
+import { otherForm } from "@/lib/tracking/plural";
 
 import { InlineText, Menu } from "./ClusterEditor";
 import { Change, Pos, Rate, Spark, TargetPage } from "./Figures";
@@ -93,10 +94,14 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
 function NewCluster({ onDone, run, keywordsFull }: { onDone: () => void; run: ReturnType<typeof useOps>["run"]; keywordsFull: boolean }) {
   const [kw, setKw] = useState("");
   const [name, setName] = useState("");
+  // 18 Oct 2026 (brief 2c): the keyword's plural (or singular), ticked by default, free, same cluster and target page.
+  const other = otherForm(kw);
+  const [withPair, setWithPair] = useState(true);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const keyword = keywordsFull ? null : kw.trim() || null;
-    const refused = run({ op: "cluster.add", tempId: tempId("c"), name: name.trim() || kw.trim(), keyword }, `Added ${name.trim() || kw.trim()}. First check tomorrow.`);
+    const pair = keyword && withPair && other ? other.keyword : null;
+    const refused = run({ op: "cluster.add", tempId: tempId("c"), name: name.trim() || kw.trim(), keyword, pair }, `Added ${name.trim() || kw.trim()}${pair ? ` and “${pair}”` : ""}. First check tomorrow.`);
     if (!refused) onDone();
   };
   return (
@@ -117,6 +122,12 @@ function NewCluster({ onDone, run, keywordsFull }: { onDone: () => void; run: Re
           <button type="submit" className="btn primary" disabled={!kw.trim() && !name.trim()}>Add cluster</button>
         </span>
       </div>
+      {!keywordsFull && kw.trim() && other ? (
+        <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, fontSize: 13.5 }}>
+          <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} />
+          <span>Also target “{other.keyword}”, no extra charge. Same cluster, same target page; tracked on Google beside it.</span>
+        </label>
+      ) : null}
       {keywordsFull ? <div className="field-err">Every keyword on your plan is in use, so this cluster starts with prompts only.</div> : null}
     </form>
   );

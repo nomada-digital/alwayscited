@@ -40,6 +40,9 @@ export type RawKeyword = {
   intent: string | null;
   added_on: Day;
   stopped_on: Day | null;
+  /** 18 Oct 2026 (brief 2c): "primary", or a primary's free "plural" / "singular" (pair_of names it). Absent = primary. */
+  form?: "primary" | "plural" | "singular";
+  pair_of?: string | null;
   cluster_id: string | null;
   group_id: string | null;
 };
@@ -142,6 +145,10 @@ export type KeywordView = {
   pageChange: { from: string; to: string; on: Day } | null;
   /** The page ranking for it is the homepage. */
   homepage: boolean;
+  /** 18 Oct 2026 (brief 2c): a tracked keyword's form, the primary a plural/singular pairs with, and a primary's suggested other form when it has none live. */
+  form?: "primary" | "plural" | "singular";
+  pairOf?: string | null;
+  suggestPair?: string | null;
 };
 
 export type PromptView = {

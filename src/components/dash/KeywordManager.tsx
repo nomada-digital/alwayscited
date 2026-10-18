@@ -38,7 +38,10 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
   const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
   const [metrics, setMetrics] = useState<Metrics>(known);
-  const tracked = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c }))).filter((k) => k.src === "tracked").sort((a, b) => (a.pos ?? 999) - (b.pos ?? 999));
+  // By position, each plural or singular straight after its keyword (brief 2c: side by side, never averaged).
+  const allTracked = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c }))).filter((k) => k.src === "tracked");
+  const heads = allTracked.filter((k) => !k.pairOf || !allTracked.some((p) => p.id === k.pairOf)).sort((a, b) => (a.pos ?? 999) - (b.pos ?? 999));
+  const tracked = heads.flatMap((k) => [k, ...allTracked.filter((p) => p.pairOf === k.id)]);
   const trackedKeys = new Set(tracked.map((k) => keywordKey(k.keyword)));
   const a = ws.allowances.keywords;
   const full = a.used >= a.limit;
@@ -97,7 +100,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                   const pending = !!k.id && k.id.startsWith("t");
                   return (
                     <tr key={k.id ?? k.keyword} className={pending ? "item pending" : undefined}>
-                      <td>{k.id && !pending ? <Link href={`${base}/${slug}/google/${k.id}`} style={{ fontWeight: 600 }}>{k.keyword}</Link> : k.keyword}<div className="sub"><Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.cluster.name}</Link>{k.group ? ` · ${k.group}` : ""}</div></td>
+                      <td>{k.id && !pending ? <Link href={`${base}/${slug}/google/${k.id}`} style={{ fontWeight: 600 }}>{k.keyword}</Link> : k.keyword}<div className="sub"><Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.cluster.name}</Link>{k.group ? ` · ${k.group}` : ""}{k.form && k.form !== "primary" ? <> · <span className="pill" style={{ padding: "0 7px" }} title="Same cluster and target page as the keyword above. Free: it does not use a keyword from your plan.">{k.form}, free</span></> : null}</div></td>
                       <td className="r num">{(k.volume ?? m?.volume)?.toLocaleString("en-GB") ?? "-"}</td>
                       <td><Kd kd={m?.kd} /></td>
                       <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : <Pos pos={k.pos} />}</td>
@@ -110,6 +113,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                             {(close) => (
                               <>
                                 <Link href={`${base}/${slug}/google/${k.id}`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }}>Every reading</Link>
+                                {k.suggestPair ? <button onClick={() => { close(); run({ op: "keyword.pair", tempId: tempId(), id: k.id!, keyword: k.suggestPair! }, `Also tracking “${k.suggestPair}” from tomorrow, free.`); }}>Also track “{k.suggestPair}” (free)</button> : null}
                                 <div className="lbl">Move to</div>
                                 {targets.filter((t) => !(t.c.id === k.cluster.id && (t.g ?? "") === (ws.clusters.find((c) => c.id === k.cluster.id)?.groups.find((g) => g.name === k.group)?.id ?? ""))).map((t) => (
                                   <button key={`${t.c.id}|${t.g ?? ""}`} onClick={() => { close(); run({ op: "keyword.move", id: k.id!, clusterId: t.c.id, groupId: t.g }, `Moved to ${t.label}.`); }}>{t.label}</button>

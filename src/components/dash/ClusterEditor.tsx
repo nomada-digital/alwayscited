@@ -260,6 +260,7 @@ function KeywordRow({ k, g, ctx }: { k: KeywordView; g: GroupView; ctx: Ctx }) {
         <div className="meta">
           {tracked ? <span title="Checked on Google every day">Tracked daily</span> : <span title="From your ranking snapshot; not checked daily">Ranking snapshot</span>}
           {k.volume ? <span>{k.volume.toLocaleString("en-GB")}/mo</span> : null}
+          {k.form && k.form !== "primary" ? <span className="pill" style={{ padding: "0 7px" }} title="Same cluster and target page as its keyword. Free: it does not use a keyword from your plan.">{k.form}, free</span> : null}
           {k.addedOn && k.addedOn > ctx.ws.today ? <span className="pill accent" style={{ padding: "0 7px" }}>First check tomorrow</span> : null}
           {k.pageChange ? <span className="pill warn" style={{ padding: "0 7px" }} title={`Google now ranks ${k.pageChange.to} instead of ${k.pageChange.from}`}>Ranking page changed</span> : null}
         </div>
@@ -279,6 +280,7 @@ function KeywordRow({ k, g, ctx }: { k: KeywordView; g: GroupView; ctx: Ctx }) {
                 {(close) => (
                   <>
                     <a href={`${ctx.base}/${ctx.ws.client.slug}/google/${k.id}`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }}>Every Google reading</a>
+                    {k.suggestPair ? <button onClick={() => { close(); run({ op: "keyword.pair", tempId: tempId(), id: k.id!, keyword: k.suggestPair! }, `Also tracking “${k.suggestPair}” from tomorrow, free.`); }}>Also track “{k.suggestPair}” (free)</button> : null}
                     <MoveTargets ctx={ctx} current={g.id} onPick={(cid, gid, name) => { close(); run({ op: "keyword.move", id: k.id!, clusterId: cid, groupId: gid }, `Moved to ${name}.`); }} />
                     <hr />
                     <button onClick={() => { close(); run({ op: "keyword.remove", id: k.id! }, `Stopped tracking “${k.keyword}”.`); }} style={{ color: "var(--bad-fg)" }}>Stop tracking</button>

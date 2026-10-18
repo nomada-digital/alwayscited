@@ -2,10 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { insertCluster, insertKeyword, insertPrompts, readingsFor } from "@/lib/tracking/limits";
+import { insertCluster, insertKeyword, insertKeywordPair, insertPrompts, missingColumn, readingsFor } from "@/lib/tracking/limits";
 import { stopDay } from "@/lib/tracking/stop";
 
-import { cleanTerms, refuseOp, type Op } from "./ops";
+import { cleanTerms, pairForm, refuseOp, type Op } from "./ops";
 import { planShape } from "./plan";
 import type { Raw, RawCluster, RawGroup, RawKeyword, RawPrompt } from "./types";
 
@@ -29,9 +29,12 @@ export async function loadStructure(db: SupabaseClient, base: Pick<Raw, "client"
   const { data: groupRows, error: gErr } = await db.from("keyword_groups").select("id, cluster_id, name, note, terms, position, stopped_on").eq("client_domain_id", cid);
   // Before 20261017000000 there is no table: groups are off, and the columns it adds are not asked for.
   const groupsReady = !gErr;
+  // 20261018030000 (brief 2c): forms let the allowance count primaries only. Before it, every keyword is a primary.
+  const { error: fErr } = await db.from("tracked_keywords").select("form, pair_of").limit(0);
+  const kCols = (groupsReady ? "id, keyword, search_volume, intent, added_on, stopped_on, cluster_id, group_id" : "id, keyword, search_volume, intent, added_on, stopped_on") + (fErr ? "" : ", form, pair_of");
   const [{ data: cRows, error: cErr }, { data: kRows, error: kErr }, { data: pRows, error: pErr }] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
-    db.from("tracked_keywords").select(groupsReady ? "id, keyword, search_volume, intent, added_on, stopped_on, cluster_id, group_id" : "id, keyword, search_volume, intent, added_on, stopped_on").eq("client_domain_id", cid),
+    db.from("tracked_keywords").select(kCols).eq("client_domain_id", cid),
     db.from("tracked_questions").select(groupsReady ? "id, text, cluster_id, group_id, angle, added_on, stopped_on, allowance" : "id, text, cluster_id, angle, added_on, stopped_on").eq("client_domain_id", cid),
   ]);
   const failed = cErr ?? kErr ?? pErr;
@@ -51,6 +54,14 @@ export async function loadStructure(db: SupabaseClient, base: Pick<Raw, "client"
 }
 
 const fail = (message: string, status = 422): WriteResult => ({ ok: false, message, status });
+
+/** A keyword's plural or singular, added free beside it (brief 2c): its id, null when none was asked for, or why it failed. */
+async function addPair(db: SupabaseClient, cid: string, primaryId: string, keyword: string, pair: string | null | undefined, day: string, by: string): Promise<{ id: string } | { error: string } | null> {
+  const text = pair?.replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const w = await insertKeywordPair(db, cid, primaryId, { keyword: text, added_on: day, added_by: by, form: pairForm(keyword, text) });
+  return w.ok ? { id: w.ids[0]! } : { error: w.message };
+}
 
 async function update(db: SupabaseClient, table: string, clientId: string, patch: Record<string, unknown>, where: Record<string, string | null>): Promise<string | null> {
   const eqs = Object.fromEntries(Object.entries(where).filter(([, v]) => v !== null)) as Record<string, string>;
@@ -72,9 +83,13 @@ export async function writeOp(db: SupabaseClient, raw: Raw, op: Op, by: string):
       if (!c.ok) return fail(c.message);
       const ids: Record<string, string> = { [op.tempId]: c.ids[0]! };
       if (op.keyword && op.keyword.trim()) {
-        const k = await insertKeyword(db, cid, c.ids[0]!, { keyword: op.keyword.replace(/\s+/g, " ").trim(), added_on: day, added_by: by }, { pooled: raw.groupsReady });
+        const keyword = op.keyword.replace(/\s+/g, " ").trim();
+        const k = await insertKeyword(db, cid, c.ids[0]!, { keyword, added_on: day, added_by: by }, { pooled: raw.groupsReady });
         if (!k.ok) return fail(`The cluster was added, but not its keyword: ${k.message}`);
         ids[`${op.tempId}-k`] = k.ids[0]!;
+        const p = await addPair(db, cid, k.ids[0]!, keyword, op.pair, day, by);
+        if (p && "error" in p) return fail(`The cluster and its keyword were added, but not the plural: ${p.error}`);
+        if (p) ids[`${op.tempId}-p`] = p.id;
       }
       return { ok: true, ids };
     }
@@ -152,12 +167,31 @@ export async function writeOp(db: SupabaseClient, raw: Raw, op: Op, by: string):
       // Before 20261017000000 there is no tracked_keywords.cluster_id to state the cluster on, so /app's rule holds: one keyword per cluster.
       const row = { keyword: op.keyword.replace(/\s+/g, " ").trim(), added_on: day, added_by: by, ...(op.volume != null ? { search_volume: op.volume } : {}), ...(op.intent ? { intent: op.intent } : {}) };
       const k = await insertKeyword(db, cid, op.clusterId, row, raw.groupsReady ? { pooled: true, groupId: op.groupId } : {});
-      return k.ok ? { ok: true, ids: { [op.tempId]: k.ids[0]! } } : fail(k.message);
+      if (!k.ok) return fail(k.message);
+      const p = await addPair(db, cid, k.ids[0]!, row.keyword, op.pair, day, by);
+      if (p && "error" in p) return fail(`The keyword was added, but not its plural: ${p.error}`);
+      return { ok: true, ids: { [op.tempId]: k.ids[0]!, ...(p ? { [`${op.tempId}-p`]: p.id } : {}) } };
     }
-    case "keyword.remove":
-      return err(await update(db, "tracked_keywords", cid, { stopped_on: day, stopped_by: by }, { id: op.id, stopped_on: null })) ?? { ok: true, ids: {} };
-    case "keyword.restore":
-      return err(await update(db, "tracked_keywords", cid, { stopped_on: null, stopped_by: null }, { id: op.id })) ?? { ok: true, ids: {} };
+    case "keyword.pair": {
+      const k = raw.keywords.find((x) => x.id === op.id)!;
+      const p = await addPair(db, cid, k.id, k.keyword, op.keyword, day, by);
+      if (!p) return fail("Name the plural or singular to track.");
+      return "error" in p ? fail(p.error) : { ok: true, ids: { [op.tempId]: p.id } };
+    }
+    // A keyword's plural or singular goes and comes back with it (brief 2c). Before 20261018030000 there is no
+    // pair_of to match on, and so no pair to carry.
+    case "keyword.remove": {
+      const e = err(await update(db, "tracked_keywords", cid, { stopped_on: day, stopped_by: by }, { id: op.id, stopped_on: null }));
+      if (e) return e;
+      const pe = await update(db, "tracked_keywords", cid, { stopped_on: day, stopped_by: by }, { pair_of: op.id, stopped_on: null });
+      return pe && !missingColumn({ message: pe }) ? fail(`Could not save that: ${pe}`, 502) : { ok: true, ids: {} };
+    }
+    case "keyword.restore": {
+      const e = err(await update(db, "tracked_keywords", cid, { stopped_on: null, stopped_by: null }, { id: op.id }));
+      if (e) return e;
+      const pe = await update(db, "tracked_keywords", cid, { stopped_on: null, stopped_by: null }, { pair_of: op.id, stopped_on: day });
+      return pe && !missingColumn({ message: pe }) ? fail(`Could not save that: ${pe}`, 502) : { ok: true, ids: {} };
+    }
     case "keyword.move": {
       const patch: Record<string, unknown> = raw.groupsReady ? { cluster_id: op.clusterId, group_id: op.groupId } : {};
       if (!Object.keys(patch).length) return { ok: true, ids: {} };

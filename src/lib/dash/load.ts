@@ -53,16 +53,19 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   const since = addDays(today, -ANSWER_DAYS);
   const sourcesSince = addDays(today, -SOURCE_DAYS);
 
-  const [{ data: groupRows, error: groupsErr }, { data: extraRow, error: extraErr }] = await Promise.all([
+  const [{ data: groupRows, error: groupsErr }, { data: extraRow, error: extraErr }, { error: formsErr }] = await Promise.all([
     db.from("keyword_groups").select("id, cluster_id, name, note, terms, position, stopped_on").eq("client_domain_id", cid),
     db.from("client_domains").select("brand_aliases, payment_status").eq("id", cid).maybeSingle(),
+    // 20261018030000 (brief 2c): a keyword's form and the primary it pairs with. Read as all-primary until applied.
+    db.from("tracked_keywords").select("form, pair_of").limit(0),
   ]);
+  const formsReady = !absent(formsErr);
   const groupsReady = !absent(groupsErr);
   if (groupsErr && groupsReady) throw new Error(`could not read groups: ${groupsErr.message}`);
   // payment_status may predate BL-2's migration on an old database; aliases always exist.
   const extra = extraErr ? null : (extraRow as { brand_aliases?: string[]; payment_status?: string | null } | null);
 
-  const kwCols = groupsReady ? "id, keyword, search_volume, intent, added_on, stopped_on, cluster_id, group_id" : "id, keyword, search_volume, intent, added_on, stopped_on";
+  const kwCols = (groupsReady ? "id, keyword, search_volume, intent, added_on, stopped_on, cluster_id, group_id" : "id, keyword, search_volume, intent, added_on, stopped_on") + (formsReady ? ", form, pair_of" : "");
   const pCols = groupsReady ? "id, text, cluster_id, group_id, angle, added_on, stopped_on, origin_kind, allowance" : "id, text, cluster_id, angle, added_on, stopped_on";
 
   const [
