@@ -183,11 +183,21 @@ const RECORDED: Record<string, string> = {
   // 13 Oct 2026 (dashboard speed work): no longer - the client row embeds its account's members through the foreign
   // key (settings-data.ts SETTINGS_READ), so the id is never read into the module at all and its entry went.
   // 1 Oct 2026, R142 part 2 (BRIEF-4 P2 Team): the owner's own client, already membership-checked.
-  "src/app/api/app/[client]/member/route.ts :: account_id":
+  // 18 Oct 2026 (brief 2e): brand_name joined, for the designed invite's "shared the <brand> dashboard". Same use.
+  "src/app/api/app/[client]/member/route.ts :: account_id, brand_name":
     "the member route's team lookup; the 303 carries only the toast word and the email the owner typed.",
   // 18 Oct 2026 (brief 2d): Settings on the dashboards host reads its own client's team, as the member route does.
   "src/app/dashboards/[client]/settings/page.tsx :: account_id":
     "the Settings page's team lookup for a membership-checked client; the page renders members' emails and roles, never the id.",
+  // 18 Oct 2026 (brief 2e): #7's one-click unsubscribe finds the account of the client its signed token names.
+  "src/app/api/dash/unsubscribe/route.ts :: account_id":
+    "the unsubscribe route finds the signed token's client's account to mark that one member opted out; it answers with a fixed page that names only the address the token already carried, never the account.",
+  // 18 Oct 2026 (brief 2e): the customer emails' merge read, server-side only.
+  "src/lib/email/merge-source.ts :: id, account_id, slug, domain, brand_name, market, tier, started_on, cluster_limit, trial_ends_at, status":
+    "clientMail reads a client's account for its upsell mode and agency name, for the emails' merge; its callers are the runner, the setup route's mail, the cron, the webhook and /admin/emails, and none answers a visitor with it.",
+  // 18 Oct 2026 (brief 2e): #11 payment_failed finds the client's account mode and live owners.
+  "src/lib/email/payment-failed-mail.ts :: account_id, domain, slug":
+    "mailPaymentFailed, from the signed Stripe webhook only, reads the client's account for its mode and owners; the webhook answers Stripe with a status only.",
   // 1 Oct 2026, R159 part 3: plan_ended finds the ended client's live owners.
   // 8 Oct 2026 (audit copy-4, package E): slug and trial_ends_at joined, for
   // plan_ended's Billing link and its trial version; the id is still used only
@@ -203,12 +213,14 @@ const RECORDED: Record<string, string> = {
   "src/lib/email/lifecycle-sweep.ts :: CLIENT_COLUMNS":
     "the daily cron's lifecycle sweep and Stripe's trial_will_end read a client's account to skip agency mode and mail its live owners; the cron answers with sent and unsent labels of email name and client id, the webhook with a status only.",
   // 1 Oct 2026, R159 part 5: first_reading finds the client's account mode and owners.
-  "src/lib/tracking/runner.ts :: account_id, tier":
+  // 18 Oct 2026 (brief 2e): slug joined, for the email's links on the dashboards host. Same use.
+  "src/lib/tracking/runner.ts :: account_id, tier, slug":
     "the tracking runner, after a run, for first_reading's agency check and owners; started only by the cron's signed dispatch, it returns a status only.",
   // 2 Oct 2026, R166 / R159: setup_confirmed's agency check, after the setup route writes its one row.
   // 9 Oct 2026 (audit copy-2): market and started_on joined, so the mail says the first check's time in the
   // client's zone and promises no "first" check once checks have begun; the id is still only the agency check.
-  "src/lib/tracking/setup-mail.ts :: account_id, tier, market, started_on":
+  // 18 Oct 2026 (brief 2e): slug and domain joined, for the email's links and its footer. Same use.
+  "src/lib/tracking/setup-mail.ts :: account_id, tier, market, started_on, slug, domain":
     "mailSetupConfirmed reads the confirmed client's account for its upsell mode; it returns nothing, and the setup route answers with a 303 to the Overview.",
 };
 
@@ -273,6 +285,20 @@ const MENTIONED: Record<string, string> = {
     "DIY P9 (13 Oct 2026): reads the members of a client's account by account_id for the Monday This week email - " +
     "its live owners and editors who can see the client. Called only from lifecycle-sweep.ts behind CRON_SECRET; " +
     "returns email addresses to mail, never the account id.",
+  // 18 Oct 2026 (brief 2e): the rebuilt customer emails.
+  "src/lib/email/merge-source.ts":
+    "brief 2e (18 Oct 2026): clientMail reads a client's account_id to read its account's upsell mode and agency name for the " +
+    "emails' merge, and hands the id back as accountId to server-side callers only (the runner, the setup mail, the cron, the " +
+    "webhook, /admin/emails); no response body carries it.",
+  "src/lib/email/payment-failed-mail.ts":
+    "brief 2e (18 Oct 2026): reads the client's account_id to skip agency mode and find its live owners for payment_failed. " +
+    "Called only from the signed Stripe webhook, which answers Stripe with a status; returns nothing.",
+  "src/lib/email/preview-source.ts":
+    "brief 2e (18 Oct 2026): /admin/emails reads the chosen client's account owner, by the account id clientMail returned, as the " +
+    "invite preview's inviter. Admin-only, behind the /admin Basic auth; the page renders emails, never the id.",
+  "src/app/api/dash/unsubscribe/route.ts":
+    "brief 2e (18 Oct 2026): reads the signed token's client's account_id to mark that one member's row opted out; the page it " +
+    "answers with names only the address the token carried, never the id.",
 };
 
 test("nothing in this tree selects *", () => {

@@ -2,7 +2,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { siteUrl } from "@/lib/scan/verify-email";
-import { dashOrigin } from "@/lib/dash/host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
 import { clustersToMake, orderEmailText, orderRow, packsOn, signupMarket, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
 import { livePacks } from "@/lib/checkout/packs";
@@ -15,7 +14,10 @@ import { trialCharge, trialMoment } from "@/config/trial";
 import { dayAfter, slugFor, trackingDay } from "@/lib/tracking/decide";
 import { angleFor, CLUSTER_BASE, clusterLimitFor, insertCluster, insertKeyword, insertPrompts, namesBrandIn, PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
 import { promptKey } from "@/lib/tracking/prompt-text";
-import { billingUrl, planEnded, trialTerms, welcome } from "@/lib/email/lifecycle";
+import { billingUrl, emailSettingsUrl, planEnded, trialTerms, welcome } from "@/lib/email/lifecycle";
+import { engineNames } from "@/lib/email/merge-source";
+import { dashOrigin } from "@/lib/dash/host";
+import { formatDay } from "@/lib/tracking/figures";
 import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
 import { lifecycleIo } from "@/lib/email/lifecycle-cron";
 import { planEndedInTrial } from "@/lib/email/lifecycle-schedule";
@@ -225,15 +227,20 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   // The welcome replaces the bare link only once its flag is on (R159; off until Danny approves it).
   // A trial order's welcome is trial_started's, behind its own flag (8 Oct 2026, audit activation-1,
   // copy-4): the paid welcome says "bought", so a trialist never gets it, whichever flag is on.
-  // 18 Oct 2026 brief 2d: the sign-in link opens the dashboards host, the one customer dashboard.
-  const link = `${dashOrigin()}/auth?token=${token}`;
-  const trial = trialEndsAt ? trialTerms({ endsAt: trialEndsAt, market, price: TRACKED_PRICE, billing: billingUrl(made.slug, siteUrl()) }) : null;
+  // 18 Oct 2026 (brief 2e, 2d): new signups go to the dashboards host, so the link and every other link in the
+  // welcome are built on dashOrigin(); the token row is the same one /api/dash/auth redeems.
+  const origin = dashOrigin();
+  const link = `${origin}/auth?token=${token}`;
+  const trial = trialEndsAt ? trialTerms({ endsAt: trialEndsAt, market, price: TRACKED_PRICE, billing: billingUrl(made.slug, origin) }) : null;
+  const engines = engineNames(tier as TierKey);
+  const settings = emailSettingsUrl(made.slug, origin);
+  const prompts = rows.length;
   const clusterLimit = made.cluster_limit ?? CLUSTER_BASE;
   const welcomeOn = !tErr && (await lifecycleOn(db, trial ? "trial_started" : "welcome"));
   const sent =
     !tErr &&
     (welcomeOn
-      ? await sendLifecycle({ memberEmail: o.email, mail: welcome({ tier: tier as TierKey, clusters, clusterLimit, domain, link, trial, market, startedOn }) })
+      ? await sendLifecycle({ memberEmail: o.email, mail: welcome({ tier: tier as TierKey, clusters, clusterLimit, domain, link, trial, market, startedOn, engines, prompts, settings }) })
       : await sendLoginLink({ memberEmail: o.email, link }));
 
   return {
@@ -402,7 +409,10 @@ async function endClient(db: SupabaseClient, clientId: string, sub: Record<strin
   if (row && (await lifecycleOn(db, "plan_ended"))) {
     const owners = await planEndedOwners(db, row.account_id as string);
     const trial = planEndedInTrial({ trialEndsAt: (row.trial_ends_at as string | null) ?? null, sub, now: Date.now() });
-    const mail = planEnded({ tier: (TIERS.includes(row.tier as string) ? row.tier : "tracked") as TierKey, domain: row.domain as string, billing: billingUrl(row.slug as string, siteUrl()), trial });
+    // 18 Oct 2026 (brief 2e): links on the dashboards host, the day it ended, and the history kept KEPT_DAYS days.
+    const origin = dashOrigin();
+    const endedOn = formatDay(trackingDay(), true);
+    const mail = planEnded({ tier: (TIERS.includes(row.tier as string) ? row.tier : "tracked") as TierKey, domain: row.domain as string, billing: billingUrl(row.slug as string, origin), trial, endedOn, settings: emailSettingsUrl(row.slug as string, origin) });
     for (const m of owners) {
       if (!(await sendLifecycle({ memberEmail: m.email as string, mail }))) console.warn(`[stripe] plan_ended not sent for ${clientId}`);
     }

@@ -28,10 +28,11 @@ import {
   runOutcome,
   trackingDay,
 } from "./decide.ts";
-import { firstReading } from "@/lib/email/lifecycle";
 import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
-import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
+import { dashOrigin } from "@/lib/dash/host";
+import { dashboardUrl, emailSettingsUrl, firstReading } from "@/lib/email/lifecycle";
+import { firstReadingFigures, focusCluster, upsellAllowed } from "@/lib/email/merge";
+import { clientMail } from "@/lib/email/merge-source";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { upsellMode } from "./ask.ts";
 import { dispatchRun } from "./dispatch.ts";
@@ -617,7 +618,7 @@ async function mailFirstReading(
     const { count, error: rErr } = await db.from("tracking_runs").select("id", { count: "exact", head: true }).eq("client_domain_id", clientId).in("status", ["complete", "partial"]);
     if (rErr) throw new Error(rErr.message);
     if (count !== 1) return;
-    const { data: c, error: cErr } = await db.from("client_domains").select("account_id, tier").eq("id", clientId).single();
+    const { data: c, error: cErr } = await db.from("client_domains").select("account_id, tier, slug").eq("id", clientId).single();
     if (cErr) throw new Error(cErr.message);
     const { data: account, error: aErr } = await db.from("accounts").select("upsell_mode").eq("id", c.account_id).maybeSingle();
     if (aErr || !account) throw new Error(aErr?.message ?? "no account");
@@ -625,7 +626,25 @@ async function mailFirstReading(
     const { data: owners, error: oErr } = await db.from("dashboard_members").select("email").eq("account_id", c.account_id).eq("role", "owner").is("removed_at", null);
     if (oErr) throw new Error(oErr.message);
     const tier = ((c.tier as string) in TIER_PLAIN ? c.tier : "tracked") as TierKey;
-    const mail = firstReading({ tier, domain, named: f.named.num, answers: f.named.den, page1: f.page1.num, keywords: f.page1.den, link: appUrl("/", siteUrl()) });
+    // 18 Oct 2026 (brief 2e): the rest of the reading from the dashboard's own rows - by engine, named instead, the
+    // site drawn on most, the cluster's keyword forms and target page - each block hidden when its read has nothing.
+    // The one upsell line in any email: alwaystracked only, never with upsell_mode off.
+    const m = await clientMail(clientId, db);
+    const origin = dashOrigin();
+    const slug = c.slug as string;
+    const mail = firstReading({
+      tier,
+      domain,
+      named: f.named.num,
+      answers: f.named.den,
+      page1: f.page1.num,
+      keywords: f.page1.den,
+      link: dashboardUrl(slug, origin),
+      figures: m ? firstReadingFigures(m.raw) : null,
+      focus: m ? focusCluster(m.raw, m.forms) : null,
+      upsell: upsellAllowed({ tier, mode: upsellMode(account.upsell_mode), clientFacing: false }),
+      settings: emailSettingsUrl(slug, origin),
+    });
     for (const m of owners ?? []) {
       if (!(await sendLifecycle({ memberEmail: m.email as string, mail }))) console.warn(`[track] ${runId} first_reading not sent`);
     }

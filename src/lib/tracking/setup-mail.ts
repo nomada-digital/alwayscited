@@ -4,10 +4,11 @@ import { CONTACT_EMAIL } from "@/config/contact";
 import { mailFrom } from "@/config/mail-from";
 import type { TierKey } from "@/components/TierName";
 import { headerSafe } from "@/lib/email-header";
-import { setupConfirmed } from "@/lib/email/lifecycle";
+import { dashOrigin } from "@/lib/dash/host";
+import { dashboardUrl, emailSettingsUrl, setupConfirmed } from "@/lib/email/lifecycle";
 import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
-import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
+import { clusterPrompts, focusCluster } from "@/lib/email/merge";
+import { clientMail, engineNames } from "@/lib/email/merge-source";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { upsellMode } from "./ask.ts";
@@ -77,7 +78,7 @@ export async function mailSetupConfirmed(clientId: string, member: string): Prom
   try {
     const db = supabaseAdmin();
     if (!(await lifecycleOn(db, "setup_confirmed"))) return;
-    const { data: c, error: cErr } = await db.from("client_domains").select("account_id, tier, market, started_on").eq("id", clientId).single();
+    const { data: c, error: cErr } = await db.from("client_domains").select("account_id, tier, market, started_on, slug, domain").eq("id", clientId).single();
     if (cErr) throw new Error(cErr.message);
     const { data: account, error: aErr } = await db.from("accounts").select("upsell_mode").eq("id", c.account_id).maybeSingle();
     if (aErr || !account) throw new Error(aErr?.message ?? "no account");
@@ -95,7 +96,27 @@ export async function mailSetupConfirmed(clientId: string, member: string): Prom
     // 12 Oct 2026 (email review H3): and the confirm's own moment, so "tomorrow" is the client's tomorrow - the setup
     // page's words for the same moment - not London's.
     const now = Date.now();
-    const mail = setupConfirmed({ tier, clusters: (clusters ?? []).map((k) => k.name as string), link: appUrl("/", siteUrl()), market: (c.market as string | null) ?? "US", today: trackingDay(new Date(now)), startedOn: (c.started_on as string | null) ?? null, livePrompts: livePrompts ?? 0, now });
+    // 18 Oct 2026 (brief 2e): the lead cluster as it will be checked - keyword, other form, target page, prompts and
+    // their angles - from the dashboard's own rows, and links on the dashboards host.
+    const m = await clientMail(clientId, db);
+    const focus = m ? focusCluster(m.raw, m.forms) : null;
+    const origin = dashOrigin();
+    const slug = c.slug as string;
+    const mail = setupConfirmed({
+      tier,
+      clusters: (clusters ?? []).map((k) => k.name as string),
+      link: dashboardUrl(slug, origin),
+      market: (c.market as string | null) ?? "US",
+      today: trackingDay(new Date(now)),
+      startedOn: (c.started_on as string | null) ?? null,
+      livePrompts: livePrompts ?? 0,
+      now,
+      domain: c.domain as string,
+      focus,
+      prompts: m && focus ? clusterPrompts(m.raw, focus.clusterId) : [],
+      engines: engineNames(tier),
+      settings: emailSettingsUrl(slug, origin),
+    });
     if (!(await sendLifecycle({ memberEmail: member, mail }))) console.warn("[app] setup_confirmed not sent");
   } catch (err) {
     console.warn(`[app] setup_confirmed skipped: ${err instanceof Error ? err.message : String(err)}`);

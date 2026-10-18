@@ -236,3 +236,27 @@ test("the rule on its own: the order row first, then the one unbought client fro
   assert.equal(subscriptionClient(e({ fromScan: ["B"], truncated: true })).client, null);
   assert.ok(SCAN_CLIENTS_READ >= 10);
 });
+
+/**
+ * #11 payment_failed (brief 2e, 18 Oct 2026): the webhook hands in the mailer, and it is called with the client the
+ * order row names, only when this invoice wrote the past-due state - never for a first invoice, a stale event, a
+ * client guessed from the scan, or a subscription that is not ours.
+ */
+test("the payment_failed mailer is called once, for the client this invoice marked past due, and for nothing else", async () => {
+  const calls: string[] = [];
+  const mail = async (_db: unknown, clientId: string, invoice: Record<string, unknown>) => {
+    calls.push(`${clientId} ${String(invoice.id)}`);
+  };
+  const t = world();
+  const { db } = fakeDb(t);
+  assert.equal(await onInvoicePaymentFailed(db, failedRenewal("sub_a", PAGE_A), T0, mail), true);
+  assert.deepEqual(calls, ["A in_sub_a"]);
+  // An older event than the one recorded writes nothing, so mails nothing.
+  assert.equal(await onInvoicePaymentFailed(db, failedRenewal("sub_a", PAGE_A, T0 - 600), T0 - 600, mail), true);
+  // A subscription's first invoice is Checkout's to show.
+  assert.equal(await onInvoicePaymentFailed(db, { ...failedRenewal("sub_b", PAGE_B), billing_reason: "subscription_create" }, T0, mail), true);
+  // A subscription with no order row and a scan two accounts bought: no client, no mail.
+  const { db: db2 } = fakeDb(world({ orderA: false, orderB: false }));
+  assert.equal(await onInvoicePaymentFailed(db2, failedRenewal("sub_x", PAGE_A), T0, mail), true);
+  assert.deepEqual(calls, ["A in_sub_a"]);
+});

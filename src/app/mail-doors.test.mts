@@ -383,6 +383,10 @@ const ACTIONS: Record<string, string[]> = {
   // judged by placements.ts. Send nothing, spend nothing, delete nothing,
   // never touch the link-check columns, same admin check first.
   "src/app/admin/tracking/actions.ts": ["addTracked", "createClientFromScan", "editTracked", "groupCluster", "logPlacement", "runNow", "setMember", "setUpsell", "stopTracked", "updatePlacement"],
+  // sendTestEmail, 18 Oct 2026 (brief 2e, /admin/emails "Send test to me"): checks the admin's Basic auth itself
+  // first, then sends one customer email through sendLifecycle to the fixed constant TEST_RECIPIENT - never an
+  // address from the form. Writes nothing, flips no flag, spends nothing.
+  "src/app/admin/emails/actions.ts": ["sendTestEmail"],
 };
 
 // --------------------------------------------------------------- the tests

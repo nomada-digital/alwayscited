@@ -11,6 +11,7 @@ import { TEAM_WHY, readTeam, teamWhy } from "@/lib/tracking/team";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Settings", robots: { index: false, follow: false } };
 
+const EMAIL_DONE: Record<string, string> = { off: "The Monday summary is off.", on: "The Monday summary is on.", soon: "Email settings switch on shortly. Try again later today.", failed: "That did not save. Try again." };
 const DONE: Record<string, string> = { invited: "Invited. They get an email with a sign-in link.", removed: "Removed. They can no longer sign in to this dashboard.", role: "Role changed." };
 
 /**
@@ -23,7 +24,7 @@ const DONE: Record<string, string> = { invited: "Invited. They get an email with
 export default async function Settings({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { raw, base, demo, viewAs } = await pageData(slug);
+  const { raw, base, demo, viewAs, email } = await pageData(slug);
   const readOnly = demo || !!viewAs;
   const owner = raw.role === "owner" && !readOnly;
   let team: { email: string; role: string }[] | null = null;
@@ -34,6 +35,13 @@ export default async function Settings({ params, searchParams }: { params: Promi
     team = t && typeof t !== "string" ? t.rows.filter((r) => r.removed_at === null && (!r.clients || r.clients.includes(raw.client.id))) : null;
   }
   const done = typeof sp.team === "string" ? (DONE[sp.team] ?? null) : null;
+  const emailWord = typeof sp.email === "string" ? (EMAIL_DONE[sp.email] ?? null) : null;
+  // 20261018040000: this member's own Monday-summary opt-out; read as on until the column exists.
+  let weekOff = false;
+  if (!demo) {
+    const { data: me, error: meErr } = await supabaseAdmin().from("dashboard_members").select("this_week_opt_out").eq("email", email).is("removed_at", null).limit(1);
+    weekOff = !meErr && !!(me?.[0] as { this_week_opt_out?: boolean } | undefined)?.this_week_opt_out;
+  }
   const why = sp.team === "refused" ? teamWhy(sp.why) : null;
   return (
     <>
@@ -84,7 +92,15 @@ export default async function Settings({ params, searchParams }: { params: Promi
       </div>
       <div className="dash-card" id="email">
         <h2>Email</h2>
-        <p className="intro">We email the address you sign in with: a sign-in link when you ask for one, and service emails about this dashboard. The Monday summary, “This week”, can be switched off from the link at the bottom of any one of them.</p>
+        <p className="intro">We email the address you sign in with: a sign-in link when you ask for one, and service emails about this dashboard. The Monday summary, “This week”, is yours to switch off.</p>
+        {emailWord ? <div className="banner" role="status" style={{ marginTop: 10 }}>{emailWord}</div> : null}
+        {readOnly ? null : (
+          <form method="post" action={`/api/dash/${slug}/email`} style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 12 }}>
+            <input type="hidden" name="this_week" value={weekOff ? "on" : "off"} maxLength={ADMIN_LIMITS.id} />
+            <span>The Monday summary is <b>{weekOff ? "off" : "on"}</b> for {email}.</span>
+            <button className="btn sm">{weekOff ? "Turn it on" : "Turn it off"}</button>
+          </form>
+        )}
       </div>
       <div className="dash-card" id="plan">
         <h2>Plan</h2>

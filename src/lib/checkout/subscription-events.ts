@@ -155,14 +155,36 @@ export async function recordPayment(
  * invoice.payment_failed (BL-2, 9 Oct 2026): the subscription's client is
  * past due, with the date Stripe tries again and the invoice's page for the
  * owner's banner (afterFailedInvoice). An invoice with no subscription, or
- * none of ours, is nothing to do. No email to the client: Stripe's own
- * failed-payment emails are Danny's setting (LB4).
+ * none of ours, is nothing to do.
+ *
+ * 18 Oct 2026 (brief 2e): and #11, the payment_failed email, through `mail` -
+ * the webhook hands in payment-failed-mail.ts mailPaymentFailed, which asks
+ * its own flag (email_payment_failed_enabled, false until Danny turns it on)
+ * and sends once per invoice. It is called only when this invoice wrote the
+ * past-due state to a client an order row ties to the subscription
+ * (afterFailedInvoice returned a write and recordPayment succeeded), so a
+ * first invoice, a stale event or a client already ended mails nobody.
+ * Until then this said "No email to the client: Stripe's own failed-payment
+ * emails are Danny's setting (LB4)".
  */
-export async function onInvoicePaymentFailed(db: SupabaseClient, invoice: Record<string, unknown>, at: number = Math.floor(Date.now() / 1000)): Promise<boolean> {
+export async function onInvoicePaymentFailed(
+  db: SupabaseClient,
+  invoice: Record<string, unknown>,
+  at: number = Math.floor(Date.now() / 1000),
+  mailFailed?: (db: SupabaseClient, clientId: string, invoice: Record<string, unknown>, at: number) => Promise<void>,
+): Promise<boolean> {
   const owner = invoiceSubscription(invoice);
   if (!owner) return true;
   const client = await clientOfSubscription(db, owner);
   if (client === false) return false;
   if (!client) return true;
-  return recordPayment(db, client, owner.id, at, (row) => afterFailedInvoice(row, invoice, at), null);
+  let wrote = false;
+  const decide = (row: PaymentRow): PaymentStep => {
+    const step = afterFailedInvoice(row, invoice, at);
+    wrote = step.write !== null;
+    return step;
+  };
+  const ok = await recordPayment(db, client, owner.id, at, decide, null);
+  if (ok && wrote && client.exact && mailFailed) await mailFailed(db, client.id, invoice, at);
+  return ok;
 }

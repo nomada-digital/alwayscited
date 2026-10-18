@@ -230,7 +230,13 @@ function functionsOf(text: string): Map<string, string> {
   return new Map(heads.map((h, i) => [h[1]!, code.slice(h.index, heads[i + 1]?.index ?? code.length)]));
 }
 
-test("census: the only mail a payment handler can reach is endClient's plan_ended, behind its flag", () => {
+/*
+ * 18 Oct 2026 (brief 2e): and #11 payment_failed. onInvoicePaymentFailed now reaches one more send, the mailer the
+ * webhook hands it as `mailFailed` (payment-failed-mail.ts mailPaymentFailed, behind its own flag, once per invoice),
+ * called only after this invoice wrote the past-due state to a client an order row ties to the subscription. The
+ * census names it rather than looking past it.
+ */
+test("census: the mail a payment handler can reach is endClient's plan_ended and the failed invoice's payment_failed, each behind its flag", () => {
   const files = { signup: src("./signup.ts"), events: src("./subscription-events.ts"), payment: src("./payment.ts") };
   const fns = new Map<string, string>();
   for (const [file, text] of Object.entries(files)) {
@@ -256,7 +262,9 @@ test("census: the only mail a payment handler can reach is endClient's plan_ende
   // The floor: the walk crosses all three files and reaches the end a cancellation takes.
   for (const f of ["clientOfSubscription", "subscriptionClient", "recordPayment", "paymentRow", "endClient", "afterSubscription", "afterFailedInvoice"]) assert.ok(reached.has(f), `the walk no longer reaches ${f}`);
   assert.ok(reached.size >= 10, `only ${reached.size} functions reached`);
-  assert.deepEqual(Object.fromEntries(sends), { endClient: ["sendLifecycle"] }, "a payment handler reaches a send other than endClient's plan_ended");
+  assert.deepEqual(Object.fromEntries(sends), { endClient: ["sendLifecycle"], onInvoicePaymentFailed: ["mailFailed"] }, "a payment handler reaches a send other than endClient's plan_ended and payment_failed");
+  // payment_failed: only after this invoice's write landed, on an exact client, and only with a mailer handed in.
+  assert.match(fns.get("onInvoicePaymentFailed")!, /const ok = await recordPayment\(db, client, owner\.id, at, decide, null\);\s*if \(ok && wrote && client\.exact && mailFailed\) await mailFailed\(db, client\.id, invoice, at\);/);
   // That send is plan_ended, after its flag (off until Danny approves it, R159), to the ended client's live owners.
   const end = fns.get("endClient")!;
   assert.match(end, /if \(row && \(await lifecycleOn\(db, "plan_ended"\)\)\) \{[\s\S]*const mail = planEnded\([\s\S]*sendLifecycle\(\{ memberEmail: m\.email as string, mail \}\)/);

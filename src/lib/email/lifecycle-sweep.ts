@@ -7,8 +7,10 @@ import type { AnswerRow } from "../tracking/figures.ts";
 import { CLUSTER_BASE } from "../tracking/limits.ts";
 import { SETUP_CONFIRMED_EVENT, firstAsked } from "../tracking/setup-landing.ts";
 import type { TierKey } from "../tier-text.ts";
-import { actionsUrl, billingUrl, dashboardUrl, type Rendered, setupReminder, setupUrl, thisWeek, trialEnding, trialMidpoint, trialTerms } from "./lifecycle.ts";
+import { actionsUrl, billingUrl, dashboardUrl, emailSettingsUrl, type Rendered, setupReminder, setupUrl, thisWeek, trialEnding, trialMidpoint, trialTerms } from "./lifecycle.ts";
 import { lifecycleOn } from "./lifecycle-flag.ts";
+import { focusCluster, type MergeInput, setupStatus, trialFigures, weekFigures, workThisMonth } from "./merge.ts";
+import { PROMPTS_PER_CLUSTER } from "../tracking/limits.ts";
 import { SETUP_MAIL_EVENTS, SETUP_WINDOW_MS, TRIAL_MAIL_EVENT, type TrialMail, setupReminderDue, setupStillEmpty, thisWeekDue, thisWeekEvent, trialEndingOnStripe, trialMailDue, trialRecap, unsentEvent } from "./lifecycle-schedule.ts";
 import { type ThisWeekChanges, type ThisWeekItem, worthSending } from "./this-week-mail.ts";
 import { weekRecipients } from "./week-recipients.ts";
@@ -49,6 +51,14 @@ export type SweepIo = {
    * as the sender is so node --test runs the sweep on a fake. None, and no This week email is built.
    */
   thisWeek?: (c: ThisWeekClient, today: string) => Promise<{ items: ThisWeekItem[]; changes: ThisWeekChanges }>;
+  /**
+   * 18 Oct 2026, brief 2e: one client's dashboard rows for the emails' figures (merge-source.ts clientMail, through
+   * dash/load.ts). None, or null for a client, and each email goes without the blocks that need them - hidden, never
+   * printed as 0. Read only after the email's flag was found on.
+   */
+  client?: (clientId: string) => Promise<MergeInput | null>;
+  /** This member's signed one-click unsubscribe link for #7 (unsubscribe.ts), or null when none can be signed. */
+  unsubscribe?: (email: string, clientId: string) => string | null;
 };
 
 /** What the This week source reads a client by. */
@@ -152,7 +162,9 @@ async function trialMail(db: SupabaseClient, io: SweepIo, c: Client, name: Trial
   const firstAsk = firstAsked({ today, startedOn: c.started_on ?? null, market: c.market, now });
   const recap = trialRecap({ rows, firstDay, today, you: c.brand_name ?? c.domain, clustersInUse: live.clusters, clusterLimit: c.cluster_limit ?? CLUSTER_BASE, livePrompts: live.prompts, firstAsk });
   const trial = trialTerms({ endsAt: c.trial_ends_at!, market: c.market, price: io.price, billing: billingUrl(c.slug, io.origin) });
-  const d = { domain: c.domain, link: dashboardUrl(c.slug, io.origin), recap, trial };
+  // 18 Oct 2026, brief 2e: the tiles and tables from the dashboard's own rows, when the cron hands a reader in.
+  const m = io.client ? await io.client(c.id) : null;
+  const d = { domain: c.domain, link: dashboardUrl(c.slug, io.origin), recap, trial, figures: m ? trialFigures(m.raw) : null, settings: emailSettingsUrl(c.slug, io.origin) };
   return name === "trial_midpoint" ? trialMidpoint(d) : trialEnding(d);
 }
 
@@ -184,7 +196,7 @@ async function deliver(db: SupabaseClient, io: SweepIo, c: Client, event: string
  * dashboard_events row is written before the send, a claim another run holds (the unique index) is "taken",
  * and a send that reached nobody releases its row for the next run.
  */
-async function deliverWeek(db: SupabaseClient, io: SweepIo, c: Client, event: string, mail: Rendered): Promise<"sent" | "unsent" | "taken"> {
+async function deliverWeek(db: SupabaseClient, io: SweepIo, c: Client, event: string, mailFor: (email: string) => Rendered): Promise<"sent" | "unsent" | "taken"> {
   const to = await weekRecipients(db, c.account_id, c.id);
   if (!to.length) return "taken";
   const { data: claim, error: cErr } = await db.from("dashboard_events").insert({ client_domain_id: c.id, member_email: null, event, path: null, props: {} }).select("id").single();
@@ -193,7 +205,8 @@ async function deliverWeek(db: SupabaseClient, io: SweepIo, c: Client, event: st
     throw new Error(`could not record ${event}: ${cErr.message}`);
   }
   let mailed = 0;
-  for (const email of to) if (await io.send({ memberEmail: email, mail })) mailed++;
+  // Rendered per recipient (18 Oct 2026): each carries its own signed unsubscribe link and List-Unsubscribe header.
+  for (const email of to) if (await io.send({ memberEmail: email, mail: mailFor(email) })) mailed++;
   if (mailed) return "sent";
   const { error: uErr } = await db.from("dashboard_events").update({ event: unsentEvent(event) }).eq("id", claim.id as number);
   if (uErr) console.warn(`[mail] ${event} for ${c.id} not sent, and its claim not released: ${uErr.message}`);
@@ -283,7 +296,18 @@ export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: n
       // Every cluster already has prompts: the reminder would say "0 of your 10 are still empty" (review of 7e133a7).
       if (!setupStillEmpty({ withPrompts: live.withPrompts, clusterLimit })) continue;
       const tier = (["tracked", "mentioned", "cited", "everywhere"].includes(c.tier ?? "") ? c.tier : "tracked") as TierKey;
-      const mail = setupReminder({ tier, domain: c.domain, link: setupUrl(c.slug, io.origin), withPrompts: live.withPrompts, clusterLimit });
+      // 18 Oct 2026, brief 2e: the first unfinished cluster's steps, and when prompts saved now are first asked.
+      const m = io.client ? await io.client(c.id) : null;
+      const mail = setupReminder({
+        tier,
+        domain: c.domain,
+        link: setupUrl(c.slug, io.origin),
+        withPrompts: live.withPrompts,
+        clusterLimit,
+        status: m ? setupStatus(m.raw, m.forms, PROMPTS_PER_CLUSTER) : null,
+        firstAsk: live.withPrompts ? null : firstAsked({ today: trackingDay(new Date(now)), startedOn: c.started_on ?? null, market: c.market, now }),
+        settings: emailSettingsUrl(c.slug, io.origin),
+      });
       const r = await deliver(db, io, c, due, mail);
       if (r !== "taken") out[r].push(`${due} ${c.id}`);
     } catch (err) {
@@ -319,9 +343,25 @@ async function sweepThisWeek(db: SupabaseClient, io: SweepIo, now: number, out: 
     try {
       const tier = (["tracked", "mentioned", "cited", "everywhere"].includes(c.tier ?? "") ? c.tier : "tracked") as TierKey;
       const content = await io.thisWeek({ id: c.id, domain: c.domain, brand: c.brand_name ?? c.domain, market: c.market, tier, startedOn: c.started_on }, today);
-      const data = { tier, domain: c.domain, weekOf: event.slice(-10), items: content.items, changes: content.changes, link: actionsUrl(c.slug, io.origin) };
+      // 18 Oct 2026, brief 2e: the week's figures from the dashboard's rows. With them, the email waits for a full
+      // week of readings ("only after 7+ days of readings"); without a reader the email goes as before, with none.
+      const m = io.client ? await io.client(c.id) : null;
+      const week = m ? weekFigures(m.raw) : null;
+      if (week && week.readings < 7) continue;
+      const data = {
+        tier,
+        domain: c.domain,
+        weekOf: event.slice(-10),
+        items: content.items,
+        changes: content.changes,
+        link: actionsUrl(c.slug, io.origin),
+        week,
+        focus: m ? focusCluster(m.raw, m.forms) : null,
+        work: m ? workThisMonth(m.raw) : null,
+        settings: emailSettingsUrl(c.slug, io.origin),
+      };
       if (!worthSending(data)) continue;
-      const r = await deliverWeek(db, io, c, event, thisWeek(data));
+      const r = await deliverWeek(db, io, c, event, (email) => thisWeek({ ...data, unsubscribe: io.unsubscribe?.(email, c.id) ?? null }));
       if (r !== "taken") out[r].push(`this_week ${c.id}`);
     } catch (err) {
       out.errors.push(`this_week ${c.id}: ${msg(err)}`);

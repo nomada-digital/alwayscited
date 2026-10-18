@@ -224,6 +224,16 @@ const NO_SCOPE: Record<string, { reads: number; why: string }> = {
     reads: 2,
     why: "deliver and planEndedOwners mail the account's owners, never limited for the same reason as the runner's.",
   },
+  // 18 Oct 2026 (brief 2e): #11 payment_failed mails the account's owners.
+  "src/lib/email/payment-failed-mail.ts": {
+    reads: 1,
+    why: "mailPaymentFailed mails the account's owners - who pay - never limited for the same reason as the runner's.",
+  },
+  // 18 Oct 2026 (brief 2e): /admin/emails names an owner as the invite preview's inviter. Admin-only, sends nothing.
+  "src/lib/email/preview-source.ts": {
+    reads: 1,
+    why: "the admin preview takes one live owner's address as the made-up inviter in the invite it draws; it decides no one's access and mails no one.",
+  },
 };
 
 test("every read of dashboard_members applies the client scope, or is recorded with why it need not", () => {
