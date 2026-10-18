@@ -532,6 +532,14 @@ const SQL_READERS: Record<string, string> = {
     "The verify-send ceiling on leads. service_role only, returns integer - and the one " +
     "whose own migration records being security definer with no revoke as the defect it " +
     "was written to fix.",
+  // 18 Oct 2026: the agency hub's customer view (20261018020000). Both are service_role only, reached through the hub's
+  // alwayscited-admin edge function after it checks the caller is an agency user with the alwayscited workspace.
+  hub_customer:
+    "The hub's one-customer read. service_role only. Returns jsonb built key by key; the client CTE " +
+    "selects account_id only to join accounts and dashboard_members, and no object it builds has the key.",
+  hub_view_as:
+    "Mints a view-as token. service_role only. Reads account_id to find the owner's email and returns " +
+    "jsonb of token, slug and expires_at only.",
 };
 
 test("the SQL walk can see the functions it is sweeping", () => {
@@ -597,9 +605,24 @@ test("no live SQL function takes a whole row", () => {
   );
 });
 
+/**
+ * The functions that name the column, each decided (18 Oct 2026): both filter on it to reach accounts and
+ * dashboard_members and build their jsonb key by key without it (SQL_READERS above has the detail). A new one still
+ * fails here until somebody records why it may.
+ */
+const SQL_NAMES_COLUMN: Record<string, string> = {
+  hub_customer: "joins on account_id to read the account's email and members; never returns it",
+  hub_view_as: "filters dashboard_members on account_id to find the owner; returns token, slug and expires_at only",
+};
+
 test(`no live SQL function names ${COLUMN}`, () => {
-  const offenders = [...liveSqlFunctions(ROOT)]
-    .filter(([, { body }]) => new RegExp(`\\b${COLUMN}\\b`).test(body))
+  const live = liveSqlFunctions(ROOT);
+  // An entry outliving its reason is how a list like this quietly widens: each one must still exist and still name it.
+  for (const fn of Object.keys(SQL_NAMES_COLUMN)) {
+    assert.ok(live.has(fn) && new RegExp(`\\b${COLUMN}\\b`).test(live.get(fn)!.body), `${fn} is recorded as naming ${COLUMN} but no longer does - drop it from SQL_NAMES_COLUMN`);
+  }
+  const offenders = [...live]
+    .filter(([fn, { body }]) => new RegExp(`\\b${COLUMN}\\b`).test(body) && !(fn in SQL_NAMES_COLUMN))
     .map(([fn, { file }]) => `${file} ${fn}`);
 
   assert.deepEqual(

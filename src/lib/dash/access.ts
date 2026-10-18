@@ -4,6 +4,7 @@ import { cache } from "react";
 
 import { trackingDay } from "@/lib/tracking/decide";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
+import { hashToken } from "@/lib/tracking/session";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -66,4 +67,39 @@ export const demoRaw = cache(async (slug: string): Promise<Raw | null> => {
   if (!data) return null;
   const row = data as unknown as Omit<ClientRow, "brand"> & { brand_name: string | null };
   return loadRaw({ ...row, brand: row.brand_name }, "owner", trackingDay());
+});
+
+/**
+ * A view-as token from the agency hub (18 Oct 2026, host.ts VIEW_HEADER): the
+ * client it opens, the agency user it was minted for, and the owner whose
+ * dashboard it shows - or null when it is unknown, expired, revoked, or for
+ * another client. Checked on every request, never trusted from the URL alone,
+ * and every request it serves is counted on its row (who and when stay with
+ * the token: dashboard_view_tokens). Nothing is written to the client's own
+ * rows: no session, no last_login_at, no dashboard_events.
+ */
+export const viewAs = cache(async (token: string, slug: string): Promise<{ by: string; ownerEmail: string; expiresAt: string } | null> => {
+  if (dashFixturePath()) return null;
+  const db = supabaseAdmin();
+  const now = new Date().toISOString();
+  const { data, error } = await db
+    .from("dashboard_view_tokens")
+    .select("token_hash, slug, created_by, as_email, expires_at, first_used_at, uses")
+    .eq("token_hash", hashToken(token))
+    .is("revoked_at", null)
+    .gt("expires_at", now)
+    .maybeSingle();
+  if (error) {
+    console.warn(`[dash] could not read a view-as token: ${error.message}`);
+    return null;
+  }
+  const row = data as { token_hash: string; slug: string; created_by: string; as_email: string; expires_at: string; first_used_at: string | null; uses: number } | null;
+  if (!row || row.slug !== slug) return null;
+  const { error: uErr } = await db
+    .from("dashboard_view_tokens")
+    .update({ uses: row.uses + 1, last_used_at: now, ...(row.first_used_at ? {} : { first_used_at: now }) })
+    .eq("token_hash", row.token_hash);
+  if (uErr) console.warn(`[dash] could not count a view-as use: ${uErr.message}`);
+  // as_email is the owner as hub_view_as found them at mint time; dashRaw still checks they are a live member.
+  return { by: row.created_by, ownerEmail: row.as_email, expiresAt: row.expires_at };
 });

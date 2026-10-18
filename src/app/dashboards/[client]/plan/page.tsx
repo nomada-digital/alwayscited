@@ -55,7 +55,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
           <p className="intro">An extra tracking pack: {packLine(ws.client.market)}, with their {PACK_KEYWORDS} keywords and {PACK_PROMPTS} prompts. Paid monthly by card through Stripe; add as many as you need.</p>
           <div style={{ marginTop: 16 }}>
             {demo ? (
-              <span className="muted" style={{ fontSize: 13 }}>Adding a pack is not available on a demo.</span>
+              <span className="muted" style={{ fontSize: 13 }}>Adding a pack is not available in a read-only view.</span>
             ) : ws.role === "owner" ? (
               <form action={`/api/dash/${slug}/pack`} method="post">
                 <button type="submit" className="btn primary">Add {PACK_CLUSTERS} clusters - {trackingPackPrice(ws.client.market)} a month</button>
@@ -78,7 +78,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
               <button type="submit" className="btn">Open billing</button>
             </form>
           ) : (
-            <span className="muted" style={{ fontSize: 12.5 }}>{demo ? "Billing is not available on a demo." : "The account owner manages billing."}</span>
+            <span className="muted" style={{ fontSize: 12.5 }}>{demo ? "Billing is not available in a read-only view." : "The account owner manages billing."}</span>
           )}
         </div>
         {billingWhy ? <div className="field-err" role="alert">{billingWhy}</div> : null}

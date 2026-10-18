@@ -301,6 +301,10 @@ const nextConfig: NextConfig = {
       // The dashboards host itself: a client's figures, never framed, never indexed. Last-but-one so it overrides the
       // site-wide CSP above, as the APP_HOST rule below does.
       { source: "/:path*", has: [{ type: "host" as const, value: "dashboards\\.alwayscited\\.com" }], headers: [{ key: "content-security-policy", value: APP_CSP.replace("frame-ancestors 'self'", "frame-ancestors 'none'") }, noIndex] },
+      // The agency hub's "What the customer sees" (18 Oct 2026, lib/dash/host.ts viewPath): the one path on the dashboards
+      // host that may be framed, and only by the hub, which embeds it in its customer view. After the rule above, so it wins
+      // there; frame-ancestors is what browsers honour over the baseline X-Frame-Options.
+      { source: "/view/:path*", has: [{ type: "host" as const, value: "dashboards\\.alwayscited\\.com" }], headers: [{ key: "content-security-policy", value: APP_CSP.replace("frame-ancestors 'self'", "frame-ancestors https://dashboards.nomadadigital.co.uk") }, noIndex] },
       /**
        * The dashboard's own host (APP_HOST, 8 Oct 2026): nothing on it is
        * meant to be framed, the marketing site included, so frame-ancestors

@@ -5,7 +5,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { allowanceLimits, allowances, fullness } from "./allowance.ts";
-import { dashBase, dashInternal, dashLinkOrigin, dashStrip, demoPath, demoSlug, isDashHost } from "./host.ts";
+import { dashBase, dashInternal, dashLinkOrigin, dashStrip, demoPath, demoSlug, isDashHost, viewPath } from "./host.ts";
 import { buildWorkspace, matchesTerms, trimRaw } from "./model.ts";
 import { applyOp, cleanTerms, inverseOp, readOp, refuseOp, undoAdd, type Op } from "./ops.ts";
 import { sampleConsole } from "./sample.ts";
@@ -344,4 +344,15 @@ test("guidance: each keyword gets the one situation its figures show", () => {
   assert.equal(keywordSituation({ pos: 12, pageChange: null, homepage: true }), "homepage");
   assert.equal(keywordSituation({ pos: 2, pageChange: null, homepage: true }), "top");
   assert.equal(keywordSituation({ pos: 15, pageChange: null, homepage: false }), "near");
+});
+
+test("a view-as path is a 64-hex token, a slug and the rest; anything else is not one (18 Oct 2026)", () => {
+  const t = "a".repeat(64);
+  assert.deepEqual(viewPath(`/view/${t}/nomadadigital-co-uk`), { token: t, slug: "nomadadigital-co-uk", rest: "" });
+  assert.deepEqual(viewPath(`/view/${t}/alwayscited-com/clusters/abc`), { token: t, slug: "alwayscited-com", rest: "/clusters/abc" });
+  assert.equal(viewPath(`/view/${"a".repeat(63)}/alwayscited-com`), null, "too short");
+  assert.equal(viewPath(`/view/${"A".repeat(64)}/alwayscited-com`), null, "not lower hex");
+  assert.equal(viewPath(`/view/${t}`), null, "no slug");
+  assert.equal(viewPath(`/view/${t}/Bad_Slug`), null);
+  assert.equal(viewPath(`/demo/${t}/alwayscited-com`), null);
 });

@@ -49,6 +49,23 @@ export function demoSlug(token: string | null | undefined, env?: { DASH_DEMO_LIN
   return demoLink(token, env)?.slug ?? null;
 }
 
+/**
+ * "What the customer sees" (18 Oct 2026): the agency hub's view-as link,
+ * `/view/<token>/<slug>/<rest>`. The token is minted by the hub's edge
+ * function (alwayscited-admin -> hub_view_as) for one agency user and one
+ * client, lives 30 minutes, and is stored only hashed (dashboard_view_tokens).
+ * The proxy checks its shape and passes it on under VIEW_HEADER; page-data
+ * checks it against the database on every request (access.ts viewAs). The
+ * pages it opens are read-only, as a demo's are, and say so on every page.
+ */
+export const VIEW_HEADER = "x-dash-view";
+
+/** `/view/<token>/<slug>/<rest>` split apart, or null for any other path or a malformed one. */
+export function viewPath(pathname: string): { token: string; slug: string; rest: string } | null {
+  const m = /^\/view\/([0-9a-f]{64})\/([a-z0-9-]{1,80})(\/.*)?$/.exec(pathname);
+  return m ? { token: m[1]!, slug: m[2]!, rest: m[3] ?? "" } : null;
+}
+
 /** `/demo/<token>/<rest>` split apart, or null for any other path. */
 export function demoPath(pathname: string): { token: string; rest: string } | null {
   const m = /^\/demo\/([^/]+)(\/.*)?$/.exec(pathname);

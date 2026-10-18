@@ -3,10 +3,10 @@ import "server-only";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { DEMO_HEADER, dashBase, demoLink, demoSlug } from "./host";
+import { DEMO_HEADER, VIEW_HEADER, dashBase, demoLink, demoSlug } from "./host";
 import { demoAs } from "./demo-state";
 
-import { dashClients, dashEmail, dashRaw, demoRaw } from "./access";
+import { dashClients, dashEmail, dashRaw, demoRaw, viewAs } from "./access";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { type PlanBanner, planBanner } from "@/lib/tracking/plan-banner";
 import { loadUpgradeContext } from "@/lib/tracking/upgrade-context";
@@ -27,6 +27,8 @@ export type PageData = {
   ws: Workspace;
   base: string;
   demo: boolean;
+  /** The agency hub's "What the customer sees" (18 Oct 2026): who opened it and until when. Read-only, as `demo` is. */
+  viewAs: { by: string; expiresAt: string } | null;
   banner: PlanBanner | null;
   others: { slug: string; domain: string }[];
   /** What the plan nudges weigh beyond the Workspace: markets on the member's sites, and days since the client started. */
@@ -44,7 +46,33 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
     if (!found) notFound();
     // A per-plan demo link shows the client as that plan, with sample delivery rows labelled as such (demo-state.ts).
     const raw = demoAs(found, demoLink(token)?.state ?? null);
-    return { email: "demo", raw, demo: true, base: `/demo/${token}`, banner: null, others: [], nudge: { markets: 1, daysOnPlan: daysSince(raw.client.started_on, raw.today) }, ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }) };
+    return { email: "demo", raw, demo: true, viewAs: null, base: `/demo/${token}`, banner: null, others: [], nudge: { markets: 1, daysOnPlan: daysSince(raw.client.started_on, raw.today) }, ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }) };
+  }
+  // The hub's view-as link: the owner's own dashboard, exactly as they see it, with every write path off (demo: true)
+  // and a banner on every page. The token is checked against the database on every request (access.ts viewAs).
+  const view = await viewToken();
+  if (view) {
+    const v = await viewAs(view, slug);
+    if (!v) notFound();
+    const raw = await dashRaw(v.ownerEmail, slug);
+    if (!raw) notFound();
+    const clients = await dashClients(v.ownerEmail);
+    const c = clients.find((x) => x.slug === slug) as (Parameters<typeof planBanner>[0]["client"] & { slug: string }) | undefined;
+    const upsell = await loadUpgradeContext(raw.client.id, v.ownerEmail, raw.today).then((u) => u.mode === "nomada").catch(() => true);
+    const base = `/view/${view}`;
+    const banner = c ? planBanner({ client: { ...c, name: raw.client.brand ?? raw.client.domain, market: raw.client.market }, role: raw.role, upsell, billing: `${base}/${slug}/plan#billing`, price: TRACKED_PRICE }) : null;
+    return {
+      nudge: { markets: new Set(clients.map((x) => String((x as { market?: string }).market ?? ""))).size, daysOnPlan: daysSince(raw.client.started_on, raw.today) },
+      banner,
+      email: v.ownerEmail,
+      base,
+      demo: true,
+      viewAs: { by: v.by, expiresAt: v.expiresAt },
+      raw,
+      ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }),
+      // One client per token: the site switcher would lead to pages this token does not open.
+      others: [],
+    };
   }
   const base = await requestBase();
   const email = await dashEmail();
@@ -66,6 +94,7 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
     email,
     base,
     demo: false,
+    viewAs: null,
     raw,
     ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }),
     others: clients.filter((c) => c.slug !== slug).map((c) => ({ slug: c.slug, domain: c.domain })),
@@ -81,4 +110,10 @@ export async function requestBase(): Promise<string> {
 export async function demoToken(): Promise<string | null> {
   const t = (await headers()).get(DEMO_HEADER);
   return t && demoSlug(t) ? t : null;
+}
+
+/** The view-as token on this request, as the proxy passed it (host.ts VIEW_HEADER); null otherwise. Checked by access.ts viewAs. */
+export async function viewToken(): Promise<string | null> {
+  const t = (await headers()).get(VIEW_HEADER);
+  return t && /^[0-9a-f]{64}$/.test(t) ? t : null;
 }

@@ -56,7 +56,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
 
   const ask = async (k: "suggestions" | "related" = kind, aud: Audience = audience) => {
     if (seed.trim().length < 2) return setErr("Type a keyword of 2 characters or more.");
-    if (demo) return setErr("Keyword research is not available on a demo.");
+    if (demo) return setErr("Keyword research is not available in a read-only view.");
     setBusy(true);
     setErr(null);
     const r = await fetch(`/api/dash/${slug}/keywords`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, kind: k, audience: aud }) }).catch(() => null);
@@ -67,7 +67,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
     setMetrics((m) => ({ ...m, ...Object.fromEntries((j.rows ?? []).map((x) => [keywordKey(x.keyword), x])) }));
   };
   const fill = async () => {
-    if (demo) return setFillMsg("Not available on a demo.");
+    if (demo) return setFillMsg("Not available in a read-only view.");
     setFilling(true);
     const r = await fetch(`/api/dash/${slug}/keywords`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ difficulty: true }) }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { ok?: boolean; filled?: number; message?: string } | null;

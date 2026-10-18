@@ -13,7 +13,7 @@ import { ClientSwitch, Nav } from "./Nav";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, banner = null, waiting = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; banner?: PlanBanner | null; waiting?: string | null; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -61,9 +61,15 @@ export default function Shell({ ws, others, base, demo = false, banner = null, w
         </div>
       </aside>
       {/* A shared demo link (17 Oct 2026): said on every page, and edits there stay in the browser (useOps). */}
-      {demo ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">Demo, read-only</span> : null}
+      {demo && !viewAs ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">Demo, read-only</span> : null}
       <div className="dash-main" id="dash-content">
         <div className="dash-inner">
+          {/* The agency hub's "What the customer sees" (18 Oct 2026): said on every page; nothing here saves or charges. */}
+          {viewAs ? (
+            <div className="banner warn view-as" style={{ marginBottom: 16 }} role="note">
+              <span><b>Viewing as customer</b> · read-only. This is {ws.client.domain}&apos;s dashboard as its owner sees it; nothing you do here is saved or charged. Opened by {viewAs.by}.</span>
+            </div>
+          ) : null}
           {banner ? (
             <div className={`banner${banner.tone === "trial" ? "" : " warn"}`} style={{ marginBottom: 16 }} role={banner.tone === "trial" ? "status" : "alert"}>
               <span>{banner.text}</span>

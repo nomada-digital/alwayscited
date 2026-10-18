@@ -5,7 +5,7 @@
  * demo or anyone else is told why not.
  */
 export default function PackButton({ slug, owner, demo, label, small = false }: { slug: string; owner: boolean; demo: boolean; label: string; small?: boolean }) {
-  if (demo) return <span className="muted" style={{ fontSize: 12.5 }}>Adding a pack is not available on a demo.</span>;
+  if (demo) return <span className="muted" style={{ fontSize: 12.5 }}>Adding a pack is not available in a read-only view.</span>;
   if (!owner) return <span className="muted" style={{ fontSize: 12.5 }}>The account owner can add more.</span>;
   return (
     <form action={`/api/dash/${slug}/pack`} method="post" style={{ display: "inline" }}>

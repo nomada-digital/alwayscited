@@ -6,7 +6,7 @@ import { appHost, appOrigin, internalPath, isAppHost, stripPrefix } from "@/lib/
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
-import { DEMO_HEADER, dashInternal, dashStrip, demoPath, demoSlug, isDashHost } from "@/lib/dash/host";
+import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashStrip, demoPath, demoSlug, isDashHost, viewPath } from "@/lib/dash/host";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -112,7 +112,16 @@ export function proxy(request: NextRequest) {
     // The demo header is the proxy's to set: whatever a client sent under that name is dropped.
     const headers = new Headers(request.headers);
     headers.delete(DEMO_HEADER);
+    headers.delete(VIEW_HEADER);
     let target = dashInternal(pathname);
+    // The hub's "What the customer sees" (18 Oct 2026): /view/<token>/<slug>/... is one client's real pages, read-only.
+    // Only the shape is checked here; page-data checks the token against the database on every request.
+    const view = viewPath(pathname);
+    if (pathname.startsWith("/view/") && !view) return new NextResponse(null, { status: 404, headers: { "x-robots-tag": "noindex, nofollow" } });
+    if (view) {
+      headers.set(VIEW_HEADER, view.token);
+      target = `/dashboards/${view.slug}${view.rest}`;
+    }
     // A read-only demo link (17 Oct 2026): /demo/<token>/... is one client's pages, opened by the token alone.
     const demo = demoPath(pathname);
     if (demo) {
@@ -125,7 +134,7 @@ export function proxy(request: NextRequest) {
     }
     const res = NextResponse.rewrite(new URL(`${target}${search}`, request.url), { request: { headers } });
     res.headers.set("x-robots-tag", "noindex, nofollow");
-    if (demo) res.headers.set("referrer-policy", "no-referrer");
+    if (demo || view) res.headers.set("referrer-policy", "no-referrer");
     return res;
   }
   // On the marketing host /dashboards is the same tree, for a signed-in member only (pageData 404s anyone else)
