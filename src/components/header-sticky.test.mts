@@ -38,5 +38,7 @@ test("R175: every other top-sticky rule offsets by the header (the app shell and
   const files = walk(SRC);
   assert.ok(files.length >= 100, `floor: 100 tsx files, found ${files.length}`);
   const inline = files.filter((f) => /position: "sticky"/.test(readFileSync(f, "utf8"))).map((f) => f.slice(SRC.length));
-  assert.deepEqual(inline, ["components/app/Sidebar.tsx"], "the /app sidebar has no site header above it");
+  // 18 Oct 2026, brief 2d: the one inline sticky element was the /app sidebar (components/app/Sidebar.tsx), which has
+  // no site header above it; it retired with /app, every address 308s to the dashboards host, so none is left.
+  assert.deepEqual(inline, [], "an inline sticky element bypasses the header offset - write it as a globals.css rule");
 });

@@ -8,7 +8,7 @@ import { DplGuard } from "@/components/DplGuard";
 import Motion from "@/components/Motion";
 import SiteChrome from "@/components/SiteChrome";
 import { ld, siteGraph } from "@/config/schema";
-import { appHref } from "@/lib/app-host";
+import { dashOrigin } from "@/lib/dash/host";
 
 /**
  * The brand face, self-hosted through next/font rather than the fontsource
@@ -98,8 +98,11 @@ export default function RootLayout({
           </a>
           {/* Log in (Danny, 13 Oct 2026): the dashboard's sign-in, on
               whichever host it is on. Read here because the header is a
-              client component and APP_HOST does not reach the browser. */}
-          <Header loginHref={appHref("/login")} />
+              client component and DASH_HOST does not reach the browser.
+              18 Oct 2026 (brief 2d): /app is retired and /app/login only
+              308s to the dashboards host's /login, so the link goes there
+              directly (dash/host.ts dashOrigin). */}
+          <Header loginHref={`${dashOrigin()}/login`} />
         </SiteChrome>
         <main id="main" tabIndex={-1} className="flex-1 outline-none">{children}</main>
         <SiteChrome>

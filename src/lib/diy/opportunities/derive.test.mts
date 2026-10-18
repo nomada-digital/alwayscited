@@ -334,5 +334,7 @@ test("the cited tab's empty-state summary is the same on its citations-only read
   const world = readFileSync(new URL("./world.ts", import.meta.url), "utf8");
   assert.match(world, /return trackingWorld\(repo, client, \{ structure, answers: "cites" \}\);/, "citedWorld no longer reads the narrow shape");
   assert.match(world, /answers: opts\.answers \?\? "full"/, "the derivation's read is no longer whole by default");
-  assert.match(readFileSync(new URL("../../../app/app/[client]/opportunities/page.tsx", import.meta.url), "utf8"), /lens === "cited" \? citedWorld\(repo, client, structureP\)/);
+  // 18 Oct 2026, brief 2d: the /app Opportunities page, which began citedWorld on the cited tab, retired with /app
+  // (every address 308s to the dashboards host); world.ts's own default read below is the caller left.
+  assert.match(world, /const t = await \(started \?\? citedWorld\(repo, client\)\);/, "the cited tab's default read is no longer the narrow one");
 });

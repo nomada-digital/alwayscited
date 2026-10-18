@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { SERP_DEPTH } from "../scan/dataforseo-request.ts";
@@ -395,12 +395,9 @@ test("8 Oct 2026 (review of data-10): the date picker names the first week every
   const later = { from: addDays(start, 30), to: addDays(start, 30 + 27) }; // its previous period begins on start + 2
   assert.equal(resolveComparison(later, "prev", start, addDays(start, 2)).kind, "prev");
   assert.equal(resolveComparison(later, "prev", start, addDays(start, 4)).kind, "start");
-  // Every date picker that compares is handed the page's first check day.
-  const dir = new URL("../../components/app/", import.meta.url);
-  const pickers = readdirSync(dir).filter((f) => f.endsWith(".tsx")).flatMap((f) => [...readFileSync(new URL(f, dir), "utf8").matchAll(/<DatePicker [^>]*>/g)].map((m) => `${f}: ${m[0]}`));
-  const comparing = pickers.filter((p) => !p.includes("noCompare"));
-  assert.ok(comparing.length >= 5, `${comparing.length} comparing pickers, floor 5`);
-  for (const p of comparing) assert.match(p, /firstCheck=\{/, p);
+  // 18 Oct 2026, brief 2d: "every date picker that compares is handed the page's first check day" walked
+  // src/components/app's <DatePicker>s (floor 5); they retired with /app, every /app address 308s to the dashboards
+  // host, whose DateControl picks a day and compares nothing. compareText and resolveComparison above still hold.
 });
 
 test("8 Oct 2026 (merge of audit packages A and B): the like-for-like share of voice change leaves unread brands out, as the figure does", () => {

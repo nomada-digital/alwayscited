@@ -53,44 +53,9 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   // 30 Sep 2026, R96 part 3 (BRIEF-2 T12).
   "/admin/tracking/[client]/placements": "logging one client's placements; behind the same /admin Basic auth, no public reader",
   "/admin/tracking/usage": "weekly dashboard usage counts (R98 T10, 30 Sep 2026); behind the same /admin Basic auth, no public reader",
-  // The alwaystracked client dashboard (T3, 29 Sep 2026): a client's own
-  // figures behind a login. The login and link pages are reachable by anyone
-  // but are doors to a private area, not pages to be found.
-  "/app": "the dashboard's entry; redirects to the member's client or to /app/login",
-  "/app/[client]": "one client's private dashboard; 404s to anyone who is not a member",
-  // 30 Sep 2026, T6 part 1.
-  "/app/[client]/clusters": "one client's tracked clusters and prompts; private, same membership 404 as the overview",
-  // 30 Sep 2026, T7 part 2b.
-  "/app/[client]/clusters/[cluster]": "one tracked cluster's figures and prompts; private, same membership 404, and a 404 for a cluster not the client's",
-  // 30 Sep 2026, R97 part 3 (T13).
-  "/app/[client]/settings": "one client's plan, matched names and team; private, same membership 404",
-  // 1 Oct 2026, R166 part 3b.
-  "/app/[client]/setup": "a new client's clusters to review and confirm; private, same membership 404",
-  // 1 Oct 2026, R143 (BRIEF-4 P3).
-  "/app/[client]/named": "every brand named in one client's tracked answers; private, same membership 404",
-  // 1 Oct 2026, R144 (BRIEF-4 P4).
-  "/app/[client]/cited": "every page cited in one client's tracked answers; private, same membership 404",
-  // 13 Oct 2026, DIY P4: AI visibility (spec 10 section 4.2), a new private page with the overview's rules.
-  "/app/[client]/ai": "one client's AI visibility by engine and by prompt; private, same membership 404",
-  // 1 Oct 2026, R145 (BRIEF-4 P5).
-  "/app/[client]/reports": "one client's monthly figures and CSV downloads; private, same membership 404",
-  "/app/[client]/placements": "one client's placements and where the cluster stood; private, same membership 404, and a 404 for a client with no placed tier and no placement",
-  // 13 Oct 2026, DIY P6: Google (spec 10 section 4.3), a new private page with the overview's rules.
-  "/app/[client]/google": "one client's Google positions, gaining ground and who holds page 1; private, same membership 404",
-  // 13 Oct 2026, DIY P3: Actions (internally the Plan).
-  "/app/[client]/plan": "one client's actions, what was done and what was read after; private, same membership 404",
-  // 13 Oct 2026, DIY P7: Opportunities and one opportunity (spec 10 section 4.7).
-  "/app/[client]/opportunities": "the pages the engines cite that leave one client out, and how to approach them; private, same membership 404",
-  "/app/[client]/opportunities/[id]": "one opportunity's brief and status; private, same membership 404, and a 404 for an opportunity not the client's",
-  // 13 Oct 2026, DIY P10 (spec 10 section 4.8).
-  "/app/[client]/links": "one client's link profile, its link gap, link targets and mentions, and Check a link; private, same membership 404",
-  // 13 Oct 2026, DIY P8: Your pages and one key page.
-  "/app/[client]/pages": "one client's key pages, their crawler access and the schema examples; private, same membership 404",
-  "/app/[client]/pages/[page]": "one key page's schema, fit, basics and history; private, same membership 404, and a 404 for a page not the client's live key page",
-  // 2 Oct 2026, R173 pass 3, DS36.
-  "/app/[client]/[...rest]": "any /app/[client] address no page matches; private, same membership 404, then the dashboard's own 404",
-  "/app/auth": "where a single-use login link lands; the token in its URL is private",
-  "/app/login": "the dashboard login form; nothing on it is meant to be found by search",
+  // 18 Oct 2026, brief 2d: /app retired - the /app pages (/app, /app/[client] and its 18 pages beneath, /app/auth,
+  // /app/login, /app/parity) are gone and every /app address 308s to the dashboards host, so their 22 entries went
+  // with them. The dashboards host's tree below is the private dashboard now.
   // 17 Oct 2026: dashboards.alwayscited.com's tree, served only on that host (src/lib/dash/host.ts).
   "/dashboards": "the dashboards host's root, which only redirects - to the member's first site, or to sign in",
   "/dashboards/[client]": "one client's overview on the dashboards host; private, behind its sign-in, a 404 for a client outside the member's list",
@@ -113,9 +78,6 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/auth": "the dashboards host's sign-in link button; nothing on it is meant to be found",
   "/dashboards/login": "the dashboards host's sign-in form; nothing on it is meant to be found by search",
 
-  // T4, 29 Sep 2026: renders only in a local checkout that has generated the
-  // uncommitted fixture file, and 404s on Vercel whatever else is true.
-  "/app/parity": "the T4 parity fixture; a 404 in production, local builds only, reads a file under docs/ and no database",
   // R91, 29 Sep 2026: reached from a tier's checkout button with the picks in its query.
   "/checkout": "an order in progress - the form before Stripe's payment page; nothing on it is meant to be found by search",
   "/checkout/done": "where Stripe returns a buyer after payment; reached only from Stripe, nothing on it is meant to be found",

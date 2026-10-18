@@ -17,9 +17,14 @@ import { test } from "node:test";
  */
 
 const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
-const DIRS = ["src/lib/diy/plan", "src/components/app/plan", "src/app/app/[client]/plan", "src/app/api/app/[client]/plan"];
-/** 13 Oct 2026: 13 + 10 + 1 + 1 files. A walk that stops matching reports a clean tree. */
-const FLOOR = 24;
+/**
+ * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, so src/components/app/plan and
+ * src/app/app/[client]/plan went with it; the library and the plan route are what is left to hold.
+ */
+const DIRS = ["src/lib/diy/plan", "src/app/api/app/[client]/plan"];
+/** 13 Oct 2026: 13 + 10 + 1 + 1 files. A walk that stops matching reports a clean tree. 18 Oct 2026 (brief 2d): the
+ * library's 17 files and the route's 1, measured once the /app components and page were gone, so the floor moves from 24 to 18. */
+const FLOOR = 18;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

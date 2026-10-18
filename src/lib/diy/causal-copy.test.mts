@@ -22,9 +22,16 @@ import { test } from "node:test";
  * than reading clean. The rest of src/lib/diy is other packages' (spec 10
  * section 7.0); the shell widens the roots when they merge.
  */
-const ROOTS = ["src/components/app", "src/app/app", "src/lib/diy/changes", "src/lib/diy/ai"];
+/**
+ * 18 Oct 2026, brief 2d: moved here from src/components/app, which retired with /app (every /app address 308s to the
+ * dashboards host). src/components/app and src/app/app went with it; src/lib/diy/changes and src/lib/diy/ai remain,
+ * and the rule holds over them as before - 5 files walked that day, so the floor moves from 55 to 5, and each root
+ * must still walk at least one file. The dashboards host's tree was never under this census and is not added to it
+ * here: walked on 18 Oct 2026 it reads differently, which is a copy decision for its own change, not this one.
+ */
+const ROOTS = ["src/lib/diy/changes", "src/lib/diy/ai"];
 const WORDS = /\b(caused|drove|because of|thanks to|resulted in|delivered)\b/i;
-const FLOOR = 55;
+const FLOOR = 5;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -38,7 +45,7 @@ export function causalHits(src: string): string[] {
   return code.split("\n").filter((l) => WORDS.test(l)).map((l) => l.trim());
 }
 
-test("census: /app copy claims no cause", () => {
+test("census: the DIY lines claim no cause", () => {
   for (const r of ROOTS) assert.ok(walk(join(process.cwd(), r)).length > 0, `${r} walked no file`);
   const files = ROOTS.flatMap((r) => walk(join(process.cwd(), r)));
   assert.ok(files.length >= FLOOR, `walked ${files.length} files, floor ${FLOOR}`);
@@ -54,6 +61,6 @@ test("census probe: copy fires, comments do not", () => {
 });
 
 test("the footnote itself passes", async () => {
-  const { PLACEMENTS_FOOTNOTE } = await import("../../lib/tracking/placement-figures.ts");
+  const { PLACEMENTS_FOOTNOTE } = await import("../tracking/placement-figures.ts");
   assert.equal(WORDS.test(PLACEMENTS_FOOTNOTE), false);
 });

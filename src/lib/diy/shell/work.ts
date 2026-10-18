@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { ChartMark } from "../../../components/app/chart-board.ts";
+import type { ChartMark } from "./chart-board.ts";
 import { appPath } from "../../app-host.ts";
 import type { UpsellMode } from "../../tracking/ask.ts";
 import type { Day } from "../../tracking/figures.ts";

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { type ActivationInput, activationShown, activationSteps } from "./activation.ts";
@@ -89,13 +88,6 @@ test("invite: more than one person on this client; an owner is sent to invite, a
   assert.equal(scoped.detail, "Only an owner can invite: ask boss@example.com.");
 });
 
-test("census: the Overview draws the list only for a client it is for, from Settings' scoped team and the usage rows", () => {
-  const page = readFileSync(new URL("../../app/app/[client]/page.tsx", import.meta.url), "utf8");
-  assert.match(page, /const checklist = activationShown\(\{ status: client\.status,/);
-  assert.match(page, /checklist \? repo\.settings\(client\.id\)/, "the team is Settings' read, which applies the member's client scope");
-  assert.match(page, /checklist \? repo\.reportOpened\(client\.id\) : null/);
-  assert.match(page, /lead=\{steps \? <Activation steps=\{steps\} \/> : null\}/, "under the Overview's own heading and date");
-  const list = readFileSync(new URL("../../components/app/Activation.tsx", import.meta.url), "utf8");
-  assert.match(list, /<ol /, "an ordered list");
-  assert.match(list, /\{s\.done \? "Done" : "To do"\}/, "each step says where it stands in words, not by colour alone");
-});
+// 18 Oct 2026, brief 2d: "census: the Overview draws the list only for a client it is for" retired with /app -
+// it held the /app Overview page and components/app/Activation.tsx, both gone; every /app address 308s to the
+// dashboards host, which draws no activation checklist. activation.ts's own rules above still hold.

@@ -138,13 +138,17 @@ test("census: CHECK_HOUR_UTC is the hour vercel.json runs the track cron at", ()
  * the API routes' toasts and the checkout pages, the lifecycle and order mail,
  * and the tracking and config modules that word their copy.
  */
-const ROOTS = ["src/components/app", "src/app/app", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config", "src/lib/diy/changes", "src/lib/diy/ai"];
+// 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. src/components/app and src/app/app
+// went with it; the dashboard a client reads is src/app/dashboards, src/components/dash and src/lib/dash now.
+const ROOTS = ["src/components/dash", "src/app/dashboards", "src/lib/dash", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config", "src/lib/diy/changes", "src/lib/diy/ai"];
 /**
  * Files walked on 9 Oct 2026: 151. A walk that stops matching reports a clean tree.
  * 13 Oct 2026, DIY P4 (review of P4): src/lib/diy/changes and src/lib/diy/ai added - the Overview's change lines
  * and the AI page's rows are written there, dated by formatDay and never by a clock. 182 files walked that day;
  * the floor rises from 140 to 165, and each root must walk at least one file. The rest of src/lib/diy is other
  * packages' (spec 10 section 7.0); the shell widens the roots when they merge.
+ * 18 Oct 2026, brief 2d: the /app roots swapped for the dashboards host's three; 214 files walked that
+ * day, so the floor stays 165.
  */
 const FLOOR = 165;
 
@@ -212,19 +216,21 @@ test("census: only check-time.ts writes a zone label", () => {
  * latest-answers 1, trial 1, setup page 1, lifecycle 1, setup-landing 3 -
  * firstCheckWhen's checkTime, setupChecks' firstCheckWhen and checkTime).
  */
+/*
+ * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. Its six surfaces (Overview,
+ * Settings, Clusters, OneCluster, Reports and the setup page) went with it; the dashboards host's two - the
+ * overview's next check and the day-zero line every page draws (dash/first-check.ts) - are recorded in their place.
+ * 13 calls that day, so the floor moves from 17 to 13.
+ */
 const CALLERS = [
-  "src/components/app/Overview.tsx",
-  "src/components/app/Settings.tsx",
-  "src/components/app/Clusters.tsx",
-  "src/components/app/OneCluster.tsx",
-  "src/components/app/Reports.tsx",
-  "src/app/app/[client]/setup/page.tsx",
+  "src/app/dashboards/[client]/page.tsx",
+  "src/lib/dash/first-check.ts",
   "src/lib/email/lifecycle.ts",
   "src/lib/tracking/latest-answers.ts",
   "src/lib/tracking/setup-landing.ts",
   "src/config/trial.ts",
 ];
-const CALLS_FLOOR = 17;
+const CALLS_FLOOR = 13;
 
 /** A call of the helper or a wrapper of it; a declaration, `function checkTime(`, is not one. */
 const CALL = /(?<!\bfunction\s+)\b(?:checkTime|clockIn|firstCheckWhen|setupChecks)\(/g;
@@ -237,10 +243,10 @@ test("census: every surface that states a check time asks check-time.ts", () => 
   for (const f of CALLERS) assert.ok((calls.find((c) => c.file === f)?.n ?? 0) > 0, `${f} no longer asks check-time.ts`);
   const total = calls.reduce((s, c) => s + c.n, 0);
   assert.ok(total >= CALLS_FLOOR, `${total} calls, floor ${CALLS_FLOOR}`);
-  // The Overview's next check and Settings' are the same day's, so they cannot disagree.
-  for (const f of ["src/components/app/Overview.tsx", "src/components/app/Settings.tsx"]) {
-    assert.match(readFileSync(join(ROOT, f), "utf8"), /checkTime\(addDays\(today, 1\), market\)/, f);
-  }
+  // The Overview's next check and Settings' were the same day's, so they could not disagree (/app, retired 18 Oct
+  // 2026, brief 2d). The dashboards host's overview names the runner's own next run, as first-check.ts does.
+  assert.match(readFileSync(join(ROOT, "src/app/dashboards/[client]/page.tsx"), "utf8"), /checkTime\(new Date\(nextCheckAt\(Date\.now\(\)\)\)/);
+  assert.match(readFileSync(join(ROOT, "src/lib/dash/first-check.ts"), "utf8"), /Math\.max\(nextCheckAt\(now\),/);
 });
 
 /**
@@ -252,11 +258,14 @@ test("census: every surface that states a check time asks check-time.ts", () => 
 test("census: only setupChecks asks firstCheckWhen, and setup's two surfaces ask setupChecks with the live prompts", () => {
   const direct = files().filter(({ file, src }) => file !== "src/lib/tracking/setup-landing.ts" && /(?<!\bfunction\s+)\bfirstCheckWhen\(/.test(code(src)));
   assert.deepEqual(direct.map((f) => f.file), [], "say it through setupChecks, which knows whether a prompt is live");
-  for (const f of ["src/app/app/[client]/setup/page.tsx", "src/lib/email/lifecycle.ts"]) {
+  // 18 Oct 2026, brief 2d: the /app setup page and Overview retired with /app (every address 308s to the dashboards
+  // host). The mail still asks setupChecks; the dashboards host's day-zero line promises no check while nothing is
+  // tracked, as NO_PROMPT_NO_CHECK says.
+  for (const f of ["src/lib/email/lifecycle.ts"]) {
     assert.match(code(readFileSync(join(ROOT, f), "utf8")), /setupChecks\(\{[^}]*livePrompts/, f);
   }
   assert.match(code(readFileSync(join(ROOT, "src/lib/tracking/setup-mail.ts"), "utf8")), /livePrompts: livePrompts \?\? 0/, "the mail's send site counts the prompts");
-  assert.match(code(readFileSync(join(ROOT, "src/components/app/Overview.tsx"), "utf8")), /: NO_PROMPT_NO_CHECK;/, "the Overview's day-zero line is the same words");
+  assert.match(code(readFileSync(join(ROOT, "src/lib/dash/first-check.ts"), "utf8")), /if \(state\.hasRun \|\| !state\.tracking\) return null;/, "the day-zero line says nothing while nothing is tracked");
 });
 
 test("census probe: the old copy fires, comments and ISO timestamps do not", () => {

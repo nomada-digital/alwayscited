@@ -49,13 +49,21 @@ const PRICE_ROUTES = ["opportunities", "links"];
 /** Actions card kinds that are about opportunities or links: swept for the price rule on /plan, inside an element carrying `data-plan-kind="<kind>"`. */
 export const PRICE_PLAN_KINDS = ["get_onto_page", "claim_profile", "answer_thread", "send_correction", "earn_link", "ask_for_link", "reclaim_link"];
 
+/**
+ * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, and the DIY page and component
+ * directories under src/app/app/[client] and src/components/app went with it. The pages a client now sees for those
+ * routes are the dashboards host's: AI answers, Google, Opportunities, and Sources (where /app's links and pages
+ * addresses land, dash/host.ts dashPathForApp), drawn by src/components/dash. Its /plan is the plan and allowances
+ * page, not Actions, and is not a DIY page. So the source sweep walks those four page directories and the dashboards
+ * components beside src/lib/diy, and the Fatgrid rule walks the whole dashboards tree and its library.
+ */
 const SOURCE_ROOTS = [
-  ...["ai", "google", "plan", "opportunities", "links", "pages"].map((d) => `src/app/app/[client]/${d}`),
-  ...["ai", "google", "plan", "opportunities", "links", "pages", "prompts"].map((d) => `src/components/app/${d}`),
+  ...["ai", "google", "opportunities", "sources"].map((d) => `src/app/dashboards/[client]/${d}`),
+  "src/components/dash",
   "src/lib/diy",
 ];
 /** Where "fatgrid" may not appear at all, and the difficulty modules may not be imported from. */
-const FATGRID_ROOTS = ["src/app/app", "src/components/app", "src/lib/diy"];
+const FATGRID_ROOTS = ["src/app/dashboards", "src/components/dash", "src/lib/dash", "src/lib/diy"];
 
 /**
  * Source files swept, recorded with their reason and date. 13 Oct 2026, DIY P1:
@@ -72,8 +80,10 @@ const FATGRID_ROOTS = ["src/app/app", "src/components/app", "src/lib/diy"];
  * fixtures.
  * Raised 13 Oct 2026 (DIY P10, wave 3): 199, measured - wave 2's and P10's
  * /links page, its two components, the links library and fixtures/links.json.
+ * 18 Oct 2026, brief 2d: /app retired; the walk is src/lib/diy, the dashboards host's four DIY page directories and
+ * src/components/dash (see SOURCE_ROOTS). 178 files that day.
  */
-const SOURCE_FLOOR = 199;
+const SOURCE_FLOOR = 178;
 /**
  * Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai.
  * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 11 on a built tree - P3's six Actions pages (board full and viewer,
@@ -88,6 +98,8 @@ const SOURCE_FLOOR = 199;
  * 13 Oct 2026 (Danny, Actions simple by default): the list is Actions' default, so diy-plan.spec saves the viewer's
  * list (plan-list-viewer) beside the viewer's board, and plan-list-full is the page with no view: seven Actions pages,
  * one more than wave 1 counted. Merged after wave 3: the floor stays 51 - a minimum - and the saved pages are 52.
+ * 18 Oct 2026, brief 2d: unchanged. The saved pages come from e2e/app/diy-*.spec.mts, which still visit /app
+ * addresses (each 308s to the dashboards host now); moving the specs onto the dashboards host is their own change.
  */
 const SAVED_FLOOR = 51;
 
@@ -329,9 +341,10 @@ function savedFiles(): { route: string; file: string }[] {
   return out;
 }
 
-/** The DIY routes this tree has a page for. */
+/** The DIY routes this tree has a page for. 18 Oct 2026, brief 2d: on the dashboards host, /app's pages being gone. */
 function builtRoutes(): string[] {
-  return Object.keys(DIY_ROUTES).filter((r) => existsSync(join(ROOT, "src", "app", "app", "[client]", r, "page.tsx")));
+  // Not plan: the dashboards host's /plan is the plan and allowances page, not Actions (see SOURCE_ROOTS).
+  return Object.keys(DIY_ROUTES).filter((r) => r !== "plan" && existsSync(join(ROOT, "src", "app", "dashboards", "[client]", r, "page.tsx")));
 }
 
 test("every DIY page this tree has, built, has its rendered HTML saved by its e2e spec", () => {

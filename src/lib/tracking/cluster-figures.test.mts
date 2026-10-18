@@ -384,9 +384,8 @@ test("8 Oct 2026 (audit data-10): a young client's clusters change against its f
   assert.equal(periodPair(c1.now, c1.before, cmp.kind), "45% this period, 43% in your first week");
   assert.equal(periodPair(c1.now, c1.before, "prev"), "45% this period, 43% the one before", "an earlier period keeps its words");
   assert.equal(periodPair(c1.now, null, null), "45% this period");
-  const page = readFileSync(new URL("../../components/app/OneCluster.tsx", import.meta.url), "utf8");
-  assert.match(page, /periodPair\(c\.now, c\.before, cmp\.kind\)/, "the page says it with the comparison's kind");
-  assert.ok(!page.includes("the one before"), "no second wording of its own");
+  // 18 Oct 2026, brief 2d: the page half (OneCluster.tsx saying it through periodPair) retired with /app; every /app
+  // address 308s to the dashboards host, which does not draw this line. periodPair's own wording above still holds.
 });
 
 test("8 Oct 2026 (review of audit data-4): the key-figure chips the Overview prints, by cluster and flat", () => {
@@ -416,9 +415,6 @@ test("8 Oct 2026 (review of audit data-4): the key-figure chips the Overview pri
     keyFigureChanges({ lfl: null, change: null }, null, { ...d.byCluster!, promptsNamedLfl: { num: now[0], den: now[1], pct: null }, promptsNamedBefore: { num: before[0], den: before[1], pct: null } }).promptsLine;
   assert.equal(line([38, 40], [37, 40]), "like-for-like 38 of 40, was 37");
   assert.equal(line([38, 40], [37, 41]), "like-for-like 38 of 40, was 37 of 41");
-  // The Overview prints these, not a copy of its own.
-  const src = readFileSync(new URL("../../components/app/Overview.tsx", import.meta.url), "utf8");
-  assert.match(src, /const chg = keyFigureChanges\(o, cs, byCluster\);/);
-  assert.match(src, /const promptsChange = chg\.promptsLine;/);
-  assert.ok(!src.includes("like-for-like ${"), "no second wording of the prompts line");
+  // 18 Oct 2026, brief 2d: the page half (the /app Overview printing these, not a copy of its own) retired with /app;
+  // every /app address 308s to the dashboards host, which does not draw these chips. keyFigureChanges above still holds.
 });

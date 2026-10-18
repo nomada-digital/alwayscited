@@ -27,9 +27,14 @@ test("the fixture switch is off unless TRACKING_FIXTURE is exactly 1, and on out
   assert.equal(fixtureMode({ TRACKING_FIXTURE: "1", VERCEL_ENV: "preview" }), true);
 });
 
-test("the /app layout asks the switch on every request", () => {
-  const layout = readFileSync(new URL("../../app/app/layout.tsx", import.meta.url), "utf8");
-  assert.match(layout, /^\s*fixtureMode\(\);/m);
+// 18 Oct 2026, brief 2d: "the /app layout asks the switch on every request" held src/app/app/layout.tsx, retired with
+// /app (every /app address 308s to the dashboards host). The rule - the layout a client's dashboard renders under
+// asks its fixture switch on every request, so production refuses it before a page draws - now holds the dashboards
+// host's layout and its switch, DASH_FIXTURE (dash/fixture.ts dashFixturePath, refused in production as fixtureMode is).
+// The /api/app routes still ask fixtureMode() themselves.
+test("the dashboards layout asks its fixture switch on every request", () => {
+  const layout = readFileSync(new URL("../../app/dashboards/layout.tsx", import.meta.url), "utf8");
+  assert.match(layout, /^\s*dashFixturePath\(\);/m);
 });
 
 const fx = expandFixture(JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8")));
