@@ -71,8 +71,10 @@ export default function LiveScanChecker({
   }
   // An interactive Turnstile challenge on screen: the visitor is solving it, so the token wait does not time out.
   const challenging = useRef(false);
+  const [challengeOn, setChallengeOn] = useState(false);
   function onChallenge(on: boolean) {
     challenging.current = on;
+    setChallengeOn(on);
   }
   const willAuto = autoStart && isPlausibleDomain(normalizeDomain(initialDomain));
   const [auto, setAuto] = useState(willAuto);
@@ -155,7 +157,8 @@ export default function LiveScanChecker({
     setBusy(true);
     setStep(0);
     stopSteps();
-    timers.current = [setTimeout(() => setStep(1), 1500), setTimeout(() => setStep(2), 3500)];
+    // The steps describe the start route's work, so they run from when it is asked - not while the bot check is pending.
+    const runSteps = () => { timers.current = [setTimeout(() => setStep(1), 1500), setTimeout(() => setStep(2), 3500)]; };
 
     /**
      * Wait for Turnstile rather than posting without it (4 Oct 2026). The
@@ -180,6 +183,7 @@ export default function LiveScanChecker({
       }
     }
 
+    runSteps();
     try {
       const headers = new Headers();
       headers.set("content-type", "application/json");
@@ -228,7 +232,7 @@ export default function LiveScanChecker({
       <div>
         <div role="status" aria-live="polite" className="scan-handoff" style={{ display: "flex", alignItems: "center", gap: "12px", background: dark ? D.field : T.surface, border: `1px solid ${dark ? D.fieldLine : T.line}`, borderRadius: "14px", padding: "16px 18px", minHeight: "56px", color: dark ? T.surface : T.ink, fontSize: "15px", fontWeight: 600 }}>
           <span className="btn-spin" aria-hidden="true" style={{ color: T.accent, marginRight: 0, flex: "none" }} />
-          <span>{step === 0 ? `Checking ${shown}\u2026` : `${steps[step]}\u2026`}</span>
+          <span>{challengeOn ? "One quick check: tick the box below and your scan starts." : step === 0 ? `Checking ${shown}\u2026` : `${steps[step]}\u2026`}</span>
         </div>
         <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} onChallenge={onChallenge} theme={dark ? "dark" : "light"} />
       </div>
