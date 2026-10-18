@@ -12,7 +12,9 @@ export const metadata: Metadata = {
   title: "AI citations and rankings for agencies",
   description:
     "Placements in the sources AI engines cite, plus schema work and link insertions aimed at the Google position." +
-    (price ? ` ${price}, priced per cluster.` : ""),
+    // The label reads "from $..."; here it opens a sentence, so it takes a
+    // capital (handoff 16 Oct 2026, shipped 18 Oct 2026).
+    (price ? ` ${price.charAt(0).toUpperCase()}${price.slice(1)}, priced per cluster.` : ""),
   openGraph: { url: "https://alwayscited.com/alwayscited", images: OG_IMAGE },
   alternates: { canonical: "https://alwayscited.com/alwayscited" },
 };
@@ -32,6 +34,7 @@ export default function Page() {
       standfirst="Everything in alwaysmentioned, then we go after the ranking directly. Schema work on your client's pages and link insertions from the placements, so the same coverage that wins the AI answer also moves the keyword."
       included={[
         "Everything in alwaysmentioned, including the placements and the tracking",
+        `${MONTHLY_INSERTIONS_MIN}+ link insertions a month inside existing high-authority articles`,
         "Insertions agreed with the publisher and with you",
         // A report in the agency's brand is not built yet (LB1, 8 Oct 2026).
         ...listIf("reportBranding", "White-label reporting with your logo"),
@@ -51,6 +54,11 @@ export default function Page() {
           figure: "Insertions",
           heading: "Link insertions, not link building",
           body: "We place contextual links inside articles that already exist, already rank for their own terms, and already get read. Agreed with the publisher, agreed with you, and always inside content about your client's category.",
+        },
+        {
+          figure: "Schema",
+          heading: "Schema so the answer is extractable",
+          body: "A model has to be able to parse what your client's page says before it can quote it. We mark up the pages the placements point at, so the claim on the page and the claim in the coverage line up.",
         },
         {
           figure: "Compounds",

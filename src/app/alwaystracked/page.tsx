@@ -70,7 +70,7 @@ export default function Page() {
         {
           figure: "Names",
           heading: "Who the engines name",
-          body: `Every brand ${ENGINE_NAMES} mention when buyers ask about your client's cluster, ranked by share of voice. You see the competitors ahead of your client by name, not a score out of a hundred.`,
+          body: `Every brand ${ENGINE_NAMES} mention when buyers ask about your client's clusters, ranked by share of voice. You see the competitors ahead of your client by name, not a score out of a hundred.`,
         },
         {
           figure: "Sources",
