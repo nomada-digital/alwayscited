@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { missingColumn } from "@/lib/tracking/limits";
 
+import type { KeyPageRow } from "./target";
 import type { Day, FootRow, Raw, RawAnswer, RawClient, RawConnection, RawConsoleRow, RawGroup, RawKeyword, RawOpportunity, RawPlacement, RawPrompt, RawRun, RawSerp, TierKey } from "./types";
 
 /**
@@ -74,6 +75,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     { data: placeRows, error: placeErr },
     { data: connRows, error: connErr },
     { data: consoleData, error: consoleErr },
+    { data: keyPageRows, error: keyPageErr },
   ] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
     db.from("tracked_keywords").select(kwCols).eq("client_domain_id", cid),
@@ -84,6 +86,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     db.from("placements").select("id, cluster_id, kind, url, domain, status, scheduled_on, live_on, anchor_text").eq("client_domain_id", cid).neq("status", "removed"),
     db.from("integration_connections").select("provider, status, property, requested_at, connected_at, last_synced_at").eq("client_domain_id", cid),
     db.from("search_console_queries").select("provider, query, clicks, impressions, ctr, position, period_end").eq("client_domain_id", cid).gte("period_end", addDays(today, -60)).limit(5000),
+    db.from("key_pages").select("url, origin, cluster_ids, added_on, removed_on").eq("client_domain_id", cid).is("removed_on", null).limit(50),
   ]);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
   if (core) throw new Error(`could not read what is tracked: ${core.message}`);
@@ -93,6 +96,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   if (placeErr) console.warn(`[dash] placements read failed: ${placeErr.message}`);
   if (connErr && !absent(connErr)) console.warn(`[dash] connections read failed: ${connErr.message}`);
   if (consoleErr && !absent(consoleErr)) console.warn(`[dash] console read failed: ${consoleErr.message}`);
+  if (keyPageErr && !absent(keyPageErr)) console.warn(`[dash] key pages read failed: ${keyPageErr.message}`);
 
   // Started together, awaited one by one: paged() throws on any page's error, so nothing here is held unchecked.
   const serpRead = paged<RawSerp>(() => db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
@@ -143,5 +147,6 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     connections: (connErr ? [] : (connRows ?? [])) as RawConnection[],
     consoleRows: (consoleErr ? [] : (consoleData ?? [])) as RawConsoleRow[],
     groupsReady,
+    keyPages: (keyPageErr ? [] : (keyPageRows ?? [])) as KeyPageRow[],
   };
 }

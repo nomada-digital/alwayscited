@@ -115,8 +115,10 @@ export function pickKeyPages(p: { rows: readonly KeyPage[]; candidates: readonly
     add.push({ url: c.url, urlKey: key, origin: c.origin, clusterIds: [] });
   }
   for (const a of add) a.clusterIds = [...(served.get(a.urlKey) ?? [])].sort();
+  // A member's page keeps the clusters a person gave it, plus any it ranks for (18 Oct 2026): it can be a cluster's
+  // chosen target page (dash/target.ts), and one that does not rank yet must not lose its cluster on the next run.
   const clusters = live
-    .map((l) => ({ id: l.id, clusterIds: [...(served.get(l.urlKey) ?? [])].sort() }))
+    .map((l) => ({ id: l.id, clusterIds: [...new Set([...(served.get(l.urlKey) ?? []), ...(l.origin === "member" ? l.clusterIds : [])])].sort() }))
     .filter((c) => !sameSet(c.clusterIds, live.find((l) => l.id === c.id)!.clusterIds));
   return { add, clusters, tooLong: long.size };
 }

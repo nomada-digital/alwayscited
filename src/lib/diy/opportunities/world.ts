@@ -104,7 +104,7 @@ export function linkCheckWords(client: Pick<Client, "market" | "trial_ends_at">,
 }
 
 /** The client's ranking page for a keyword and its key pages, for "What to point it at". */
-export async function loadTargets(client: Client, keywordId: string | null, today: Day, entry: OppFixtureState | null): Promise<{ ranking: string | null; keyPages: { url: string; clusterIds: string[] }[] }> {
+export async function loadTargets(client: Client, keywordId: string | null, today: Day, entry: OppFixtureState | null): Promise<{ ranking: string | null; keyPages: { url: string; clusterIds: string[]; origin?: string; addedOn?: string }[] }> {
   if (entry) {
     const top = (entry.serpTop ?? []).find((s) => s.keyword_id === keywordId)?.top ?? [];
     const own = top.find((t) => {

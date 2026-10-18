@@ -1,6 +1,7 @@
 import EngineLogo from "@/components/EngineLogo";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { fullness } from "@/lib/dash/allowance";
+import { targetLabel } from "@/lib/dash/target";
 
 /**
  * The dashboards host's small figures. No hooks, so both server pages and the
@@ -17,6 +18,12 @@ export function pct(r: number | null): string {
 export function Pos({ pos }: { pos: number | null }) {
   if (pos === null) return <span className="pos none" title="Not in the top 100">-</span>;
   return <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>;
+}
+
+/** A cluster's target page (target.ts): the page placements point at, or a plain "not chosen yet". */
+export function TargetPage({ url, prefix = "Target page" }: { url: string | null; prefix?: string }) {
+  if (!url) return <span className="faint">{prefix}: not chosen yet</span>;
+  return <span>{prefix}: <a href={url} target="_blank" rel="noopener noreferrer">{targetLabel(url)}</a></span>;
 }
 
 export function Change({ n }: { n: number | null }) {

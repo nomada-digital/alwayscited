@@ -186,8 +186,8 @@ export function missingTable(e: { code?: string; message?: string } | null | und
  * read tolerant (spec 7.8): while the table is absent, an empty list and one
  * log line. Any other failure throws.
  */
-export async function readKeyPages(db: SupabaseClient, clientId: string): Promise<{ url: string; clusterIds: string[] }[]> {
-  const { data, error } = await db.from("key_pages").select("url, cluster_ids").eq("client_domain_id", clientId).is("removed_on", null).limit(50);
+export async function readKeyPages(db: SupabaseClient, clientId: string): Promise<{ url: string; clusterIds: string[]; origin?: string; addedOn?: string }[]> {
+  const { data, error } = await db.from("key_pages").select("url, cluster_ids, origin, added_on").eq("client_domain_id", clientId).is("removed_on", null).limit(50);
   if (error) {
     if (missingTable(error)) {
       console.warn(`[diy] opportunities key pages: ${error.message}; no key pages until the your_pages migration is applied`);
@@ -195,7 +195,13 @@ export async function readKeyPages(db: SupabaseClient, clientId: string): Promis
     }
     throw new Error(`could not read the key pages: ${error.message}`);
   }
-  return ((data ?? []) as { url: unknown; cluster_ids: unknown }[]).filter((r) => typeof r.url === "string").map((r) => ({ url: r.url as string, clusterIds: Array.isArray(r.cluster_ids) ? (r.cluster_ids as unknown[]).filter((c): c is string => typeof c === "string") : [] }));
+  return ((data ?? []) as { url: unknown; cluster_ids: unknown; origin?: unknown; added_on?: unknown }[]).filter((r) => typeof r.url === "string").map((r) => ({
+    url: r.url as string,
+    clusterIds: Array.isArray(r.cluster_ids) ? (r.cluster_ids as unknown[]).filter((c): c is string => typeof c === "string") : [],
+    // 18 Oct 2026: a member's page can be a cluster's chosen target (dash/target.ts), so who added it and when is read too.
+    ...(typeof r.origin === "string" ? { origin: r.origin } : {}),
+    ...(typeof r.added_on === "string" ? { addedOn: r.added_on } : {}),
+  }));
 }
 
 /**

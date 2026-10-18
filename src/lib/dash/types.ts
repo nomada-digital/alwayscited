@@ -7,6 +7,8 @@
  * the browser after an optimistic edit, and under `node --test`.
  */
 
+import type { KeyPageRow } from "./target.ts";
+
 export type Day = string;
 export type Engine = "google_aio" | "chatgpt" | "gemini" | "perplexity" | "claude";
 export type TierKey = "tracked" | "mentioned" | "cited" | "everywhere";
@@ -108,6 +110,8 @@ export type Raw = {
   consoleRows: RawConsoleRow[];
   /** False until 20261017000000 is applied: no groups table, no group_id columns. Groups are then read-only and empty. */
   groupsReady: boolean;
+  /** Live key pages (DIY P8), for each cluster's target page (target.ts). Absent on a snapshot taken before 18 Oct 2026. */
+  keyPages?: KeyPageRow[];
 };
 
 // ---------------------------------------------------------------- derived
@@ -165,6 +169,8 @@ export type ClusterView = {
   tier: string;
   startedOn: Day;
   headKeyword: string | null;
+  /** The page a person chose for this cluster (target.ts); null until one is set. */
+  target: string | null;
   headVolume: number | null;
   headPos: number | null;
   headChange: number | null;
