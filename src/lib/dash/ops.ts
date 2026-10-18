@@ -24,6 +24,7 @@ import { refuseRole, stopDay } from "../tracking/stop.ts";
 import { otherForm } from "../tracking/plural.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
+import { refuseTargetUrl } from "./target.ts";
 import { MANAGED_TIERS, type Raw, type RawGroup, type RawKeyword, type RawPrompt } from "./types.ts";
 
 export const KEYWORD_MIN = 2;
@@ -38,6 +39,7 @@ export type Op =
   | { op: "cluster.rename"; id: string; name: string }
   | { op: "cluster.remove"; id: string }
   | { op: "cluster.restore"; id: string }
+  | { op: "cluster.target"; id: string; url: string }
   | { op: "group.add"; tempId: string; clusterId: string; name: string; terms: string[] }
   | { op: "group.edit"; id: string; name?: string; note?: string | null; terms?: string[] }
   | { op: "group.remove"; id: string }
@@ -55,7 +57,7 @@ export type Op =
 
 export type OpKind = Op["op"];
 export const OP_KINDS: readonly OpKind[] = [
-  "cluster.add", "cluster.rename", "cluster.remove", "cluster.restore",
+  "cluster.add", "cluster.rename", "cluster.remove", "cluster.restore", "cluster.target",
   "group.add", "group.edit", "group.remove", "group.restore",
   "keyword.add", "keyword.pair", "keyword.remove", "keyword.restore", "keyword.move",
   "prompt.add", "prompt.edit", "prompt.remove", "prompt.restore", "prompt.move",
@@ -117,6 +119,10 @@ export function readOp(b: unknown): Op | null {
     case "cluster.rename": {
       const i = id(o.id), name = str(o.name, 200);
       return i && name !== null ? { op: o.op, id: i, name } : null;
+    }
+    case "cluster.target": {
+      const i = id(o.id), url = str(o.url, 500);
+      return i && url !== null ? { op: o.op, id: i, url } : null;
     }
     case "cluster.remove": case "cluster.restore": case "keyword.remove": case "keyword.restore":
     case "prompt.remove": case "prompt.restore": case "group.remove": {
@@ -250,6 +256,9 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
       }
       return null;
     }
+    case "cluster.target":
+      if (!cluster(op.id)) return "That cluster has been removed.";
+      return refuseTargetUrl(op.url, raw.client.domain);
     case "cluster.rename": {
       if (!cluster(op.id)) return "That cluster has been removed.";
       if (isManaged(raw, op.id)) return MANAGED_SWAP;
@@ -410,6 +419,17 @@ export function applyOp(raw: Raw, op: Op, ctx: { by: string; newId?: (tempId: st
     case "cluster.rename":
       set(next.clusters, op.id, { name: op.name.trim() });
       break;
+    case "cluster.target": {
+      // As target-write.ts writes it: the cluster leaves other member pages and joins this one, made the member's.
+      if (!next.keyPages) break;
+      const key = op.url.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+      const keyOf = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/+$/, "");
+      next.keyPages = next.keyPages.map((p) => (p.origin === "member" && p.removed_on === null && keyOf(p.url) !== key && (p.cluster_ids ?? []).includes(op.id) ? { ...p, cluster_ids: (p.cluster_ids ?? []).filter((c) => c !== op.id) } : p));
+      const here = next.keyPages.find((p) => p.removed_on === null && keyOf(p.url) === key);
+      if (here) next.keyPages = next.keyPages.map((p) => (p === here ? { ...p, origin: "member", cluster_ids: [...new Set([...(p.cluster_ids ?? []), op.id])] } : p));
+      else next.keyPages = [...next.keyPages, { url: op.url.trim(), origin: "member", cluster_ids: [op.id], added_on: day, removed_on: null }];
+      break;
+    }
     case "cluster.remove":
       set(next.clusters, op.id, { stopped_on: day });
       for (const r of next.prompts) if (r.cluster_id === op.id && r.stopped_on === null) set(next.prompts, r.id, { stopped_on: day });
@@ -543,6 +563,7 @@ export function inverseOp(before: Raw, op: Op): Op | null {
       return p && p.cluster_id ? { op: "prompt.move", id: op.id, clusterId: p.cluster_id, groupId: p.group_id } : null;
     }
     case "cluster.add":
+    case "cluster.target":
     case "group.add":
     case "keyword.add":
     case "keyword.pair":

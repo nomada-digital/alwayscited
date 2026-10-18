@@ -14,8 +14,9 @@ import { sendInvite } from "@/lib/tracking/invite-mail";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
 import { writeFixture } from "@/lib/tracking/repo";
 import { readKept } from "@/lib/tracking/stop";
-import { type TeamDone, type TeamWhy, changeRole, invite, inviteMail, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, teamReturn, teamWhy } from "@/lib/tracking/team";
+import { type TeamDone, type TeamWhy, changeRole, dashTeamReturn, invite, inviteMail, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, teamReturn, teamWhy } from "@/lib/tracking/team";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
+import { dashBase } from "@/lib/dash/host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +43,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   // DS40: the form's action carries the page's stated range; only from, to and compare come back.
   const sp = new URL(req.url).searchParams;
   const kept = readKept((k) => sp.get(k), 0);
-  const back = (done: TeamDone, why: TeamWhy | null = null) => NextResponse.redirect(dashUrl(req, teamReturn(slug, done, f?.email ?? null, kept, why)), 303);
+  // 18 Oct 2026 brief 2d: Settings lives on the dashboards host, so its posts come back there.
+  const dash = form?.get("from") === "dash";
+  const back = (done: TeamDone, why: TeamWhy | null = null) =>
+    NextResponse.redirect(dash ? new URL(dashTeamReturn(dashBase(req.headers.get("host")), slug, done, f?.email ?? null, why), req.url) : dashUrl(req, teamReturn(slug, done, f?.email ?? null, kept, why)), 303);
   // R151 (3 Oct 2026): an invite whose address fails the shape check says so on its field.
   if (!f) return back("refused", form?.get("op") === "invite" ? "email" : null);
   if (fixtureMode()) {

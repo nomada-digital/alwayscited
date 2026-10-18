@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 import { ROBOTS_AGENTS } from "@/config/robots-agents";
-import { appHost, appOrigin, internalPath, isAppHost, stripPrefix } from "@/lib/app-host";
+import { appHost, appOrigin, internalPath, isAppHost, passesThrough, stripPrefix } from "@/lib/app-host";
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
-import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashStrip, demoPath, demoSlug, isDashHost, viewPath } from "@/lib/dash/host";
+import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashOrigin, dashPathForApp, dashStrip, demoPath, demoSlug, isDashHost, viewPath } from "@/lib/dash/host";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -145,6 +145,14 @@ export function proxy(request: NextRequest) {
     // The operations page is not served from the dashboard's host at all.
     if (onApp) return new NextResponse(null, { status: 404 });
     return admin(request);
+  }
+
+  // 18 Oct 2026 brief 2d: the dashboards host is the one customer dashboard. Every /app address - on the app host,
+  // or under /app on this one - answers a 308 to its equivalent there (dash/host.ts dashPathForApp), query kept,
+  // so old emails and bookmarks still arrive. Assets and /api pass as before.
+  const appBare = onApp ? (passesThrough(pathname) ? null : (stripPrefix(pathname) ?? pathname)) : stripPrefix(pathname);
+  if (appBare !== null && pathname !== "/robots.txt") {
+    return NextResponse.redirect(new URL(`${dashPathForApp(appBare)}${search}`, dashOrigin()), 308);
   }
 
   if (onApp) {

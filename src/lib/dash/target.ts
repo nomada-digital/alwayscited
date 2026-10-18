@@ -26,3 +26,20 @@ export function chosenTargetRow<R extends KeyPageRow>(pages: readonly R[], clust
 export function targetLabel(url: string): string {
   return url.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/\/+$/, "");
 }
+
+export const TARGET_NOT_OWN = "The target page has to be on your own site.";
+export const TARGET_BAD = "That is not a page address. Paste the full URL, starting https://";
+
+/** Why a URL cannot be a cluster's target page on `domain` (18 Oct 2026 brief 2b), or null. Pure, for the browser and the server alike. */
+export function refuseTargetUrl(raw: string, domain: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(raw.trim());
+  } catch {
+    return TARGET_BAD;
+  }
+  if ((u.protocol !== "https:" && u.protocol !== "http:") || u.username || u.password || !u.hostname.includes(".")) return TARGET_BAD;
+  const bare = (h: string) => h.toLowerCase().replace(/^www\./, "");
+  const host = bare(u.hostname), own = bare(domain);
+  return host === own || host.endsWith(`.${own}`) ? null : TARGET_NOT_OWN;
+}

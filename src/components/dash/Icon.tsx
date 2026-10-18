@@ -19,6 +19,7 @@ const PATHS: Record<string, string> = {
   arrow: "M3 8h10M9.5 4.5L13 8l-3.5 3.5",
   ext: "M9 3h4v4M13 3L7.5 8.5M11 9.5V13H3V5h3.5",
   lock: "M4.5 7V5a3.5 3.5 0 017 0v2M3.5 7h9v6.5h-9z",
+  settings: "M2.5 4.5h7M12 4.5h1.5M2.5 11.5h2M7 11.5h6.5M9.5 3v3M4.5 10v3",
 };
 
 export default function Icon({ name, size = 16, title }: { name: keyof typeof PATHS | string; size?: number; title?: string }) {

@@ -394,3 +394,16 @@ test("ops: a posted pair is read as text or none; anything else is a bad body", 
   assert.equal(readOp({ op: "keyword.add", tempId: "t1", clusterId: "k1", groupId: null, keyword: "a b", pair: 7 }), null);
   assert.equal("pair" in (readOp({ op: "cluster.add", tempId: "t1", name: "n", keyword: null, pair: "x" }) ?? {}), false, "no keyword, no pair");
 });
+
+test("every old /app address has a home on the dashboards host (brief 2d)", async () => {
+  const { dashPathForApp } = await import("./host.ts");
+  const cases: [string, string][] = [
+    ["/", "/"], ["/login", "/login"], ["/auth", "/auth"], ["/parity", "/"],
+    ["/acme-com", "/acme-com"], ["/acme-com/setup", "/acme-com/setup"], ["/acme-com/settings", "/acme-com/settings"],
+    ["/acme-com/clusters/abc", "/acme-com/clusters/abc"], ["/acme-com/google", "/acme-com/google"], ["/acme-com/plan", "/acme-com/plan"],
+    ["/acme-com/opportunities/x1", "/acme-com/opportunities"], ["/acme-com/cited", "/acme-com/ai"], ["/acme-com/named", "/acme-com/ai"],
+    ["/acme-com/pages/p1", "/acme-com/sources"], ["/acme-com/placements", "/acme-com/managed"], ["/acme-com/reports", "/acme-com"],
+    ["/acme-com/whatever/else", "/acme-com"], ["/<script>", "/"],
+  ];
+  for (const [from, to] of cases) assert.equal(dashPathForApp(from), to, from);
+});

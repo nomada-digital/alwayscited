@@ -27,6 +27,7 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },
     { href: `${root}/plan`, label: "Plan", icon: "plan" },
+    { href: `${root}/settings`, label: "Settings", icon: "settings" },
   ];
   return (
     <div className="dash">

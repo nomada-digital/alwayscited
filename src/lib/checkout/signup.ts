@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
+import { dashOrigin } from "@/lib/dash/host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
 import { clustersToMake, orderEmailText, orderRow, packsOn, signupMarket, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
 import { livePacks } from "@/lib/checkout/packs";
@@ -225,7 +225,8 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   // The welcome replaces the bare link only once its flag is on (R159; off until Danny approves it).
   // A trial order's welcome is trial_started's, behind its own flag (8 Oct 2026, audit activation-1,
   // copy-4): the paid welcome says "bought", so a trialist never gets it, whichever flag is on.
-  const link = appUrl(`/auth?token=${token}`, siteUrl());
+  // 18 Oct 2026 brief 2d: the sign-in link opens the dashboards host, the one customer dashboard.
+  const link = `${dashOrigin()}/auth?token=${token}`;
   const trial = trialEndsAt ? trialTerms({ endsAt: trialEndsAt, market, price: TRACKED_PRICE, billing: billingUrl(made.slug, siteUrl()) }) : null;
   const clusterLimit = made.cluster_limit ?? CLUSTER_BASE;
   const welcomeOn = !tErr && (await lifecycleOn(db, trial ? "trial_started" : "welcome"));

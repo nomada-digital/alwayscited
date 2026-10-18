@@ -5,7 +5,7 @@ import { CONTACT_EMAIL } from "@/config/contact";
 import { MICRO, SHELL, T } from "@/config/tokens";
 import { doneEmail } from "@/lib/checkout/done-email";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
-import { appPath } from "@/lib/app-host";
+import { dashOrigin } from "@/lib/dash/host";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +104,7 @@ export default async function CheckoutDone({ searchParams }: Props) {
               <p style={{ ...P, margin: "24px 0 0", fontSize: "14px" }}>No email after a few minutes? Sign in asks for a new link.</p>
               <p style={{ margin: "10px 0 0" }}>
                 <a
-                  href={appPath("/login")}
+                  href={`${dashOrigin()}/login`}
                   style={{ display: "inline-block", padding: "12px 16px", borderRadius: "10px", border: `1px solid ${T.line}`, background: T.surface, color: T.ink, fontWeight: 600, fontSize: "15px", textDecoration: "none" }}
                 >
                   Go to sign in

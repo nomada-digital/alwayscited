@@ -238,6 +238,16 @@ export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; sc
 
 export type TeamDone = "invited" | "removed" | "role" | "refused";
 
+/**
+ * The same return on the dashboards host (18 Oct 2026 brief 2d): Settings is `${base}/<slug>/settings` there,
+ * `base` being dash/host.ts dashBase ("" on its own host, "/dashboards" on the main one). Same query, same rules.
+ */
+export function dashTeamReturn(base: string, slug: string, done: TeamDone, email: string | null, why: TeamWhy | null = null): string {
+  const q = new URLSearchParams({ team: done, ...(email && done !== "refused" ? { who: email } : {}), ...(done === "refused" && why ? { why } : {}) });
+  const at = done === "refused" && why && INVITE_WHYS.includes(why) ? "" : "#members";
+  return `${base}/${encodeURIComponent(slug)}/settings?${q}${at}`;
+}
+
 export function teamReturn(slug: string, done: TeamDone, email: string | null, keep: Record<string, string> = {}, why: TeamWhy | null = null): string {
   // DS40 (2 Oct 2026, R173 pass 4): the range the form posted with (readKept's from, to, compare) comes back too.
   const range = Object.fromEntries(Object.entries(keep).filter(([k]) => k === "from" || k === "to" || k === "compare"));

@@ -6,6 +6,7 @@ import { insertCluster, insertKeyword, insertKeywordPair, insertPrompts, missing
 import { stopDay } from "@/lib/tracking/stop";
 
 import { cleanTerms, pairForm, refuseOp, type Op } from "./ops";
+import { setClusterTarget } from "./target-write";
 import { planShape } from "./plan";
 import type { Raw, RawCluster, RawGroup, RawKeyword, RawPrompt } from "./types";
 
@@ -95,6 +96,10 @@ export async function writeOp(db: SupabaseClient, raw: Raw, op: Op, by: string):
     }
     case "cluster.rename":
       return err(await update(db, "tracked_clusters", cid, { name: op.name.trim() }, { id: op.id })) ?? { ok: true, ids: {} };
+    case "cluster.target": {
+      const t = await setClusterTarget(db, raw.client, op.id, op.url, { by, today: raw.today });
+      return t.ok ? { ok: true, ids: {} } : fail(t.message);
+    }
     case "cluster.remove": {
       const tables = ["tracked_questions", "tracked_keywords", ...(raw.groupsReady ? ["keyword_groups"] : [])];
       for (const table of tables) {

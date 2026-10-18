@@ -77,7 +77,7 @@ export function useOps(slug: string, initial: Raw, plan: PlanShape, demo = false
         // Each new row gets a stable local id; nothing leaves the page.
         const local: Record<string, string> = {};
         const t = (op as { tempId?: string }).tempId;
-        if (t) for (const k of [t, `${t}-k`]) local[k] = `demo-${k}`;
+        if (t) for (const k of [t, `${t}-k`, `${t}-p`]) local[k] = `demo-${k}`;
         answer = { ok: true, ids: local };
       } else try {
         const r = await fetch(`/api/dash/${slug}/ops`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(op) });
