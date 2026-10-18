@@ -35,9 +35,14 @@ const pill: React.CSSProperties = {
 export default function HeroSection({
   initialDomain = "",
   notice = null,
+  autoStart = false,
+  handoff,
 }: {
   initialDomain?: string;
   notice?: string | null;
+  /** /scan only: a domain handed over in the URL starts the scan without a click (LiveScanChecker autoStart). */
+  autoStart?: boolean;
+  handoff?: { ref: string | null; market: "UK" | "US" | null };
 }) {
   // No background is set here: body carries the page ground, so every board
   // sits on #f6f6f7 and the white cards read as surfaces.
@@ -127,7 +132,7 @@ export default function HeroSection({
         ) : null}
 
         <div className="ac-row" style={{ margin: "26px auto 0", maxWidth: "400px", textAlign: "left" }}>
-          {scanReady() ? <LiveScanChecker initialDomain={initialDomain} /> : <RequestScanForm initialDomain={initialDomain} />}
+          {scanReady() ? <LiveScanChecker initialDomain={initialDomain} autoStart={autoStart} handoff={handoff} /> : <RequestScanForm initialDomain={initialDomain} />}
         </div>
       </div>
     </section>

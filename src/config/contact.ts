@@ -201,6 +201,8 @@ export const SCAN_LIMITS = {
   question: 200,
   email: 254,
   topicVariant: { min: 2, max: 80 },
+  /** The ?ref= a partner site hands a scan over with (18 Oct 2026, lib/scan/handoff.ts); scans.ref's own check. */
+  ref: 32,
 };
 
 /**

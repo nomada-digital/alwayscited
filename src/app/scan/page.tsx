@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
 import HeroSection from "@/components/scan/HeroSection";
+import { isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
+import { handoffMarket, scanRef } from "@/lib/scan/handoff";
 
 /**
  * The landing for a domain submitted from elsewhere on the site. It prefills
@@ -66,8 +68,13 @@ const VERIFY_NOTICE: ReadonlyMap<string, string> = new Map([
 export default async function ScanPage({
   searchParams,
 }: {
-  searchParams: Promise<{ domain?: string; verify?: string }>;
+  searchParams: Promise<{ domain?: string; verify?: string; ref?: string; market?: string }>;
 }) {
-  const { domain = "", verify } = await searchParams;
-  return <HeroSection initialDomain={domain} notice={(verify && VERIFY_NOTICE.get(verify)) || null} />;
+  const { domain = "", verify, ref, market } = await searchParams;
+  // A scan handed over from a partner site (18 Oct 2026): a plausible ?domain= starts by itself, with its ref and market
+  // checked here (lib/scan/handoff.ts). No domain, or one that cannot be an address: the step 1 form, as before. A
+  // verify notice is a person arriving from an email link, never a hand-off, so it never auto-starts.
+  const handoff = { ref: scanRef(ref), market: handoffMarket(market) };
+  const autoStart = !verify && isPlausibleDomain(normalizeDomain(domain));
+  return <HeroSection initialDomain={domain} notice={(verify && VERIFY_NOTICE.get(verify)) || null} autoStart={autoStart} handoff={handoff} />;
 }

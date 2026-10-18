@@ -22,11 +22,14 @@ const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render
 export default function Turnstile({
   onToken,
   onError,
+  onChallenge,
   theme = "light",
 }: {
   onToken: (token: string | null) => void;
   /** The widget failed or its script could not load - no token is coming. */
   onError?: () => void;
+  /** Cloudflare is showing an interactive challenge (true) or has finished with it (false): a token is coming, just later. */
+  onChallenge?: (on: boolean) => void;
   theme?: "light" | "dark";
 }) {
   const holder = useRef<HTMLDivElement>(null);
@@ -37,10 +40,12 @@ export default function Turnstile({
   // Kept in a ref so a changing callback does not tear down and re-render the
   // widget, which would drop a token the visitor has already solved for.
   const errCb = useRef(onError);
+  const chCb = useRef(onChallenge);
   useEffect(() => {
     cb.current = onToken;
     errCb.current = onError;
-  }, [onToken, onError]);
+    chCb.current = onChallenge;
+  }, [onToken, onError, onChallenge]);
 
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
 
@@ -61,8 +66,14 @@ export default function Turnstile({
         // Invisible unless Cloudflare decides to challenge (Danny, 25 Sep). The
         // server check is unchanged: a token is still required to start a scan.
         appearance: "interaction-only",
-        "before-interactive-callback": () => setChallenge(true),
-        "after-interactive-callback": () => setChallenge(false),
+        "before-interactive-callback": () => {
+          setChallenge(true);
+          chCb.current?.(true);
+        },
+        "after-interactive-callback": () => {
+          setChallenge(false);
+          chCb.current?.(false);
+        },
         theme,
       });
     }

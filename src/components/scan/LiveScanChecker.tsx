@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { D } from "@/components/home/dark";
+import { T } from "@/config/tokens";
 import { track } from "@/lib/analytics";
 import { isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
 
@@ -31,11 +33,21 @@ import Turnstile from "./Turnstile";
  */
 export default function LiveScanChecker({
   initialDomain = "",
+  autoStart = false,
+  handoff,
   dark = false,
   onBusyChange,
   box,
 }: {
   initialDomain?: string;
+  /**
+   * A scan handed over from a partner site (18 Oct 2026, /scan?domain=...): start it without a click, once per page
+   * load, with a "Checking example.com..." panel in place of the form. Only when initialDomain is a plausible address;
+   * any refusal brings the form back with its message, never a second automatic try.
+   */
+  autoStart?: boolean;
+  /** The hand-off's ref and market, already checked (lib/scan/handoff.ts); sent to the start route as they are. */
+  handoff?: { ref: string | null; market: "UK" | "US" | null };
   dark?: boolean;
   /** Told every time busy flips, so a parent can hide its own lines (R49). */
   onBusyChange?: (busy: boolean) => void;
@@ -57,6 +69,14 @@ export default function LiveScanChecker({
   function onWidgetError() {
     widgetFailed.current = true;
   }
+  // An interactive Turnstile challenge on screen: the visitor is solving it, so the token wait does not time out.
+  const challenging = useRef(false);
+  function onChallenge(on: boolean) {
+    challenging.current = on;
+  }
+  const willAuto = autoStart && isPlausibleDomain(normalizeDomain(initialDomain));
+  const [auto, setAuto] = useState(willAuto);
+  const autoFired = useRef(false);
   const [busy, setBusyState] = useState(false);
   function setBusy(next: boolean) {
     setBusyState(next);
@@ -100,12 +120,34 @@ export default function LiveScanChecker({
 
   async function onDomain(e: React.FormEvent) {
     e.preventDefault();
+    await start(domain);
+  }
+
+  // The hand-off: one automatic start per page load (the ref survives a re-render and React's double effect in dev).
+  useEffect(() => {
+    if (!willAuto || autoFired.current) return;
+    autoFired.current = true;
+    void start(initialDomain, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** A refused or failed start: the step 1 form again, with its message, and a fresh bot check. */
+  function refuse(message: string) {
+    stopSteps();
+    setError(message);
+    setBusy(false);
+    setAuto(false);
+    freshToken();
+  }
+
+  async function start(domain: string, automatic = false) {
     /**
      * An address that cannot be one is answered here, in the start route's own
      * words, before anything is spent: no round trip, no token used, no
      * analytics event for an empty field. The route still checks it.
      */
     if (!isPlausibleDomain(normalizeDomain(domain))) {
+      setAuto(false);
       setError("That does not look like a website address. Try example.com.");
       return;
     }
@@ -125,17 +167,15 @@ export default function LiveScanChecker({
      */
     const needsToken = Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY);
     if (needsToken && !tokenRef.current) {
-      const deadline = Date.now() + 15_000;
+      // A challenge the visitor is solving holds the wait open (the hand-off submits the moment it passes), up to 5 minutes.
+      let deadline = Date.now() + 15_000;
+      const cap = Date.now() + 300_000;
       while (!tokenRef.current && !widgetFailed.current && Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 200));
+        if (challenging.current) deadline = Math.min(cap, Date.now() + 15_000);
       }
       if (!tokenRef.current) {
-        stopSteps();
-        setError(
-          "Our bot check did not load. If you use a content or ad blocker, allow challenges.cloudflare.com, or try another browser.",
-        );
-        setBusy(false);
-        freshToken();
+        refuse("Our bot check did not load. If you use a content or ad blocker, allow challenges.cloudflare.com, or try another browser.");
         return;
       }
     }
@@ -149,15 +189,18 @@ export default function LiveScanChecker({
         // No market: the start route picks it from the domain (market-pick.ts).
         // This used to send a hard-coded "UK", which meant every scan opened
         // on the UK whatever the domain said.
-        body: JSON.stringify({ domain, turnstileToken: tokenRef.current ?? turnstileToken }),
+        // A hand-off's market and ref ride along when the page had them (lib/scan/handoff.ts); the route checks both again.
+        body: JSON.stringify({
+          domain,
+          turnstileToken: tokenRef.current ?? turnstileToken,
+          ...(handoff?.market ? { market: handoff.market } : {}),
+          ...(handoff?.ref ? { ref: handoff.ref } : {}),
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        stopSteps();
-        setError(data.message ?? "Something went wrong. Please try again.");
-        setBusy(false);
-        freshToken();
+        refuse(data.message ?? "Something went wrong. Please try again.");
         return;
       }
 
@@ -170,15 +213,26 @@ export default function LiveScanChecker({
       // name a business and is kept out of GA.
       track("free_scan_start", {
         market: typeof data.market === "string" ? data.market : undefined,
-        cta_location: box ? "card" : "hero",
+        cta_location: automatic ? "handoff" : box ? "card" : "hero",
       });
       router.push("/scan/" + data.token);
     } catch {
-      stopSteps();
-      setError("We could not reach the checker. Please try again.");
-      setBusy(false);
-      freshToken();
+      refuse("We could not reach the checker. Please try again.");
     }
+  }
+
+  // The hand-off in progress: a status panel, not a form waiting for input. The bot check stays mounted below it, so an
+  // interactive challenge shows here and the scan goes on as soon as it passes.
+  if (auto) {
+    return (
+      <div>
+        <div role="status" aria-live="polite" className="scan-handoff" style={{ display: "flex", alignItems: "center", gap: "12px", background: dark ? D.field : T.surface, border: `1px solid ${dark ? D.fieldLine : T.line}`, borderRadius: "14px", padding: "16px 18px", minHeight: "56px", color: dark ? T.surface : T.ink, fontSize: "15px", fontWeight: 600 }}>
+          <span className="btn-spin" aria-hidden="true" style={{ color: T.accent, marginRight: 0, flex: "none" }} />
+          <span>{step === 0 ? `Checking ${shown}\u2026` : `${steps[step]}\u2026`}</span>
+        </div>
+        <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} onChallenge={onChallenge} theme={dark ? "dark" : "light"} />
+      </div>
+    );
   }
 
   if (box) {
@@ -194,7 +248,7 @@ export default function LiveScanChecker({
           status={busy ? steps[step] : ""}
           busy={busy}
         />
-        <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} />
+        <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} onChallenge={onChallenge} />
       </div>
     );
   }
@@ -211,7 +265,7 @@ export default function LiveScanChecker({
         busy={busy}
         dark={dark}
       />
-      <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} theme={dark ? "dark" : "light"} />
+      <Turnstile key={attempt} onToken={setTurnstileToken} onError={onWidgetError} onChallenge={onChallenge} theme={dark ? "dark" : "light"} />
     </div>
   );
 }

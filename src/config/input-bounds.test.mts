@@ -1001,7 +1001,8 @@ test("the table reader finds the tables and keys this test thinks it does", () =
   // rather than swallowing the keys after it - SCAN_LIMITS is the mixed case.
   const scan = TABLES.find((t) => t.table === "SCAN_LIMITS");
   assert.ok(scan, "SCAN_LIMITS was not parsed");
-  assert.deepEqual([...scan.keys].sort(), ["email", "question", "topic", "topicVariant"]);
+  // `ref` joined on 18 Oct 2026: the partner hand-off code (lib/scan/handoff.ts), scans.ref's own check.
+  assert.deepEqual([...scan.keys].sort(), ["email", "question", "ref", "topic", "topicVariant"]);
   // And that the nested table is read as three bounds rather than as one, which
   // is the case a `[^}]*` slice gets wrong.
   const coverage = TABLES.find((t) => t.table === "COVERAGE_LIMITS");
