@@ -44,7 +44,10 @@ test("every section on the four tier pages has a short word figure, never a numb
   // 17 -> 13 on 16 Oct 2026: the cards that repeated a monthly tile went
   // (Screened and Replaced on alwaysmentioned, Schema on alwayscited, Tracked
   // on alwayseverywhere), Danny's call.
-  assert.ok(n >= 13, `only ${n} section figures found - the walk stopped matching`);
+  // 13 -> 16 on 18 Oct 2026: Screened, Replaced (alwaysmentioned) and Schema
+  // (alwayscited) restored to match the approved package-pages handoff, which
+  // keeps those cards below Block B. Tracked on alwayseverywhere stays gone.
+  assert.ok(n >= 16, `only ${n} section figures found - the walk stopped matching`);
 });
 
 test("the monthly block's numbers come from pricing.ts, never a literal (16 Oct 2026)", () => {

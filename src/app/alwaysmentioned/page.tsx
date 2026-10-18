@@ -36,9 +36,11 @@ export default function Page() {
       headlineAccent="AI recommends."
       standfirst="Three placements a month in the third-party articles the engines draw on when someone asks who to use. The focus is recommendations and brand mentions for one keyword cluster. Rankings improve as a side effect."
       included={[
+        `${MONTHLY_PLACEMENTS} placements a month on one cluster`,
         "Placed in sources the scan shows the engines already citing",
         "Best-of lists, comparisons and round-ups, approached through editors we work with",
         "Anchor text agreed with you before anything goes live",
+        "Everything in alwaystracked, so you can see what each placement did",
         ...listIf("reportBranding", "White-label reporting with your logo"),
       ]}
       notIncluded={{
@@ -47,6 +49,16 @@ export default function Page() {
         href: "/alwayscited",
       }}
       sections={[
+        {
+          figure: "Screened",
+          heading: "Every placement passes the same three-part screen",
+          body: "Already cited by the engines for the cluster, so we place where the answers are actually drawn from rather than on a domain-authority list. Real organic traffic, verified rather than claimed. And contextual to the cluster, so the mention reads as part of the page to a person and to a model.",
+        },
+        {
+          figure: "Replaced",
+          heading: "A placement that fails the screen is replaced",
+          body: `Not counted. You are buying placements that passed, not attempts. If a publication drops out or the piece never runs, it does not come off your ${MONTHLY_PLACEMENTS}.`,
+        },
         {
           figure: "Mentions",
           heading: "A mention can win the citation without a link",
