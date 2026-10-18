@@ -15,7 +15,9 @@ export const metadata: Metadata = {
     "Three placements a month in the sources AI engines already cite for your client's keyword cluster" +
     (onlyIf("dashboardBranding", ", white-labelled") ?? "") +
     "." +
-    (price ? ` ${price}, priced per cluster.` : ""),
+    // The label reads "from $..."; here it opens a sentence, so it takes a
+    // capital (handoff 16 Oct 2026, shipped 18 Oct 2026).
+    (price ? ` ${price.charAt(0).toUpperCase()}${price.slice(1)}, priced per cluster.` : ""),
   openGraph: { url: "https://alwayscited.com/alwaysmentioned", images: OG_IMAGE },
   alternates: { canonical: "https://alwayscited.com/alwaysmentioned" },
 };

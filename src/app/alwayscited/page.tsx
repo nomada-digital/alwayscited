@@ -12,7 +12,9 @@ export const metadata: Metadata = {
   title: "AI citations and rankings for agencies",
   description:
     "Placements in the sources AI engines cite, plus schema work and link insertions aimed at the Google position." +
-    (price ? ` ${price}, priced per cluster.` : ""),
+    // The label reads "from $..."; here it opens a sentence, so it takes a
+    // capital (handoff 16 Oct 2026, shipped 18 Oct 2026).
+    (price ? ` ${price.charAt(0).toUpperCase()}${price.slice(1)}, priced per cluster.` : ""),
   openGraph: { url: "https://alwayscited.com/alwayscited", images: OG_IMAGE },
   alternates: { canonical: "https://alwayscited.com/alwayscited" },
 };
