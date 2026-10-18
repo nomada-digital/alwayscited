@@ -86,6 +86,8 @@ const KEYS: Record<string, Record<string, string>> = {
   "/settings": {
     team: 'typeof sp.team === "string" ? (DONE[sp.team] ?? null) : null',
     why: 'sp.team === "refused" ? teamWhy(sp.why) : null',
+    // 18 Oct 2026 (brief 2e): the email-setting route's 303, one word through EMAIL_DONE's fixed sentences.
+    email: 'typeof sp.email === "string" ? (EMAIL_DONE[sp.email] ?? null) : null',
   },
   "/setup": {},
   // One of SOURCE_RANGES, else the page's default.
