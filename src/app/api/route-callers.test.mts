@@ -215,6 +215,13 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     why: "Posted by a mail client's RFC 8058 one-click (the List-Unsubscribe-Post header), or by the plain form the GET page draws, which the fetch scanner does not read.",
     earns: () => readFileSync(join(ROOT, "src/app/api/dash/unsubscribe/route.ts"), "utf8").includes('<form method="post" action="/api/dash/unsubscribe?t='),
   },
+  // 18 Oct 2026 (brief 2e): Settings' Monday-summary switch on the dashboards host, a plain form post.
+  {
+    route: "/api/dash/[client]/email",
+    method: "POST",
+    why: "Posted by the Email section's form on /dashboards/[client]/settings, which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/settings/page.tsx"), "utf8").includes("action={`/api/dash/${slug}/email`}"),
+  },
   {
     route: "/api/cron/purge-responses",
     method: "GET",

@@ -229,6 +229,11 @@ const NO_SCOPE: Record<string, { reads: number; why: string }> = {
     reads: 1,
     why: "mailPaymentFailed mails the account's owners - who pay - never limited for the same reason as the runner's.",
   },
+  // 18 Oct 2026 (brief 2e): Settings on the dashboards host reads the signed-in member's own email preference.
+  "src/app/dashboards/[client]/settings/page.tsx": {
+    reads: 1,
+    why: "reads the signed-in member's own this_week_opt_out to say whether their Monday summary is on; it decides no one's access (the page's team list is team.ts readTeam's, scope-filtered).",
+  },
   // 18 Oct 2026 (brief 2e): /admin/emails names an owner as the invite preview's inviter. Admin-only, sends nothing.
   "src/lib/email/preview-source.ts": {
     reads: 1,

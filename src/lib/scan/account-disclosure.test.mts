@@ -186,6 +186,9 @@ const RECORDED: Record<string, string> = {
   // 18 Oct 2026 (brief 2e): brand_name joined, for the designed invite's "shared the <brand> dashboard". Same use.
   "src/app/api/app/[client]/member/route.ts :: account_id, brand_name":
     "the member route's team lookup; the 303 carries only the toast word and the email the owner typed.",
+  // 18 Oct 2026 (brief 2e): Settings' Monday-summary switch finds the member's own row on the client's account.
+  "src/app/api/dash/[client]/email/route.ts :: account_id":
+    "the email-setting route finds a membership-checked client's account to update the signed-in member's own row; it answers with a 303 carrying one word.",
   // 18 Oct 2026 (brief 2d): Settings on the dashboards host reads its own client's team, as the member route does.
   "src/app/dashboards/[client]/settings/page.tsx :: account_id":
     "the Settings page's team lookup for a membership-checked client; the page renders members' emails and roles, never the id.",
@@ -251,6 +254,9 @@ const MENTIONED: Record<string, string> = {
     "sent|refused and us|agency, never the id.",
   // settings-data.ts left this list 13 Oct 2026 (dashboard speed work): its team read embeds the account's members
   // through the foreign key and no longer names the column (R142, 1 Oct 2026, read it to filter the members).
+  "src/app/api/dash/[client]/email/route.ts":
+    "18 Oct 2026 (brief 2e): reads its own membership-checked client's account_id to update the signed-in member's own email preference. " +
+    "Answers with a 303 carrying one word, never the id.",
   "src/app/dashboards/[client]/settings/page.tsx":
     "18 Oct 2026 (brief 2d): reads its own membership-checked client's account_id to read the team (team.ts readTeam). " +
     "Server component; renders emails and roles only, never the id.",
