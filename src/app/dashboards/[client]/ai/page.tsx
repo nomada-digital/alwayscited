@@ -2,7 +2,10 @@ import type { Metadata } from "next";
 
 import EngineLogo from "@/components/EngineLogo";
 import { engineLabel, longDay, pct } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
+import Nudges from "@/components/dash/Nudges";
 import PromptManager from "@/components/dash/PromptManager";
+import { PROMPTS_GUIDE } from "@/config/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { trimRaw } from "@/lib/dash/model";
 import { planShape } from "@/lib/dash/plan";
@@ -13,7 +16,7 @@ export const metadata: Metadata = { title: "AI visibility", robots: { index: fal
 
 export default async function Ai({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { raw, ws, base, demo } = await pageData(slug);
+  const { raw, ws, base, demo, nudge } = await pageData(slug);
   const rows = ws.clusters.flatMap((c) => [...c.groups, c.own].flatMap((g) => g.prompts.map((p) => ({ p }))));
   // Per engine: named / answered on each prompt's latest reading.
   const byEngine = ws.engines.map((e) => {
@@ -32,7 +35,9 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
           </div>
         ))}
       </div>
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-everywhere"]} />
       <div className="dash-card" style={{ marginTop: 16 }}>
+        <div style={{ marginBottom: 12 }}><GuideBox guide={PROMPTS_GUIDE} /></div>
         <PromptManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} />
       </div>
       <div className="dash-card">

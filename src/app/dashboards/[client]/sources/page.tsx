@@ -3,7 +3,9 @@ import Link from "next/link";
 
 import EngineLogo from "@/components/EngineLogo";
 import { engineLabel } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
 import { PageHead } from "@/components/dash/Shell";
+import { SOURCES_GUIDE } from "@/config/guidance";
 import { citingAnswers } from "@/lib/dash/history";
 import { pageData } from "@/lib/dash/page-data";
 import { SOURCE_RANGES, type SourceRange, sourcesIn } from "@/lib/dash/sources";
@@ -28,6 +30,7 @@ export default async function Sources({ params, searchParams }: { params: Promis
   return (
     <>
       <PageHead micro="Sources" title="What AI reads" intro="The sites the engines cite when they answer your prompts. Open one to see every answer that cited it, and the page it cited." />
+      <div style={{ marginBottom: 16 }}><GuideBox guide={SOURCES_GUIDE} /></div>
       <div className="dash-card">
         <div className="dash-card-head">
           <div><h2>Cited sites</h2><p className="intro">Across your prompts, the last {range} days.</p></div>

@@ -23,7 +23,7 @@ import { PROMPT_LENGTH, PROMPT_MAX, PROMPT_MIN, PROMPT_TRACKED, promptKey } from
 import { refuseRole, stopDay } from "../tracking/stop.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
-import type { Raw, RawGroup, RawKeyword, RawPrompt } from "./types.ts";
+import { MANAGED_TIERS, type Raw, type RawGroup, type RawKeyword, type RawPrompt } from "./types.ts";
 
 export const KEYWORD_MIN = 2;
 export const KEYWORD_MAX = 120;
@@ -168,6 +168,21 @@ export function refusePromptText(raw: string, liveInCluster: readonly string[]):
   return null;
 }
 
+/**
+ * Managed clusters (17 Oct 2026): the clusters we work on each month on a paid
+ * plan. Their keyword is what the month's placements are built around, so it
+ * is not renamed, removed or swapped self-serve - the client asks, and the
+ * swap takes effect at the next billing date, once the month's work is done.
+ * Groups, keywords and prompts inside a managed cluster stay free to edit.
+ */
+export const MANAGED_SWAP = "We work on this cluster each month, so its keyword changes on request, from your next billing date. Ask us from the plan tab. You can still edit its groups, keywords and prompts.";
+
+export function isManaged(raw: Pick<Raw, "client" | "clusters">, clusterId: string | null): boolean {
+  if (!clusterId || raw.client.tier === "tracked") return false;
+  const c = raw.clusters.find((x) => x.id === clusterId);
+  return !!c && (MANAGED_TIERS as readonly string[]).includes(c.tier);
+}
+
 /** The reason an op is refused on these rows, or null when it may go ahead. */
 export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
   const role = refuseRole(raw.client.status === "ended" ? "viewer" : raw.role);
@@ -204,9 +219,11 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
     }
     case "cluster.rename": {
       if (!cluster(op.id)) return "That cluster has been removed.";
+      if (isManaged(raw, op.id)) return MANAGED_SWAP;
       return refuseName(op.name, "cluster");
     }
     case "cluster.remove":
+      if (cluster(op.id) && isManaged(raw, op.id)) return MANAGED_SWAP;
       return cluster(op.id) ? null : "That cluster has already been removed.";
     case "cluster.restore": {
       const c = raw.clusters.find((x) => x.id === op.id);
@@ -258,6 +275,7 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
     }
     case "keyword.remove": {
       const k = raw.keywords.find((x) => x.id === op.id);
+      if (k && live(k) && raw.clusters.some((c) => c.keyword_id === k.id && isManaged(raw, c.id))) return MANAGED_SWAP;
       return k && live(k) ? null : "That keyword has already been removed.";
     }
     case "keyword.restore": {
@@ -272,6 +290,7 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
       const k = raw.keywords.find((x) => x.id === op.id);
       if (!k || !live(k)) return "That keyword has been removed.";
       if (!cluster(op.clusterId)) return "That cluster has been removed.";
+      if (op.clusterId !== k.cluster_id && raw.clusters.some((c) => c.keyword_id === k.id && isManaged(raw, c.id))) return MANAGED_SWAP;
       if (!raw.groupsReady && (op.groupId !== null || op.clusterId !== k.cluster_id)) return "Moving keywords is not switched on yet.";
       return groupIn(op.groupId, op.clusterId);
     }

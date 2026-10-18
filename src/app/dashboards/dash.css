@@ -277,6 +277,16 @@
 body:has([data-dash-tree]) .site-chrome { display: none; }
 .btn.primary .tier-name__accent, .toast .tier-name__accent { color: inherit; }
 .kpi .v .num { font-size: 14px; letter-spacing: 0; }
+/* A plan suggestion (NudgeCard): the page's own card, a wash edge, never a colour of its own. */
+.nudge { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; background: var(--surface); border: 1px solid var(--wash-line); border-left: 3px solid var(--accent); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+.nudge-ev { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
+.nudge-ev li + li { margin-top: 2px; }
+/* A self-serve guide (GuideBox): closed by default, the page's own card. */
+.guide { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--surface); }
+.guide + .guide { margin-top: 8px; }
+.guide summary { cursor: pointer; font-weight: 600; font-size: 13.5px; }
+.guide ol { margin: 8px 0 2px; padding-left: 20px; font-size: 13px; color: var(--ink); }
+.guide li + li { margin-top: 4px; }
 /* Click-through views (17 Oct 2026): the date control, an answer's words and its marks, the history strip. */
 .datectl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .datectl .field { padding: 5px 8px; font-size: 13px; max-width: 100%; }

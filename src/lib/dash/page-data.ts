@@ -3,7 +3,8 @@ import "server-only";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
-import { DEMO_HEADER, dashBase, demoSlug } from "./host";
+import { DEMO_HEADER, dashBase, demoLink, demoSlug } from "./host";
+import { demoAs } from "./demo-state";
 
 import { dashClients, dashEmail, dashRaw, demoRaw } from "./access";
 import { TRACKED_PRICE } from "@/config/pricing";
@@ -20,16 +21,30 @@ import type { Raw, Workspace } from "./types";
  * its rows and the Workspace drawn from them. React `cache` holds each read
  * for the request, so the layout and the page share one.
  */
-export type PageData = { email: string; raw: Raw; ws: Workspace; base: string; demo: boolean; banner: PlanBanner | null; others: { slug: string; domain: string }[] };
+export type PageData = {
+  email: string;
+  raw: Raw;
+  ws: Workspace;
+  base: string;
+  demo: boolean;
+  banner: PlanBanner | null;
+  others: { slug: string; domain: string }[];
+  /** What the plan nudges weigh beyond the Workspace: markets on the member's sites, and days since the client started. */
+  nudge: { markets: number; daysOnPlan: number | null };
+};
+
+const daysSince = (day: string | null, today: string) => (day ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86_400_000) : null);
 
 export async function pageData(slug: string, opts: { sample?: boolean } = {}): Promise<PageData> {
   // A demo link: the proxy verified the token and set the header; it is checked again here against the slug it opens.
   const token = await demoToken();
   if (token) {
     if (demoSlug(token) !== slug) notFound();
-    const raw = await demoRaw(slug);
-    if (!raw) notFound();
-    return { email: "demo", raw, demo: true, base: `/demo/${token}`, banner: null, others: [], ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }) };
+    const found = await demoRaw(slug);
+    if (!found) notFound();
+    // A per-plan demo link shows the client as that plan, with sample delivery rows labelled as such (demo-state.ts).
+    const raw = demoAs(found, demoLink(token)?.state ?? null);
+    return { email: "demo", raw, demo: true, base: `/demo/${token}`, banner: null, others: [], nudge: { markets: 1, daysOnPlan: daysSince(raw.client.started_on, raw.today) }, ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }) };
   }
   const base = await requestBase();
   const email = await dashEmail();
@@ -46,6 +61,7 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
   const upsell = await loadUpgradeContext(raw.client.id, email, raw.today).then((u) => u.mode === "nomada").catch(() => true);
   const banner = c ? planBanner({ client: { ...c, name: raw.client.brand ?? raw.client.domain, market: raw.client.market }, role: raw.role, upsell, billing: `${base}/${slug}/plan#billing`, price: TRACKED_PRICE }) : null;
   return {
+    nudge: { markets: new Set(clients.map((x) => String((x as { market?: string }).market ?? ""))).size, daysOnPlan: daysSince(raw.client.started_on, raw.today) },
     banner,
     email,
     base,

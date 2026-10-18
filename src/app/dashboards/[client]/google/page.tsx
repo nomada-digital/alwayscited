@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Pos, longDay } from "@/components/dash/Figures";
+import GuideBox from "@/components/dash/GuideBox";
 import KeywordManager from "@/components/dash/KeywordManager";
+import Nudges from "@/components/dash/Nudges";
+import { KEYWORD_GUIDES } from "@/config/guidance";
+import { keywordSituation } from "@/lib/dash/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { dashFixturePath } from "@/lib/dash/fixture";
 import { planShape } from "@/lib/dash/plan";
@@ -17,15 +21,24 @@ export const metadata: Metadata = { title: "Search positions", robots: { index: 
 
 export default async function Google({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { raw, ws, base, demo } = await pageData(slug);
+  const { raw, ws, base, demo, nudge } = await pageData(slug);
   // What the shared research cache already knows about the tracked keywords: free, no paid read on page view.
   const metrics = Object.fromEntries([...(await knownMetricsSafe(raw.client.market, raw.keywords.filter((k) => k.stopped_on === null).map((k) => k.keyword), raw.today))]);
   const rows = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c })));
+  const situations = [...new Set(rows.filter((r) => r.src === "tracked").map((k) => keywordSituation(k)))];
   const also = rows.filter((r) => r.src === "footprint").sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, 40);
   return (
     <>
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-cited"]} />
       <KeywordManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} metrics={metrics} audience={defaultAudience(await orderSector(raw.client.id))} />
+      {situations.length ? (
+        <div className="dash-card">
+          <h2>Doing it yourself</h2>
+          <p className="intro">The next step for each keyword, from its own figures.</p>
+          <div style={{ marginTop: 10 }}>{situations.map((s) => <GuideBox key={s} id={`guide-${s}`} guide={KEYWORD_GUIDES[s]} />)}</div>
+        </div>
+      ) : null}
       <div className="dash-card">
         <div className="dash-card-head"><div><h2>Also ranking, in your groups</h2><p className="intro">From the ranking snapshot of {longDay(ws.footprintOn)}. Track any of them from its cluster.</p></div></div>
         {also.length ? (

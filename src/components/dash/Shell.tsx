@@ -1,5 +1,5 @@
 import BrandMark from "@/components/BrandMark";
-import TierName from "@/components/TierName";
+import TierName, { TIER_PLAIN } from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { CONTACT_EMAIL } from "@/config/contact";
 import type { Workspace } from "@/lib/dash/types";
@@ -18,6 +18,8 @@ export default function Shell({ ws, others, base, demo = false, banner = null, w
   const a = ws.allowances;
   const items = [
     { href: root, label: "Overview", icon: "overview" },
+    // Paid plans: the clusters we work on, under the plan's own name (Danny, 17 Oct 2026). Plain text - a tier lockup never sits in a link.
+    ...(ws.client.tier !== "tracked" ? [{ href: `${root}/managed`, label: TIER_PLAIN[ws.client.tier], icon: "plan", n: ws.clusters.filter((c) => c.managed).length || null }] : []),
     { href: `${root}/clusters`, label: "Clusters", icon: "clusters", n: ws.clusters.length },
     { href: `${root}/ai`, label: "AI visibility", icon: "ai" },
     { href: `${root}/google`, label: "Search positions", icon: "google" },

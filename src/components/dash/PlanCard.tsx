@@ -79,7 +79,7 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
             <tbody>
               {cluster.placements.map((p) => (
                 <tr key={p.id}>
-                  <td><a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
+                  <td>{p.sample ? <span>{p.domain} <span className="pill sample">Sample</span></span> : <a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>}{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
                   <td>{p.kind.replace("_", " ")}</td>
                   <td><span className={`pill${p.status === "live" ? " good" : ""}`}>{p.status}</span></td>
                   <td className="r num">{p.live_on ?? "-"}</td>

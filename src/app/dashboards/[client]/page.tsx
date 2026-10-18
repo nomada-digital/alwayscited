@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Change, EngineHeads, Kpi, Pos, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
+import Nudges from "@/components/dash/Nudges";
 import PlanCard from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { fullness } from "@/lib/dash/allowance";
@@ -19,7 +20,7 @@ function nextCheckLabel(market: string): string {
 
 export default async function Overview({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { ws, base } = await pageData(slug);
+  const { ws, base, nudge } = await pageData(slug);
   const tracked = ws.clusters.flatMap((c) => clusterKeywords(c)).filter((k) => k.src === "tracked");
   const ranked = tracked.filter((k) => k.pos !== null);
   const top10 = ranked.filter((k) => (k.pos ?? 99) <= 10).length;
@@ -37,7 +38,8 @@ export default async function Overview({ params }: { params: Promise<{ client: s
         title={ws.client.brand ?? ws.client.domain}
         intro="Whether AI names you when buyers ask, and where you rank on Google for the same searches - checked every morning."
       />
-      {full.length ? (
+      <Nudges ws={ws} base={base} ctx={nudge} />
+      {full.length && ws.client.tier !== "tracked" ? (
         <div className="banner" style={{ marginBottom: 16 }}>
           <span><b>{full.map((k) => `${ws.allowances[k].used} of ${ws.allowances[k].limit} ${k}`).join(", ")}</b> in use. Add a tracking pack, or move up a plan, before you run out.</span>
           <Link className="btn sm primary" href={`${base}/${slug}/plan`}>See options</Link>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import TierName from "@/components/TierName";
 import { Meter, TargetPage } from "@/components/dash/Figures";
+import Nudges from "@/components/dash/Nudges";
 import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, trackingPackPrice } from "@/config/pricing";
@@ -30,7 +31,7 @@ const BILLING_WHY: Record<string, string> = {
 export default async function Plan({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { ws, demo } = await pageData(slug);
+  const { ws, demo, base, nudge } = await pageData(slug);
   const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
   const packWhy = typeof sp.pack === "string" ? (PACK_WHY[sp.pack] ?? null) : null;
   const a = ws.allowances;
@@ -38,6 +39,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
   return (
     <>
       <PageHead micro="Plan" title={<TierName tier={ws.client.tier} />} intro={planCopy(ws.client.tier).positioning} />
+      <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-cited", "to-everywhere"]} />
       <div className="dash-grid k2">
         <div className="dash-card">
           <h2>Allowances</h2>

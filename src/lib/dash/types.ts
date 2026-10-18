@@ -10,6 +10,9 @@
 import type { KeyPageRow } from "./target.ts";
 
 export type Day = string;
+
+/** The plans whose clusters we work on each month (17 Oct 2026). A cluster is managed when its tier is one of these. */
+export const MANAGED_TIERS = ["mentioned", "cited", "everywhere"] as const;
 export type Engine = "google_aio" | "chatgpt" | "gemini" | "perplexity" | "claude";
 export type TierKey = "tracked" | "mentioned" | "cited" | "everywhere";
 
@@ -79,6 +82,8 @@ export type RawOpportunity = {
 };
 export type RawPlacement = {
   id: string;
+  /** Drawn on a demo link only, and labelled there: no such placement exists. */
+  sample?: boolean;
   cluster_id: string;
   kind: "guest_post" | "link_insertion" | "on_site" | "coverage";
   url: string;
@@ -182,6 +187,13 @@ export type ClusterView = {
   trackedKeywords: number;
   prompts: number;
   placements: RawPlacement[];
+  /** Worked by us on the client's plan (tracked_clusters.tier is a paid tier), not only tracked. */
+  managed: boolean;
+  /** The cluster keyword's first position held, and the cluster's first naming rate, for "since we started". */
+  startPos: number | null;
+  startRate: number | null;
+  /** Answers in the last 7 readings citing a page one of this cluster's live placements is on. */
+  placementCitations: number;
 };
 
 export type Workspace = {
@@ -198,6 +210,8 @@ export type Workspace = {
   loose: { prompts: PromptView[]; keywords: KeywordView[] };
   rate: number | null;
   rateTrend: (number | null)[];
+  /** The last 7 readings, across live prompts: answers given, answers naming the client, answers citing its site. */
+  window: { readings: number; answers: number; named: number; cited: number };
   brands: { name: string; answers: number; you: boolean }[];
   sources: { domain: string; answers: number; urls: number; you: boolean; engines: Engine[] }[];
   opportunities: RawOpportunity[];

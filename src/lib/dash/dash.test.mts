@@ -9,6 +9,12 @@ import { dashBase, dashInternal, dashLinkOrigin, dashStrip, demoPath, demoSlug, 
 import { buildWorkspace, matchesTerms, trimRaw } from "./model.ts";
 import { applyOp, cleanTerms, inverseOp, readOp, refuseOp, undoAdd, type Op } from "./ops.ts";
 import { sampleConsole } from "./sample.ts";
+import { demoAs } from "./demo-state.ts";
+import { keywordSituation } from "./guidance.ts";
+import { demoLink } from "./host.ts";
+import { packNudge, stillDismissed, upgradeNudge } from "./nudges.ts";
+import { MANAGED_SWAP, isManaged } from "./ops.ts";
+import { NUDGES } from "../../config/nudges.ts";
 import type { Raw } from "./types.ts";
 
 /**
@@ -232,10 +238,110 @@ test("model: the browser's copy carries no answer words, brands or citations", (
 // ---------------------------------------------------------------- the route tree
 
 test("every dashboards page is noindex and reads through pageData or redirects", () => {
-  const pages = ["page.tsx", "[client]/page.tsx", "[client]/clusters/page.tsx", "[client]/clusters/[cluster]/page.tsx", "[client]/ai/page.tsx", "[client]/google/page.tsx", "[client]/sources/page.tsx", "[client]/opportunities/page.tsx", "[client]/integrations/page.tsx", "[client]/plan/page.tsx", "login/page.tsx", "auth/page.tsx"];
+  const pages = ["page.tsx", "[client]/page.tsx", "[client]/clusters/page.tsx", "[client]/clusters/[cluster]/page.tsx", "[client]/ai/page.tsx", "[client]/google/page.tsx", "[client]/sources/page.tsx", "[client]/opportunities/page.tsx", "[client]/integrations/page.tsx", "[client]/managed/page.tsx", "[client]/plan/page.tsx", "login/page.tsx", "auth/page.tsx"];
   for (const p of pages) {
     const src = readFileSync(join(ROOT, "src", "app", "dashboards", p), "utf8");
     assert.ok(/index: false/.test(src) || p === "page.tsx", `${p} says noindex`);
     assert.ok(/pageData\(|redirect\(|LoginForm|isTokenShape/.test(src), `${p} checks the session`);
   }
+});
+
+// ---------------------------------------------------------------- growth (preview, 17 Oct 2026)
+
+/** A workspace with `days` readings of `per` answers a day, the client named in `named` of each day's. */
+function readings(over: Partial<Raw>, days: number, per: number, named: number, cites = 0, rival = "Rival Co"): Raw {
+  const r = raw(over);
+  r.prompts = Array.from({ length: per }, (_, i) => ({ id: `p${i}`, text: `Prompt number ${i} about widgets`, cluster_id: "k1", group_id: null, angle: null, added_on: "2026-10-01", stopped_on: null }));
+  r.answers = [];
+  for (let d = 0; d < days; d++) {
+    const day = `2026-10-${String(10 + d).padStart(2, "0")}`;
+    for (let i = 0; i < per; i++) {
+      const isNamed = i < named;
+      r.answers.push({ run_date: day, question_id: `p${i}`, engine: "chatgpt", answered: true, named: isNamed, brands: isNamed ? ["Acme", rival] : [rival], citations: i < cites ? [{ url: "https://acme.com/x" }] : [{ url: "https://list.com/x" }] });
+    }
+  }
+  r.client.cluster_limit = 10;
+  return r;
+}
+
+test("nudges: alwaystracked is offered alwaysmentioned only when AI rarely names it, never before enough readings", () => {
+  assert.equal(upgradeNudge(buildWorkspace(readings({}, 3, 10, 1), { plan: PLAN }), { markets: 1, daysOnPlan: 10 }), null, "3 readings is too few to judge");
+  const low = upgradeNudge(buildWorkspace(readings({}, 7, 10, 1), { plan: PLAN }), { markets: 1, daysOnPlan: 10 });
+  assert.equal(low?.to, "mentioned");
+  assert.match(low!.evidence[0]!, /named you in 7 of 70 answers \(10%\)/);
+  assert.equal(upgradeNudge(buildWorkspace(readings({}, 7, 10, 6), { plan: PLAN }), { markets: 1, daysOnPlan: 10 }), null, "named in 60% and not outnamed: nothing");
+});
+
+test("nudges: alwaysmentioned is offered alwayscited only when its site is rarely cited AND a managed cluster is off page 1", () => {
+  const base = readings({}, 7, 10, 6, 0);
+  base.client.tier = "mentioned";
+  base.clusters[0]!.tier = "mentioned";
+  assert.equal(upgradeNudge(buildWorkspace(base, { plan: PLAN }), { markets: 1, daysOnPlan: 30 }), null, "the cluster keyword is at #8: page 1, so no nudge");
+  base.serp.push({ run_date: "2026-10-18", keyword_id: "w1", position: 14, url: "https://acme.com/" });
+  const n = upgradeNudge(buildWorkspace(base, { plan: PLAN }), { markets: 1, daysOnPlan: 30 });
+  assert.equal(n?.to, "cited");
+  assert.match(n!.evidence.join(" "), /#14 on Google/);
+  const cited = readings({}, 7, 10, 6, 5);
+  cited.client.tier = "mentioned";
+  cited.clusters[0]!.tier = "mentioned";
+  cited.serp.push({ run_date: "2026-10-18", keyword_id: "w1", position: 14, url: "https://acme.com/" });
+  assert.equal(upgradeNudge(buildWorkspace(cited, { plan: PLAN }), { markets: 1, daysOnPlan: 30 }), null, "cited in half the answers: no nudge");
+});
+
+test("nudges: alwayscited stays put unless there is real scope; alwayseverywhere is never nudged", () => {
+  const c = readings({}, 7, 10, 1);
+  c.client.tier = "cited";
+  c.clusters[0]!.tier = "cited";
+  assert.equal(upgradeNudge(buildWorkspace(c, { plan: PLAN }), { markets: 1, daysOnPlan: 200 }), null, "one managed cluster, one market: stay on alwayscited");
+  assert.equal(upgradeNudge(buildWorkspace(c, { plan: PLAN }), { markets: NUDGES.everywhere.minMarkets, daysOnPlan: 5 })?.to, "everywhere", "a second market is scope");
+  c.client.tier = "everywhere";
+  assert.equal(upgradeNudge(buildWorkspace(c, { plan: PLAN }), { markets: 3, daysOnPlan: 200 }), null);
+});
+
+test("nudges: the pack is offered from 80% of an allowance, and a dismissal holds for 30 days", () => {
+  const r = raw();
+  r.client.cluster_limit = 1;
+  assert.equal(packNudge(buildWorkspace(r, { plan: PLAN }))?.id, "pack");
+  r.client.cluster_limit = 10;
+  assert.equal(packNudge(buildWorkspace(r, { plan: PLAN })), null);
+  assert.equal(stillDismissed(1000, 1000 + 29 * 86_400_000), true);
+  assert.equal(stillDismissed(1000, 1000 + 31 * 86_400_000), false);
+  assert.equal(stillDismissed(null, 5), false);
+});
+
+test("managed clusters: on a paid plan the cluster keyword changes on request; inside it stays editable", () => {
+  const r = raw();
+  r.client.tier = "cited";
+  r.clusters[0]!.tier = "cited";
+  assert.equal(isManaged(r, "k1"), true);
+  assert.equal(refuseOp(r, { op: "cluster.remove", id: "k1" }, PLAN), MANAGED_SWAP);
+  assert.equal(refuseOp(r, { op: "cluster.rename", id: "k1", name: "x" }, PLAN), MANAGED_SWAP);
+  assert.equal(refuseOp(r, { op: "keyword.remove", id: "w1" }, PLAN), MANAGED_SWAP);
+  assert.equal(refuseOp(r, { op: "prompt.add", tempId: "t", clusterId: "k1", groupId: "g1", text: "Which widget makers are best?" }, PLAN), null);
+  assert.equal(refuseOp(r, { op: "group.edit", id: "g1", name: "Navy widgets" }, PLAN), null);
+  r.client.tier = "tracked";
+  assert.equal(isManaged(r, "k1"), false, "a tracking plan manages nothing");
+  assert.equal(refuseOp(r, { op: "cluster.remove", id: "k1" }, PLAN), null);
+});
+
+test("demo states: a per-plan link shows the client as that plan, with every sample placement marked", () => {
+  const tok = "c".repeat(40);
+  assert.deepEqual(demoLink(tok, { DASH_DEMO_LINKS: `${tok}:acme-com:cited` }), { slug: "acme-com", state: "cited" });
+  assert.equal(demoLink(tok, { DASH_DEMO_LINKS: `${tok}:acme-com:gold` }), null, "an unknown state opens nothing");
+  const cited = demoAs(raw(), "cited");
+  assert.equal(cited.client.tier, "cited");
+  assert.equal(cited.clusters[0]!.tier, "cited");
+  assert.ok(cited.placements.length > 0 && cited.placements.every((p) => p.sample === true));
+  const trial = demoAs(raw(), "tracked-trial");
+  assert.ok(trial.client.trial_ends_at && trial.placements.length === 0);
+  const same = raw();
+  assert.equal(demoAs(same, null), same, "no state: the rows as they are");
+});
+
+test("guidance: each keyword gets the one situation its figures show", () => {
+  assert.equal(keywordSituation({ pos: 12, pageChange: { from: "/a", to: "/b", on: "2026-10-15" }, homepage: false }), "swap");
+  assert.equal(keywordSituation({ pos: null, pageChange: null, homepage: false }), "absent");
+  assert.equal(keywordSituation({ pos: 12, pageChange: null, homepage: true }), "homepage");
+  assert.equal(keywordSituation({ pos: 2, pageChange: null, homepage: true }), "top");
+  assert.equal(keywordSituation({ pos: 15, pageChange: null, homepage: false }), "near");
 });
