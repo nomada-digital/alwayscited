@@ -193,6 +193,10 @@ export const STATES: Record<string, State> = {
   "/dashboards/[client]/sources/[domain]": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/opportunities": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/plan": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  // 18 Oct 2026 (brief 2d / 2g): setup, Settings and the alwaystracked view, behind the same sign-in.
+  "/dashboards/[client]/setup": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/settings": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  "/dashboards/[client]/alwaystracked": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/sources": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/app/login": { urls: ["/app/login", "/app/login?link=expired"] },
   // 29 Sep 2026, R91: the order form. Tracked, a placements tier before a

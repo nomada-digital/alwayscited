@@ -333,7 +333,9 @@ test("the root icons are the only icons, so the denominator above is the whole s
 
   assert.deepEqual(
     found.sort(),
-    ["src/app/favicon.ico", "src/app/icon.svg"],
+    // 18 Oct 2026 (brief 2f): apple-icon.png is the same asterisk on white for iOS home screens, not a second
+    // mark - LOGO_URL stays icon.svg, and config/schema.ts's logo decision stands.
+    ["src/app/apple-icon.png", "src/app/favicon.ico", "src/app/icon.svg"],
     "an icon exists that nothing here reads - decide which mark is the company's logo and say so in config/schema.ts",
   );
 });

@@ -45,6 +45,8 @@ const SPRITE_FILES = [
   "components/dash/PromptManager.tsx",
   "app/dashboards/[client]/sources/page.tsx",
   "components/dash/Figures.tsx",
+  // 18 Oct 2026 (brief 2g): the alwaystracked view's engine row, under app/dashboards/layout.tsx.
+  "app/dashboards/[client]/alwaystracked/page.tsx",
 ];
 const INLINE_FILES = [
   "app/pr-agencies/page.tsx",

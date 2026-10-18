@@ -5,6 +5,7 @@ import { PageHead } from "@/components/dash/Shell";
 import TierName from "@/components/TierName";
 import { pageData } from "@/lib/dash/page-data";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { ADMIN_LIMITS } from "@/lib/tracking/decide";
 import { TEAM_WHY, readTeam, teamWhy } from "@/lib/tracking/team";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +28,9 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const owner = raw.role === "owner" && !readOnly;
   let team: { email: string; role: string }[] | null = null;
   if (!demo) {
-    const { data: row } = await supabaseAdmin().from("client_domains").select("account_id").eq("id", raw.client.id).maybeSingle();
-    const t = row ? await readTeam(supabaseAdmin(), row.account_id as string) : null;
+    // The account is read here, server-side only, to read the team; it is never rendered (as the member route reads it).
+    const { data: row, error: aErr } = await supabaseAdmin().from("client_domains").select("account_id").eq("id", raw.client.id).maybeSingle();
+    const t = row && !aErr ? await readTeam(supabaseAdmin(), row.account_id as string) : null;
     team = t && typeof t !== "string" ? t.rows.filter((r) => r.removed_at === null && (!r.clients || r.clients.includes(raw.client.id))) : null;
   }
   const done = typeof sp.team === "string" ? (DONE[sp.team] ?? null) : null;
@@ -53,9 +55,9 @@ export default async function Settings({ params, searchParams }: { params: Promi
                     <td className="r">
                       {owner && m.role !== "owner" ? (
                         <form method="post" action={`/api/app/${slug}/member`} style={{ display: "inline" }}>
-                          <input type="hidden" name="from" value="dash" />
-                          <input type="hidden" name="op" value="remove" />
-                          <input type="hidden" name="email" value={m.email} />
+                          <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
+                          <input type="hidden" name="op" value="remove" maxLength={ADMIN_LIMITS.email} />
+                          <input type="hidden" name="email" value={m.email} maxLength={ADMIN_LIMITS.email} />
                           <button className="btn sm" style={{ color: "var(--bad-fg)" }}>Remove</button>
                         </form>
                       ) : null}
@@ -68,10 +70,10 @@ export default async function Settings({ params, searchParams }: { params: Promi
         )}
         {owner ? (
           <form method="post" action={`/api/app/${slug}/member`} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
-            <input type="hidden" name="from" value="dash" />
-            <input type="hidden" name="op" value="invite" />
-            <input type="hidden" name="scope" value="client" />
-            <input className="field" type="email" name="email" required placeholder="name@company.com" aria-label="Email address to invite" style={{ flex: "1 1 240px" }} autoFocus={!!why} />
+            <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
+            <input type="hidden" name="op" value="invite" maxLength={ADMIN_LIMITS.email} />
+            <input type="hidden" name="scope" value="client" maxLength={ADMIN_LIMITS.email} />
+            <input className="field" type="email" name="email" required placeholder="name@company.com" aria-label="Email address to invite" maxLength={ADMIN_LIMITS.email} style={{ flex: "1 1 240px" }} autoFocus={!!why} />
             <select className="field" name="role" defaultValue="editor" aria-label="Role">
               <option value="editor">Editor</option>
               <option value="viewer">Viewer</option>

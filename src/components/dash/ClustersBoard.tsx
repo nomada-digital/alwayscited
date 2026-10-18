@@ -124,7 +124,7 @@ function NewCluster({ onDone, run, keywordsFull }: { onDone: () => void; run: Re
       </div>
       {!keywordsFull && kw.trim() && other ? (
         <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, fontSize: 13.5 }}>
-          <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} />
+          <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} maxLength={KEYWORD_MAX} />
           <span>Also target “{other.keyword}”, no extra charge. Same cluster, same target page; tracked on Google beside it.</span>
         </label>
       ) : null}

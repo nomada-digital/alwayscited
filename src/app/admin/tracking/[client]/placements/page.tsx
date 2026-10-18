@@ -60,15 +60,15 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
   if (!client) notFound();
   const id = client.id as string;
 
-  const [{ data: clusters, error: clErr }, { data: rows, error: pErr }] = await Promise.all([
+  const cols = "id, cluster_id, kind, url, url_key, status, scheduled_on, live_on, anchor_text, internal_note, last_checked_on, link_present";
+  const placementsOf = (c: string) => db.from("placements").select(c).eq("client_domain_id", id).order("created_at", { ascending: false });
+  const [{ data: clusters, error: clErr }, first] = await Promise.all([
     db.from("tracked_clusters").select("id, name, stopped_on").eq("client_domain_id", id).order("created_at", { ascending: true }),
-    db
-      .from("placements")
-      .select("*")
-      .eq("client_domain_id", id)
-      .order("created_at", { ascending: false }),
+    // 20261018030000 (brief 2b / 2c) adds the target columns; before it, the placements are read without them.
+    placementsOf(`${cols}, target_page_id, target_keyword_id`),
   ]);
   if (clErr) throw new Error(`could not read clusters: ${clErr.message}`);
+  const { data: rows, error: pErr } = missingColumn(first.error) ? await placementsOf(cols) : first;
   if (pErr) throw new Error(`could not read placements: ${pErr.message}`);
   // 18 Oct 2026 brief 2b / 2c: each live cluster's target page, keyword forms and split, and where the Sunday
   // check found each live placement's link pointing (link_checks.target, newest per page).
@@ -78,7 +78,8 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
     if (typeof aim === "string") throw new Error(aim);
     aims.set(c.id as string, aim);
   }
-  const { data: checks } = await db.from("link_checks").select("url_key, target, checked_at").eq("client_domain_id", id).order("checked_at", { ascending: false });
+  const { data: checks, error: lcErr } = await db.from("link_checks").select("url_key, target, checked_at").eq("client_domain_id", id).order("checked_at", { ascending: false });
+  if (lcErr) throw new Error(`could not read the link checks: ${lcErr.message}`);
   const linkTarget = (urlKey: unknown) => ((checks ?? []).find((c) => c.url_key === urlKey)?.target as string | null | undefined) ?? null;
   const conflicts = sharedTargets((clusters ?? []).filter((c) => aims.has(c.id as string)).map((c) => ({ name: c.name as string, target: aims.get(c.id as string)!.target?.url ?? null })));
   // DIY P2: the switch, and the prompts placements added (none to read before the prompt_origins migration).
@@ -93,7 +94,7 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
   const kinds = PLACEMENT_KINDS.filter((k) => k !== "coverage" || client.tier === "everywhere");
   const liveClusters = (clusters ?? []).filter((c) => c.stopped_on === null);
   const nameOf = (cid: unknown) => ((clusters ?? []).find((c) => c.id === cid)?.name as string | undefined) ?? "-";
-  const list = (rows ?? []).map((r) => ({ r, check: linkCheckState(r as { status: string; last_checked_on: string | null; link_present: boolean | null }) }));
+  const list = ((rows ?? []) as unknown as Row[]).map((r) => ({ r, check: linkCheckState(r as { status: string; last_checked_on: string | null; link_present: boolean | null }) }));
   const flagged = list.filter((x) => x.check.flagged);
 
   return (

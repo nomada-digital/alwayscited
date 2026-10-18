@@ -27,6 +27,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },
     { href: `${root}/plan`, label: "Plan", icon: "plan" },
+    // 18 Oct 2026 brief 2g: paid plans always see what alwaystracked would keep. Plain text, as above.
+    ...(ws.client.tier !== "tracked" ? [{ href: `${root}/alwaystracked`, label: `Your ${TIER_PLAIN.tracked} view`, icon: "overview" }] : []),
     { href: `${root}/settings`, label: "Settings", icon: "settings" },
   ];
   return (
