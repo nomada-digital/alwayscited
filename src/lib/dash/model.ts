@@ -20,6 +20,7 @@ import { brandKey, subjectKeys } from "../scan/brand-name.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
 import { sampleConsole } from "./sample.ts";
+import { chosenTarget } from "./target.ts";
 import { MANAGED_TIERS } from "./types.ts";
 import type {
   ClusterView,
@@ -282,6 +283,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       tier: c.tier,
       startedOn: c.started_on,
       headKeyword: head?.keyword ?? null,
+      target: chosenTarget(raw.keyPages ?? [], c.id),
       headVolume: head?.search_volume ?? null,
       headPos: headView?.pos ?? null,
       headChange: headView?.change ?? null,

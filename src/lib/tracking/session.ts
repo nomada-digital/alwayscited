@@ -19,6 +19,18 @@ export const LOGIN_PER_EMAIL_PER_HOUR = 5;
 export const LOGIN_PER_IP_PER_HOUR = 20;
 
 /**
+ * 18 Oct 2026: form-spraying bots asked for links for about forty strangers'
+ * addresses, three times each within seconds, from forty-odd IPs - under both
+ * hourly caps. No mail went (strangers never get one), but every request was a
+ * row. A burst cap per hashed IP stops the repeat, and strangers' rows are
+ * stored only up to an hourly ceiling across everyone; past it the request is
+ * answered the same and nothing is written. A member's request never meets
+ * the second cap, so a bot wave cannot lock a member out.
+ */
+export const LOGIN_PER_IP_PER_MINUTE = 2;
+export const LOGIN_STRANGER_ROWS_PER_HOUR = 10;
+
+/**
  * The session cookie (M1, 5 Oct 2026).
  *
  * `__Host-` is a prefix the browser enforces rather than a name we chose: it
@@ -58,8 +70,13 @@ export function isTokenShape(token: unknown): token is string {
 }
 
 /** May another link be sent? Counts are this hour's requests so far. */
-export function mayRequestLink(emailCount: number, ipCount: number): boolean {
-  return emailCount < LOGIN_PER_EMAIL_PER_HOUR && ipCount < LOGIN_PER_IP_PER_HOUR;
+export function mayRequestLink(emailCount: number, ipCount: number, ipLastMinute = 0): boolean {
+  return emailCount < LOGIN_PER_EMAIL_PER_HOUR && ipCount < LOGIN_PER_IP_PER_HOUR && ipLastMinute < LOGIN_PER_IP_PER_MINUTE;
+}
+
+/** Store a non-member's request? Only while this hour's stranger rows, across every address, are under the ceiling. */
+export function mayRecordStranger(strangerRowsThisHour: number): boolean {
+  return strangerRowsThisHour < LOGIN_STRANGER_ROWS_PER_HOUR;
 }
 
 /** A login token row is usable once, before it expires. */

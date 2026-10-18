@@ -7,6 +7,7 @@ import {
   SESSION_TTL_MS,
   hashToken,
   isTokenShape,
+  mayRecordStranger,
   mayRequestLink,
   newToken,
   sessionCookie,
@@ -39,6 +40,11 @@ test("link requests are capped at 5 per email and 20 per IP an hour", () => {
   assert.ok(mayRequestLink(4, 19));
   assert.ok(!mayRequestLink(5, 0));
   assert.ok(!mayRequestLink(0, 20));
+  // 18 Oct 2026: the burst cap - a third request from one IP inside a minute is not sent.
+  assert.ok(mayRequestLink(0, 1, 1));
+  assert.ok(!mayRequestLink(0, 2, 2));
+  assert.ok(mayRecordStranger(9));
+  assert.ok(!mayRecordStranger(10));
 });
 
 test("the session cookie is httpOnly, Secure, Lax and lasts 30 days", () => {

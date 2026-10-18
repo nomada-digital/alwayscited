@@ -69,6 +69,11 @@ test("the target page: the ranking page, else the cluster's key page, else the h
   assert.deepEqual(targetPage({ domain: "", ranking: null, keyPage: null, intent: null }), { url: null, how: "pick" });
 });
 
+test("the target page a person chose wins over the ranking page and the blog rule (18 Oct 2026)", () => {
+  assert.deepEqual(targetPage({ domain: "tallyroo.com", chosen: "https://tallyroo.com/blog/best-invoicing", ranking: "https://tallyroo.com/invoicing", keyPage: null, intent: "commercial" }), { url: "https://tallyroo.com/blog/best-invoicing", how: "chosen" });
+  assert.deepEqual(targetPage({ domain: "tallyroo.com", chosen: null, ranking: "https://tallyroo.com/invoicing", keyPage: null, intent: "commercial" }), { url: "https://tallyroo.com/invoicing", how: "ranking" });
+});
+
 test("what it is: read, unread, or a page we could not read - never 'doesn't name you'", () => {
   assert.equal(whatItIs(opp(), null).kind, "unread");
   const unreadable = whatItIs(opp(), facts({ status: "error", http: 403 }));

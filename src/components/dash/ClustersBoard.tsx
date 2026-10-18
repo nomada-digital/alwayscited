@@ -9,7 +9,7 @@ import { KEYWORD_MAX, NAME_MAX } from "@/lib/dash/ops";
 import type { Raw } from "@/lib/dash/types";
 
 import { InlineText, Menu } from "./ClusterEditor";
-import { Change, Pos, Rate, Spark } from "./Figures";
+import { Change, Pos, Rate, Spark, TargetPage } from "./Figures";
 import Icon from "./Icon";
 import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
@@ -58,7 +58,7 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
                     </Link>
                   )}
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
-                    {c.headKeyword ? <>Keyword <b style={{ color: "var(--ink)" }}>{c.headKeyword}</b>{c.headVolume ? ` · ${c.headVolume.toLocaleString("en-GB")}/mo` : ""}</> : "No keyword yet"}
+                    {c.headKeyword ? <>Keyword <b style={{ color: "var(--ink)" }}>{c.headKeyword}</b>{c.headVolume ? ` · ${c.headVolume.toLocaleString("en-GB")}/mo` : ""}</> : "No keyword yet"} · <TargetPage url={c.target} prefix="Target" />
                   </div>
                 </div>
                 {c.managed ? <span className="pill accent" title="We work on this cluster each month. Its keyword changes on request, from your next billing date.">Managed by us</span> : null}

@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import ClusterEditor from "@/components/dash/ClusterEditor";
 import ClusterTitle from "@/components/dash/ClusterTitle";
-import { Change, Kpi, Pos, Spark, fullDay, pct } from "@/components/dash/Figures";
+import { Change, Kpi, Pos, Spark, TargetPage, fullDay, pct } from "@/components/dash/Figures";
 import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { trimRaw } from "@/lib/dash/model";
@@ -26,7 +26,7 @@ export default async function Cluster({ params }: { params: Promise<{ client: st
       <PageHead
         micro={<><Link href={`${base}/${slug}/clusters`}>Clusters</Link><span>/</span><span>{c.headKeyword ?? "cluster"}</span></>}
         title={<ClusterTitle slug={slug} id={c.id} name={c.name} canWrite={ws.canWrite} demo={demo} />}
-        intro={c.headKeyword ? <>Started {fullDay(c.startedOn)}. Its keyword is <b>{c.headKeyword}</b>{c.headVolume ? `, ${c.headVolume.toLocaleString("en-GB")} searches a month` : ""}.</> : `Started ${fullDay(c.startedOn)}.`}
+        intro={<>{c.headKeyword ? <>Started {fullDay(c.startedOn)}. Its keyword is <b>{c.headKeyword}</b>{c.headVolume ? `, ${c.headVolume.toLocaleString("en-GB")} searches a month` : ""}.</> : `Started ${fullDay(c.startedOn)}.`} <TargetPage url={c.target} /></>}
       />
       <div className="dash-grid k4" style={{ marginBottom: 16 }}>
         <Kpi label="Google, cluster keyword" value={<span style={{ display: "inline-flex", gap: 8, alignItems: "center" }}><Pos pos={c.headPos} /><Change n={c.headChange} /></span>} sub="Today, against 7 days ago" />

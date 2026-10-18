@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import TierName from "@/components/TierName";
-import { Meter } from "@/components/dash/Figures";
+import { Meter, TargetPage } from "@/components/dash/Figures";
 import Nudges from "@/components/dash/Nudges";
 import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
@@ -100,7 +100,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
           })}
         </div>
       </div>
-      {ws.clusters.map((c) => <div key={c.id} style={{ marginTop: 16 }}><div className="dash-micro" style={{ marginBottom: 6 }}>{c.name}</div><Delivery ws={ws} cluster={c} /></div>)}
+      {ws.clusters.map((c) => <div key={c.id} style={{ marginTop: 16 }}><div className="dash-micro" style={{ marginBottom: 2 }}>{c.name}</div><p className="muted" style={{ margin: "0 0 6px", fontSize: 13 }}><TargetPage url={c.target} /></p><Delivery ws={ws} cluster={c} /></div>)}
     </>
   );
 }

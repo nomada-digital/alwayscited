@@ -4,7 +4,7 @@
  * experience on alwayscited.com does not change until the cut-over.
  *
  * The route tree is `src/app/dashboards/`. On the dashboards host the public
- * paths carry no prefix (`/meetlifesciences-com/clusters`) and the proxy
+ * paths carry no prefix (`/alwayscited-com/clusters`) and the proxy
  * rewrites them to `/dashboards/...`; on any other host `/dashboards` is a 404,
  * so the tree has exactly one address.
  *

@@ -18,15 +18,18 @@ import { NOT_CLASSIFIED, PAGE_TYPE_LABEL, type Opportunity, type PageFacts, type
  */
 
 /** Where the client's target page came from (section 4.7, "What to point it at"). */
-export type Target = { url: string | null; how: "ranking" | "key_page" | "homepage" | "pick" };
+export type Target = { url: string | null; how: "chosen" | "ranking" | "key_page" | "homepage" | "pick" };
 
 /**
- * The cluster's target page: the latest URL of the client's ranking for the
- * cluster keyword, else a key page serving the cluster, else the homepage.
- * Never a blog post for a buying keyword: a ranking URL that is one is
- * skipped (Nomada op:450-473). "Pick a page" when there is no domain at all.
+ * The cluster's target page: the one a person chose for it (dash/target.ts,
+ * 18 Oct 2026) whatever it is, else the latest URL of the client's ranking for
+ * the cluster keyword, else a key page serving the cluster, else the homepage.
+ * Never a blog post for a buying keyword unless a person chose it: a ranking
+ * URL that is one is skipped (Nomada op:450-473). "Pick a page" when there is
+ * no domain at all.
  */
-export function targetPage(p: { domain: string; ranking: string | null; keyPage: string | null; intent: string | null }): Target {
+export function targetPage(p: { domain: string; chosen?: string | null; ranking: string | null; keyPage: string | null; intent: string | null }): Target {
+  if (p.chosen) return { url: p.chosen, how: "chosen" };
   const blog = (u: string) => /\/(blog|news|articles?|posts?)\//i.test(u);
   const buying = p.intent === "commercial" || p.intent === "transactional";
   if (p.ranking && !(buying && blog(p.ranking))) return { url: p.ranking, how: "ranking" };
@@ -36,6 +39,7 @@ export function targetPage(p: { domain: string; ranking: string | null; keyPage:
 }
 
 export const TARGET_LABEL: Record<Target["how"], string> = {
+  chosen: "The target page set for this cluster",
   ranking: "Your page that ranks for this cluster's keyword",
   key_page: "Your key page for this cluster",
   homepage: "Your homepage, until a page of yours ranks for this cluster",

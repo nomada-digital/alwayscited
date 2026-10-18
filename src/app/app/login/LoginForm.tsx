@@ -7,6 +7,7 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { appPath } from "@/lib/app-host";
+import LoginHoneypot from "@/components/LoginHoneypot";
 
 /** The route's refusal, word for word, so the browser and the server say the same thing. */
 const BAD_EMAIL = "That email does not look right.";
@@ -29,6 +30,7 @@ export default function LoginForm({ next, refused, again }: { next?: string; ref
   const [message, setMessage] = useState<string | null>(null);
   const [fieldError, setFieldError] = useState<string | null>(refused ? BAD_EMAIL : null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const trapRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   function refuse(text: string) {
@@ -48,7 +50,7 @@ export default function LoginForm({ next, refused, again }: { next?: string; ref
       const res = await fetch("/api/app/login", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(next ? { email, next } : { email }),
+        body: JSON.stringify({ email, ...(next ? { next } : {}), ...(trapRef.current?.value ? { website: trapRef.current.value } : {}) }),
       });
       const body = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; message?: string };
       if (body.error === "bad_email") refuse(body.message ?? BAD_EMAIL);
@@ -98,6 +100,7 @@ export default function LoginForm({ next, refused, again }: { next?: string; ref
           </p>
         ) : null}
       </div>
+      <LoginHoneypot id="app-login-website" inputRef={trapRef} />
       <button
         type="submit"
         disabled={busy}

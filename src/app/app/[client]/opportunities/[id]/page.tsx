@@ -11,6 +11,7 @@ import { enginesFor, trackingPackPrice } from "@/config/pricing";
 import { T } from "@/config/tokens";
 import { section } from "@/lib/diy/plan/data";
 import { brief, targetPage } from "@/lib/diy/opportunities/brief";
+import { chosenTarget } from "@/lib/dash/target";
 import { askLabel, historyLines, movesFor, promptState, statusLine } from "@/lib/diy/opportunities/detail";
 import { answerLinker, promptPlaces } from "@/lib/diy/opportunities/links";
 import { firstCitedLines, lastCitedText, pathOf, typesLine, u3LeavesOut, whyFacts } from "@/lib/diy/opportunities/payload";
@@ -89,7 +90,9 @@ export default async function ClientOpportunity({ params, searchParams }: { para
     cluster ? section("opportunity swap", () => repo.loadOverview(client.id, { from: addDays(today, -27), to: today }, "none", { answers: "verdicts", cluster: cluster.id })) : Promise.resolve(null),
   ]);
   const keyPage = targets.ok ? (targets.value.keyPages.find((p) => cluster && p.clusterIds.includes(cluster.id))?.url ?? null) : null;
-  const target = targetPage({ domain: client.domain, ranking: targets.ok ? targets.value.ranking : null, keyPage, intent: keyword?.intent ?? null });
+  // 18 Oct 2026: the page a person chose for the cluster (dash/target.ts) wins over the ranking URL and the blog rule.
+  const chosen = targets.ok && cluster ? chosenTarget(targets.value.keyPages.map((p) => ({ url: p.url, origin: p.origin ?? "", cluster_ids: p.clusterIds, added_on: p.addedOn ?? "", removed_on: null })), cluster.id) : null;
+  const target = targetPage({ domain: client.domain, chosen, ranking: targets.ok ? targets.value.ranking : null, keyPage, intent: keyword?.intent ?? null });
   const b = brief({ opp, facts: shown, brand, target });
 
   const { range } = rangeFrom({}, today, client.started_on);

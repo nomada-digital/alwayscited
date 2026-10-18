@@ -32,6 +32,12 @@ test("the automatic order: the homepage, each cluster's ranking URL once, the ci
   assert.equal(pick.add[9]!.urlKey, "tallyroo.com/p6");
 });
 
+test("a member's page keeps the clusters a person gave it: a chosen target that does not rank yet is never stripped (18 Oct 2026)", () => {
+  const rows = [keyPage({ id: "kp-1", url: "https://tallyroo.com/blog/best", origin: "member", clusterIds: ["c5"] }), keyPage({ id: "kp-2", url: "https://tallyroo.com/", origin: "member", clusterIds: ["c6"] })];
+  const pick = pickKeyPages({ rows, candidates: [{ url: "https://tallyroo.com/", origin: "homepage", clusterIds: [] }, { url: "https://tallyroo.com/", origin: "ranking", clusterIds: ["c3"] }], domain: D });
+  assert.deepEqual(pick.clusters, [{ id: "kp-2", clusterIds: ["c3", "c6"] }], "kp-1 keeps c5 untouched; kp-2 gains the cluster it ranks for and keeps c6");
+});
+
 test("a page on another domain is never picked, and a page a member removed is never picked again", () => {
   const rows = [keyPage({ id: "kp-1", url: "https://tallyroo.com/", origin: "homepage" }), keyPage({ id: "kp-2", url: "https://tallyroo.com/old", origin: "cited_own", removedOn: "2026-09-15", removedBy: "owner@example.com" })];
   const pick = pickKeyPages({ rows, candidates: [{ url: "https://ledgerline.com/cloud", origin: "ranking", clusterIds: ["c8"] }, { url: "https://tallyroo.com/old", origin: "cited_own", clusterIds: [] }, { url: "https://tallyroo.com/new", origin: "cited_own", clusterIds: [] }], domain: D });

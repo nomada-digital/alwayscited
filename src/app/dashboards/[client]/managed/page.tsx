@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import TierName from "@/components/TierName";
-import { Change, Pos, Rate, Spark, fullDay, pct } from "@/components/dash/Figures";
+import { Change, Pos, Rate, Spark, TargetPage, fullDay, pct } from "@/components/dash/Figures";
 import { PageHead } from "@/components/dash/Shell";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { pageData } from "@/lib/dash/page-data";
@@ -83,6 +83,8 @@ function ManagedCluster({ ws, c, n, href }: { ws: Workspace; c: ClusterView; n: 
           <div className="dash-micro">Cluster {n} · <span className="pill accent">Managed by us</span></div>
           <h2 style={{ marginTop: 6 }}><Link href={href} style={{ color: "inherit", textDecoration: "none" }}>{c.name}</Link></h2>
           <p className="intro">Since {fullDay(c.startedOn)}{c.headKeyword ? <> · keyword <b>{c.headKeyword}</b></> : null}</p>
+          {/* 18 Oct 2026: the page this cluster's placements point at (target.ts). */}
+          <p className="intro" style={{ marginTop: 2 }}><TargetPage url={c.target} /></p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className="btn" href={href}>Groups, keywords and prompts</Link>
