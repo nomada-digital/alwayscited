@@ -42,13 +42,12 @@ test("roles: owners and editors write; a viewer, or a role we do not know, is re
   assert.deepEqual(decide(form({ do: "add", title: "x" }), null, { ...ctx, role: "viewer" }), { op: "refuse", why: "viewer" });
 });
 
-test("an ended client is read-only: the route and the page judge writes by writeRole(client), which reads an ended client as a viewer", () => {
+test("an ended client is read-only: the route judges writes by writeRole(client), which reads an ended client as a viewer", () => {
   // member.ts writeRole imports server-only, so its use is held here by source; its rule is member.ts's own.
+  // 18 Oct 2026, brief 2d: the page half (the /app Actions page drawing its controls disabled with ENDED_REASON)
+  // retired with /app; every address 308s to the dashboards host. The route still refuses.
   const route = readFileSync(join(ROOT, "src/app/api/app/[client]/plan/route.ts"), "utf8");
-  const page = readFileSync(join(ROOT, "src/app/app/[client]/plan/page.tsx"), "utf8");
   assert.match(route, /role: writeRole\(client\)/);
-  assert.match(page, /const canWrite = refuseRole\(writeRole\(client\)\) === null;/);
-  assert.match(page, /client\.status === "ended" \? ENDED_REASON : VIEWER_REASON/);
   assert.match(ENDED_REASON, /read-only/);
 });
 

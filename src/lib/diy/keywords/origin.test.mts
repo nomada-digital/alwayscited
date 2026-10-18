@@ -58,9 +58,6 @@ test("src survives the check's round trip: back() carries it beside add, kw, the
   const cluster = src("src/app/api/app/[client]/cluster/route.ts");
   assert.match(cluster, /const origin = momentumOrigin\(field\("src"\)\);/);
   assert.match(cluster, /role: writeRole\(client\),\n\s+origin,/);
-  // The panel posts it as a hidden field on both steps, and the page reads `src` (gaining only).
-  const panel = src("src/components/app/Clusters.tsx");
-  assert.match(panel, /<input id="kw-src" type="hidden" name="src" value=\{src\} \/>/);
-  assert.match(panel, /<input id="nc-src" type="hidden" name="src" value=\{src\} \/>/);
-  assert.match(src("src/app/app/[client]/clusters/page.tsx"), /src=\{one\("src"\) === "gaining" \? "gaining" : null\}/);
+  // 18 Oct 2026, brief 2d: the panel half - the /app Clusters page posting src as a hidden field on both steps, and
+  // reading `src` (gaining only) - retired with /app; every address 308s to the dashboards host. The routes' half holds.
 });

@@ -89,7 +89,7 @@ test("8 Oct 2026 (audit data-10): a young client's month compares with its first
     const card = monthFigures({ ...young.data, runs }, { from: "2026-09-01", to: addDays(start, 3) }, { startedOn: start, today: young.today, engines });
     assert.equal(card.lfl, null, `${status}: no change against a first check that did not read every engine`);
   }
-  const src = readFileSync(new URL("../../components/app/Reports.tsx", import.meta.url), "utf8");
   // 9 Oct 2026 (ON-3): the line grew a third case, the first reading; the first week's words are unchanged.
-  assert.match(src, /f\.lfl\.firstWeek \? " in the first week" : f\.lfl\.firstReading \? " on the first reading" : ""/, "the card says which period it is against");
+  // 18 Oct 2026, brief 2d: the page half (components/app/Reports.tsx saying which period a card is against) retired
+  // with /app; every /app address 308s to the dashboards host, which has no Reports page. monthFigures above holds.
 });

@@ -102,7 +102,9 @@ test("a link from the site into the dashboard is relative until the dashboard ha
 
 test("the header is handed its Log in link by the server, never decides it in the browser", () => {
   const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
-  assert.match(layout, /<Header loginHref=\{appHref\("\/login"\)\} \/>/, "the root layout passes appHref(\"/login\")");
+  // 18 Oct 2026 (brief 2d): /app retired, every address 308s to the dashboards host, so the layout hands the
+  // dashboards host's own /login (dash/host.ts dashOrigin) rather than appHref("/login"), which would only 308 there.
+  assert.match(layout, /<Header loginHref=\{`\$\{dashOrigin\(\)\}\/login`\} \/>/, "the root layout passes the dashboards host's /login");
   const header = readFileSync(join(process.cwd(), "src", "components", "Header.tsx"), "utf8");
   // The header is a client component: APP_HOST is empty there, so any helper
   // that reads it would give the server's render one href and hydration another.
@@ -225,8 +227,14 @@ test("a client component decides from the address it was served at", () => {
   assert.equal(siteHrefAt("/contact", { pathname: "/application", host: "app.localhost:3108" }), "http://localhost:3108/contact");
 });
 
-/** Where a dashboard page's links are written. */
-const DASHBOARD = [join(SRC, "components", "app"), join(SRC, "app", "app")];
+/**
+ * Where a dashboard page's links are written. 18 Oct 2026 (brief 2d): /app retired, every address 308s to the
+ * dashboards host; the dashboard is src/app/dashboards and src/components/dash now (src/components/app and
+ * src/app/app are gone). The dashboards host is never the marketing host, so its marketing links are absolute -
+ * `${SITE_ORIGIN}...` - or through siteHref, and a root-relative literal there is a dashboard path, of which the
+ * two recorded in DASH_OWN_HREF are the only ones written by hand.
+ */
+const DASHBOARD = [join(SRC, "components", "dash"), join(SRC, "app", "dashboards")];
 
 /**
  * A marketing page reached from the dashboard. contactUrlFor and CONTACT_URL
@@ -270,6 +278,36 @@ test("the sweep sees an unwrapped marketing link in each spelling", () => {
  * that build a marketing href from pricing.ts. A walk that stops matching finds
  * neither, and would otherwise report a clean dashboard.
  */
+/**
+ * 18 Oct 2026 (brief 2d), the dashboards host's spellings: a tier page is also reached through tierInfo(...).href
+ * and info.href, and SITE_ORIGIN interpolated in front is as good as siteHref there, because that host never
+ * serves the marketing site. Its own hand-written root-relative links: /login (the auth page's Back to sign in) and
+ * /dashboards (the not-found pages' way back).
+ */
+const DASH_MARKETING_SOURCE = new RegExp(`${MARKETING_SOURCE.source}|\\btierInfo\\([^)]*\\)\\.href\\b|\\binfo\\.href\\b|["'\`]/help\\b`);
+const DASH_WRAPPED = /\bsiteHref(?:At)?\(|\$\{SITE_ORIGIN\}/;
+const DASH_OWN_HREF = /\bhref=(?:"|\{\s*["'`])\/(?:login|dashboards)["'`]/;
+
+function dashMarketingOffenders(line: string): boolean {
+  if (/^\s*import\b/.test(line)) return false;
+  return (DASH_MARKETING_SOURCE.test(line) && !DASH_WRAPPED.test(line)) || (LITERAL_HREF.test(line) && !DASH_OWN_HREF.test(line));
+}
+
+test("the dashboards host's sweep sees an unwrapped marketing link, and passes SITE_ORIGIN and its own two paths", () => {
+  for (const p of ["<a href={tierInfo(up).href}>", "href={info.href}", '<a href="/contact">', "<a href={`/help`}>Help centre</a>"]) assert.ok(dashMarketingOffenders(p), p);
+  for (const p of ["<a href={`${SITE_ORIGIN}${tierInfo(up).href}`}>", "href={`${SITE_ORIGIN}${info.href}`}", "<a href={`${SITE_ORIGIN}/help`}>Help centre</a>", '<a className="btn primary" href="/login">', '<Link href="/dashboards">']) assert.ok(!dashMarketingOffenders(p), p);
+});
+
+/**
+ * The floor: 6 call sites on 8 Oct 2026 - the plan card (Sidebar), the Add
+ * panel's pack (Clusters), the tier button (UpgradePrompt), setup's Book a
+ * call, login's See the plan and the error page's Tell us here - and 4 lines
+ * that build a marketing href from pricing.ts. A walk that stops matching finds
+ * neither, and would otherwise report a clean dashboard.
+ * 18 Oct 2026 (brief 2d): the walk is the dashboards host's now. Measured that day: 4 lines that build a marketing
+ * href from a tier (PlanCard twice, Nudges, Plan) plus the sidebar's Help centre, and 6 wrapped sites (Shell,
+ * PlanCard twice, Nudges, Plan, login's Not a customer yet). The floors stay 4 and 6.
+ */
 test("every dashboard link to the marketing site goes through siteHref", () => {
   const offenders: string[] = [];
   let sources = 0;
@@ -277,12 +315,12 @@ test("every dashboard link to the marketing site goes through siteHref", () => {
   for (const file of DASHBOARD.flatMap((d) => walk(d))) {
     const rel = file.slice(process.cwd().length + 1);
     for (const line of codeLines(readFileSync(file, "utf8"))) {
-      if (marketingOffenders(line)) offenders.push(`${rel}: ${line.trim().slice(0, 140)}`);
-      if (MARKETING_SOURCE.test(line) && !/^\s*import\b/.test(line)) sources += 1;
-      if (WRAPPED.test(line) && !/^\s*import\b/.test(line)) wrapped += 1;
+      if (dashMarketingOffenders(line)) offenders.push(`${rel}: ${line.trim().slice(0, 140)}`);
+      if (DASH_MARKETING_SOURCE.test(line) && !/^\s*import\b/.test(line)) sources += 1;
+      if (DASH_WRAPPED.test(line) && !/^\s*import\b/.test(line)) wrapped += 1;
     }
   }
-  assert.deepEqual(offenders, [], `a marketing link that 404s on the app host - wrap it in siteHref() from src/lib/app-host.ts:\n${offenders.join("\n")}`);
+  assert.deepEqual(offenders, [], `a marketing link that 404s on the dashboards host - prefix it with SITE_ORIGIN or wrap it in siteHref() from src/lib/app-host.ts:\n${offenders.join("\n")}`);
   assert.ok(sources >= 4, `only ${sources} marketing hrefs found in the dashboard; 4 is the recorded floor`);
-  assert.ok(wrapped >= 6, `only ${wrapped} siteHref() call sites in the dashboard; 6 is the recorded floor`);
+  assert.ok(wrapped >= 6, `only ${wrapped} SITE_ORIGIN or siteHref() sites in the dashboard; 6 is the recorded floor`);
 });

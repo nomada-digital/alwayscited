@@ -149,8 +149,30 @@ const SRC = read(HELP_SRC);
 const RUNS = code(SRC).split("\n").flatMap(proseRuns);
 const SLUGS = HELP.map((a) => a.slug);
 
-/** The dashboard's own code, comments cut: its pages, its components and the rules behind them. */
-const PRODUCT = ["src/app/app", "src/components/app", "src/lib/tracking"].flatMap((d) => walk(d)).map((f) => ({ f, src: code(read(f)) }));
+/**
+ * The dashboard's own code, comments cut: its pages, its components and the rules behind them.
+ * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, so the dashboard is the
+ * dashboards host's - src/app/dashboards, src/components/dash and src/lib/dash - beside src/lib/tracking as before
+ * (src/app/app and src/components/app are gone).
+ */
+const PRODUCT = ["src/app/dashboards", "src/components/dash", "src/lib/dash", "src/lib/tracking"].flatMap((d) => walk(d)).map((f) => ({ f, src: code(read(f)) }));
+
+/**
+ * 18 Oct 2026, brief 2d: controls the help names that only the retired /app pages drew. The dashboards host draws
+ * none of them, so these sentences in config/help.ts now describe a dashboard nobody can reach. Rewriting the help
+ * for the dashboards host is its own piece of work - public, client-facing copy - and is not done by deleting the
+ * pages it described. Recorded here rather than let rule 2 go red or stop reading: each entry is re-earned below
+ * (still named by the help, still drawn nowhere), so the list can only shrink, and a new label the dashboard does
+ * not draw still fails rule 2 exactly as before.
+ */
+const RETIRED_WITH_APP = new Set([
+  "Add a cluster", "Answers CSV", "Answers naming you", "Ask us to change these", "Ask us to pick one", "Cancel trial",
+  "Change keyword", "Check keyword", "Cited pages", "Cluster keywords on page 1", "Clusters in use", "Every check, day by day",
+  "Every daily check, by cluster", "Keywords CSV", "Latest answers", "Make editor", "Make viewer", "Move", "Names we match",
+  "Notes on this cluster", "Open cluster", "Other sites", "Pages the engines cite most", "Prompts you are named in",
+  "Reports", "Review and confirm", "Send invite", "Share of voice", "Sign out of every device", "Start tracking this cluster",
+  "Stop", "Who is named", "Who is named instead", "Who they see", "Yes, cancel the trial", "Your clusters", "Your site",
+]);
 
 type Block = HelpContent["articles"][number]["sections"][number]["blocks"][number];
 const blockText = (b: Block): string[] => (typeof b === "string" ? [b] : "list" in b ? b.list : b.steps);
@@ -185,14 +207,16 @@ test("the probes see what they are for", () => {
 });
 
 test("rule 2 fails on a renamed control, and a comment naming it does not stand in", () => {
-  const settings = PRODUCT.find((p) => p.f === "src/components/app/Settings.tsx");
-  assert.ok(settings, "Settings.tsx is not where this reads it");
-  assert.ok(drawn("Cancel trial", PRODUCT), "Settings draws Cancel trial today");
-  // The injected defect: Settings' Cancel trial renamed, in memory. Its doc
-  // comment and limits.ts's header still say "Cancel trial"; neither counts.
-  const renamed = settings.src.replace(">Cancel trial</summary>", ">End trial</summary>");
-  assert.notEqual(renamed, settings.src, "the Cancel trial summary is not where this renames it");
-  assert.ok(!drawn("Cancel trial", PRODUCT.map((p) => (p === settings ? { ...p, src: renamed } : p))), "a renamed Cancel trial must go missing");
+  // 18 Oct 2026, brief 2d: /app's Settings.tsx and its Cancel trial went with /app; the injected defect is now the
+  // dashboards host's Settings' Remove, which the help names and nothing else in the dashboard draws.
+  const settings = PRODUCT.find((p) => p.f === "src/app/dashboards/[client]/settings/page.tsx");
+  assert.ok(settings, "the dashboards host's Settings is not where this reads it");
+  assert.ok(drawn("Remove", PRODUCT), "Settings draws Remove today");
+  // The injected defect: Settings' Remove renamed, in memory. team.ts's doc
+  // comments still say "Remove"; they do not count.
+  const renamed = settings.src.replace(">Remove</button>", ">Take off</button>");
+  assert.notEqual(renamed, settings.src, "the Remove button is not where this renames it");
+  assert.ok(!drawn("Remove", PRODUCT.map((p) => (p === settings ? { ...p, src: renamed } : p))), "a renamed Remove must go missing");
   assert.ok(!drawn("Cancel trial", [{ src: code('/** "Cancel trial" (Danny) */\n{/* "Cancel trial": a confirm */}\n// >Cancel trial<\nconst x = 1;') }]), "a label in a comment is not drawn");
   assert.ok(drawn("Stop", [{ src: "{STOP_ICON}Stop</>" }]) && drawn("Sign out", [{ src: "<button>\n  Sign out\n</button>" }]) && drawn("Overview", [{ src: 'label: "Overview",' }]));
   assert.ok(!drawn("Stop", [{ src: '"Stop tracking this cluster"' }]), "a label inside a longer string is another control");
@@ -219,8 +243,14 @@ test("every number the help states is interpolated from the code, never typed", 
 });
 
 test("every control the help names is one the dashboard draws", () => {
-  const missing = [...new Set(uiLabels(SRC))].filter((label) => !drawn(label, PRODUCT));
+  const missing = [...new Set(uiLabels(SRC))].filter((label) => !drawn(label, PRODUCT) && !RETIRED_WITH_APP.has(label));
   assert.deepEqual(missing, [], `the help names a control the dashboard's code does not draw - rename it in ${HELP_SRC}:\n${missing.join("\n")}`);
+});
+
+test("every control recorded as retired with /app is still named by the help and still drawn nowhere (18 Oct 2026, brief 2d)", () => {
+  const labels = new Set(uiLabels(SRC));
+  const stale = [...RETIRED_WITH_APP].filter((label) => !labels.has(label) || drawn(label, PRODUCT));
+  assert.deepEqual(stale, [], "these are no longer named by the help, or the dashboard draws them again - take them off RETIRED_WITH_APP");
 });
 
 test("built with the trial off, the help names no trial; built on, it does", () => {

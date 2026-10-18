@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import SendNewLink from "@/app/app/auth/SendNewLink";
+import SendNewLink from "@/components/SendNewLink";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { MICRO, SHELL, T } from "@/config/tokens";
 import { doneEmail } from "@/lib/checkout/done-email";

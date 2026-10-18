@@ -21,10 +21,17 @@ import { test } from "node:test";
  * from 9 to 55 (62 files walked that day). The rest of src/lib/diy is other
  * packages' (spec 10 section 7.0); the shell widens the roots when they merge.
  */
-const ROOTS = ["src/components/app", "src/app/app", "src/lib/diy/changes", "src/lib/diy/ai"];
+/**
+ * 18 Oct 2026, brief 2d: moved here from src/components/app, which retired with /app (every /app address 308s to the
+ * dashboards host). src/components/app and src/app/app went with it; src/lib/diy/changes and src/lib/diy/ai remain,
+ * and the rule holds over them as before - 5 files walked that day, so the floor moves from 55 to 5, and each root
+ * must still walk at least one file. The dashboards host's tree was never under this census and is not added to it
+ * here: walked on 18 Oct 2026 it reads differently, which is a copy decision for its own change, not this one.
+ */
+const ROOTS = ["src/lib/diy/changes", "src/lib/diy/ai"];
 // data-figure="questions" is the figure's id, read by e2e/app specs, never shown.
 const IDENTIFIERS = [/figure: "questions"/];
-const FLOOR = 55;
+const FLOOR = 5;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -44,7 +51,7 @@ export function copyHits(src: string): string[] {
   return hits;
 }
 
-test("census: /app copy says prompts, never questions", () => {
+test("census: the DIY lines say prompts, never questions", () => {
   for (const r of ROOTS) assert.ok(walk(join(process.cwd(), r)).length > 0, `${r} walked no file`);
   const files = ROOTS.flatMap((r) => walk(join(process.cwd(), r)));
   assert.ok(files.length >= FLOOR, `walked ${files.length} files, floor ${FLOOR}`);

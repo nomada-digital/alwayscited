@@ -122,9 +122,14 @@ test("the past-due and unpaid fixture states draw their banners on the real fixt
   assert.equal(at("default"), null);
 });
 
-test("census: Sidebar draws the banner planBanner decides, and sends no referrer to an external page", () => {
-  const sidebar = readFileSync(new URL("../../components/app/Sidebar.tsx", import.meta.url), "utf8");
-  assert.ok(sidebar.includes("const banner = planBanner({"), "Sidebar no longer takes its banner from planBanner");
-  for (const copy of ["Tracking has ended for", "Free trial: ", "did not go through"]) assert.ok(!sidebar.includes(copy), `Sidebar writes banner copy of its own: ${copy}`);
-  assert.ok(sidebar.includes('rel={banner.link.external ? "noreferrer" : undefined}'));
+// 18 Oct 2026, brief 2d: the /app Sidebar (components/app/Sidebar.tsx) retired with /app; every /app address 308s to
+// the dashboards host. The rule holds there: pageData takes the banner from planBanner, signed in and on a view-as
+// link alike, and the Shell draws it with no copy of its own and no referrer to an external page.
+test("census: the dashboards Shell draws the banner planBanner decides, and sends no referrer to an external page", () => {
+  const data = readFileSync(new URL("../dash/page-data.ts", import.meta.url), "utf8");
+  assert.equal(data.match(/const banner = c \? planBanner\(\{/g)?.length, 2, "pageData no longer takes its banner from planBanner");
+  const shell = readFileSync(new URL("../../components/dash/Shell.tsx", import.meta.url), "utf8");
+  assert.ok(shell.includes("banner?: PlanBanner | null"), "the Shell no longer draws pageData's banner");
+  for (const src of [data, shell]) for (const copy of ["Tracking has ended for", "Free trial: ", "did not go through"]) assert.ok(!src.includes(copy), `banner copy written outside plan-banner.ts: ${copy}`);
+  assert.ok(shell.includes('{...(banner.link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}'));
 });

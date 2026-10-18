@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
@@ -48,34 +48,14 @@ test("loginHref carries the page and its query, encoded, and drops an unsafe one
   assert.equal(loginHref("//example.com"), "/app/login");
 });
 
-/** Census: every /app page that refuses a signed-out visitor sends them to the login page with next. */
-test("every /app/[client] page redirects signed-out visitors through loginHref", () => {
-  const root = join(import.meta.dirname, "../../app/app/[client]");
-  const pages: string[] = [];
-  const walk = (d: string) => {
-    for (const n of readdirSync(d)) {
-      const p = join(d, n);
-      if (statSync(p).isDirectory()) walk(p);
-      else if (n === "page.tsx") pages.push(p);
-    }
-  };
-  walk(root);
-  assert.ok(pages.length >= 8, `found ${pages.length} pages, floor 8`);
-  for (const p of pages) {
-    const s = readFileSync(p, "utf8");
-    assert.ok(!s.includes('redirect(appPath("/login"))'), `${p} drops the page it was asked for`);
-    // M1 (6 Oct 2026): the page the visitor was on is now built through
-    // appPath(), because on app.alwayscited.com it is `/tallyroo/named` and
-    // on the marketing host `/app/tallyroo/named`. The rule is unchanged -
-    // every page that refuses a signed-out visitor carries where they were.
-    assert.match(s, /if \(!email\) redirect\(loginHref\(appPath\(`\/\$\{\(await params\)\.client\}/, `${p} does not carry next`);
-  }
-});
-
+// 18 Oct 2026, brief 2d: "every /app/[client] page redirects signed-out visitors through loginHref" retired with /app.
+// It walked src/app/app/[client] (floor 8 pages), which is gone; every /app address 308s to the dashboards host, whose
+// pages refuse a signed-out visitor through pageData (client-pages.test.mts holds that). loginHref's own tests above
+// still hold, for the /api/app routes that build it.
 test("next is re-validated on every hop", () => {
   const read = (p: string) => readFileSync(join(import.meta.dirname, "../../app", p), "utf8");
-  assert.match(read("app/login/page.tsx"), /next=\{safeNext\(q\.next\)/);
+  // 18 Oct 2026, brief 2d: the two page hops, /app/login and /app/auth, retired with /app (every /app address 308s to
+  // the dashboards host); the two route hops remain and still re-validate.
   assert.match(read("api/app/login/route.ts"), /const next = safeNext\(body\.next\)/);
-  assert.match(read("app/auth/page.tsx"), /const next = safeNext\(rawNext\)/);
   assert.match(read("api/app/auth/route.ts"), /const next = safeNext\(form\?\.get\("next"\)\)/);
 });

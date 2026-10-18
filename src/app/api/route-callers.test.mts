@@ -243,16 +243,18 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
   {
     route: "/api/app/auth",
     method: "POST",
-    why: "Posted by the plain HTML form on /app/auth (the login link's button), which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/app/app/auth/page.tsx"), "utf8").includes('action="/api/app/auth"'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the plain HTML form on /app/auth (the login link's button); the dashboards host's /auth posts to /api/dash/auth instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("auth"),
   },
   {
     route: "/api/app/logout",
     method: "POST",
     // The sidebar moved out of /app/[client]/page.tsx into its own component
     // on 29 Sep 2026 (T4), so the parity fixture draws the same one.
-    why: "Posted by the plain HTML form in the dashboard sidebar, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Sidebar.tsx"), "utf8").includes('action="/api/app/logout"'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the plain HTML Sign out form in the /app sidebar; the dashboards host's sidebar posts to /api/dash/logout instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("logout"),
   },
   {
     route: "/api/dash/auth",
@@ -284,36 +286,41 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     route: "/api/app/[client]/stop",
     method: "POST",
     // BRIEF-3 T6 part 2b, 30 Sep 2026: stop and Undo on the Clusters page.
-    why: "Posted by the plain HTML stop and Undo forms on the Clusters page, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action: `/api/app/${encodeURIComponent(slug)}/stop`"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the stop and Undo forms on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("stop"),
   },
   {
     route: "/api/app/[client]/group",
     method: "POST",
     // R170 part 2, 2 Oct 2026: Move into a cluster on the Clusters page's ungrouped prompts.
-    why: "Posted by the plain HTML Move into a cluster form on the Clusters page's ungrouped prompts, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes('act.action.replace(/\\/stop$/, "/group")'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Move into a cluster form on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("group"),
   },
   {
     route: "/api/app/[client]/prompt",
     method: "POST",
     // BRIEF-3 T6 part 2c, 30 Sep 2026: the free slot on the Clusters page.
-    why: "Posted by the plain HTML free-slot form on the Clusters page, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes('act.action.replace(/\\/stop$/, "/prompt")'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the free-slot form on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("prompt"),
   },
   {
     route: "/api/app/[client]/edit",
     method: "POST",
     // BRIEF-3 T6 part 2d, 30 Sep 2026: the pending cluster editor's Save changes.
-    why: "Posted by the plain HTML pending-cluster editor on the Clusters page, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes('act.action.replace(/\\/stop$/, "/edit")'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the pending-cluster editor on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("edit"),
   },
   {
     route: "/api/app/[client]/note",
     method: "POST",
     // BRIEF-3 T7 part 4b, 30 Sep 2026: Add a note on the one-cluster page.
-    why: "Posted by the plain HTML Add a note form on the one-cluster page, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/app/app/[client]/clusters/[cluster]/page.tsx"), "utf8").includes("noteAction={`/api/app/${encodeURIComponent(slug)}/note`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Add a note form on the /app one-cluster page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("note"),
   },
   {
     route: "/api/app/[client]/report",
@@ -322,10 +329,9 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     // R97 part 4, 30 Sep 2026: also the placements screen's Download CSV (?kind=placements).
     // R151, 3 Oct 2026: the Overview's links go through `download`, which is `report` once the
     // range has readings - withheld with nothing read, as the Reports page already does.
-    why: "Opened by the Overview's Download report and Keywords CSV links (once the range has readings) and the placements screen's Download CSV (plain <a download>), which the fetch scanner does not read.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/app/app/[client]/page.tsx"), "utf8").includes("reportPath={`/api/app/${encodeURIComponent(slug)}/report`}") &&
-      readFileSync(join(ROOT, "src/components/app/Overview.tsx"), "utf8").includes('href={download("answers")} download'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the /app Overview's and placements screen's CSV links, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("report"),
   },
   {
     route: "/api/app/[client]/ask",
@@ -334,66 +340,77 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     // DS16, 2 Oct 2026: the action now carries the page's view in its query (fact moved).
     // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): also "Suggest this to your account lead" on one
     // opportunity, kind=opportunity&id=<uuid> and nothing typed (paths.ts oppAskAction).
-    why: "Posted by the plain HTML Ask us to pick one form in the Clusters page's Add panel, and the Suggest this to your account lead form on one opportunity, which the fetch scanner does not read.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/ask${view ? `?${view}` : \"\"}`}") &&
-      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/ask${query({ kind: \"opportunity\", id })}`;") &&
-      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes("action={oppAskAction(p.slug, p.id)}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the /app Clusters page's Ask us to pick one and one opportunity's Suggest this to your account lead (paths.ts oppAskAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("ask", ["oppAskAction"]),
   },
   {
     route: "/api/app/[client]/hide",
     method: "POST",
     // BRIEF-2 T11 part 5, 30 Sep 2026: the upgrade prompt's x, "Hide for 30 days".
-    why: "Posted by the plain HTML Hide for 30 days form in UpgradePrompt, which the fetch scanner does not read.",
     // DS16, 2 Oct 2026: the action carries the Clusters view (`kept`); fact moved.
-    earns: () => readFileSync(join(ROOT, "src/components/app/UpgradePrompt.tsx"), "utf8").includes("action={`${api}/hide${kept}`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was UpgradePrompt's Hide for 30 days form on the /app pages, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("hide"),
   },
   {
     route: "/api/app/[client]/check",
     method: "POST",
     // BRIEF-3 T6 part 3b, 30 Sep 2026: Check keyword in Add a cluster.
-    why: "Posted by the plain HTML Check keyword form in the Clusters page's Add panel, which the fetch scanner does not read.",
     // DS15, 2 Oct 2026: the action carries the page's view as a query, so the literal ends `/check${view ...`.
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/check${view ? `?${view}` : \"\"}`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Check keyword form in the /app Clusters page's Add panel, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("check"),
   },
   {
     route: "/api/app/[client]/setup",
     method: "POST",
     // R166 part 3b, 1 Oct 2026: step 3's Confirm on the setup page.
-    why: "Posted by the plain HTML Confirm form on /app/[client]/setup, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/app/app/[client]/setup/page.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/setup`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Confirm form on /app/[client]/setup; the dashboards host's setup posts to /api/dash/[client]/setup/finish instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("setup"),
   },
   {
     route: "/api/app/[client]/cluster",
     method: "POST",
     // BRIEF-3 T6 part 3c, 30 Sep 2026: Start tracking this cluster.
-    why: "Posted by the plain HTML step 2 form in the Clusters page's Add panel, which the fetch scanner does not read.",
     // DS15, 2 Oct 2026: as /check above, the action carries the page's view.
-    earns: () => readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/cluster${view ? `?${view}` : \"\"}`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was step 2 of the /app Clusters page's Add panel, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("cluster"),
   },
   {
     route: "/api/app/[client]/keyword",
     method: "POST",
     // R179, 2 Oct 2026: Use this keyword, after a pending cluster's Change keyword passes - on a setup card and on Clusters.
-    why: "Posted by the plain HTML Use this keyword forms on a setup card and a pending Clusters card, which the fetch scanner does not read.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/app/app/[client]/setup/page.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/keyword?") &&
-      readFileSync(join(ROOT, "src/components/app/Clusters.tsx"), "utf8").includes('route("/keyword")'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Use this keyword forms on the /app setup and Clusters pages; the dashboards host's setup posts to /api/dash/[client]/setup/keyword instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("keyword"),
   },
   {
     route: "/api/app/[client]/member",
     method: "POST",
     // R142 part 2, 1 Oct 2026 (BRIEF-4 P2 Team): invite, change a role, remove.
-    why: "Posted by the plain HTML Invite someone, Make editor/viewer and Remove forms on Settings, which the fetch scanner does not read.",
+    why: "Posted by the plain HTML Invite someone and Remove forms on the dashboards host's Settings, which the fetch scanner does not read.",
     // DS40, 2 Oct 2026: the action now carries the page's stated range (`keep`), so the 303 lands back on it.
-    earns: () => readFileSync(join(ROOT, "src/components/app/Settings.tsx"), "utf8").includes("const action = `/api/app/${encodeURIComponent(slug)}/member${keep}`;"),
+    // 18 Oct 2026, brief 2d: /app retired; the dashboards host's Settings draws the Invite and Remove forms now (fact moved).
+    earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/settings/page.tsx"), "utf8").includes("action={`/api/app/${slug}/member`}"),
   },
   {
     route: "/api/app/[client]/trial",
     method: "POST",
     // 8 Oct 2026: the alwaystracked trial's Cancel trial, owners only, built dark.
-    why: "Posted by the plain HTML Cancel trial confirm form in Settings > Billing, which the fetch scanner does not read.",
-    earns: () => readFileSync(join(ROOT, "src/components/app/Settings.tsx"), "utf8").includes("action={`/api/app/${encodeURIComponent(slug)}/trial`}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Cancel trial form in /app Settings > Billing; the dashboards host's Settings draws none, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("trial"),
+  },
+  {
+    route: "/api/app/[client]/event",
+    method: "POST",
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. UsageBeacon's fetch was the
+    // caller and went with src/components/app, so the fetch scanner no longer finds one; the reason is recorded here.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was UsageBeacon's keepalive fetch on the /app pages, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("event"),
   },
   {
     route: "/api/checkout",
@@ -436,66 +453,49 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     route: "/api/app/[client]/plan",
     method: "POST",
     // 13 Oct 2026, DIY P5 (P3's handoff, spec 10 section 3.6): every form on Actions and on the Overview's This week.
-    why: "Posted by the plain HTML forms on Actions and on the Overview's This week, which the fetch scanner does not read; paths.ts builds every one of their actions.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/lib/diy/plan/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/plan${query(keep)}`;") &&
-      readFileSync(join(ROOT, "src/components/app/plan/PlanCard.tsx"), "utf8").includes("planAction(slug, { ...keep, id: item.id })") &&
-      readFileSync(join(ROOT, "src/components/app/plan/ThisWeek.tsx"), "utf8").includes("action={planAction(slug, { ...at, id: item.id })}") &&
-      readFileSync(join(ROOT, "src/components/app/plan/AddTask.tsx"), "utf8").includes("action={planAction(slug, keep)}"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Actions and the /app Overview's This week (paths.ts planAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("plan", ["planAction"]),
   },
   {
     route: "/api/app/[client]/keywords",
     method: "POST",
     // 13 Oct 2026, DIY P9 (P6's handoff, spec 10 section 3.6): gaining ground's Dismiss, Restore and the toast's Undo on Google.
-    why: "Posted by the plain HTML Dismiss, Restore and Undo forms in gaining ground on the Google page, which the fetch scanner does not read.",
-    earns: () => {
-      const src = readFileSync(join(ROOT, "src/components/app/google/GainingGround.tsx"), "utf8");
-      return src.includes("const route = `/api/app/${encodeURIComponent(p.slug)}/keywords?${new URLSearchParams(p.keep)}`;") && src.includes('<form method="post" action={route}');
-    },
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was gaining ground's Dismiss, Restore and Undo on the /app Google page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("keywords"),
   },
   {
     route: "/api/app/[client]/opportunity",
     method: "POST",
     // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): every status form, Log a site and Verify now on Opportunities.
-    why: "Posted by the plain HTML status, Log a site and Verify now forms on Opportunities and one opportunity, which the fetch scanner does not read; paths.ts oppAction builds every one of their actions.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/opportunity${query(q)}`;") &&
-      readFileSync(join(ROOT, "src/components/app/opportunities/Opportunities.tsx"), "utf8").includes("action={oppAction(p.slug, p.keep)}") &&
-      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes('const action = oppAction(p.slug, { id: p.id, at: "detail" });'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the status, Log a site and Verify now forms on /app Opportunities (paths.ts oppAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("opportunity", ["oppAction"]),
   },
   {
     route: "/api/app/[client]/prompt-offer",
     method: "POST",
     // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 sections 3.6 and 6.7): the prompt step on one opportunity - add, swap, undo, watch.
-    why: "Posted by the plain HTML prompt step and swap picker forms on one opportunity, which the fetch scanner does not read; paths.ts promptOfferAction builds their action.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/lib/diy/opportunities/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/prompt-offer${query({ id })}`;") &&
-      readFileSync(join(ROOT, "src/components/app/opportunities/OppDetail.tsx"), "utf8").includes("const offer = promptOfferAction(p.slug, p.id);"),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the prompt step on one /app opportunity (paths.ts promptOfferAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("prompt-offer", ["promptOfferAction"]),
   },
   {
     route: "/api/app/[client]/links",
     method: "POST",
     // 13 Oct 2026, DIY P10 (spec 10 section 3.6): Show the next 5, Pursue and Check a link on Links.
-    why: "Posted by the plain HTML Show the next 5, Pursue and Check a link forms on Links, which the fetch scanner does not read; paths.ts linksAction builds every one of their actions.",
-    earns: () => {
-      const links = readFileSync(join(ROOT, "src/components/app/links/Links.tsx"), "utf8");
-      return (
-        readFileSync(join(ROOT, "src/lib/diy/links/paths.ts"), "utf8").includes("return `/api/app/${encodeURIComponent(slug)}/links${query({ view: keep.view })}`;") &&
-        links.includes("action={linksAction(slug, { view })}") &&
-        links.includes('action={linksAction(p.slug, { view: "targets" })}') &&
-        links.includes('action={linksAction(p.slug, { view: "check" })}')
-      );
-    },
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Links (paths.ts linksAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("links", ["linksAction"]),
   },
   {
     route: "/api/app/[client]/pages",
     method: "POST",
     // 13 Oct 2026, DIY P9 (P8's handoff, spec 10 section 3.6): add, remove, check, example and Add to Actions on Your pages.
-    why: "Posted by the plain HTML forms on Your pages and one key page (Add page, Remove, Check this page now, Draft an example, Add to Actions), which the fetch scanner does not read; paths.ts pagesAction builds every one of their actions.",
-    earns: () =>
-      readFileSync(join(ROOT, "src/lib/diy/pages/paths.ts"), "utf8").includes("const base = `/api/app/${encodeURIComponent(slug)}/pages`;") &&
-      readFileSync(join(ROOT, "src/components/app/pages/KeyPagesList.tsx"), "utf8").includes("const action = pagesAction(slug, keep);") &&
-      readFileSync(join(ROOT, "src/components/app/pages/SchemaPanel.tsx"), "utf8").includes('const action = pageAction(slug, pageId, "schema");'),
+    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
+    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Your pages and one key page (paths.ts pagesAction and pageAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
+    earns: () => orphanedByAppRetirement("pages", ["pagesAction", "pageAction"]),
   },
   {
     route: "/api/verify/[vtoken]",
@@ -544,6 +544,27 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => true,
   },
 ];
+
+/**
+ * 18 Oct 2026, brief 2d: /app is retired and every /app address 308s to the
+ * dashboards host, so the /api/app routes only its pages posted to have no
+ * caller. The reason is earned, not trusted: no live page or component (src/app
+ * outside src/app/api, and src/components) has a line naming `/api/app` and
+ * the route's last segment, nor calls a lib builder that made its action. The
+ * moment one does, the entry is stale and says so.
+ */
+function orphanedByAppRetirement(segment: string, builders: string[] = []): boolean {
+  const live = [...walk("src/app").filter((f) => !f.startsWith("src/app/api/")), ...walk("src/components")].filter(
+    (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f),
+  );
+  if (live.length < 50) return false; // the walk has drifted, and a blind walk earns nothing
+  const seg = new RegExp(`/${segment}(?![\\w-])`);
+  return live.every((f) => {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    if (builders.some((b) => new RegExp(`\\b${b}\\(`).test(src))) return false;
+    return !src.split("\n").some((l) => l.includes("/api/app") && seg.test(l));
+  });
+}
 
 function declaredCron(path: string): boolean {
   const json = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8")) as {

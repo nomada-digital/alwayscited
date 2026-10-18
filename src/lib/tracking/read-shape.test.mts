@@ -383,17 +383,9 @@ test("census DB-2: the panel's read is read-shape.ts's in Supabase and on the fi
   assert.match(repo, /answerDay: loadAnswerDay/);
   assert.match(repo, /return shapeAnswerDay\(stored, plan\);/);
   assert.match(repo, /if \(clientId !== f\.client\.id\) return \{ day: null, rows: \[\] \};\n[^]*?return shapeAnswerDay/, "the fixture answers only its own client");
-  // The scoping: the client is the session's member client, the prompt one of this cluster's, the day the only thing the URL moves.
-  const page = src("../../app/app/[client]/clusters/[cluster]/page.tsx");
-  for (const line of [
-    "const client = clients.find((c) => c.slug === slug);",
-    "const picked = detail.card.prompts[prompt];",
-    "const day = pickedDay(sp.day, today);",
-    'picked && detail.card.status !== "pending" ? repo.answerDay(client.id, dayPlan(picked.id, range.to, day)) : null,',
-  ]) {
-    assert.ok(page.includes(line), `the one-cluster page: "${line}" is gone`);
-  }
-  assert.equal((page.match(/repo\.answerDay\(/g) ?? []).length, 1, "one panel read");
+  // 18 Oct 2026, brief 2d: the page half - the /app one-cluster page scoping the panel's read to the session's member
+  // client, one of this cluster's prompts and the URL's day - retired with /app; every /app address 308s to the
+  // dashboards host, whose answer views read through lib/dash (clickthrough.test.mts). The read's own shape holds.
 });
 
 test("census: loadOverview takes its plan, prompts and read from read-shape.ts, and the fixture repo its shapeRead", () => {
@@ -618,21 +610,10 @@ const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
  */
 const WHOLE = /data\.answers|(?<![-\w.])data\b(?![-\w.]|\s*[:=])/g;
 const USES: { what: string; path: string; use: RegExp; binds: number; lines: [page: string, compared: string][] }[] = [
-  {
-    what: "the one-cluster page",
-    path: "../../components/app/OneCluster.tsx",
-    use: WHOLE,
-    binds: 1,
-    lines: [
-      ["answers: data.answers, serp: data.serp, range, before, today, engines", "chart: clusterChart(input, id)"],
-      ["promptStrip({ answers: data.answers", "promptStrip({ answers: data.answers, range, engines }, p.id)"],
-      ["promptBrands({ answers: data.answers", "promptBrands({ answers: data.answers, range }, p.id, f.client.brand)"],
-      // 8 Oct 2026 (merge of audit packages A and C): the picked prompt's unread brand answers - its own answers, inside the narrow read.
-      ["brandGaps(data.answers.filter((a) => a.question_id === P.id), range)", "brandGaps(data.answers.filter((a) => a.question_id === p.id), range)"],
-      // 8 Oct 2026 (review of the integration): the range's lost checks, on the days the cluster's prompts were asked.
-      ["runNote(data, range, today, { askedOn })", "note: runNote(data, range, f.today, { askedOn: askedOnFor(data.questions, id) })"],
-    ],
-  },
+  // 18 Oct 2026, brief 2d: the one-cluster page (components/app/OneCluster.tsx), Who is named
+  // (components/app/Named.tsx) and Reports (app/app/[client]/reports/page.tsx) retired with /app - every /app address
+  // 308s to the dashboards host - and their entries went with them. The placements screen still reads for the
+  // report route's placements CSV.
   {
     what: "the placements screen",
     path: "./placements-screen.ts",
@@ -644,34 +625,6 @@ const USES: { what: string; path: string; use: RegExp; binds: number; lines: [pa
       ["cites: citeRows(data.answers)", "cites: citeRows(data.answers), engines"],
       // 13 Oct 2026, DIY P2: the first-cited line on each live placement (spec 10 section 4.11), from the same cluster's cites.
       ["placementFirstCited(rows, cluster.id, citeRows(data.answers)", "placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines)"],
-    ],
-  },
-  {
-    // 13 Oct 2026 (dashboard speed, payload): brands without citations while no row is open.
-    what: "Who is named",
-    path: "../../components/app/Named.tsx",
-    use: WHOLE,
-    binds: 1,
-    lines: [
-      ["questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today, engines", "keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today: f.today, engines })"],
-      ["namedPage({ answers: data.answers, range, before, you: brand, only, engine })", "const page = namedPage({ answers: data.answers, range, before, you, only, engine });"],
-      ["brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)", "gap: brandGapNote(brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)),"],
-      ["runNote(data, range, today)", "partial: runNote(data, range, f.today),"],
-      ["ungroupedRead(data.questions, data.answers, range)", "loose: picked || !cards.length ? 0 : ungroupedRead(data.questions, data.answers, range),"],
-      ["namedEvidence({ answers: data.answers, range, key: r.key, you: brand, only, engine, engines })", "namedEvidence({ answers: data.answers, range, key: r.key, you, only, engine, engines })"],
-      // Open rows only, which read the whole answer: compared as that rule, not as a figure.
-      ["citedWithBrand({ answers: data.answers, range, key: r.key, you: brand, domain, only, engine })", 'assert.equal(namedRead(r.key), "full");'],
-    ],
-  },
-  {
-    what: "Reports",
-    path: "../../app/app/[client]/reports/page.tsx",
-    use: /(?<![-\w])data\b(?!\.clusters)/g,
-    binds: 1,
-    lines: [
-      ["monthFigures(monthSlice(data, m.range)", "monthFigures(monthSlice(narrow, m.range), m.range, opts)"],
-      // 8 Oct 2026 (merge of audit packages B and C): the range's lost checks, compared above on the verdicts read.
-      ["note={runNote(data, range, today)}", "assert.equal(runNote(narrow, range, f.today), note"],
     ],
   },
 ];
@@ -690,16 +643,10 @@ test("census: the pages on a narrow read use their answers only where compared a
     const expected = lines.length + binds;
     assert.equal(hits, expected, `${what} uses its answers ${hits} times, ${expected} recorded`);
   }
-  const reports = src("../../app/app/[client]/reports/page.tsx");
-  assert.match(reports, /\{ answers: "verdicts" \}/);
   assert.match(src("./placements-screen.ts"), /\{ answers: "cites", cluster: cluster\.id, structure \}/);
-  assert.match(src("../../app/app/[client]/clusters/[cluster]/page.tsx"), /\{ cluster: id \}/);
-  assert.match(src("../../app/app/[client]/named/page.tsx"), /const open = openKey\(sp\.open\);[\s\S]*\{ answers: namedRead\(open\) \}[\s\S]*open=\{open\}/);
-  for (const p of ["settings", "setup"]) {
-    const page = src(`../../app/app/[client]/${p}/page.tsx`);
-    assert.doesNotMatch(page, /loadOverview\(/, `${p} reads answers again`);
-    assert.match(page, /repo\.structure\(client\.id\)/);
-  }
+  // 18 Oct 2026, brief 2d: the /app pages' narrow reads (Reports' verdicts, one cluster's, Who is named's, and Settings
+  // and setup reading no answers) retired with /app; every /app address 308s to the dashboards host.
+  assert.ok(USES.length >= 1, "the census reads no page");
 });
 
 /**
@@ -760,11 +707,7 @@ test("rangeFrom applies the floor, and every page and the CSV route pass it the 
   assert.match(data, /boundStated\(\{ from, to \}, today, startedOn\)/, "rangeFrom no longer bounds a stated range");
   assert.match(src("../../app/api/app/[client]/report/route.ts"), /rangeFrom\(Object\.fromEntries\(sp\), repo\.today\(\), client\.started_on\)/);
   assert.match(src("./placements-screen.ts"), /rangeFrom\(sp, today, client\.started_on \?\? null\)/);
-  let calls = 0;
-  for (const p of ["", "/clusters", "/clusters/[cluster]", "/named", "/cited", "/reports"]) {
-    const page = src(`../../app/app/[client]${p}/page.tsx`);
-    assert.match(page, /rangeFrom\(sp, today, client\.started_on\)/, `${p || "/"} reads its range without the client's start`);
-    calls++;
-  }
-  assert.equal(calls, 6);
+  // 18 Oct 2026, brief 2d: the six /app pages that read a stated range (the overview, Clusters, one cluster, Who is
+  // named, Cited pages and Reports; floor 6) retired with /app - every /app address 308s to the dashboards host, whose
+  // pages take no stated range. The CSV route and the placements screen above are rangeFrom's callers now.
 });

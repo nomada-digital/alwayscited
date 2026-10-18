@@ -149,11 +149,9 @@ test("8 Oct 2026 (audit ia-3): the Overview's card reads answers naming each bra
   for (const r of page.rows) assert.equal(r.reach.num, r.answers, r.name);
   // Review of audit ia-3 (8 Oct 2026): the card is whoIsNamedCard - Who is named's rows on the headline's own
   // answers (the call this pinned counted every answer; see the pending-cluster test below).
-  const src = readFileSync(new URL("../../components/app/Overview.tsx", import.meta.url), "utf8");
-  assert.match(src, /whoIsNamedCard\(\{ answers: data\.answers, range, before: o\.compare, you: brand, only: byCluster \? byCluster\.ids : null, lfl: byCluster \? byCluster\.lflIds : lflIds \}\)/, "the card is built from Who is named's rows, on the headline's basis");
-  assert.match(src, /const leader = \[\.\.\.who\.page\.rows\]/, "the leader line reads the card's rows");
-  assert.match(src, /const whoPage = who\.page;\n  const whoLfl = who\.change;/);
-  assert.ok(!src.includes("brandBoard(") && !src.includes("namedPage("), "not a second count of its own");
+  // 18 Oct 2026, brief 2d: the page half (the /app Overview building its card with whoIsNamedCard and no count of its
+  // own) retired with /app; every /app address 308s to the dashboards host, which draws no such card. The figures
+  // above and whoIsNamedCard's tests below still hold.
 });
 
 /** The Overview's headline inputs for one fixture variant: the summary when it reads by cluster, and the flat like-for-like prompts. */

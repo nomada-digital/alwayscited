@@ -93,25 +93,30 @@ test("every usage event has a sender, bar the recorded exemption", async () => {
       else if (/\.tsx?$/.test(e.name) && !/\.test\./.test(e.name)) files.push(p);
     }
   };
-  for (const d of ["app/app", "app/api/app", "components/app"]) walk(join(root, d));
-  assert.ok(files.length >= 30, `walked ${files.length} files, floor 30`);
+  // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. src/app/app and
+  // src/components/app went with it - the beacon (UsageBeacon), every data-usage control and panel, UpgradePrompt's
+  // data-usage-shown and the copy buttons (CopyButton, CopyBlock) - so the walk is the routes and the dashboards
+  // host's tree. 93 files that day; the floor moves from 30 to 80.
+  for (const d of ["app/api/app", "app/dashboards", "components/dash", "lib/dash"]) walk(join(root, d));
+  assert.ok(files.length >= 80, `walked ${files.length} files, floor 80`);
   const src = files.map((f) => readFileSync(f, "utf8")).join("\n");
   // No range control exists yet: the date on /app is display only (30 Sep 2026).
   const EXEMPT: Record<string, string> = { range_change: "no range picker is built; the date range is display only" };
-  // 13 Oct 2026, DIY P9: a copy button's event is a prop - CopyButton's and CopyBlock's `usage="<event>"` - which
-  // each draws as `data-usage={usage}` on its button, so the beacon sends it on the click. The pass-through is
-  // asserted here, so a component that stops drawing it stops counting as a sender.
-  const COPIERS = ["components/app/opportunities/CopyButton.tsx", "components/app/pages/CopyBlock.tsx"];
-  for (const c of COPIERS) assert.ok(readFileSync(join(root, c), "utf8").includes("data-usage={usage}"), `${c} no longer draws its usage prop as data-usage`);
+  // 18 Oct 2026, brief 2d: the events only /app's pages sent. The dashboards host sends no usage event, so each of
+  // these is a column /admin/tracking/usage shows as zero from today - recorded, not hidden: each is re-earned
+  // below (still no sender), so the list can only shrink as the dashboards host takes events up.
+  const RETIRED_WITH_APP: string[] = ["view", "compare_change", "engine_toggle", "add_open", "add_abandon", "detail_open", "placement_select", "cta_shown", "cta_click", "ai_filter", "gaining_track", "brief_copy", "fix_copy", "example_copy"];
   const sent = (e: string) =>
     src.includes(`data-usage="${e}"`) ||
     src.includes(`usage="${e}"`) ||
     src.includes(`"${e}"`) && (src.includes(`event: "${e}"`) || new RegExp(`event: [^,}]*"${e}"`).test(src)) ||
     (e === "view" && src.includes('send(slug, "view")')) ||
     (e === "cta_shown" && src.includes("data-usage-shown={cta}"));
-  const missing = USAGE_EVENTS.filter((e) => !sent(e) && !EXEMPT[e]);
+  const missing = USAGE_EVENTS.filter((e) => !sent(e) && !EXEMPT[e] && !RETIRED_WITH_APP.includes(e));
   assert.deepEqual(missing, []);
   for (const e of Object.keys(EXEMPT)) assert.ok(!sent(e), `${e} now has a sender: drop its exemption`);
+  for (const e of RETIRED_WITH_APP) assert.ok(!sent(e), `${e} has a sender again: take it off RETIRED_WITH_APP`);
+  for (const e of RETIRED_WITH_APP) assert.ok((USAGE_EVENTS as readonly string[]).includes(e), `${e} is no longer a usage event: take it off RETIRED_WITH_APP`);
 });
 
 test("the app host's unprefixed paths are read in their /app form (M1, 9 Oct 2026)", () => {

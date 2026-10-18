@@ -93,13 +93,9 @@ test("census: /admin/tracking flags a live branded prompt in both lists", () => 
   assert.match(page, /names the brand/);
 });
 
-test("census: the Clusters page chips a branded prompt in its list and in the pending editor (R133)", () => {
-  const src = read("src/components/app/Clusters.tsx");
-  const chips = [...src.matchAll(/subject && namesBrandIn\(p\.text, subject\) \? <BrandedChip \/> : null/g)].length;
-  assert.equal(chips, 2, `${chips} chip sites; the prompt rows and the pending editor`);
-  assert.match(src, /\{BRANDED_CHIP\}/, "the label comes from limits.ts");
-  assert.match(read("src/app/app/[client]/clusters/page.tsx"), /subject=\{\{ brand: client\.brand, domain: client\.domain \}\}/, "the page hands the Clusters list the brand");
-});
+// 18 Oct 2026, brief 2d: "census: the Clusters page chips a branded prompt in its list and in the pending editor (R133)"
+// retired with /app - it held components/app/Clusters.tsx and the /app Clusters page, both gone; every /app address
+// 308s to the dashboards host, whose prompt editor draws no branded chip. The write-side rules above still hold.
 
 test("census probe: a text write, a brand check before a write and one after each read as they should", () => {
   assert.deepEqual(textWrites(`await db.from("tracked_questions").insert(rows);`).length, 1);

@@ -21,17 +21,22 @@ import { test } from "node:test";
  *
  * Floor: the component's heading and its five column heads, so a file that
  * moves or empties fails here instead of reading clean.
+ *
+ * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards
+ * host. The rule still holds for its live equivalent, the dashboards host's
+ * Sources ("What AI reads") and one source, so the census reads those two
+ * pages now; the floor is that page's heading and its five column heads.
  */
 
 const ROOT = join(import.meta.dirname, "..", "..");
-const FILES = ["src/components/app/Cited.tsx", "src/app/app/[client]/cited/page.tsx"];
+const FILES = ["src/app/dashboards/[client]/sources/page.tsx", "src/app/dashboards/[client]/sources/[domain]/page.tsx"];
 const BANNED = /[$£€]\s?\d|\bprices?\b|\bpricing\b|\bcosts?\b|\bmarketplaces?\b|\bdifficulty\b|\bDR\b|domain rating|\bplace (?:this|it|here)\b|could place/gi;
 // Imports go too: page.tsx imports trackingPackPrice from "@/config/pricing" for the sidebar's pack line.
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1").replace(/^import [\s\S]*?;$/gm, "");
 
-test("Cited pages names no price, marketplace, difficulty, DR or 'you could place this'", () => {
+test("Sources (once Cited pages) names no price, marketplace, difficulty, DR or 'you could place this'", () => {
   const src = Object.fromEntries(FILES.map((f) => [f, stripComments(readFileSync(join(ROOT, f), "utf8"))]));
-  for (const head of ["Cited pages", "Times cited", "Engines", "Prompts", "Your site", "Placement"]) {
+  for (const head of ["What AI reads", "Site", "Cited in", "Pages", "Prompts", "Engines"]) {
     assert.ok(src[FILES[0]!]!.includes(head), `${FILES[0]} no longer draws "${head}" - the census is reading the wrong file`);
   }
   const hits: string[] = [];
