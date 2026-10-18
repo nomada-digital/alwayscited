@@ -1,3 +1,4 @@
+import { AUDIENCES } from "@/config/keyword-audience";
 import { dashEmail } from "@/lib/dash/access";
 import { dashFixturePath } from "@/lib/dash/fixture";
 import { fillDifficulty, research } from "@/lib/dash/research";
@@ -19,7 +20,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
   const email = await dashEmail();
   if (!email) return Response.json({ ok: false, message: "Your session has ended. Sign in again." }, { status: 401 });
   if (dashFixturePath()) return Response.json({ ok: false, message: "Keyword research is not available on a local snapshot." }, { status: 409 });
-  const body = (await req.json().catch(() => null)) as { seed?: unknown; kind?: unknown; difficulty?: unknown } | null;
+  const body = (await req.json().catch(() => null)) as { seed?: unknown; kind?: unknown; difficulty?: unknown; audience?: unknown } | null;
   const clients = await clientsFor(email).catch(() => null);
   const c = clients?.find((x) => x.slug === slug);
   if (!c) return Response.json({ ok: false, message: "Not found." }, { status: 404 });
@@ -34,6 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
   }
   const seed = typeof body?.seed === "string" ? body.seed.slice(0, 200) : "";
   const kind = body?.kind === "related" ? "related" : "suggestions";
-  const r = await research(db, { clientId: c.id, market: c.market, member: email, seed, kind, today });
+  const audience = AUDIENCES.find((a) => a === body?.audience) ?? "all";
+  const r = await research(db, { clientId: c.id, market: c.market, member: email, seed, kind, today, audience });
   return Response.json(r, { status: r.ok ? 200 : 429 });
 }
