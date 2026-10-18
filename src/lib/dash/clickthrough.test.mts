@@ -14,7 +14,7 @@ test("highlight: the client's names and the named competitors are marked, whole 
   const segs = highlight("Try Michael Page Life Sciences, Acme or acmeville.", ["Acme"], ["Michael Page", "Michael Page Life Sciences"]);
   assert.deepEqual(segs.filter((s) => s.mark).map((s) => [s.text, s.mark]), [["Michael Page Life Sciences", "rival"], ["Acme", "you"]]);
   assert.equal(highlight("ok", ["ab"], []).length, 1, "names under 3 characters are never matched");
-  assert.deepEqual(ownNames({ brand: null, domain: "www.meetlifesciences.com" }), ["meetlifesciences.com", "meetlifesciences"]);
+  assert.deepEqual(ownNames({ brand: null, domain: "www.exampleclient.com" }), ["exampleclient.com", "exampleclient"]);
 });
 
 test("answerDiff: named gained or lost, brands and sources in and out", () => {
