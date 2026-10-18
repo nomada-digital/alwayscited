@@ -294,7 +294,7 @@ test("trigger jsonb is written: the hide and ask routes record the surface the p
   const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
   assert.match(read("app/api/app/[client]/hide/route.ts"), /recordHidden\(supabaseAdmin\(\), \{[^}]*trigger: upgradeTrigger\(surface\) \}\)/);
   assert.match(read("app/api/app/[client]/ask/route.ts"), /trigger: upgradeTrigger\(surface \?\? "clusters", \{ items: String\(items\.length\) \}\)/);
-  // And the prompt carries it: the component puts `surface` in both actions' query, and /ai says "ai".
-  assert.match(read("components/app/UpgradePrompt.tsx"), /new URLSearchParams\(\{ \.\.\.keep, surface \}\)/);
-  assert.match(read("components/app/ai/AiVisibility.tsx"), /<UpgradePrompt [^\n]*surface="ai" \/>/);
+  // 18 Oct 2026, brief 2d: the prompt half - UpgradePrompt putting `surface` in both actions' query and /ai saying "ai"
+  // (src/components/app) - retired with /app; every /app address 308s to the dashboards host, which draws no
+  // UpgradePrompt. The routes still record what a posted surface says.
 });

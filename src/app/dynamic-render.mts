@@ -198,7 +198,6 @@ export const STATES: Record<string, State> = {
   "/dashboards/[client]/settings": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/alwaystracked": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/sources": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
-  "/app/login": { urls: ["/app/login", "/app/login?link=expired"] },
   // 29 Sep 2026, R91: the order form. Tracked, a placements tier before a
   // sector is picked, one priced with an error back from the route, and one
   // past ten clusters (a call). No database and no Stripe call either way.
@@ -213,57 +212,7 @@ export const STATES: Record<string, State> = {
   // Stripe's success URL; the Session id is not read, so a made-up one renders the same page.
   // 1 Oct 2026, R148 pass 8: plan and from=scan pick the copy, so the from-scan state renders too.
   "/checkout/done": { urls: ["/checkout/done", "/checkout/done?session=cs_placeholder", "/checkout/done?session=cs_placeholder&plan=tracked&from=scan"] },
-  "/app/auth": {
-    urls: ["/app/auth", "/app/auth?token=0000000000000000000000000000000000000000000000000000000000000000"],
-  },
-  // With no session it redirects to /app/login, which the capture follows.
-  "/app": { urls: ["/app"] },
-  // Same: with no session a client slug redirects to /app/login. The signed-in
-  // render needs a session cookie and a client row, which the capture has not.
-  "/app/[client]": { urls: ["/app/example"] },
-  // 30 Sep 2026, T6 part 1: the Clusters page, same session rule as the overview.
-  "/app/[client]/clusters": { urls: ["/app/example/clusters"] },
-  // 30 Sep 2026, T7 part 2b: one cluster, same session rule.
-  "/app/[client]/clusters/[cluster]": { urls: ["/app/example/clusters/c1", "/app/example/clusters/c1?prompt=1"] },
-  // 30 Sep 2026, R97 part 3 (T13): the placements screen, same session rule.
-  "/app/[client]/placements": { urls: ["/app/example/placements", "/app/example/placements?cluster=c1"] },
-  // 1 Oct 2026, R142 (BRIEF-4 P2): Settings, same session rule.
-  "/app/[client]/settings": { urls: ["/app/example/settings"] },
-  // 1 Oct 2026, R166 part 3b: a new client's setup page, same session rule.
-  "/app/[client]/setup": { urls: ["/app/example/setup", "/app/example/setup?confirm=failed"] },
-  // 1 Oct 2026, R143 (BRIEF-4 P3): Who is named, same session rule.
-  "/app/[client]/named": { urls: ["/app/example/named", "/app/example/named?engine=chatgpt&all=1"] },
-  // 1 Oct 2026, R144 (BRIEF-4 P4): Cited pages, same session rule.
-  "/app/[client]/cited": { urls: ["/app/example/cited", "/app/example/cited?kind=others&all=1"] },
-  // 1 Oct 2026, R145 (BRIEF-4 P5): Reports, same session rule.
-  "/app/[client]/reports": { urls: ["/app/example/reports", "/app/example/reports?from=2026-08-01&to=2026-08-31"] },
-  // 13 Oct 2026, DIY P4 (spec 10 section 3.3): AI visibility, same session rule. Its signed-in states are swept from
-  // the HTML e2e/app/diy-results.spec.mts saves (section 6.10 item 2).
-  "/app/[client]/ai": { urls: ["/app/example/ai", "/app/example/ai?missing=1&eng=chatgpt"] },
-  // 2 Oct 2026, R173 pass 3, DS36: any address no /app/[client] page matches, same session rule.
-  "/app/[client]/[...rest]": { urls: ["/app/example/nope"] },
-  // 13 Oct 2026, DIY P3: Actions (internally the Plan), same session rule. The signed-in page is swept from
-  // the HTML e2e/app/diy-plan.spec.mts saves (spec 10 section 6.10 item 2).
-  // 13 Oct 2026 (review): the list became the default, so both URLs drew the list; the board is asked for by name.
-  "/app/[client]/plan": { urls: ["/app/example/plan", "/app/example/plan?view=list&status=done", "/app/example/plan?view=board"] },
-  // 13 Oct 2026, DIY P6: Google (tracked keywords, gaining ground, the footprint), same session rule. Its signed-in
-  // states are swept from the HTML e2e/app/diy-google.spec.mts saves (spec 10 section 6.10 item 2).
-  "/app/[client]/google": { urls: ["/app/example/google", "/app/example/google?view=all&intent=commercial"] },
-  // 13 Oct 2026, DIY P7 (spec 10 section 3.3): Opportunities and one opportunity, same session rule. The signed-in
-  // pages are swept from the HTML e2e/app/diy-opportunities.spec.mts saves (spec 10 section 6.10 item 2).
-  "/app/[client]/opportunities": { urls: ["/app/example/opportunities", "/app/example/opportunities?view=pursuing"] },
-  "/app/[client]/opportunities/[id]": { urls: ["/app/example/opportunities/opp-invoicing"] },
-  // 13 Oct 2026, DIY P8: Your pages and one key page, same session rule. The signed-in pages are swept from the
-  // HTML e2e/app/diy-pages.spec.mts saves (spec 10 section 6.10 item 2).
-  "/app/[client]/pages": { urls: ["/app/example/pages", "/app/example/pages?view=bots"] },
-  "/app/[client]/pages/[page]": { urls: ["/app/example/pages/kp-1", "/app/example/pages/kp-8?tab=fit"] },
-  // 13 Oct 2026, DIY P10: Links, same session rule. The signed-in states are swept from the HTML
-  // e2e/app/diy-links.spec.mts saves (spec 10 section 6.10 item 2).
-  "/app/[client]/links": { urls: ["/app/example/links", "/app/example/links?view=gap"] },
-  // 29 Sep 2026, T4: the overview drawn from the local parity fixture - the
-  // only way the sweeps see the signed-in overview's markup at all. A 404 in
-  // a checkout that has not run docs/parity/T4/make-fixture.py.
-  "/app/parity": { urls: ["/app/parity"] },
+  // 18 Oct 2026 (brief 2d): the /app pages are gone; every /app address 308s to its dashboards-host equivalent (src/proxy.ts).
   // 29 Sep 2026, T2: the same /admin Basic auth as /admin/scans.
   "/admin/tracking": {
     urls: [],

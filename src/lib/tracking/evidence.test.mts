@@ -139,37 +139,7 @@ test("the Overview's heat cell opens one of the answers it counts, and a name wh
   assert.ok(cells >= 1000 && named >= 500, `${cells} cells, ${named} opening a name`);
 });
 
-/**
- * Census: the links are built with these pickers. Named and Cited's prompt
- * links dropped the engine and the day; nothing but answerHref may build a
- * one-cluster link with a prompt there again.
- */
-const src = (p: string) => readFileSync(new URL(`../../components/app/${p}`, import.meta.url), "utf8");
-
-test("census: every figure that opens answers builds its link with evidence.ts", () => {
-  const named = src("Named.tsx");
-  assert.match(named, /const opens = isOpen \? namedEvidence\(\{ answers: data\.answers, range, key: r\.key, you: brand, only, engine, engines \}\) : null;/);
-  assert.match(named, /href=\{answerHref\(clusterPath\(w\.clusterId\), \{ \.\.\.base, prompt: String\(w\.index\) \}, opens\?\.get\(p\.id\)\)\}/);
-  const cited = src("Cited.tsx");
-  assert.match(cited, /const opens = isOpen \? citedEvidence\(\{ answers: data\.answers, range, page: p\.page, only, engine, engines \}\) : null;/);
-  assert.match(cited, /href=\{answerHref\(`\$\{clientPath\}\/clusters\/\$\{encodeURIComponent\(w\.clusterId\)\}`, \{ \.\.\.base, prompt: String\(w\.index\) \}, opens\?\.get\(q\.id\)\)\}/);
-  for (const [f, text] of [["Named.tsx", named], ["Cited.tsx", cited]] as const) {
-    assert.ok(!/prompt: String\(w\.index\) \}\)\}`/.test(text), `${f} builds a prompt link without its answer again`);
-  }
-  const overview = src("Overview.tsx");
-  assert.match(overview, /dayAnswerIn\(byPromptDay, c\.prompts\.map\(\(p\) => p\.id\), d, engines\)/);
-  assert.match(overview, /answerHref\(`\$\{clustersPath\}\/\$\{encodeURIComponent\(c\.id\)\}`, \{ \.\.\.rangeQuery, prompt: String\(at\.prompt\) \}, at\)/);
-  assert.match(overview, /role=\{detailHref \? "group" : "img"\}/, "a heat map with links in it is not an image, whose children go unread");
-  // Review of 95a8747 (9 Oct 2026): a heat link has one name, its <title> - an aria-label beside it read it twice - and the
-  // index holds the grid's own days only.
-  const link = overview.slice(overview.indexOf('<a key={`${c.id}-${d}`}'), overview.indexOf("</a>", overview.indexOf('<a key={`${c.id}-${d}`}')));
-  assert.ok(link.length > 100 && link.includes("<title>"), "the heat link not found");
-  assert.ok(!link.includes("aria-label"), "the heat link is named twice again");
-  assert.match(overview, /answersByPromptDay\(data\.answers, \{ from: gridDays\[0\]!, to: gridDays\[gridDays\.length - 1\]! \}\)/);
-  const one = src("OneCluster.tsx");
-  assert.match(one, /<section id=\{answerAnchor\(tab\.engine\)\} tabIndex=\{-1\}/, "the anchor the links end on");
-  assert.match(one, /const dayHref = \(d: Day, e: string\) => answerHref\("", \{ \.\.\.rangeQuery, prompt: String\(prompt\) \}, \{ day: d, engine: e \}\);/);
-  assert.match(one, /href=\{dayHref\(d, r\.engine\)\}/, "the day grid's squares are links");
-  assert.match(one, /aria-label=\{`\$\{said\}\. Open this answer\.`\}/, "each says its day, engine and outcome in words");
-  assert.match(one, /pickedDayLine\(\{ day, today, market, stored: !noCheck, run: todayRun\(data\.runs, today\)/, "the picked day's line is latest-answers.ts's");
-});
+// 18 Oct 2026, brief 2d: "census: every figure that opens answers builds its link with evidence.ts" retired with /app.
+// It held Named.tsx, Cited.tsx, Overview.tsx and OneCluster.tsx under src/components/app, all gone; every /app
+// address 308s to the dashboards host, whose click-through views link answers their own way (lib/dash/clickthrough,
+// with its own tests). evidence.ts's pickers above still hold.

@@ -50,9 +50,12 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-test("census: nothing under src/app/app or src/components/app points at /admin", () => {
-  const files = [...walk(join(ROOT, "src/app/app")), ...walk(join(ROOT, "src/components/app"))];
+test("census: nothing under src/app/dashboards or src/components/dash points at /admin", () => {
+  // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, so what a client sees is the
+  // dashboards host's tree; src/app/app and src/components/app are gone.
+  const files = [...walk(join(ROOT, "src/app/dashboards")), ...walk(join(ROOT, "src/components/dash"))];
   // Floor: 33 files on 1 Oct 2026; a walk that stops matching reads clean.
+  // 18 Oct 2026 (brief 2d): the walk is the dashboards host's tree, 45 files that day; the floor stays 33.
   assert.ok(files.length >= 33, `walked only ${files.length} files`);
   const hits = files.filter((f) => /["'`]\/admin\b/.test(readFileSync(f, "utf8"))).map((f) => f.slice(ROOT.length + 1));
   assert.deepEqual(hits, [], "a client-facing /admin link is prefetched into a Basic-auth prompt");

@@ -23,30 +23,9 @@ test("no note for a complete run, no run, or a partial run outside the range", (
   assert.equal(partialRunNote(run("2026-08-30", "partial"), range, "2026-09-29"), null);
 });
 
-test("Overview, Clusters, a cluster, Who is named and Cited pages all take the sentence from run-note.ts", () => {
-  // OneCluster added 1 Oct 2026 (R151): the one-cluster page said nothing of a partial run beyond its answer tab.
-  // Reports added 8 Oct 2026 (audit reliability-3): it said nothing of a partial or failed check at all.
-  for (const f of ["Overview", "Clusters", "OneCluster", "Named", "Cited", "Reports"]) {
-    const src = readFileSync(new URL(`../../components/app/${f}.tsx`, import.meta.url), "utf8");
-    if (f !== "Reports") assert.match(src, /from "@\/lib\/tracking\/run-note"/, `${f} imports run-note`);
-    assert.ok(!src.includes("did not come back") && !src.includes("check failed"), `${f} has no copy of the sentences`);
-  }
-  // 8 Oct 2026 (audit data-3): every page reads the range's runs, not only the last one.
-  for (const f of ["Clusters", "OneCluster", "Named", "Cited"]) {
-    const src = readFileSync(new URL(`../../components/app/${f}.tsx`, import.meta.url), "utf8");
-    // Merge of audit packages B and C (8 Oct 2026): the one-cluster page, on its own prompts' answers (perf-9),
-    // also says which days they were asked, so its note claims nothing those answers cannot show.
-    assert.match(src, f === "OneCluster" ? /runNote\(data, range, today, \{ askedOn \}\)/ : /runNote\(data, range, today\)/, `${f} notes every lost check in its range`);
-    assert.ok(!src.includes("partialRunNote("), `${f} still reads the last run only`);
-  }
-  // Review of the merge of audit packages B and C (8 Oct 2026): the one-cluster page's askedOn is run-note.ts
-  // askedOnFor, the runner's rule (decide.ts liveOn) in one copy - not written out inline again.
-  const one = readFileSync(new URL("../../components/app/OneCluster.tsx", import.meta.url), "utf8");
-  assert.match(one, /const askedOn = askedOnFor\(data\.questions, c\.id\);/, "OneCluster's askedOn is askedOnFor");
-  assert.ok(!/stopped_on > d\b/.test(one), "OneCluster writes a liveness rule of its own again");
-  const reports = readFileSync(new URL("../../app/app/[client]/reports/page.tsx", import.meta.url), "utf8");
-  assert.match(reports, /note=\{runNote\(data, range, today\)\}/, "Reports is handed the range's note");
-});
+// 18 Oct 2026, brief 2d: "Overview, Clusters, a cluster, Who is named and Cited pages all take the sentence from
+// run-note.ts" retired with /app. It held six files under src/components/app and the /app Reports page, all gone;
+// every /app address 308s to the dashboards host, which draws no run note. run-note.ts's own sentences still hold.
 
 const today = "2026-09-29";
 const runs = (...xs: [string, string, string?][]) => xs.map(([run_date, status, error]) => ({ run_date, status, error: error ?? null }));
@@ -123,11 +102,8 @@ test("8 Oct 2026 (review of audit data-3): on a range that ends before today, a 
   assert.deepEqual(failedTodayNote(failed, { from: addDays(fx.today, -27), to: fx.today }, fx.today), { line: "Today's check failed, so the figures run to 28 Sep.", aside: null });
   assert.deepEqual(failedTodayNote(failed, { from: "2026-08-05", to: "2026-09-01" }, fx.today), { line: null, aside: "Today's check failed." });
   assert.equal(failedTodayNote(fx.data, { from: addDays(fx.today, -27), to: fx.today }, fx.today), null, "today's check did not fail");
-  const src = readFileSync(new URL("../../components/app/Overview.tsx", import.meta.url), "utf8");
-  assert.match(src, /const failed = failedTodayNote\(data, range, today\);/);
-  // 9 Oct 2026 (audit copy-2): the time is tomorrow's in the client's zone (check-time.ts), no longer a bare "06:00".
-  assert.match(src, /failed\?\.aside \? `\$\{failed\.aside\} Next check tomorrow at \$\{next\}\.`/, "an earlier range keeps Last checked, then the aside");
-  assert.match(src, /skipToday: !!failed\?\.line/);
+  // 18 Oct 2026, brief 2d: the page half (the /app Overview drawing failedTodayNote's line and aside) retired with /app;
+  // every /app address 308s to the dashboards host, which draws neither. failedTodayNote above still holds.
 });
 
 test("8 Oct 2026 (review of audit data-3): a failed check that stored answers did not finish - it did not read nothing", () => {
@@ -184,30 +160,13 @@ test("8 Oct 2026 (review of the integration of audit packages A, B and C): share
   assert.match(sovGapNote([], [g(2_000)])!, /leaves out 2,000 answers/);
 });
 
-test("8 Oct 2026: the screens that draw brand shares say when answers are left out, and the Overview's partial line asks lostReads", () => {
-  const src = (f: string) => readFileSync(new URL(`../../components/app/${f}.tsx`, import.meta.url), "utf8");
-  for (const f of ["Overview", "Named"]) assert.match(src(f), /brandGapNote\(/, `${f} draws the brand gap note`);
-  // Review of the integration of audit packages A, B and C (8 Oct 2026): the Overview's note counts the card's
-  // prompts, and share of voice - every prompt - gets its own count when it leaves out more.
-  assert.match(src("Overview"), /const gapNote = \[brandGapNote\(gaps\), sovGapNote\(gaps, brandGaps\(data\.answers, range\)\)\]\.filter\(Boolean\)\.join\(" "\) \|\| null;/);
-  assert.match(src("OneCluster"), /brandGaps\(/, "the one-cluster page counts a prompt's unread answers");
-  assert.match(src("OneCluster"), /tab\.othersRead/, "and its answer tab says when the others were not read");
-  assert.match(src("Overview"), /const missing = lostReads\(data\.lastRun\)/);
-  assert.ok(!src("Overview").includes('data.lastRun?.status === "partial" ? ` ${MISSING_READS}`'), "a brand-only partial is not lost reads");
-});
+// 18 Oct 2026, brief 2d: "the screens that draw brand shares say when answers are left out, and the Overview's partial
+// line asks lostReads" retired with /app: the Overview, Who is named and the one-cluster page (src/components/app)
+// are gone, and the dashboards host draws neither note. brandGapNote and sovGapNote above still hold.
 
-test("8 Oct 2026 (review of reliability-1 / data-6): the one-cluster answer tab and the Clusters prompts ask lostReads too", () => {
-  // A brand-only partial said "No answer came back from Google AI Overviews" of a stored silence, and
-  // hid the Clusters page's upgrade prompts, which are judged on named rates and keyword positions.
-  const src = (f: string) => readFileSync(new URL(`../../components/app/${f}.tsx`, import.meta.url), "utf8");
-  assert.match(src("OneCluster"), /unsure=\{!data\.lastRun \|\| data\.lastRun\.run_date !== latest\.day \|\| lostReads\(data\.lastRun\)\}/);
-  // Merge of audit packages A and B (8 Oct 2026): B also made a failed check today partial here (audit data-3).
-  // Both facts hold - lostReads for the last run shown, and today's run when it failed - in one line.
-  assert.match(src("Clusters"), /const state = shown\.length === 0 \? "empty" : lostReads\(data\.lastRun\) \|\| todayRun\(data\.runs, today\)\?\.status === "failed" \? "partial" : "ok";/);
-  for (const f of ["Overview", "Clusters", "OneCluster", "Named", "Cited"]) {
-    assert.ok(!/lastRun\??\.status === "(partial|complete)"/.test(src(f)), `${f} reads a partial run through run-note.ts, not its status`);
-  }
-});
+// 18 Oct 2026, brief 2d: "the one-cluster answer tab and the Clusters prompts ask lostReads too" retired with /app:
+// OneCluster, Clusters, Overview, Named and Cited (src/components/app) are gone, and the dashboards host reads no run
+// status. lostReads' own rules in this file still hold.
 
 test("8 Oct 2026 (merge of audit packages A and B): runNote lists no brand-only partial run, and names only the reads that failed", () => {
   // B's runNote read every partial run in the range as lost reads; A made a run partial when brand

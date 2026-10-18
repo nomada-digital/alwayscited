@@ -16,7 +16,9 @@ function walk(dir: string): string[] {
 
 test("R174: only the header's BrandMark spins, and the walk still finds every mark", () => {
   const sites = walk(SRC).flatMap((f) => (readFileSync(f, "utf8").match(/<BrandMark\b[^>]*>/g) ?? []).map((tag) => ({ f: f.slice(SRC.length), tag })));
-  assert.ok(sites.length >= 7, `floor: 7 call sites, found ${sites.length}`);
+  // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. Its six marks (error, not-found,
+  // setup, auth, login, Sidebar) went with it: 11 call sites became 5, so the floor moves from 7 to 5.
+  assert.ok(sites.length >= 5, `floor: 5 call sites, found ${sites.length}`);
   const spinning = sites.filter((s) => /\bspin\b/.test(s.tag));
   assert.deepEqual(spinning.map((s) => s.f), ["components/Header.tsx"]);
   assert.match(spinning[0]!.tag, /id="hdr"/);

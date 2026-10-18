@@ -79,8 +79,14 @@ test("an engine's bulleted answer renders as list items with markers (R128, 30 S
   ]);
   // Each block is drawn as <ul>/<ol> of <li>, with a marker the reset cannot
   // take away. Read as source: node --test cannot render the .tsx.
-  const src = readFileSync("src/components/app/OneCluster.tsx", "utf8");
-  assert.match(src, /b\.items\.map\(\(it, j\) => <li key=\{j\}>/);
-  assert.match(src, /<ul key=\{i\} style=\{\{ \.\.\.style, listStyle: "disc" \}\}>/);
-  assert.match(src, /<ol key=\{i\} style=\{\{ \.\.\.style, listStyle: "decimal" \}\}>/);
+  // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, and OneCluster.tsx went with it.
+  // The answer is drawn there by AnswerText.tsx, whose lists took the reset's list-style: none until today - so the
+  // markers are dash.css's `.answer ul` and `.answer ol` rules now, and this reads both files.
+  const src = readFileSync("src/components/dash/AnswerText.tsx", "utf8");
+  assert.match(src, /if \(b\.kind === "ul"\) return <ul key=\{k\}>\{b\.items\.map\(\(it, j\) => <li key=\{j\}>/);
+  assert.match(src, /if \(b\.kind !== "table"\) return <ol key=\{k\}>\{b\.items\.map\(\(it, j\) => <li key=\{j\}>/);
+  assert.match(src, /<div className="answer">/);
+  const css = readFileSync("src/app/dashboards/dash.css", "utf8");
+  assert.match(css, /^\.answer ul \{ list-style: disc; \}$/m);
+  assert.match(css, /^\.answer ol \{ list-style: decimal; \}$/m);
 });

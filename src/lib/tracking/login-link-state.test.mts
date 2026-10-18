@@ -26,11 +26,14 @@ test("the fixture's links cover fresh, spent and expired", () => {
 test("the GET only reads the token; the POST alone claims it", () => {
   const read = readFileSync(join(import.meta.dirname, "login-link.ts"), "utf8");
   assert.ok(!/\.update\(|\.insert\(|\.delete\(|\.upsert\(/.test(read), "the link's GET read writes");
-  const page = readFileSync(join(import.meta.dirname, "../../app/app/auth/page.tsx"), "utf8");
-  assert.match(page, /<form method="post" action="\/api\/app\/auth">/, "the token is still spent by a POST");
-  assert.match(page, /\{auto \? <AutoSubmit \/> : null\}/);
-  assert.match(page, /failed !== "1"/, "a failed claim must not submit itself again");
-  const route = readFileSync(join(import.meta.dirname, "../../app/api/app/auth/route.ts"), "utf8");
+  // 18 Oct 2026, brief 2d: /app/auth (its form, AutoSubmit and the failed guard) retired with /app; every /app address
+  // 308s to the dashboards host. The rule holds there: the page a link opens writes nothing and submits nothing by
+  // itself - a button posts the token - and the route spends it with a compare-and-swap, failing back with failed=1.
+  const page = readFileSync(join(import.meta.dirname, "../../app/dashboards/auth/page.tsx"), "utf8");
+  assert.match(page, /<form action="\/api\/dash\/auth" method="post">/, "the token is still spent by a POST");
+  assert.match(page, /<button type="submit"/, "a person presses it");
+  assert.ok(!/AutoSubmit|requestSubmit|\.submit\(|\.from\(/.test(page), "the page submits itself or reads the database on GET");
+  const route = readFileSync(join(import.meta.dirname, "../../app/api/dash/auth/route.ts"), "utf8");
   assert.match(route, /\.is\("used_at", null\)/, "the claim is still a compare-and-swap");
   assert.match(route, /failed=1/);
 });

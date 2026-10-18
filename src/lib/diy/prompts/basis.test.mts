@@ -46,11 +46,11 @@ test("no line says a placement moved a figure (causal-copy), names Nomada, or ca
   }
 });
 
-test("the pages that draw these figures draw the line: Clusters, one cluster and Placements", () => {
+test("the placements screen's named figures leave the placement prompts out; its citations count them all", () => {
   const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
-  assert.match(src("../../../components/app/Clusters.tsx"), /placementBasis\(card\.prompts, origins\)/);
-  assert.match(src("../../../components/app/OneCluster.tsx"), /placementBasis\(c\.prompts, origins\)/);
-  assert.match(src("../../../components/app/Placements.tsx"), /leftOutLine\(placementPrompts, prompts \+ placementPrompts\)/);
+  // 18 Oct 2026, brief 2d: the three pages that drew these lines - /app's Clusters, one cluster and Placements
+  // (components/app) - retired with /app; every address 308s to the dashboards host, which draws none of them.
+  // placements-screen.ts still reads for the report route's placements CSV, so its half holds.
   // The Placements named figures are drawn from the cluster's prompts less the placement ones; its citations from all.
   const screen = src("../../tracking/placements-screen.ts");
   assert.match(screen, /const named = data\.questions\.filter\(\(q\) => !isPlacementPrompt\(byId, q\.id\)\);/);

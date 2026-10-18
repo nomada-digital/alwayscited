@@ -173,259 +173,13 @@ const EXEMPT: Record<string, Exemption> = {
       },
     ]),
   ),
-  // T6 part 1 (30 Sep 2026): the Clusters search form carries the range and
-  // filter as hidden fields so a search keeps them. Nobody types in them; the
-  // page re-reads each - rangeFrom clamps from/to/compare, and filter is
-  // anything but named/never read as all.
-  // 8 Oct 2026 (audit perf-8): the three pages' rangeFrom now also takes the
-  // client's started_on, for the floor a stated from is held to
-  // (read-shape.ts rangeFloor); the recorded call below moved with it.
-  ...Object.fromEntries(
-    (["from", "to", "compare", "filter"] as const).map((f) => [
-      `cl-${f}`,
-      {
-        why: [
-          `the Clusters search form's hidden ${f}, copied from the current URL so a search keeps it.`,
-          "type=hidden, which maxLength does not apply to and nobody types in. The page",
-          "re-validates it: rangeFrom for the range, and a two-value whitelist for the filter.",
-        ].join(" "),
-        holds: [
-          { file: "app/app/[client]/clusters/page.tsx", needs: f === "filter" ? 'f === "named" || f === "never"' : "rangeFrom(sp, today, client.started_on)" },
-        ],
-      },
-    ]),
-  ),
-  // DS20 (2 Oct 2026, R173 pass 2): the Cited pages search form carries the
-  // range and the three filters as hidden fields, as Clusters' does. Nobody
-  // types in them; the page re-reads each against its own whitelist.
-  ...Object.fromEntries(
-    (
-      [
-        ["from", "rangeFrom(sp, today, client.started_on)"],
-        ["to", "rangeFrom(sp, today, client.started_on)"],
-        ["compare", "rangeFrom(sp, today, client.started_on)"],
-        ["cluster", '(data.clusters ?? []).some((c) => c.id === one("cluster"))'],
-        ["engine", 'engines.find((e) => e === one("engine"))'],
-        ["kind", 'k === "yours" || k === "others" ? k : "all"'],
-      ] as const
-    ).map(([f, needs]) => [
-      `ct-${f}`,
-      {
-        why: [
-          `the Cited pages search form's hidden ${f}, copied from the current URL so a search keeps it.`,
-          "type=hidden, which maxLength does not apply to and nobody types in. The page",
-          "re-validates it: rangeFrom for the range, this client's clusters, its tier's engines, a two-value kind.",
-        ].join(" "),
-        holds: [{ file: "app/app/[client]/cited/page.tsx", needs }],
-      },
-    ]),
-  ),
-  // DS21 (2 Oct 2026, R173 pass 2): Who is named's search form, the same
-  // hidden range and filters bar kind, re-read by the named page.
-  ...Object.fromEntries(
-    (
-      [
-        ["from", "rangeFrom(sp, today, client.started_on)"],
-        ["to", "rangeFrom(sp, today, client.started_on)"],
-        ["compare", "rangeFrom(sp, today, client.started_on)"],
-        ["cluster", '(data.clusters ?? []).some((c) => c.id === one("cluster"))'],
-        ["engine", 'engines.find((e) => e === one("engine"))'],
-      ] as const
-    ).map(([f, needs]) => [
-      `nm-${f}`,
-      {
-        why: [
-          `the Who is named search form's hidden ${f}, copied from the current URL so a search keeps it.`,
-          "type=hidden, which maxLength does not apply to and nobody types in. The page",
-          "re-validates it: rangeFrom for the range, this client's clusters, its tier's engines.",
-        ].join(" "),
-        holds: [{ file: "app/app/[client]/named/page.tsx", needs }],
-      },
-    ]),
-  ),
-  // T6 part 3c (30 Sep 2026): step 2 of Add a cluster carries the checked
-  // verdict as hidden fields. Nobody types in them; the cluster route clamps
-  // each to ADMIN_LIMITS.question and refuses the lot unless the HMAC over
-  // client, keyword, volume, intent and day verifies.
-  ...Object.fromEntries(
-    (["keyword", "vol", "intent", "sig"] as const).map((f) => [
-      `nc-${f}`,
-      {
-        why: [
-          `Add a cluster step 2's hidden ${f}, from Check keyword's signed pass.`,
-          "type=hidden, which maxLength does not apply to and nobody types in. The route",
-          "clamps it and refuses unless verifyCheck passes for this client and today.",
-        ].join(" "),
-        holds: [{ file: "app/api/app/[client]/cluster/route.ts", needs: "verifyCheck(" }],
-      },
-    ]),
-  ),
-  // R166 part 5 (2 Oct 2026): a setup card's Check keyword carries the card's
-  // cluster id and its current keyword; a pass rides into Confirm as hidden
-  // fields. The check route clamps both and only routes on the card; the setup
-  // route names a pass in the mail only when verifyCheck passes and the card
-  // is one of this client's clusters.
-  "setup-card-${i}": {
-    why: "A setup card's hidden cluster id. type=hidden, nobody types in it; the check route clamps it to 64 and the setup page matches it against its own cards.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("card") as string).slice(0, 64)' }],
-  },
-  "setup-own-${i}": {
-    why: "A setup card's hidden current keyword. type=hidden, nobody types in it; the check route clamps it to ADMIN_LIMITS.question and uses it only to leave that keyword out of the tracked list.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("own") as string).slice(0, ADMIN_LIMITS.question)' }],
-  },
-  ...Object.fromEntries(
-    (["card", "keyword", "vol", "intent", "sig"] as const).map((f) => [
-      `sc-${f}`,
-      {
-        why: [
-          `Setup Confirm's hidden ${f}, from a setup card's signed Check keyword pass.`,
-          "type=hidden, which maxLength does not apply to and nobody types in. The route",
-          "clamps it and names the pass in the mail only if verifyCheck passes for this client and today.",
-        ].join(" "),
-        holds: [{ file: "app/api/app/[client]/setup/route.ts", needs: "verifyCheck(pass," }],
-      },
-    ]),
-  ),
-  // R179 (2 Oct 2026): Change keyword on a pending Clusters card posts the
-  // same hidden card and own as a setup card, plus on=clusters, to the check
-  // route; a signed pass then rides to the keyword route as hidden fields, on
-  // Clusters and on a setup card alike. The keyword route refuses unless
-  // verifyCheck passes for this client and today.
-  "rk-card-${c.id}": {
-    why: "A pending Clusters card's hidden cluster id for Check keyword. type=hidden, nobody types in it; the check route clamps it to 64 and the page draws a verdict only on the card whose id matches.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("card") as string).slice(0, 64)' }],
-  },
-  "rk-own-${c.id}": {
-    why: "A pending Clusters card's hidden current keyword. type=hidden, nobody types in it; the check route clamps it to ADMIN_LIMITS.question and uses it only to leave that keyword out of the tracked list.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("own") as string).slice(0, ADMIN_LIMITS.question)' }],
-  },
-  "rk-on-${c.id}": {
-    why: "A fixed hidden word, on=clusters. type=hidden; the check route only compares it to \"clusters\" to pick where its 303 goes.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: 'form?.get("on") === "clusters"' }],
-  },
-  ...Object.fromEntries(
-    (["kw", "vol", "intent", "sig"] as const).flatMap((f) => [
-      [
-        `rk-use-${f}-\${c.id}`,
-        {
-          why: `Use this keyword's hidden ${f} on a pending Clusters card, from its signed Check keyword pass. type=hidden, nobody types in it; the keyword route clamps it to ADMIN_LIMITS.question and refuses unless verifyCheck passes for this client and today.`,
-          holds: [{ file: "app/api/app/[client]/keyword/route.ts", needs: "verifyCheck(" }],
-        },
-      ],
-      [
-        `setup-use-${f}-\${i}`,
-        {
-          why: `Use this keyword's hidden ${f} on a setup card, from its signed Check keyword pass. type=hidden, nobody types in it; the keyword route clamps it to ADMIN_LIMITS.question and refuses unless verifyCheck passes for this client and today.`,
-          holds: [{ file: "app/api/app/[client]/keyword/route.ts", needs: "verifyCheck(" }],
-        },
-      ],
-    ]),
-  ),
-  // T11 /ask (30 Sep 2026): "Ask us to pick one" carries the refused keyword
-  // back as a hidden field. The ask route trims it and clamps it to
-  // ADMIN_LIMITS.question in readAskKeyword before it goes in the mail.
-  // 13 Oct 2026, DIY P5 (P4's /ai page, spec 10 section 4.2): AI visibility's search form carries the page's
-  // state bar the search as hidden fields (`ai-${k}`: the range, cluster, angle, origin, eng, lfl, missing, sort
-  // and dir), so a search keeps the view. Nobody types in them; the page re-reads every one against its own bound,
-  // each registered in client-pages.test.mts.
-  "ai-${k}": {
-    why: [
-      "AI visibility's search form's hidden view keys, copied from the page's own state so a search keeps it.",
-      "type=hidden, which maxLength does not apply to and nobody types in. The page re-validates each: rangeFrom",
-      "for the range, this client's clusters, its tier's engines, and fixed lists for angle, origin, sort and dir.",
-    ].join(" "),
-    holds: [
-      { file: "app/app/[client]/ai/page.tsx", needs: "rangeFrom(sp, today, client.started_on)" },
-      { file: "app/app/[client]/ai/page.tsx", needs: '(data.clusters ?? []).some((c) => c.id === one("cluster"))' },
-      { file: "app/app/[client]/ai/page.tsx", needs: 'engines.find((e) => e === one("eng"))' },
-      { file: "app/app/[client]/ai/page.tsx", needs: 'pickAngle(one("angle"))' },
-      { file: "app/app/[client]/ai/page.tsx", needs: 'pickOrigin(one("origin"))' },
-      { file: "app/app/[client]/ai/page.tsx", needs: 'pickSort(one("sort"))' },
-      { file: "app/app/[client]/ai/page.tsx", needs: 'pickDir(one("dir"))' },
-    ],
-  },
-  "ask-keyword": {
-    why: [
-      "Ask us to pick one's hidden keyword, the one Check keyword just refused.",
-      "type=hidden, which maxLength does not apply to and nobody types in. ask.ts",
-      "readAskKeyword clamps it to ADMIN_LIMITS.question on the server.",
-    ].join(" "),
-    holds: [{ file: "lib/tracking/ask.ts", needs: ".slice(0, ADMIN_LIMITS.question)" }],
-  },
-  // T11 part 5 (30 Sep 2026): an upgrade prompt's two plain HTML forms. The
-  // cta fields are read against a fixed list; the items field is split and
-  // kept only as uuids, at most ASK_ITEMS_MAX, then resolved against the
-  // client's own rows, so no sent text reaches the mail.
-  "up-ask-cta": {
-    why: "Ask about these N's hidden cta. type=hidden, nobody types in it; ask.ts readUpgradeCta accepts only mentioned or cited.",
-    holds: [{ file: "lib/tracking/ask.ts", needs: 'raw === "mentioned" || raw === "cited" ? raw : null' }],
-  },
-  "up-ask-items": {
-    why: "Ask about these N's hidden prompt ids. type=hidden; ask.ts readAskItems keeps uuids only, capped at ASK_ITEMS_MAX, and the route lists only this client's rows.",
-    holds: [{ file: "lib/tracking/ask.ts", needs: "out.size < ASK_ITEMS_MAX" }],
-  },
-  "up-hide-cta": {
-    why: "Hide for 30 days's hidden cta. type=hidden, nobody types in it; ask.ts readHideCta accepts only the five cta_events ctas.",
-    holds: [{ file: "lib/tracking/ask.ts", needs: "export const readHideCta" }],
-  },
-  // R142 part 2 (1 Oct 2026): Settings' team forms carry the op, the member's
-  // email and the new role as hidden fields. Nobody types in them; team.ts
-  // readTeamForm accepts only the three ops, an email that passes readEmail
-  // (trimmed, format-checked, at most EMAIL_MAX) and Editor or Viewer.
-  ...Object.fromEntries(
-    ["tm-role-op-${i}", "tm-role-email-${i}", "tm-role-role-${i}", "tm-rm-op-${i}", "tm-rm-email-${i}", "tm-inv-op"].map((id) => [
-      id,
-      {
-        why: [
-          "a Settings team form's hidden field: the op, a listed member's email or the new role.",
-          "type=hidden, which maxLength does not apply to and nobody types in. team.ts readTeamForm",
-          "accepts only invite/role/remove, an email readEmail passes, and editor or viewer.",
-        ].join(" "),
-        holds: [{ file: "lib/tracking/team.ts", needs: "e.length <= EMAIL_MAX && isPlausibleEmail(e)" }],
-      },
-    ]),
-  ),
-  // AG-1 (9 Oct 2026): Settings' invite carries its scope - two radios on an
-  // account with two or more clients, or a hidden "account" while the scope
-  // table is not there yet. Nothing typed; team.ts reads only the two words,
-  // and anything else is this client only.
-  ...Object.fromEntries(
-    ["tm-inv-scope-client", "tm-inv-scope-account", "tm-inv-scope"].map((id) => [
-      id,
-      {
-        why: [
-          "the invite form's scope, a radio or a hidden field: client or account.",
-          "Nothing is typed in it. team.ts readScopeWord accepts only those two words, and",
-          "inviteScope reads anything but an explicit account as this client only.",
-        ].join(" "),
-        holds: [
-          { file: "lib/tracking/team.ts", needs: '(raw === "client" || raw === "account" ? raw : null)' },
-          { file: "lib/tracking/team.ts", needs: 'return raw === "account" ? "account" : "client";' },
-        ],
-      },
-    ]),
-  ),
-  // R142 part 3 (1 Oct 2026): Settings' two asks carry `about`, and "Sign out
-  // of every device" carries everywhere=1, as hidden fields.
-  "set-ask-aliases": {
-    why: "Settings' alias ask's hidden `about`. type=hidden, nobody types in it; ask.ts readAskAbout accepts only aliases or billing.",
-    holds: [{ file: "lib/tracking/ask.ts", needs: 'raw === "aliases" || raw === "billing" ? raw : null' }],
-  },
-  "set-ask-billing": {
-    why: "Settings' billing ask's hidden `about`. type=hidden, nobody types in it; ask.ts readAskAbout accepts only aliases or billing.",
-    holds: [{ file: "lib/tracking/ask.ts", needs: 'raw === "aliases" || raw === "billing" ? raw : null' }],
-  },
-  // 8 Oct 2026: Settings > Billing's "Cancel trial" confirm carries confirm=1.
-  "set-trial-confirm": {
-    why: "Cancel trial's hidden `confirm`. type=hidden, nobody types in it; the trial route acts only when it is exactly \"1\".",
-    holds: [{ file: "app/api/app/[client]/trial/route.ts", needs: 'form?.get("confirm") !== "1"' }],
-  },
-  // R151 (2 Oct 2026): /app/login posts without script, so the page a
-  // signed-out visitor was going to rides the form as a hidden field.
-  "app-login-next": {
-    why: "The login form's hidden next path, set by the page from safeNext. type=hidden, nobody types in it; the login route passes it through safeNext again before it reaches a link or a redirect.",
-    holds: [{ file: "app/api/app/login/route.ts", needs: "const next = safeNext(body.next)" }],
-  },
+  // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. Its forms' hidden and radio
+  // fields went with it - Clusters, Cited pages and Who is named's search forms (cl-*, ct-*, nm-*), Add a cluster
+  // (nc-*), setup and Change keyword (setup-*, sc-*, rk-*), AI visibility (ai-*), Ask us to pick one (ask-keyword),
+  // the upgrade prompts (up-*), Settings' team, asks, trial and sign-out (tm-*, set-*), /app/login's next
+  // (app-login-next), the ungrouped bulk ticks (ug-tick-*), Google (kw-src, gg-*, g-*), Opportunities (op-*) and
+  // Links (lk-*) - and their 79 entries went with them. The dashboards host's own hidden fields all carry a
+  // maxLength, so none of them needs an entry here.
   // R151 (3 Oct 2026): SendNewLink posts without script, so the address the
   // spent link or the order went to rides the form as a hidden field.
   "send-new-link-email": {
@@ -455,10 +209,6 @@ const EXEMPT: Record<string, Exemption> = {
     why: "The walkthrough ask's hidden way back, set by the coverage reading page. type=hidden, nobody types in it; walkthroughBack accepts only a /scan/ or /coverage-check/ path of at most 80 token characters, else the scan's own page.",
     holds: [{ file: "lib/scan/walkthrough-outcome.ts", needs: "/^\\/(scan|coverage-check)\\/[A-Za-z0-9_-]{1,80}$/.test(raw)" }],
   },
-  "set-out-all": {
-    why: "Sign out of every device's hidden flag. type=hidden, nobody types in it; the logout route acts only on the exact value 1 and reads the email off the session row, never the form.",
-    holds: [{ file: "app/api/app/logout/route.ts", needs: 'form?.get("everywhere") === "1"' }],
-  },
   // R140 (1 Oct 2026): step 2's coverage ticks. type=checkbox, nobody types in
   // it and it carries no value; what is posted is the ticked rows' urls, which
   // came from parseCoverageCsv and are cut to MAX_COVERAGE_URLS by tickedRows
@@ -466,124 +216,6 @@ const EXEMPT: Record<string, Exemption> = {
   "cc-row-${i}": {
     why: "Step 2's coverage tick. type=checkbox, nothing typed; tickedRows caps the posted urls at MAX_COVERAGE_URLS and the run route caps them again.",
     holds: [{ file: "app/api/coverage-check/route.ts", needs: "parsed.rows.slice(0, MAX_COVERAGE_URLS)" }],
-  },
-  // DS13 (R173 pass 2, 2 Oct 2026): the Ungrouped bulk ticks. type=checkbox,
-  // nothing typed; each carries a listed prompt's id, and the stop and group
-  // routes keep only well-formed ids, once each, at most BULK_MAX.
-  "ug-tick-${q.id}": {
-    why: "An ungrouped prompt's bulk tick. type=checkbox, nothing typed; readBulkIds keeps well-formed ids once each, capped at BULK_MAX, and each id still goes through the one-row stop or move rules.",
-    holds: [{ file: "lib/tracking/stop.ts", needs: "[...new Set(ids)].slice(0, BULK_MAX)" }],
-  },
-  // 13 Oct 2026, DIY P9 (wave 2's hidden fields, as P6 and P7 handed them over). Each type=hidden: maxLength does
-  // not apply and nobody types in it. What bounds each is on the server or in the page that re-reads it.
-  // Cited pages (P7, spec 10 section 4.5): the search form keeps ?type= and ?leaves=1, as it keeps the other filters.
-  "ct-type": {
-    why: "the Cited pages search form's hidden type, copied from the current URL so a search keeps it. type=hidden, nobody types in it; the page re-reads it through cited.ts pickCitedType, which accepts only a DOMAIN_TYPES word.",
-    holds: [{ file: "app/app/[client]/cited/page.tsx", needs: 'pickCitedType(one("type"))' }],
-  },
-  "ct-leaves": {
-    why: "the Cited pages search form's hidden leaves flag, the fixed value 1. type=hidden, nobody types in it; the page reads only the exact value 1 as on.",
-    holds: [{ file: "app/app/[client]/cited/page.tsx", needs: 'one("leaves") === "1"' }],
-  },
-  // Clusters (P6, spec 10 section 3.5): `src` rides Check keyword and the add as a hidden field, the word gaining only.
-  "kw-src": {
-    why: "Check keyword's hidden src, set only to the word gaining when Clusters was opened from a gaining-ground keyword. type=hidden, nobody types in it; the check route carries it back only when new-cluster.ts momentumOrigin reads the exact word.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: 'momentumOrigin(form?.get("src"))' }],
-  },
-  "nc-src": {
-    why: "Add a cluster step 2's hidden src, the word gaining only. type=hidden, nobody types in it; the cluster route sets the Momentum origin only when momentumOrigin reads the exact word, and refuses the add unless verifyCheck passes.",
-    holds: [
-      { file: "app/api/app/[client]/cluster/route.ts", needs: 'momentumOrigin(field("src"))' },
-      { file: "lib/tracking/new-cluster.ts", needs: 'return src === MOMENTUM_SRC ? "momentum" : null;' },
-    ],
-  },
-  // Google's gaining ground (P6, spec 10 sections 3.6 and 4.3): Dismiss, Restore and the toast's Undo post the op and
-  // the keyword as hidden fields. The keywords route accepts only dismiss or restore, a keyword of at most
-  // KEYWORD_MAX (120) characters, and only one in the latest pull or a live dismissal of this client.
-  ...Object.fromEntries(
-    ["gg-undo-do", "gg-undo-kw", "gg-do-${i}", "gg-kw-${i}", "gg-r-do-${i}", "gg-r-kw-${i}"].map((id) => [
-      id,
-      {
-        why: [
-          "a gaining-ground Dismiss, Restore or Undo form's hidden op or keyword, drawn from the page's own rows.",
-          "type=hidden, nobody types in it. The keywords route accepts only dismiss or restore (isKeywordsDo), and",
-          "decideKeywords refuses a keyword over KEYWORD_MAX or one not in this client's latest pull or live dismissals.",
-        ].join(" "),
-        holds: [
-          { file: "lib/diy/keywords/write.ts", needs: "if (!raw || raw.length > KEYWORD_MAX) return { op: \"refuse\", why: \"unknown\" };" },
-          { file: "lib/diy/keywords/write.ts", needs: "export const KEYWORD_MAX = 120;" },
-        ],
-      },
-    ]),
-  ),
-  // Google's search forms (P6): the page's view state bar q and page, re-read by the page against its own bounds.
-  "g-${k}": {
-    why: [
-      "Google's search forms' hidden view keys (the range, view, gaining, cluster, band, intent, sort and dir), copied",
-      "from the page's own state so a search keeps it. type=hidden, nobody types in it. The page re-validates each:",
-      "rangeFrom for the range, this client's clusters, and keys.ts's fixed lists for the rest.",
-    ].join(" "),
-    holds: [
-      { file: "app/app/[client]/google/page.tsx", needs: "rangeFrom(sp, today, client.started_on)" },
-      { file: "app/app/[client]/google/page.tsx", needs: '(data.clusters ?? []).some((c) => c.id === one("cluster"))' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'pickView(one("view"))' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'one("gaining") === "1"' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'pickBand(one("band"))' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'pickIntent(one("intent"))' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'pickSort(one("sort"))' },
-      { file: "app/app/[client]/google/page.tsx", needs: 'pickDir(one("dir"))' },
-    ],
-  },
-  // U7, the pack prompt (P6, spec 10 section 2.7): its Hide for 30 days posts cta=pack, as every upgrade prompt's does.
-  "up-hide-pack-${surface}": {
-    why: "the pack prompt's Hide for 30 days hidden cta, the fixed word pack. type=hidden, nobody types in it; ask.ts readHideCta accepts only the five cta_events ctas.",
-    holds: [{ file: "app/api/app/[client]/hide/route.ts", needs: 'readHideCta(form?.get("cta"))' }],
-  },
-  // Setup's suggested keywords (P6, spec 10 section 4.12): Use this keyword runs the existing Check keyword on a card.
-  "setup-sg-card-${i}": {
-    why: "a suggested keyword's hidden card id on Setup. type=hidden, nobody types in it; the check route clamps it to 64 and the setup page matches it against its own cards.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("card") as string).slice(0, 64)' }],
-  },
-  "setup-sg-own-${i}": {
-    why: "a suggested keyword's hidden current keyword on Setup, always empty here. type=hidden, nobody types in it; the check route clamps it to ADMIN_LIMITS.question.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("own") as string).slice(0, ADMIN_LIMITS.question)' }],
-  },
-  "setup-sg-kw-${i}": {
-    why: "a suggested keyword itself on Setup, drawn from the footprint. type=hidden, nobody types in it; the check route trims it and clamps it to ADMIN_LIMITS.question before the paid door's own prechecks.",
-    holds: [{ file: "app/api/app/[client]/check/route.ts", needs: '(form.get("keyword") as string).trim().slice(0, ADMIN_LIMITS.question)' }],
-  },
-  // Opportunities' search form (P7, spec 10 section 4.7): it keeps the lens, cluster and engine.
-  "op-lens": {
-    why: "Opportunities' search form's hidden lens, copied from the page's state. type=hidden, nobody types in it; the page re-reads it against TAB_LENSES.",
-    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'pickLens(one("lens"))' }],
-  },
-  "op-cluster": {
-    why: "Opportunities' search form's hidden cluster. type=hidden, nobody types in it; the page keeps it only when it is one of this client's clusters.",
-    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'structure.clusters.some((c) => c.id === one("cluster"))' }],
-  },
-  "op-engine": {
-    why: "Opportunities' search form's hidden engine. type=hidden, nobody types in it; the page keeps it only when it is one of this client's tier's engines.",
-    holds: [{ file: "app/app/[client]/opportunities/page.tsx", needs: 'engines.find((e) => e === one("engine"))' }],
-  },
-  // 13 Oct 2026, DIY P10 (wave 3): Links' hidden fields. Each type=hidden: nobody types in it, and the links route
-  // re-reads each against what the page lists rather than trusting it.
-  "lk-lens-${rowId}": {
-    why: "a Pursue form's hidden lens on Links. type=hidden, nobody types in it; the links route accepts only one of LINK_LENSES and otherwise answers gone.",
-    holds: [{ file: "app/api/app/[client]/links/route.ts", needs: "(LINK_LENSES as readonly string[]).includes(lens)" }],
-  },
-  "lk-key-${rowId}": {
-    why: "a Pursue form's hidden row key on Links. type=hidden, nobody types in it; the links route cuts it to 520 and pursues only a row the page itself lists, with Nomada's placements already subtracted.",
-    holds: [
-      { file: "app/api/app/[client]/links/route.ts", needs: 'String(form?.get("key") ?? "").slice(0, 520)' },
-      { file: "app/api/app/[client]/links/route.ts", needs: "const row = findRow(page, lens, key);" },
-    ],
-  },
-  "lk-seen": {
-    why: "the reveal form's hidden count of this month's revealed link targets on Links. type=hidden, nobody types in it; the route reads it as a whole number and reveals nothing unless it equals the month's own count.",
-    holds: [
-      { file: "app/api/app/[client]/links/route.ts", needs: 'const seenRaw = Number(form?.get("seen"));' },
-      { file: "lib/diy/links/targets.ts", needs: "p.seen !== p.usedThisMonth" },
-    ],
   },
   "cc-coverage": {
     why: [
@@ -613,11 +245,13 @@ test("the census still sees every field - a shrinking count is a blind probe", (
   // Raised 13 Oct 2026 (DIY P9, wave 2 merged): 185 fields across 36 files, measured on the merged tree - the
   // dashboard's forms through wave 2 (Google, Opportunities, Your pages). The floor had stayed at 23 and 11.
   // Raised 13 Oct 2026 (DIY P10, wave 3): 189 fields across 37 files - Links' Pursue, reveal and Check a link fields.
+  // Moved down 18 Oct 2026 (brief 2d: /app retired, every address 308s to the dashboards host): 114 fields across 25
+  // files, measured once src/app/app and src/components/app were deleted - a fall the deletion explains, not the scanner.
   assert.ok(
-    found.length >= 189,
-    `only ${found.length} fields were found across the tree, and there were 189 on 13 Oct 2026 - a falling count means the scanner broke, not that fields were deleted`,
+    found.length >= 114,
+    `only ${found.length} fields were found across the tree, and there were 114 on 18 Oct 2026 - a falling count means the scanner broke, not that fields were deleted`,
   );
-  assert.ok(files.size >= 37, `only ${files.size} files carry a field, and 37 did on 13 Oct 2026`);
+  assert.ok(files.size >= 25, `only ${files.size} files carry a field, and 25 did on 18 Oct 2026`);
 });
 
 /**

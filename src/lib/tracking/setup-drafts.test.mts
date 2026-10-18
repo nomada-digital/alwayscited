@@ -235,19 +235,16 @@ test("on the fixture, a no-scan signup checks its keyword, sets it days after it
   assert.equal(fixtureFillDrafts(keyed.fixture, { clusterId: card.id, prompts: draftPrompts(KW), today, role: "viewer" }).ok, false);
 });
 
-test("census: the setup card and the empty Clusters row post drafts to the free slot's route, which writes them with fillDrafts", () => {
+test("census: the free slot's route writes posted drafts with fillDrafts", () => {
   const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
   const route = src("../../app/api/app/[client]/prompt/route.ts");
   assert.match(route, /const drafts = readDrafts\(/, "the prompt route reads the drafts");
   assert.match(route, /await fillDrafts\(supabaseAdmin\(\), \{ clientId: client\.id, clusterId: f\.id, prompts: drafts, today: trackingDay\(\), by: email, role: writeRole\(client\) \}\)/, "and writes them through fillDrafts, as the member's role on a live client");
   const draft = src("./new-cluster.ts");
   assert.match(draft, /return fillSlots\(db, \{/, "fillDrafts is the free slot's write, not a fork of it");
-  const setup = src("../../app/app/[client]/setup/page.tsx");
-  assert.match(setup, /action=\{`\/api\/app\/\$\{encodeURIComponent\(slug\)\}\/prompt\?\$\{new URLSearchParams\(\{ kind: "cluster", id: c\.id, to: "setup" \}\)\}`\}/);
-  assert.match(setup, /drafts && canWrite \? \(/, "owners and editors only; an ended client's writeRole is viewer");
-  const clusters = src("../../components/app/Clusters.tsx");
-  assert.equal((clusters.match(/<DraftPrompts /g) ?? []).length, 2, "the pending editor and the open row");
-  assert.match(clusters, /act && bare && c\.keyword \? \(/, "the open row offers them to owners and editors only");
+  // 18 Oct 2026, brief 2d: the callers' half - the /app setup card and the empty Clusters row posting drafts, owners
+  // and editors only - retired with /app; every /app address 308s to the dashboards host, whose setup posts to its own
+  // route. The route's write through fillDrafts still holds.
 });
 
 /**
@@ -280,8 +277,8 @@ test("the text rules the page runs before posting are the routes' own, and their
   assert.deepEqual(refuseDraftsAt([d[0]!, d[1]!, d[2]!, "short", d[4]!], 5), { message: SLOT_WHY.length, at: 3 });
   assert.equal(refuseDrafts([d[0]!, d[1]!, d[0]!, d[3]!, d[4]!]), PROMPT_TWIN, "refuseDrafts is the same rule");
   // DraftsCheck imports prompt-text.ts alone, which imports nothing - so the page's bundle carries no server code.
+  // 18 Oct 2026, brief 2d: DraftsCheck and SubmitButton (src/components/app) retired with /app; prompt-text.ts still
+  // imports nothing, so any page that runs these rules carries no server code.
   const src = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
   assert.doesNotMatch(src("./prompt-text.ts"), /^import /m);
-  assert.match(src("../../components/app/DraftsCheck.tsx"), /import \{ refuseDraftsAt \} from "@\/lib\/tracking\/prompt-text";/);
-  assert.match(src("../../components/app/SubmitButton.tsx"), /e\.defaultPrevented\) return;/, "a submit the check stopped is not left busy");
 });
