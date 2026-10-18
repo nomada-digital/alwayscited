@@ -21,6 +21,7 @@
 
 import { PROMPT_LENGTH, PROMPT_MAX, PROMPT_MIN, PROMPT_TRACKED, promptKey } from "../tracking/prompt-text.ts";
 import { refuseRole, stopDay } from "../tracking/stop.ts";
+import { otherForm } from "../tracking/plural.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
 import { MANAGED_TIERS, type Raw, type RawGroup, type RawKeyword, type RawPrompt } from "./types.ts";
@@ -33,7 +34,7 @@ export const TERM_MAX = 60;
 export const NOTE_MAX = 200;
 
 export type Op =
-  | { op: "cluster.add"; tempId: string; name: string; keyword: string | null }
+  | { op: "cluster.add"; tempId: string; name: string; keyword: string | null; pair?: string | null }
   | { op: "cluster.rename"; id: string; name: string }
   | { op: "cluster.remove"; id: string }
   | { op: "cluster.restore"; id: string }
@@ -41,7 +42,8 @@ export type Op =
   | { op: "group.edit"; id: string; name?: string; note?: string | null; terms?: string[] }
   | { op: "group.remove"; id: string }
   | { op: "group.restore"; id: string; keywords: string[]; prompts: string[] }
-  | { op: "keyword.add"; tempId: string; clusterId: string; groupId: string | null; keyword: string; volume?: number | null; intent?: string | null }
+  | { op: "keyword.add"; tempId: string; clusterId: string; groupId: string | null; keyword: string; volume?: number | null; intent?: string | null; pair?: string | null }
+  | { op: "keyword.pair"; tempId: string; id: string; keyword: string }
   | { op: "keyword.remove"; id: string }
   | { op: "keyword.restore"; id: string }
   | { op: "keyword.move"; id: string; clusterId: string; groupId: string | null }
@@ -55,7 +57,7 @@ export type OpKind = Op["op"];
 export const OP_KINDS: readonly OpKind[] = [
   "cluster.add", "cluster.rename", "cluster.remove", "cluster.restore",
   "group.add", "group.edit", "group.remove", "group.restore",
-  "keyword.add", "keyword.remove", "keyword.restore", "keyword.move",
+  "keyword.add", "keyword.pair", "keyword.remove", "keyword.restore", "keyword.move",
   "prompt.add", "prompt.edit", "prompt.remove", "prompt.restore", "prompt.move",
 ];
 
@@ -78,6 +80,29 @@ export function cleanTerms(raw: readonly string[]): string[] {
   return out;
 }
 
+/** A posted `pair` (18 Oct 2026 brief 2c): absent or null is none, a string is the other form, anything else is a bad body (undefined). */
+function readPair(v: unknown): string | null | undefined {
+  if (v === undefined || v === null || v === "") return null;
+  return str(v, 200) ?? undefined;
+}
+
+/**
+ * Why a keyword's other form cannot ride with it, or null (18 Oct 2026 brief 2c). The pair is free - no
+ * allowance - but it is a tracked keyword like any other, so the same text rules and duplicate check hold.
+ */
+export function refusePairText(pair: string | null | undefined, keyword: string, liveKeywords: readonly string[]): string | null {
+  if (!pair || !pair.trim()) return null;
+  if (keywordKey(pair) === keywordKey(keyword)) return "The plural is the same as the keyword.";
+  const t = refuseKeywordText(pair, liveKeywords);
+  return t ? `The plural: ${t.charAt(0).toLowerCase()}${t.slice(1)}` : null;
+}
+
+/** The form a pair takes: what otherForm() names it when it is that suggestion, plural otherwise. */
+export function pairForm(keyword: string, pair: string): "plural" | "singular" {
+  const o = otherForm(keyword);
+  return o && keywordKey(o.keyword) === keywordKey(pair) ? o.form : "plural";
+}
+
 /** A posted body as an Op, or null. Shape only; refuseOp judges it. */
 export function readOp(b: unknown): Op | null {
   if (!b || typeof b !== "object") return null;
@@ -85,7 +110,9 @@ export function readOp(b: unknown): Op | null {
   switch (o.op) {
     case "cluster.add": {
       const tempId = id(o.tempId), name = str(o.name, 200), keyword = o.keyword === null || o.keyword === undefined ? null : str(o.keyword, 200);
-      return tempId && name !== null && (keyword !== null || o.keyword == null) ? { op: o.op, tempId, name, keyword } : null;
+      const pair = readPair(o.pair);
+      if (pair === undefined) return null;
+      return tempId && name !== null && (keyword !== null || o.keyword == null) ? { op: o.op, tempId, name, keyword, ...(pair && keyword ? { pair } : {}) } : null;
     }
     case "cluster.rename": {
       const i = id(o.id), name = str(o.name, 200);
@@ -120,7 +147,13 @@ export function readOp(b: unknown): Op | null {
       // From keyword research: the volume and intent it showed, kept on the tracked keyword (vendor estimates).
       const volume = typeof o.volume === "number" && Number.isInteger(o.volume) && o.volume >= 0 && o.volume < 1e9 ? o.volume : null;
       const intent = typeof o.intent === "string" && ["informational", "navigational", "commercial", "transactional"].includes(o.intent) ? o.intent : null;
-      return { op: o.op, tempId, clusterId, groupId, keyword, ...(volume !== null ? { volume } : {}), ...(intent ? { intent } : {}) };
+      const pair = readPair(o.pair);
+      if (pair === undefined) return null;
+      return { op: o.op, tempId, clusterId, groupId, keyword, ...(volume !== null ? { volume } : {}), ...(intent ? { intent } : {}), ...(pair ? { pair } : {}) };
+    }
+    case "keyword.pair": {
+      const tempId = id(o.tempId), i = id(o.id), keyword = str(o.keyword, 200);
+      return tempId && i && keyword !== null ? { op: o.op, tempId, id: i, keyword } : null;
     }
     case "prompt.add": {
       const tempId = id(o.tempId), clusterId = id(o.clusterId), groupId = idOrNull(o.groupId ?? null), text = str(o.text, 600);
@@ -213,7 +246,7 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
       if (raw.clusters.some((c) => live(c) && keywordKey(c.name) === keywordKey(op.name))) return "You already have a cluster with that name.";
       if (op.keyword !== null && op.keyword.trim()) {
         if (a.keywords.used >= a.keywords.limit) return `Every keyword on your plan is in use (${a.keywords.limit}).`;
-        return refuseKeywordText(op.keyword, liveKeywords());
+        return refuseKeywordText(op.keyword, liveKeywords()) ?? refusePairText(op.pair, op.keyword, liveKeywords());
       }
       return null;
     }
@@ -271,7 +304,14 @@ export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
       const g = groupIn(op.groupId, op.clusterId);
       if (g) return g;
       if (a.keywords.used >= a.keywords.limit) return `Every keyword on your plan is in use (${a.keywords.limit}).`;
-      return refuseKeywordText(op.keyword, liveKeywords());
+      return refuseKeywordText(op.keyword, liveKeywords()) ?? refusePairText(op.pair, op.keyword, liveKeywords());
+    }
+    case "keyword.pair": {
+      const k = raw.keywords.find((x) => x.id === op.id);
+      if (!k || !live(k)) return "That keyword has been removed.";
+      if ((k.form ?? "primary") !== "primary") return "Only a main keyword takes a plural or singular.";
+      if (raw.keywords.some((x) => live(x) && x.pair_of === k.id)) return "That keyword already has its other form.";
+      return refusePairText(op.keyword, k.keyword, liveKeywords());
     }
     case "keyword.remove": {
       const k = raw.keywords.find((x) => x.id === op.id);
@@ -364,6 +404,7 @@ export function applyOp(raw: Raw, op: Op, ctx: { by: string; newId?: (tempId: st
       const kw = op.keyword && op.keyword.trim() ? newKeyword(`${op.tempId}-k`, op.keyword, cid, null) : null;
       next.clusters.push({ id: cid, name: op.name.trim(), keyword_id: kw?.id ?? null, tier: raw.client.tier, started_on: day, stopped_on: null });
       if (kw) next.keywords.push(kw);
+      if (kw && op.pair?.trim()) next.keywords.push({ ...newKeyword(`${op.tempId}-p`, op.pair, cid, null), form: pairForm(kw.keyword, op.pair), pair_of: kw.id });
       break;
     }
     case "cluster.rename":
@@ -408,14 +449,25 @@ export function applyOp(raw: Raw, op: Op, ctx: { by: string; newId?: (tempId: st
       for (const k of op.keywords) if (next.keywords.some((r) => r.id === k && r.group_id === null)) set(next.keywords, k, { group_id: op.id });
       for (const p of op.prompts) if (next.prompts.some((r) => r.id === p && r.group_id === null)) set(next.prompts, p, { group_id: op.id });
       break;
-    case "keyword.add":
-      next.keywords.push({ ...newKeyword(op.tempId, op.keyword, op.clusterId, op.groupId), search_volume: op.volume ?? null, intent: op.intent ?? null });
+    case "keyword.add": {
+      const kw = { ...newKeyword(op.tempId, op.keyword, op.clusterId, op.groupId), search_volume: op.volume ?? null, intent: op.intent ?? null };
+      next.keywords.push(kw);
+      if (op.pair?.trim()) next.keywords.push({ ...newKeyword(`${op.tempId}-p`, op.pair, op.clusterId, op.groupId), form: pairForm(kw.keyword, op.pair), pair_of: kw.id });
       break;
+    }
+    case "keyword.pair": {
+      const k = next.keywords.find((x) => x.id === op.id);
+      if (k) next.keywords.push({ ...newKeyword(op.tempId, op.keyword, k.cluster_id ?? "", k.group_id), cluster_id: k.cluster_id, form: pairForm(k.keyword, op.keyword), pair_of: k.id });
+      break;
+    }
+    // A keyword's plural or singular goes and comes back with it (brief 2c).
     case "keyword.remove":
       set(next.keywords, op.id, { stopped_on: day });
+      for (const r of next.keywords) if (r.pair_of === op.id && r.stopped_on === null) set(next.keywords, r.id, { stopped_on: day });
       break;
     case "keyword.restore":
       set(next.keywords, op.id, { stopped_on: null });
+      for (const r of next.keywords) if (r.pair_of === op.id && r.stopped_on === day) set(next.keywords, r.id, { stopped_on: null });
       break;
     case "keyword.move":
       set(next.keywords, op.id, { cluster_id: op.clusterId, group_id: op.groupId });
@@ -493,6 +545,7 @@ export function inverseOp(before: Raw, op: Op): Op | null {
     case "cluster.add":
     case "group.add":
     case "keyword.add":
+    case "keyword.pair":
     case "prompt.add":
     case "prompt.edit":
     case "cluster.restore":
@@ -509,6 +562,7 @@ export function undoAdd(op: Op, idOf: (tempId: string) => string): Op | null {
     case "cluster.add": return { op: "cluster.remove", id: idOf(op.tempId) };
     case "group.add": return { op: "group.remove", id: idOf(op.tempId) };
     case "keyword.add": return { op: "keyword.remove", id: idOf(op.tempId) };
+    case "keyword.pair": return { op: "keyword.remove", id: idOf(op.tempId) };
     case "prompt.add": return { op: "prompt.remove", id: idOf(op.tempId) };
     default: return null;
   }

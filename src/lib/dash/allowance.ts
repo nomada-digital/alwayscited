@@ -32,7 +32,8 @@ export function allowances(raw: Pick<Raw, "client" | "clusters" | "prompts" | "k
   return {
     clusters: { used: liveN(raw.clusters), limit: lim.clusters },
     prompts: { used: raw.prompts.filter((p) => p.stopped_on === null && (p as { allowance?: string | null }).allowance !== "placement").length, limit: lim.prompts },
-    keywords: { used: liveN(raw.keywords), limit: lim.keywords },
+    // 18 Oct 2026 (brief 2c): a keyword's plural or singular rides free beside it - only primaries are counted.
+    keywords: { used: raw.keywords.filter((k) => k.stopped_on === null && (k.form ?? "primary") === "primary").length, limit: lim.keywords },
   };
 }
 

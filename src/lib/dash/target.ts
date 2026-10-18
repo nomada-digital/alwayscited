@@ -12,9 +12,14 @@
 export type KeyPageRow = { url: string; origin: string; cluster_ids: readonly string[] | null; added_on: string; removed_on: string | null };
 
 export function chosenTarget(pages: readonly KeyPageRow[], clusterId: string): string | null {
+  return chosenTargetRow(pages, clusterId)?.url ?? null;
+}
+
+/** The chosen target's whole row (its key_pages id for placements.target_page_id, 18 Oct 2026 brief 2b). */
+export function chosenTargetRow<R extends KeyPageRow>(pages: readonly R[], clusterId: string): R | null {
   const mine = pages.filter((p) => p.origin === "member" && p.removed_on === null && (p.cluster_ids ?? []).includes(clusterId));
   mine.sort((a, b) => (a.added_on < b.added_on ? 1 : a.added_on > b.added_on ? -1 : 0));
-  return mine[0]?.url ?? null;
+  return mine[0] ?? null;
 }
 
 /** A target page as it is shown: no scheme, no www, no trailing slash ("nomadadigital.co.uk/blog/best-seo-agency-for-b2b"). */

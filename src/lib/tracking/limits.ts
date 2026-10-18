@@ -305,7 +305,7 @@ export type KeywordRow = { keyword: string; added_on: string; added_by: string; 
 export async function insertKeyword(db: SupabaseClient, clientId: string, clusterId: string | null, row: KeywordRow, opts: { pooled?: boolean; groupId?: string | null } = {}): Promise<Written> {
   const clusterLimit = await clusterLimitOf(db, clientId);
   if (typeof clusterLimit === "string") return { ok: false, message: clusterLimit };
-  const clientLive = await liveCount(db, "tracked_keywords", "client_domain_id", clientId);
+  const clientLive = await livePrimaryKeywordCount(db, clientId);
   if (typeof clientLive === "string") return { ok: false, message: clientLive };
   let clusterHasLive: boolean | null = null;
   if (clusterId) {
@@ -327,6 +327,52 @@ export async function insertKeyword(db: SupabaseClient, clientId: string, cluste
     const { error: lErr } = await db.from("tracked_clusters").update({ keyword_id: data.id }).eq("id", clusterId);
     if (lErr) return { ok: false, message: `Keyword added, but not linked to its cluster: ${lErr.message}` };
   }
+  return { ok: true, ids: [data.id as string] };
+}
+
+/**
+ * Live keywords counted against the allowance: primary forms only (18 Oct 2026 brief, 2c). A plural or
+ * singular paired with a primary (`form`, `pair_of`, 20261018030000) is free. Before that migration there is no
+ * `form` column and every live keyword is a primary, so a failed filtered count falls back to counting all of
+ * them - which can only refuse a keyword that would have fitted, never let one past the limit.
+ */
+export async function livePrimaryKeywordCount(db: SupabaseClient, clientId: string): Promise<number | string> {
+  const live = () => db.from("tracked_keywords").select("id", { count: "exact", head: true }).eq("client_domain_id", clientId).is("stopped_on", null);
+  const { count, error } = await live().eq("form", "primary");
+  if (!error) return count ?? 0;
+  const { count: all, error: allErr } = await live();
+  if (allErr) return `Could not count tracked_keywords: ${allErr.message || error.message}`;
+  return all ?? 0;
+}
+
+/** Why a paired form cannot be added to `primary`, or null when it can. Pure, for the tests. */
+export function refusePair(p: { primary: { stopped_on: string | null; form: string } | null; hasLivePair: boolean; same: boolean }): string | null {
+  if (!p.primary || p.primary.stopped_on !== null) return "That keyword is not live.";
+  if (p.primary.form !== "primary") return "Only a cluster's main keyword takes a plural or singular.";
+  if (p.same) return "That is the same keyword.";
+  if (p.hasLivePair) return "That keyword already has its other form.";
+  return null;
+}
+
+/**
+ * Add a keyword's plural (or singular) beside it (18 Oct 2026 brief, 2c): same client, cluster and group as the
+ * primary, no allowance used, at most one live per primary (tracked_keywords_one_live_pair). The daily runner
+ * reads every live keyword by client, so the pair is checked for the target page from the next run.
+ */
+export async function insertKeywordPair(db: SupabaseClient, clientId: string, primaryId: string, row: KeywordRow & { form: "plural" | "singular" }): Promise<Written> {
+  const { data: primary, error } = await db.from("tracked_keywords").select("id, keyword, stopped_on, form, cluster_id, group_id").eq("id", primaryId).eq("client_domain_id", clientId).maybeSingle();
+  if (error) return { ok: false, message: `Could not read the keyword: ${error.message}` };
+  const { count, error: cErr } = await db.from("tracked_keywords").select("id", { count: "exact", head: true }).eq("pair_of", primaryId).is("stopped_on", null);
+  if (cErr) return { ok: false, message: `Could not read the keyword's pair: ${cErr.message}` };
+  const refused = refusePair({ primary: primary ? { stopped_on: primary.stopped_on as string | null, form: (primary.form as string) ?? "primary" } : null, hasLivePair: (count ?? 0) > 0, same: !!primary && String(primary.keyword).trim().toLowerCase() === row.keyword.trim().toLowerCase() });
+  if (refused) return { ok: false, message: refused };
+  const { data, error: iErr } = await db
+    .from("tracked_keywords")
+    .insert({ ...row, form: row.form, pair_of: primaryId, cluster_id: primary!.cluster_id ?? null, group_id: primary!.group_id ?? null, client_domain_id: clientId })
+    .select("id")
+    .single();
+  if (iErr?.code === "23505") return { ok: false, message: "That keyword already has its other form." };
+  if (iErr) return { ok: false, message: `Could not add the keyword's other form: ${iErr.message}` };
   return { ok: true, ids: [data.id as string] };
 }
 

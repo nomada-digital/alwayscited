@@ -10,11 +10,13 @@ import { isPlausibleEmail } from "@/lib/email-address";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ADMIN_LIMITS, dayAfter, liveOn, slugFor, trackingDay, upsellSetting } from "@/lib/tracking/decide";
 import { NEEDS_A_KEYWORD } from "@/lib/checkout/signup";
-import { type Angle, angleFor, groupPrompts, insertCluster, insertKeyword, insertPrompts, linkKeyword, namesBrandIn, PROMPTS_PER_CLUSTER, readPromptRoom, readSubject, refuseGrouping } from "@/lib/tracking/limits";
+import { type Angle, angleFor, groupPrompts, insertCluster, insertKeyword, insertPrompts, linkKeyword, missingColumn, namesBrandIn, PROMPTS_PER_CLUSTER, readPromptRoom, readSubject, refuseGrouping } from "@/lib/tracking/limits";
 import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { RERUN_BUTTON } from "@/lib/tracking/rerun";
 import { adminEdit, adminStop, isAdminKind } from "@/lib/tracking/admin-edit";
 import { placementFields } from "@/lib/tracking/placements";
+import { anchorWarning, nextForm } from "@/lib/tracking/placement-target";
+import { readClusterAim } from "@/lib/tracking/placement-target-io";
 import { placementSaved } from "@/lib/diy/prompts/placement-prompt";
 import { clearScope } from "@/lib/tracking/scope";
 
@@ -351,9 +353,19 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
   if (!cluster) return { ok: false, message: "Pick one of this client's clusters." };
   const judged = placementFields(placementInput(form), client.tier as string);
   if ("error" in judged) return { ok: false, message: judged.error };
-  const { data: made, error } = await db.from("placements").insert({ ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" }).select("id").single();
-  if (error) return { ok: false, message: `Could not log the placement: ${error.message}` };
-  const message = await placementPrompt(db, form, { clientId, placementId: made.id as string, before: null, after: judged.row.status, saved: `Logged ${judged.row.url_key} (${judged.row.status}).` });
+  // 18 Oct 2026 brief 2b / 2c: the placement points at the cluster's target page, for the keyword form the
+  // split calls for unless one was picked. Neither blocks the save; what is missing or off is said after it.
+  const aim = await readClusterAim(db, clientId, clusterId);
+  if (typeof aim === "string") return { ok: false, message: aim };
+  const picked = aim.forms.find((f) => f.id === text(form, "target_keyword")) ?? nextForm(aim.forms, aim.placements);
+  const aimed = { target_page_id: aim.target?.id ?? null, target_keyword_id: picked?.id ?? null };
+  const base = { ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" };
+  let { data: made, error } = await db.from("placements").insert({ ...base, ...aimed }).select("id").single();
+  if (missingColumn(error)) ({ data: made, error } = await db.from("placements").insert(base).select("id").single());
+  if (error || !made) return { ok: false, message: `Could not log the placement: ${error?.message ?? "no row came back"}` };
+  const warnings = [aim.target ? null : "This cluster has no target page yet: choose one on the dashboard's cluster page.", anchorWarning(judged.row.anchor_text, picked?.keyword)].filter(Boolean);
+  const aimLine = `${aim.target ? ` To ${aim.target.url}` : ""}${picked ? `, for "${picked.keyword}"` : ""}.`;
+  const message = await placementPrompt(db, form, { clientId, placementId: made.id as string, before: null, after: judged.row.status, saved: `Logged ${judged.row.url_key} (${judged.row.status}).${aimLine}${warnings.length ? ` ${warnings.join(" ")}` : ""}` });
   revalidatePath(`/admin/tracking/${client.slug as string}/placements`);
   return { ok: true, message };
 }
@@ -377,7 +389,7 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
   const db = supabaseAdmin();
   const { data: row, error: rErr } = await db
     .from("placements")
-    .select("id, kind, url, status, client_domains(tier, slug)")
+    .select("id, kind, url, status, cluster_id, client_domains(tier, slug)")
     .eq("id", id)
     .eq("client_domain_id", clientId)
     .maybeSingle();
@@ -392,13 +404,17 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
   const judged = placementFields({ ...placementInput(form), kind: row.kind as string, url: row.url as string }, owner.tier);
   if ("error" in judged) return { ok: false, message: judged.error };
   const { status, scheduled_on, live_on, anchor_text, internal_note } = judged.row;
-  const { error } = await db
-    .from("placements")
-    .update({ status, scheduled_on, live_on, anchor_text, internal_note, updated_at: new Date().toISOString() })
-    .eq("id", id)
-    .eq("client_domain_id", clientId);
+  // 18 Oct 2026 brief 2c: the keyword form may be changed here; the anchor is checked against it, as a warning.
+  const aim = await readClusterAim(db, clientId, row.cluster_id as string);
+  if (typeof aim === "string") return { ok: false, message: aim };
+  const picked = aim.forms.find((f) => f.id === text(form, "target_keyword")) ?? null;
+  const fields = { status, scheduled_on, live_on, anchor_text, internal_note, updated_at: new Date().toISOString() };
+  const save = (f: Record<string, unknown>) => db.from("placements").update(f).eq("id", id).eq("client_domain_id", clientId);
+  let { error } = await save(picked ? { ...fields, target_keyword_id: picked.id } : fields);
+  if (missingColumn(error)) ({ error } = await save(fields));
   if (error) return { ok: false, message: `Could not save the placement: ${error.message}` };
-  const message = await placementPrompt(db, form, { clientId, placementId: id, before: row.status as string, after: status, saved: `Saved: ${status}.` });
+  const warning = anchorWarning(anchor_text, picked?.keyword);
+  const message = await placementPrompt(db, form, { clientId, placementId: id, before: row.status as string, after: status, saved: `Saved: ${status}.${warning ? ` ${warning}` : ""}` });
   revalidatePath(`/admin/tracking/${owner.slug}/placements`);
   return { ok: true, message };
 }

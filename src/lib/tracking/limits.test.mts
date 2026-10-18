@@ -11,7 +11,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { promptsDb } from "../diy/prompts/fake-prompts-db.mts";
-import { ANGLES, PLACEMENT_FULL, PLACEMENT_PROMPTS_PER_CLIENT, angleFor, clusterLimitFor, groupPrompts, insertPrompts, livePromptCount, missingColumn, promptRoom, readPromptRoom, refuseCluster, refuseEdit, refuseGrouping, refuseKeyword, refusePlacementPrompts, refusePrompts } from "./limits.ts";
+import { ANGLES, PLACEMENT_FULL, PLACEMENT_PROMPTS_PER_CLIENT, angleFor, clusterLimitFor, groupPrompts, insertPrompts, livePromptCount, missingColumn, promptRoom, readPromptRoom, refuseCluster, refuseEdit, refuseGrouping, refuseKeyword, refusePair, refusePlacementPrompts, refusePrompts } from "./limits.ts";
 
 test("clusters: refused at cluster_limit live, allowed under it", () => {
   assert.equal(refuseCluster(9, 10), null);
@@ -262,7 +262,8 @@ test("census: every insert into the three tracked tables goes through limits.ts"
   assert.ok(walked >= FLOOR, `walked ${walked} .from( chains, floor ${FLOOR} - the walk has stopped matching`);
   const stray = files.filter((f) => f.file !== HOME).flatMap((f) => strayWrites(f.source).map((a) => `${f.file}: .from(${a})`));
   assert.deepEqual(stray, [], "write to a tracked table outside limits.ts");
-  assert.equal(strayWrites(readFileSync(join(ROOT, HOME), "utf8")).length, 3, "limits.ts holds the three writers");
+  // 4 since 18 Oct 2026 (brief 2c): insertKeywordPair adds a primary's plural or singular, outside the allowance.
+  assert.equal(strayWrites(readFileSync(join(ROOT, HOME), "utf8")).length, 4, "limits.ts holds the four writers");
 });
 
 test("census probe: a direct insert and a variable-table insert both fire", () => {
@@ -271,4 +272,24 @@ test("census probe: a direct insert and a variable-table insert both fire", () =
   assert.deepEqual(strayWrites(`await db.from("tracked_clusters")\n  .upsert(row, { onConflict: "id" })\n  .select("id");`), ['"tracked_clusters"']);
   assert.deepEqual(strayWrites(`await db.from("tracked_questions").select("id").eq("x", 1);`), [], "a read is not a write");
   assert.deepEqual(strayWrites(`await db.from("scan_questions").insert(rows);`), [], "another table");
+});
+
+// ---- 18 Oct 2026 brief, 2c: a keyword's plural or singular is free and one per primary. ----
+
+test("a paired form is refused unless its primary is a live primary with no live pair", () => {
+  const live = { stopped_on: null, form: "primary" };
+  assert.equal(refusePair({ primary: live, hasLivePair: false, same: false }), null);
+  assert.match(refusePair({ primary: null, hasLivePair: false, same: false }) ?? "", /not live/);
+  assert.match(refusePair({ primary: { ...live, stopped_on: "2026-10-18" }, hasLivePair: false, same: false }) ?? "", /not live/);
+  assert.match(refusePair({ primary: { ...live, form: "plural" }, hasLivePair: false, same: false }) ?? "", /main keyword/);
+  assert.match(refusePair({ primary: live, hasLivePair: true, same: false }) ?? "", /already has its other form/);
+  assert.match(refusePair({ primary: live, hasLivePair: false, same: true }) ?? "", /same keyword/);
+});
+
+test("the keyword allowance counts primary forms only", () => {
+  const src = readFileSync(new URL("./limits.ts", import.meta.url), "utf8");
+  const body = src.slice(src.indexOf("export async function insertKeyword("), src.indexOf("export async function livePrimaryKeywordCount"));
+  assert.match(body, /livePrimaryKeywordCount\(db, clientId\)/, "insertKeyword counts with livePrimaryKeywordCount");
+  assert.doesNotMatch(body, /liveCount\(db, "tracked_keywords"/, "insertKeyword no longer counts every live keyword");
+  assert.match(src, /\.eq\("form", "primary"\)/);
 });

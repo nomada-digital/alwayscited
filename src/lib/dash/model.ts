@@ -16,6 +16,7 @@
  *    against the plan.
  */
 
+import { otherForm } from "../tracking/plural.ts";
 import { brandKey, subjectKeys } from "../scan/brand-name.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
@@ -120,6 +121,20 @@ function rateOf(rows: readonly RawAnswer[]): number | null {
 
 export type BuildOpts = { plan: PlanShape; sample?: boolean };
 
+/**
+ * Each plural or singular straight after the keyword it pairs with (18 Oct 2026 brief 2c): the two forms are
+ * read side by side, never averaged. Everything else keeps its order.
+ */
+export function pairsBeside<T extends { id: string | null; pairOf?: string | null }>(rows: readonly T[]): T[] {
+  const ids = new Set(rows.map((r) => r.id));
+  const out: T[] = [];
+  for (const r of rows) {
+    if (r.pairOf && ids.has(r.pairOf)) continue;
+    out.push(r, ...rows.filter((p) => p.pairOf && p.pairOf === r.id));
+  }
+  return out;
+}
+
 export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const dates = [...new Set(raw.answers.map((a) => a.run_date))].sort();
   const strip = dates.slice(-STRIP_DAYS);
@@ -204,6 +219,9 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       addedOn: k.added_on,
       pageChange: pageChangeOf(hist),
       homepage: pathOf(cur?.[2] ?? null) === "/",
+      form: k.form ?? "primary",
+      pairOf: k.pair_of ?? null,
+      suggestPair: (k.form ?? "primary") === "primary" && !raw.keywords.some((x) => live(x) && x.pair_of === k.id) ? (otherForm(k.keyword)?.keyword ?? null) : null,
     };
   };
 
@@ -247,7 +265,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     const head = raw.keywords.find((k) => k.id === c.keyword_id) ?? null;
     const headView = head ? trackedView(head) : null;
     const groups: GroupView[] = groupsOf(c.id).map((g) => {
-      const tracked = kws.filter((k) => k.group_id === g.id).map(trackedView);
+      const tracked = pairsBeside(kws.filter((k) => k.group_id === g.id).map(trackedView));
       const footprint = footBy.get(g.id) ?? [];
       const keywords = [...tracked, ...footprint];
       return {
@@ -266,7 +284,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       name: "Not in a group",
       note: null,
       terms: [],
-      keywords: kws.filter((k) => !k.group_id || !groupIds.has(k.group_id)).map(trackedView),
+      keywords: pairsBeside(kws.filter((k) => !k.group_id || !groupIds.has(k.group_id)).map(trackedView)),
       prompts: ps.filter((p) => !p.group_id || !groupIds.has(p.group_id)).map(promptView),
       discovered: { gsc: [], bing: [] },
     };
