@@ -9,6 +9,7 @@ import { keywordKey } from "@/lib/dash/ops";
 import { RESEARCH_SEED_MAX } from "@/lib/scan/dataforseo-request";
 import type { Raw } from "@/lib/dash/types";
 import type { ResearchedKeyword } from "@/lib/scan/dataforseo-request";
+import type { Audience } from "@/config/keyword-audience";
 
 import { Menu } from "./ClusterEditor";
 import { Change, Pos, Spark, longDay } from "./Figures";
@@ -33,7 +34,7 @@ function Kd({ kd }: { kd: number | null | undefined }) {
  * one click to track any of them into a chosen cluster and group. Research
  * goes through /api/dash/[client]/keywords, capped per client per day.
  */
-export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics }) {
+export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known, audience: startAudience = "all" }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics; audience?: Audience }) {
   const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
   const [metrics, setMetrics] = useState<Metrics>(known);
@@ -48,16 +49,17 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
   const [target, setTarget] = useState(targets[0] ? `${targets[0].c.id}|${targets[0].g ?? ""}` : "");
   const [seed, setSeed] = useState("");
   const [kind, setKind] = useState<"suggestions" | "related">("suggestions");
+  const [audience, setAudience] = useState<Audience>(startAudience);
   const [rows, setRows] = useState<ResearchedKeyword[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const ask = async (k: "suggestions" | "related" = kind) => {
+  const ask = async (k: "suggestions" | "related" = kind, aud: Audience = audience) => {
     if (seed.trim().length < 2) return setErr("Type a keyword of 2 characters or more.");
     if (demo) return setErr("Keyword research is not available on a demo.");
     setBusy(true);
     setErr(null);
-    const r = await fetch(`/api/dash/${slug}/keywords`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, kind: k }) }).catch(() => null);
+    const r = await fetch(`/api/dash/${slug}/keywords`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, kind: k, audience: aud }) }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { ok?: boolean; rows?: ResearchedKeyword[]; message?: string } | null;
     setBusy(false);
     if (!j?.ok) return setErr(j?.message ?? "That search did not go through. Try again.");
@@ -140,8 +142,14 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                 <button type="button" aria-pressed={kind === "suggestions"} onClick={() => { setKind("suggestions"); if (rows) void ask("suggestions"); }}>Matching terms</button>
                 <button type="button" aria-pressed={kind === "related"} onClick={() => { setKind("related"); if (rows) void ask("related"); }}>Related</button>
               </div>
+              <div className="seg" role="group" aria-label="Who the searches are for">
+                {(["all", "b2b", "b2c"] as const).map((x) => (
+                  <button key={x} type="button" aria-pressed={audience === x} title={x === "b2b" ? "Business buyers: software, services, pricing, providers..." : x === "b2c" ? "Consumers: best, reviews, near me, buy..." : "Every search, by volume"} onClick={() => { setAudience(x); if (rows) void ask(kind, x); }}>{x === "all" ? "All" : x.toUpperCase()}</button>
+                ))}
+              </div>
               <button type="submit" className="btn primary" disabled={busy}>{busy ? "Searching…" : "Search"}</button>
             </form>
+            {audience !== "all" ? <p className="muted" style={{ fontSize: 12.5, margin: "6px 0 0" }}>{audience === "b2b" ? "Ranked for business buyers: searches with words like software, services, pricing or providers, and commercial intent, come first; consumer searches are left out." : "Ranked for consumers: searches with words like best, reviews, near me or buy, and buying intent, come first; business searches are left out."}</p> : null}
             {err ? <div className="field-err" role="alert">{err}</div> : null}
             {rows ? (
               <div style={{ marginTop: 14 }}>

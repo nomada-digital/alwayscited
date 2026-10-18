@@ -7,6 +7,7 @@ import { CONTACT_FORM_ID } from "@/components/ContactTier";
 import { CONTACT_LIMITS } from "@/config/contact";
 import { submitContactForm, type ContactField, type ContactFormState } from "@/app/contact/actions";
 import { T } from "@/config/tokens";
+import { track } from "@/lib/analytics";
 
 /**
  * The contact form, from Contact.dc.html: name, work email, agency, and what
@@ -82,6 +83,17 @@ export default function ContactForm() {
    */
   const bad = state.status === "error" ? state.field : undefined;
   const formRef = useRef<HTMLFormElement>(null);
+
+  /**
+   * generate_lead on a sent enquiry (15 Oct 2026) - but submitContactForm
+   * answers "success" to a filled honeypot too, so a bot is told it worked.
+   * Whether the hidden `website` field had anything in it is read at submit,
+   * the one moment this side can see it, and a filled one is never counted.
+   */
+  const honeypotFilled = useRef(false);
+  useEffect(() => {
+    if (state.status === "success" && !honeypotFilled.current) track("generate_lead", { lead_type: "contact" });
+  }, [state]);
   useEffect(() => {
     if (!bad) return;
     formRef.current?.querySelector<HTMLElement>(`[name="${bad}"]`)?.focus();
@@ -122,7 +134,16 @@ export default function ContactForm() {
   }
 
   return (
-    <form id={CONTACT_FORM_ID} ref={formRef} action={formAction} noValidate>
+    <form
+      id={CONTACT_FORM_ID}
+      ref={formRef}
+      action={formAction}
+      onSubmit={(e) => {
+        const trap = e.currentTarget.elements.namedItem("website");
+        honeypotFilled.current = trap instanceof HTMLInputElement && trap.value.trim() !== "";
+      }}
+      noValidate
+    >
       <label htmlFor="c-name" style={labelStyle}>
         Name
       </label>

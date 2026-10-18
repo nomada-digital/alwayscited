@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import BrandMark from "./BrandMark";
+import { CookieSettingsButton } from "./ConsentBanner";
 import TierName from "./TierName";
 import { COMPANY_LINE, CONTACT_EMAIL } from "@/config/contact";
 import { GRID12, MICRO, T } from "@/config/tokens";
@@ -167,6 +168,8 @@ export default function Footer() {
           <Link href="/legal" style={{ color: T.soft, textDecoration: "none" }}>
             Privacy
           </Link>
+          {/* Reopens the consent banner, so a yes or a no can be changed (15 Oct 2026). */}
+          <CookieSettingsButton style={{ color: T.soft }} />
           <div style={{ flexGrow: 1 }} />
           <span>{CONTACT_EMAIL}</span>
         </div>

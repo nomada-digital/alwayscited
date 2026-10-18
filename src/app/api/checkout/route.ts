@@ -50,6 +50,8 @@ export async function POST(req: Request) {
     keyword: field("keyword", CHECKOUT_LIMITS.keyword.max + 1),
     scan: field("scan", CHECKOUT_LIMITS.scan),
     website: field("website", CHECKOUT_LIMITS.website),
+    // The GA client id (15 Oct 2026), only ever present after a yes to analytics.
+    gaClientId: field("ga_client_id", CHECKOUT_LIMITS.gaClientId),
   };
 
   // The trial's one-per-domain-and-email read, only while the trial is on and

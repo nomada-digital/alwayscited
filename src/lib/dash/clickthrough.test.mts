@@ -91,3 +91,26 @@ test("the webhook sends a pack to its own handler and never to signup", async ()
   await send("customer.subscription.updated", { id: "sub_main", metadata: {} });
   assert.deepEqual(calls, ["pack-completed", "pack-changed", "pack-ended", "updated"]);
 });
+
+test("B2B / B2C: business and consumer words and intent rank the rows; the other side is left out; All keeps volume order", async () => {
+  const { audienceFit, defaultAudience, rankForAudience } = await import("./audience.ts");
+  const rows = [
+    { keyword: "best life sciences recruitment near me", volume: 900, intent: "transactional" },
+    { keyword: "life sciences recruitment software", volume: 300, intent: "commercial" },
+    { keyword: "life sciences recruitment pricing", volume: 100, intent: "commercial" },
+    { keyword: "life sciences recruitment", volume: 2000, intent: "commercial" },
+    { keyword: "Life Sciences Recruitment", volume: 2000, intent: "commercial" },
+    { keyword: "acme recruitment login", volume: 500, intent: "navigational" },
+  ];
+  const b2b = rankForAudience(rows, "b2b").map((r) => r.keyword);
+  assert.deepEqual(b2b.slice(0, 3), ["life sciences recruitment software", "life sciences recruitment pricing", "life sciences recruitment"], "own words first, then commercial intent");
+  assert.ok(!b2b.includes("best life sciences recruitment near me"), "a consumer search is left out of B2B");
+  assert.ok(!b2b.includes("acme recruitment login"), "a navigational search is left out");
+  assert.equal(b2b.filter((k) => k.toLowerCase() === "life sciences recruitment").length, 1, "de-duplicated");
+  assert.equal(rankForAudience(rows, "b2c")[0]!.keyword, "best life sciences recruitment near me");
+  assert.equal(rankForAudience(rows, "all")[0]!.volume, 2000);
+  assert.equal(audienceFit({ keyword: "vs software", volume: 1, intent: null }, "all"), 0);
+  assert.equal(defaultAudience("technology"), "b2b");
+  assert.equal(defaultAudience("retail"), "b2c");
+  assert.equal(defaultAudience(null), "all");
+});

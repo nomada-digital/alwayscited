@@ -22,7 +22,7 @@ import { isPlausibleDomain, normalizeDomain } from "../scan/domain.ts";
 export const CHECKOUT_TIERS = ["tracked", "mentioned", "cited"] as const;
 export type CheckoutTier = (typeof CHECKOUT_TIERS)[number];
 
-export type Order = { tier: string; sector: string; quantity: number; market: string; email: string; keyword: string; scan?: string; website?: string; /** Extra tracking packs. No checkout sells one yet, so 0. */ packs?: number };
+export type Order = { tier: string; sector: string; quantity: number; market: string; email: string; keyword: string; scan?: string; website?: string; /** The GA client id from the _ga cookie, after consent; anything else is dropped. */ gaClientId?: string; /** Extra tracking packs. No checkout sells one yet, so 0. */ packs?: number };
 
 export type CheckoutContext = {
   /** alwaystracked's monthly price per market, from pricing.ts. */
@@ -101,6 +101,11 @@ export function checkoutRequest(order: Order, ctx: CheckoutContext): CheckoutReq
     f.set(`metadata[${k}]`, v);
     f.set(`subscription_data[metadata][${k}]`, v);
   }
+  // The GA client id (15 Oct 2026), on the Session only - the webhook reads it
+  // from checkout.session.completed to send the purchase to GA4 against the
+  // visit that made it. Only the cookie's own shape gets through.
+  const ga = (order.gaClientId ?? "").trim();
+  if (/^\d{1,12}\.\d{1,12}$/.test(ga)) f.set("metadata[ga_client_id]", ga);
   // VAT through Stripe Tax (R129, Danny, 30 Sep 2026, danny.md 116-117): live
   // on the account, UK VAT registered since Nov 2025, prices tax-exclusive.
   // tax_behavior is set on the price itself: left unset, Stripe falls back to

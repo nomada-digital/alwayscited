@@ -6,6 +6,7 @@ import { requestScan } from "@/app/actions/waitlist";
 import { WAITLIST_LIMITS } from "@/config/contact";
 import { FREE_ENGINE_LABELS, listOf } from "@/config/scan-shape";
 import { T } from "@/config/tokens";
+import { track } from "@/lib/analytics";
 import { isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
 import { isWorkEmail, WORK_EMAIL_REFUSAL } from "@/lib/work-email";
 
@@ -77,7 +78,11 @@ export default function RequestScanForm({ initialDomain = "" }: { initialDomain?
     setBusy(true);
     try {
       const res = await requestScan({ domain, email, topic, website });
-      if (res.ok) setStep("done");
+      if (res.ok) {
+        setStep("done");
+        // requestScan answers ok to a filled honeypot as well; only a real one counts.
+        if (!website.trim()) track("generate_lead", { lead_type: "scan_request" });
+      }
       else setError(res.message);
     } finally {
       setBusy(false);

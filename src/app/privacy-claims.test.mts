@@ -19,6 +19,8 @@ import { SETTINGS_FALLBACK } from "../lib/scan/settings-merge.ts";
  *   - an unclaimed scan loses only its transcript, after seven days, and keeps
  *     its measured facts;
  *   - the one third-party script the page loads is Cloudflare Turnstile.
+ *     (15 Oct 2026: two now, Turnstile and, after a yes on the cookie banner,
+ *     Google Analytics - Danny approved GA4 with a consent banner in chat.)
  *
  * All three were true when typed and none was falsifiable afterwards, which is
  * the species this queue keeps paying for. A privacy policy is the one page
@@ -387,9 +389,37 @@ test("every off-origin recipient of the raw address is named on the page", () =>
  * B. "This site sets no cookies of its own"
  * ------------------------------------------------------------------ */
 
-test("nothing in the tree touches document.cookie", () => {
+/**
+ * The one file allowed to touch document.cookie, with the argument for it.
+ *
+ * Empty until 15 Oct 2026, when Danny approved GA4 with a consent banner in
+ * chat. GA sets its own cookies (_ga, _ga_<id>) on this domain after a yes,
+ * and /legal now promises two things that need the jar: that declining after
+ * accepting deletes them, and that the purchase is joined to the visit only
+ * for a visitor who accepted - which is the _ga cookie read at checkout. Both
+ * live in the consent module, which never writes a cookie of its own; it only
+ * expires GA's. Reading is still held with writing: a read is one character
+ * from a write, so anywhere else stays forbidden.
+ */
+const COOKIE_SCRIPT_TOUCHERS: Record<string, string> = {
+  "src/lib/analytics.ts":
+    "expireGaCookies() sets Max-Age=0 on GA's own cookies when a yes is withdrawn, and gaClientId() reads _ga after a yes so the webhook's purchase joins the visit. It sets no cookie of its own.",
+};
+
+test("only the consent module touches document.cookie", () => {
   const hits = FILES.filter(({ source }) => /\bdocument\s*\.\s*cookie\b/.test(bare(source))).map((f) => f.file);
-  assert.deepEqual(hits, [], '/legal says "This site sets no cookies of its own". Reading is forbidden alongside writing on purpose: the page promises the site does not deal in them at all, and a read is one character from a write.');
+  assert.deepEqual(
+    hits.sort(),
+    Object.keys(COOKIE_SCRIPT_TOUCHERS).sort(),
+    '/legal says that apart from Google Analytics\'s, set only after a yes, "this site sets no cookies of its own" but the dashboard login. document.cookie is touched somewhere new, or the consent module no longer touches it and its allowance is stale.',
+  );
+  for (const [file, why] of Object.entries(COOKIE_SCRIPT_TOUCHERS)) assert.ok(why.length > 40, `${file} is allowed the cookie jar with no argument for it`);
+  // What the consent module does with it: expire, or read _ga. Every write
+  // assigns an expired value - nothing it writes can create a cookie.
+  const consent = bare(readFileSync(join(SRC, "lib/analytics.ts"), "utf8"));
+  const writes = [...code(readFileSync(join(SRC, "lib/analytics.ts"), "utf8")).matchAll(/document\.cookie\s*=\s*(.*)$/gm)].map((m) => m[1]!);
+  assert.ok(writes.length >= 1 && /document\.cookie\s*=/.test(consent), "the consent module no longer expires GA's cookies, and /legal says declining deletes them");
+  for (const w of writes) assert.match(w, /Max-Age=0/, `the consent module writes a cookie that is not an expiry: ${w}`);
 });
 
 /**
@@ -505,7 +535,26 @@ const THIRD_PARTIES: { origin: string; vendor: string; why: string }[] = [
   {
     origin: "https://challenges.cloudflare.com",
     vendor: "Cloudflare",
-    why: "Turnstile: the api.js script, the widget's iframe, and the connection it makes to score the challenge. The only origin on this site that is not ours.",
+    why: "Turnstile: the api.js script, the widget's iframe, and the connection it makes to score the challenge.",
+  },
+  // 15 Oct 2026, Danny approved GA4 with a consent banner in chat. Three
+  // origins, one vendor, one script: gtag.js and where it sends hits. None is
+  // requested before a yes (analytics-claim.test.mts holds the gate), and the
+  // dashboard's own policy has them taken out (APP_CSP in next.config.ts).
+  {
+    origin: "https://www.googletagmanager.com",
+    vendor: "Google",
+    why: "gtag.js, Google Analytics' script, loaded by the consent banner after a yes; it also takes hits and serves a pixel.",
+  },
+  {
+    origin: "https://www.google-analytics.com",
+    vendor: "Google",
+    why: "where gtag.js sends GA4 hits, by fetch, beacon and image, after a yes.",
+  },
+  {
+    origin: "https://region1.google-analytics.com",
+    vendor: "Google",
+    why: "GA4's regional collection endpoint, which gtag.js sends hits to after a yes.",
   },
 ];
 
@@ -588,7 +637,7 @@ test("the CSP parse read the real policy, so an empty set cannot pass as a stric
   }
 });
 
-test("the browser may reach exactly one third party, and it is the one on the page", () => {
+test("the browser may reach exactly the argued third parties, and they are the ones on the page", () => {
   const found = new Set<string>();
   for (const { name, sources } of directives()) {
     if (name === "form-action") continue; // navigation targets, pinned by FORM_TARGETS above
@@ -598,7 +647,7 @@ test("the browser may reach exactly one third party, and it is the one on the pa
       const origin = new URL(src).origin;
       assert.ok(
         THIRD_PARTIES.some((t) => t.origin === origin),
-        `${name} permits ${origin}, which is not on the argued list. /legal tells a visitor the one third-party script the page loads is Cloudflare Turnstile - a second origin makes that sentence false, and route-closure passes on it the moment something in src/ loads it.`,
+        `${name} permits ${origin}, which is not on the argued list. /legal tells a visitor the site loads two third-party scripts, Cloudflare Turnstile and Google Analytics - a third origin makes that sentence false, and route-closure passes on it the moment something in src/ loads it.`,
       );
       found.add(origin);
     }
@@ -625,14 +674,26 @@ test("no directive smuggles a third party in through a source that is not a URL"
   assert.deepEqual(loose, [], "a CSP source that is a wildcard, a bare scheme or a hostname without an origin. The rule above reads origins, so anything in this list is a third party it cannot see.");
 });
 
+/**
+ * The sentence was "The one third-party script the page loads is Cloudflare
+ * Turnstile" until 15 Oct 2026, when Danny approved GA4 with a consent banner
+ * in chat. It is now "two third-party scripts, and one of them only if you say
+ * yes", and the count is still held: two vendors, each named on the page and
+ * in "Who else sees it".
+ */
 test("the page still claims the number this file just checked", () => {
-  assert.equal(THIRD_PARTIES.length, 1, "there is more than one third party now, so the sentence below has to change before this test can be made to pass");
+  const vendors = [...new Set(THIRD_PARTIES.map((t) => t.vendor))].sort();
+  assert.deepEqual(vendors, ["Cloudflare", "Google"], "the set of third-party vendors changed, so the sentence below has to change before this test can be made to pass");
   assert.ok(
-    /The one third-party script the page loads is Cloudflare Turnstile/.test(LEGAL),
-    '/legal no longer says "The one third-party script the page loads is Cloudflare Turnstile". The rules above hold that sentence; if it was reworded, reword them with it rather than deleting them.',
+    /The site loads two third-party scripts, and one of them only if you say yes\. Cloudflare Turnstile/.test(LEGAL),
+    '/legal no longer says "The site loads two third-party scripts, and one of them only if you say yes. Cloudflare Turnstile ...". The rules above hold that sentence; if it was reworded, reword them with it rather than deleting them.',
   );
-  for (const { vendor } of THIRD_PARTIES) {
+  assert.ok(!/The one third-party script the page loads/.test(LEGAL), "/legal still claims a single third-party script");
+  const who = LEGAL.match(/id: "who",[\s\S]*?id: "cookies",/)?.[0] ?? "";
+  for (const { vendor, why } of THIRD_PARTIES) {
+    assert.ok(why.length > 30, `${vendor} is an argued third party with no argument`);
     assert.ok(LEGAL.includes(vendor), `${vendor} is a third party this site reaches and /legal does not name it`);
+    assert.ok(who.includes(vendor), `${vendor} is a third party this site reaches and "Who else sees it" does not name it`);
   }
 });
 
