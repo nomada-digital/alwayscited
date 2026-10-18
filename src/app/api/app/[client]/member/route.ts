@@ -46,7 +46,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   // 18 Oct 2026 brief 2d: Settings lives on the dashboards host, so its posts come back there.
   const dash = form?.get("from") === "dash";
   const back = (done: TeamDone, why: TeamWhy | null = null) =>
-    NextResponse.redirect(dash ? new URL(dashTeamReturn(dashBase(req.headers.get("host")), slug, done, f?.email ?? null, why), req.url) : dashUrl(req, teamReturn(slug, done, f?.email ?? null, kept, why)), 303);
+    NextResponse.redirect(dashUrl(req, dash ? dashTeamReturn(dashBase(req.headers.get("host")), slug, done, f?.email ?? null, why) : teamReturn(slug, done, f?.email ?? null, kept, why)), 303);
   // R151 (3 Oct 2026): an invite whose address fails the shape check says so on its field.
   if (!f) return back("refused", form?.get("op") === "invite" ? "email" : null);
   if (fixtureMode()) {

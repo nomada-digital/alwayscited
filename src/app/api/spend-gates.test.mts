@@ -287,6 +287,32 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     where: "src/app/api/app/[client]/setup/route.ts",
   },
   /**
+   * 18 October 2026, brief 2d: setup's Confirm on the dashboards host - the
+   * same once-only internal mail as app/[client]/setup, as JSON.
+   */
+  "dash/[client]/setup/finish": {
+    why:
+      "Sends one internal mail when a signed-in owner or editor confirms the client's setup on the " +
+      "dashboards host, and starts no scan. Once a client: the send follows the setup_confirmed insert, " +
+      "which a client already confirmed never reaches, and setupGaps refuses before either.",
+    evidence: /if \(already\) return Response\.json\(\{ ok: true, already: true \}\);[\s\S]*?await sendSetupConfirmed\(/,
+    where: "src/app/api/dash/[client]/setup/finish/route.ts",
+  },
+  /**
+   * 18 October 2026, brief 2b / 2c: setup's keyword step on the dashboards
+   * host - Check keyword, plus where the site and the chosen page rank and
+   * the plural's volume.
+   */
+  "dash/[client]/setup/keyword": {
+    why:
+      "Runs the same check-keyword.ts check as app/[client]/check for a signed-in owner or editor - " +
+      "nothing paid until the free prechecks pass, CHECKS_PER_CLIENT_PER_DAY a client a day counted off " +
+      "keyword_checked rows written before any read - and only after a passing check two Google position " +
+      "reads and one volume read (a few cents), so the same daily count bounds them.",
+    evidence: /if \(!check\.ok\) return Response\.json\(\{ ok: true, check \}\);[\s\S]*?readKeywordPosition\(/,
+    where: "src/app/api/dash/[client]/setup/keyword/route.ts",
+  },
+  /**
    * 30 September 2026, BRIEF-2 T11 /ask: a member's ask - one Resend message,
    * to us or the account's agency contact, and no scan.
    */
@@ -691,8 +717,14 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * fallback behind `diy_enabled`, the link-check allowance and the DIY
      * caps, so `scans_enabled` has nothing to refuse and the decision is not
      * moved.
+     *
+     * Twenty on 18 Oct 2026 (brief 2d): `dash/[client]/setup/keyword` and
+     * `dash/[client]/setup/finish`, setup on the dashboards host - the same
+     * keyword check (per-client daily cap) and once-only internal mail as
+     * `app/[client]/check` and `app/[client]/setup`. They start no scan, so
+     * `scans_enabled` has nothing to refuse and the decision is not moved.
      */
-    18,
+    20,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });

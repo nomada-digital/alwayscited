@@ -105,6 +105,10 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/[client]/managed": "one client's managed clusters and this month's delivery on them (paid plans, 17 Oct 2026); private, same membership 404",
   "/dashboards/[client]/opportunities": "one client's opportunities; private, same membership 404",
   "/dashboards/[client]/plan": "one client's plan and allowances; private, same membership 404",
+  // 18 Oct 2026 (brief 2d / 2g).
+  "/dashboards/[client]/setup": "one client's setup (keywords, target pages, prompts); private, same membership 404",
+  "/dashboards/[client]/settings": "one client's team and settings; private, same membership 404",
+  "/dashboards/[client]/alwaystracked": "one paid client's alwaystracked view of its own figures; private, same membership 404",
   "/dashboards/[client]/sources": "the sites the engines cite for one client; private, same membership 404",
   "/dashboards/auth": "the dashboards host's sign-in link button; nothing on it is meant to be found",
   "/dashboards/login": "the dashboards host's sign-in form; nothing on it is meant to be found by search",

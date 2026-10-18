@@ -360,9 +360,15 @@ export async function logPlacement(_prev: AdminResult | null, form: FormData): P
   const picked = aim.forms.find((f) => f.id === text(form, "target_keyword")) ?? nextForm(aim.forms, aim.placements);
   const aimed = { target_page_id: aim.target?.id ?? null, target_keyword_id: picked?.id ?? null };
   const base = { ...judged.row, client_domain_id: clientId, cluster_id: clusterId, created_by: "nomada" };
-  let { data: made, error } = await db.from("placements").insert({ ...base, ...aimed }).select("id").single();
-  if (missingColumn(error)) ({ data: made, error } = await db.from("placements").insert(base).select("id").single());
-  if (error || !made) return { ok: false, message: `Could not log the placement: ${error?.message ?? "no row came back"}` };
+  const { data: aimedRow, error: aimedErr } = await db.from("placements").insert({ ...base, ...aimed }).select("id").single();
+  let made = aimedRow;
+  if (missingColumn(aimedErr)) {
+    // Before 20261018030000 there are no target columns: the placement is logged without them.
+    const { data: plain, error: plainErr } = await db.from("placements").insert(base).select("id").single();
+    if (plainErr) return { ok: false, message: `Could not log the placement: ${plainErr.message}` };
+    made = plain;
+  } else if (aimedErr) return { ok: false, message: `Could not log the placement: ${aimedErr.message}` };
+  if (!made) return { ok: false, message: "Could not log the placement: no row came back" };
   const warnings = [aim.target ? null : "This cluster has no target page yet: choose one on the dashboard's cluster page.", anchorWarning(judged.row.anchor_text, picked?.keyword)].filter(Boolean);
   const aimLine = `${aim.target ? ` To ${aim.target.url}` : ""}${picked ? `, for "${picked.keyword}"` : ""}.`;
   const message = await placementPrompt(db, form, { clientId, placementId: made.id as string, before: null, after: judged.row.status, saved: `Logged ${judged.row.url_key} (${judged.row.status}).${aimLine}${warnings.length ? ` ${warnings.join(" ")}` : ""}` });
@@ -409,10 +415,11 @@ export async function updatePlacement(_prev: AdminResult | null, form: FormData)
   if (typeof aim === "string") return { ok: false, message: aim };
   const picked = aim.forms.find((f) => f.id === text(form, "target_keyword")) ?? null;
   const fields = { status, scheduled_on, live_on, anchor_text, internal_note, updated_at: new Date().toISOString() };
-  const save = (f: Record<string, unknown>) => db.from("placements").update(f).eq("id", id).eq("client_domain_id", clientId);
-  let { error } = await save(picked ? { ...fields, target_keyword_id: picked.id } : fields);
-  if (missingColumn(error)) ({ error } = await save(fields));
-  if (error) return { ok: false, message: `Could not save the placement: ${error.message}` };
+  const { error: aimedErr } = await db.from("placements").update(picked ? { ...fields, target_keyword_id: picked.id } : fields).eq("id", id).eq("client_domain_id", clientId);
+  if (missingColumn(aimedErr)) {
+    const { error: plainErr } = await db.from("placements").update(fields).eq("id", id).eq("client_domain_id", clientId);
+    if (plainErr) return { ok: false, message: `Could not save the placement: ${plainErr.message}` };
+  } else if (aimedErr) return { ok: false, message: `Could not save the placement: ${aimedErr.message}` };
   const warning = anchorWarning(anchor_text, picked?.keyword);
   const message = await placementPrompt(db, form, { clientId, placementId: id, before: row.status as string, after: status, saved: `Saved: ${status}.${warning ? ` ${warning}` : ""}` });
   revalidatePath(`/admin/tracking/${owner.slug}/placements`);

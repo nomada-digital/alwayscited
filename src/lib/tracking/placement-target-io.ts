@@ -29,14 +29,19 @@ export async function readClusterAim(db: SupabaseClient, clientId: string, clust
   const forms: FormKeyword[] = [];
   const primaryId = (cluster?.keyword_id as string | null) ?? null;
   if (primaryId) {
-    const withForms = await db.from("tracked_keywords").select("id, keyword, form, stopped_on").or(`id.eq.${primaryId},pair_of.eq.${primaryId}`).is("stopped_on", null);
-    if (withForms.error && !missingColumn(withForms.error)) return `Could not read the cluster keyword: ${withForms.error.message}`;
-    const rows = withForms.error ? ((await db.from("tracked_keywords").select("id, keyword, stopped_on").eq("id", primaryId).is("stopped_on", null)).data ?? []) : (withForms.data ?? []);
+    const { data: withForms, error: fErr } = await db.from("tracked_keywords").select("id, keyword, form, stopped_on").eq("client_domain_id", clientId).or(`id.eq.${primaryId},pair_of.eq.${primaryId}`).is("stopped_on", null);
+    if (fErr && !missingColumn(fErr)) return `Could not read the cluster keyword: ${fErr.message}`;
+    let rows: { id: string; keyword: string; form?: string }[] = withForms ?? [];
+    if (fErr) {
+      const { data: head, error: hErr } = await db.from("tracked_keywords").select("id, keyword, stopped_on").eq("client_domain_id", clientId).eq("id", primaryId).is("stopped_on", null);
+      if (hErr) return `Could not read the cluster keyword: ${hErr.message}`;
+      rows = head ?? [];
+    }
     for (const k of rows as { id: string; keyword: string; form?: string }[]) forms.push({ id: k.id, keyword: k.keyword, form: (k.form as FormKeyword["form"]) ?? "primary" });
     forms.sort((a, b) => (a.form === "primary" ? -1 : b.form === "primary" ? 1 : 0));
   }
 
-  const { data: placed, error: plErr } = await db.from("placements").select("target_keyword_id, status").eq("cluster_id", clusterId);
+  const { data: placed, error: plErr } = await db.from("placements").select("target_keyword_id, status").eq("client_domain_id", clientId).eq("cluster_id", clusterId);
   if (plErr && !missingColumn(plErr)) return `Could not read the cluster's placements: ${plErr.message}`;
   return { target, forms, placements: plErr ? [] : ((placed ?? []) as CountedPlacement[]) };
 }

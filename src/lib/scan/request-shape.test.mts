@@ -341,7 +341,8 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
   assert.deepEqual(senders, {
     keywordVolumeRequest: ["src/lib/scan/dataforseo.ts"],
     keywordRankRequest: ["src/lib/scan/dataforseo.ts"],
-    readKeywordVolumes: ["src/app/api/scan/[token]/questions/route.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts"],
+    // 18 Oct 2026 (brief 2c): setup's keyword step reads the plural's volume, after check-keyword.ts's capped check passes.
+    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/app/api/scan/[token]/questions/route.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts"],
     readKeywordRank: ["src/lib/scan/pipeline.ts"],
   });
 });

@@ -44,7 +44,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
   const market = isMarket(c.market) ? c.market : "US";
   const db = supabaseAdmin();
 
-  const { data: tracked } = await db.from("tracked_keywords").select("keyword").eq("client_domain_id", c.id).is("stopped_on", null);
+  const { data: tracked, error: tErr } = await db.from("tracked_keywords").select("keyword").eq("client_domain_id", c.id).is("stopped_on", null);
+  if (tErr) return Response.json({ ok: false, message: "Could not read your keywords. Try again." }, { status: 502 });
   // The keyword being set up is this cluster's own: re-checking it is not "already tracked".
   const others = (tracked ?? []).map((r) => r.keyword as string).filter((k) => k.trim().toLowerCase() !== keyword.trim().toLowerCase());
   const check = await checkClusterKeyword(db, { clientId: c.id, email, keyword, market, tracked: others, brands: [c.brand ?? "", c.domain].filter(Boolean), today: trackingDay() });

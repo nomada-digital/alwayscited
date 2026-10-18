@@ -4,6 +4,10 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import type { PlanShape } from "@/lib/dash/allowance";
+import { KEYWORD_MAX } from "@/lib/dash/ops";
+import { PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
+import { PLACEMENT_LIMITS } from "@/lib/tracking/placements";
+import { ADMIN_LIMITS } from "@/lib/tracking/decide";
 import { setupClusters, setupGaps, stepOf, worked, type SetupCluster } from "@/lib/dash/setup";
 import { targetLabel } from "@/lib/dash/target";
 import type { Raw } from "@/lib/dash/types";
@@ -44,7 +48,7 @@ export default function SetupWizard({ slug, base, initial, plan, demo, homepage 
   const confirm = async () => {
     setConfirming(true);
     setConfirmErr(null);
-    const r = await fetch(`/api/dash/${slug}/setup/confirm`, { method: "POST" }).catch(() => null);
+    const r = await fetch(`/api/dash/${slug}/setup/finish`, { method: "POST" }).catch(() => null);
     const a = (await r?.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
     setConfirming(false);
     if (a?.ok) router.push(`${base}/${slug}?setup=confirmed`);
@@ -88,7 +92,7 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
 
   const check = async (keyword: string, forUrl: string | null = null) => {
     setChecking(true);
-    const r = await fetch(`/api/dash/${slug}/setup/check`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ keyword, url: forUrl }) }).catch(() => null);
+    const r = await fetch(`/api/dash/${slug}/setup/keyword`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ keyword, url: forUrl }) }).catch(() => null);
     const a = ((await r?.json().catch(() => null)) as Checked | null) ?? { ok: false, message: "No connection. Try again." };
     setChecking(false);
     setChecked(a);
@@ -127,7 +131,7 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
         ) : null}
         {canWrite && (!keywordDone || !c.pair) ? (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 6 }}>
-            {!keywordDone ? <input className="field" style={{ flex: "1 1 260px" }} value={kw} onChange={(e) => { setKw(e.target.value); setChecked(null); }} placeholder="b2b seo agency" aria-label={`Keyword for cluster ${n}`} maxLength={120} /> : null}
+            {!keywordDone ? <input className="field" style={{ flex: "1 1 260px" }} value={kw} onChange={(e) => { setKw(e.target.value); setChecked(null); }} placeholder="b2b seo agency" aria-label={`Keyword for cluster ${n}`} maxLength={KEYWORD_MAX} /> : null}
             <button className="btn" disabled={checking || !(keywordDone ? (c.keyword ?? "") : kw).trim()} onClick={() => void check(keywordDone ? c.keyword! : kw, url.trim() || null)}>{checking ? "Checking…" : "Check on Google"}</button>
           </div>
         ) : null}
@@ -136,9 +140,9 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
         {ranks?.pair && canWrite ? (
           <div style={{ marginTop: 8 }}>
             <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13.5 }}>
-              <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} />
+              <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} maxLength={PLACEMENT_LIMITS.id} />
               <span>
-                Also target <input className="field" style={{ width: 240, display: "inline-block" }} value={pairText ?? ""} onChange={(e) => setPairText(e.target.value)} aria-label="The other form of the keyword" />
+                Also target <input className="field" style={{ width: 240, display: "inline-block" }} value={pairText ?? ""} onChange={(e) => setPairText(e.target.value)} aria-label="The other form of the keyword" maxLength={KEYWORD_MAX} />
                 {ranks.pair.volume ? ` (${ranks.pair.volume.toLocaleString("en-GB")}/mo)` : ""}, no extra charge.
               </span>
             </label>
@@ -154,7 +158,7 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
           <p className="intro" style={{ margin: "4px 0" }}>The one page this cluster should rank and be cited with. Every placement and link insertion for it links here.</p>
           {canWrite ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input className="field" style={{ flex: "1 1 320px" }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={homepage} aria-label={`Target page for cluster ${n}`} maxLength={500} />
+              <input className="field" style={{ flex: "1 1 320px" }} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={homepage} aria-label={`Target page for cluster ${n}`} maxLength={PLACEMENT_LIMITS.url} />
               <button className="btn" disabled={checking || !url.trim()} onClick={() => void check(c.keyword!, url.trim())}>Where does it rank?</button>
               <button className="btn primary" disabled={!url.trim() || (!!c.target && c.target === url.trim())} onClick={() => run({ op: "cluster.target", id: c.id, url: url.trim() }, `Target page set: ${targetLabel(url.trim())}.`)}>{c.target ? "Change target page" : "Set target page"}</button>
             </div>
@@ -177,9 +181,9 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
             <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{prompts.map((p) => <li key={p}>{p}</li>)}</ul>
           ) : canWrite ? (
             <>
-              <p className="intro" style={{ margin: "4px 0" }}>Five questions buyers ask, drafted from your keyword. Edit any of them; nothing is tracked until you save.</p>
+              <p className="intro" style={{ margin: "4px 0" }}>{PROMPTS_PER_CLUSTER} questions buyers ask, drafted from your keyword. Edit any of them; nothing is tracked until you save.</p>
               {(drafts ?? draftPrompts(c.keyword!)).map((d, i) => (
-                <input key={i} className="field" style={{ width: "100%", marginTop: 6 }} value={d} maxLength={300} aria-label={`Prompt ${i + 1}`} onChange={(e) => { const next = [...(drafts ?? draftPrompts(c.keyword!))]; next[i] = e.target.value; setDrafts(next); }} />
+                <input key={i} className="field" style={{ width: "100%", marginTop: 6 }} value={d} maxLength={ADMIN_LIMITS.question} aria-label={`Prompt ${i + 1}`} onChange={(e) => { const next = [...(drafts ?? draftPrompts(c.keyword!))]; next[i] = e.target.value; setDrafts(next); }} />
               ))}
               <button className="btn primary" style={{ marginTop: 10 }} onClick={() => { for (const t of drafts ?? draftPrompts(c.keyword!)) run({ op: "prompt.add", tempId: tempId(), clusterId: c.id, groupId: null, text: t }, null); }}>Save these prompts</button>
             </>

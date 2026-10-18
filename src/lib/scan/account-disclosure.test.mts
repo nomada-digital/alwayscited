@@ -185,6 +185,9 @@ const RECORDED: Record<string, string> = {
   // 1 Oct 2026, R142 part 2 (BRIEF-4 P2 Team): the owner's own client, already membership-checked.
   "src/app/api/app/[client]/member/route.ts :: account_id":
     "the member route's team lookup; the 303 carries only the toast word and the email the owner typed.",
+  // 18 Oct 2026 (brief 2d): Settings on the dashboards host reads its own client's team, as the member route does.
+  "src/app/dashboards/[client]/settings/page.tsx :: account_id":
+    "the Settings page's team lookup for a membership-checked client; the page renders members' emails and roles, never the id.",
   // 1 Oct 2026, R159 part 3: plan_ended finds the ended client's live owners.
   // 8 Oct 2026 (audit copy-4, package E): slug and trial_ends_at joined, for
   // plan_ended's Billing link and its trial version; the id is still used only
@@ -236,6 +239,9 @@ const MENTIONED: Record<string, string> = {
     "sent|refused and us|agency, never the id.",
   // settings-data.ts left this list 13 Oct 2026 (dashboard speed work): its team read embeds the account's members
   // through the foreign key and no longer names the column (R142, 1 Oct 2026, read it to filter the members).
+  "src/app/dashboards/[client]/settings/page.tsx":
+    "18 Oct 2026 (brief 2d): reads its own membership-checked client's account_id to read the team (team.ts readTeam). " +
+    "Server component; renders emails and roles only, never the id.",
   "src/app/api/app/[client]/member/route.ts":
     "R142 part 2 (1 Oct 2026): reads the owner's own client's account_id to read and change its team. " +
     "Used only in team.ts filters and writes; the route answers with a 303 carrying a toast word and an email, never the id.",
