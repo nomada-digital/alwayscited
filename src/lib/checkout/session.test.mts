@@ -127,3 +127,55 @@ test("an order the browser could forge is refused, and no field sets the amount"
   assert.ok(forged.kind === "session" && honest.kind === "session");
   assert.equal(forged.form.toString(), honest.form.toString());
 });
+
+/**
+ * Danny, 18 Oct 2026: "site is right. stripe should adjust the amount based on the keyword cluster though as the price
+ * varies." The site's price for a cluster is its sector's (sector-prices.json, read by pricing.ts through
+ * sector-pricing.ts) times the clusters bought. Checked here against the JSON itself, not against quoteFor, for every
+ * priced sector, both markets, both checkout tiers and every quantity /checkout sells: the Stripe Session's
+ * unit_amount is the sector's price in cents, its quantity the clusters, and its currency the market's.
+ * "From $1,395" is the cheapest sector; an entertainment-sector alwaysmentioned order is $1,795 - which is what
+ * the one cancelled test subscription was.
+ */
+test("the Stripe amount is pricing.ts's price for the order's sector, for every sector, market, tier and quantity (18 Oct 2026)", async () => {
+  const { readFileSync } = await import("node:fs");
+  const { MAX_CLUSTERS } = await import("../../config/sector-pricing.ts");
+  const raw = JSON.parse(readFileSync(new URL("../../config/sector-prices.json", import.meta.url), "utf8")) as Record<string, { us: unknown; uk: unknown }>;
+  let checked = 0;
+  for (const [id, e] of Object.entries(raw)) {
+    for (const market of ["us", "uk"] as const) {
+      for (const tier of ["mentioned", "cited"] as const) {
+        for (let q = 1; q <= MAX_CLUSTERS; q++) {
+          const r = checkoutRequest(order({ sector: id, market, tier, quantity: q }), ctx);
+          const prices = e[market];
+          if (typeof prices !== "object" || prices === null) {
+            assert.equal(r.kind, "call", `${id} is priced on a call, so no Session`);
+            continue;
+          }
+          const unit = (prices as Record<string, number>)[tier];
+          assert.equal(r.kind, "session", `${id} ${market} ${tier} x${q}`);
+          if (r.kind !== "session") continue;
+          assert.equal(r.form.get("line_items[0][price_data][unit_amount]"), String(unit * 100), `${id} ${market} ${tier}: unit`);
+          assert.equal(r.form.get("line_items[0][quantity]"), String(q), `${id} ${market} ${tier}: quantity`);
+          assert.equal(r.form.get("line_items[0][price_data][currency]"), market === "uk" ? "gbp" : "usd");
+          assert.equal(r.amount, unit * q, `${id} ${market} ${tier} x${q}: the amount shown before checkout`);
+          checked++;
+        }
+      }
+    }
+  }
+  assert.ok(checked >= 19 * 2 * 2 * MAX_CLUSTERS, `expected every priced band checked, got ${checked}`);
+  // The one cancelled test subscription's figure, for the record.
+  const ent = checkoutRequest(order({ sector: "entertainment", market: "us", tier: "mentioned", quantity: 1 }), ctx);
+  assert.equal(ent.kind === "session" && ent.form.get("line_items[0][price_data][unit_amount]"), "179500");
+});
+
+test("an extra tracking pack is charged pricing.ts's TRACKING_PACK_PRICE for the client's market, never a typed figure", async () => {
+  const { readFileSync } = await import("node:fs");
+  const route = readFileSync(new URL("../../app/api/dash/[client]/pack/route.ts", import.meta.url), "utf8");
+  assert.match(route, /unitAmount: TRACKING_PACK_PRICE\[market\]/);
+  const { packCheckoutForm } = await import("./packs.ts");
+  const f = packCheckoutForm({ customer: "cus_x", clientId: "c", slug: "s", market: "uk", unitAmount: 39, name: "n", returnTo: "https://x" });
+  assert.equal(f.get("line_items[0][price_data][unit_amount]"), "3900");
+  assert.equal(f.get("line_items[0][price_data][currency]"), "gbp");
+});

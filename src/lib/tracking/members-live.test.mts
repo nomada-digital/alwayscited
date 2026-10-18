@@ -160,11 +160,23 @@ test("census floor: the walk still finds the dashboard_members and dashboard_mem
   assert.ok(scoped.length >= SCOPE_FILTERED_FLOOR, `${scoped.length} scope reads/updates, floor ${SCOPE_FILTERED_FLOOR}`);
 });
 
+/**
+ * The one delete this rule allows (18 Oct 2026): the retention purge removes a client whose plan ended more than
+ * 90 days ago, by policy (Danny: "customer data should be kept for 90 days"), and its scope rows have to go first -
+ * dashboard_member_clients' foreign key has no on-delete rule, so a removed_at mark would still block the client's
+ * delete. The audit those marks keep is moot for a client that no longer exists; the purge writes retention_purges.
+ */
+const PURGE_SCOPE_DELETE = { file: join("src", "lib", "tracking", "retention-purge.ts"), table: "dashboard_member_clients" };
+const purgeExempt = (c: Call) => c.file === PURGE_SCOPE_DELETE.file && c.table === PURGE_SCOPE_DELETE.table && /\.delete\(/.test(c.chain);
+
 test("every read and update of dashboard_members and dashboard_member_clients skips removed rows, and none deletes", () => {
-  const bad = CALLS.map((c) => [c, breaks(c)] as const)
+  const bad = CALLS.filter((c) => !purgeExempt(c))
+    .map((c) => [c, breaks(c)] as const)
     .filter(([, why]) => why)
     .map(([c, why]) => `${c.file} (${c.table}): ${why}`);
   assert.deepEqual(bad, [], bad.join("\n"));
+  // The exemption is one call, still there: an allowance that outlives its call is how a rule like this widens.
+  assert.equal(CALLS.filter(purgeExempt).length, 1, "the retention purge's scope delete is recorded as exempt but is not one call");
 });
 
 test("the sign-in sets last_login_at", () => {
@@ -223,6 +235,12 @@ const NO_SCOPE: Record<string, { reads: number; why: string }> = {
   "src/lib/email/lifecycle-sweep.ts": {
     reads: 2,
     why: "deliver and planEndedOwners mail the account's owners, never limited for the same reason as the runner's.",
+  },
+  // 18 Oct 2026: the retention purge reads who belongs to an account it is deleting, to clear their sign-ins - and
+  // which of them also belong elsewhere, to keep those. Nothing it reads decides who sees a client.
+  "src/lib/tracking/retention-purge.ts": {
+    reads: 2,
+    why: "the 90-day retention purge clears the sign-ins of an account it deletes, keeping anyone who is a member of another account; it shows nothing to anybody.",
   },
 };
 

@@ -38,13 +38,15 @@ test("only the owner sees the failed payment, and tracking is not said to have s
 test("ended for payment says why; ended any other way reads as before", () => {
   // No invoice to pay (or one too old to offer, below): the owner asks us, as any end does.
   const unpaid = { status: "ended", payment_status: "unpaid", payment_ended_at: "2026-10-08T12:00:00Z", payment_invoice_url: null };
-  assert.deepEqual(draw(unpaid), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here.", link: { href: BILLING, label: "Ask us to restart it" } });
-  assert.deepEqual(draw({ ...unpaid, payment_invoice_url: PAGE }, "viewer"), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here - an owner can ask us to restart it.", link: null });
-  assert.deepEqual(draw(unpaid, "owner", false), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here - your account contact can restart it.", link: null });
+  assert.deepEqual(draw(unpaid), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here, read-only, until 6 Jan 2027.", link: { href: BILLING, label: "Ask us to restart it" } });
+  assert.deepEqual(draw({ ...unpaid, payment_invoice_url: PAGE }, "viewer"), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here, read-only, until 6 Jan 2027 - an owner can ask us to restart it.", link: null });
+  assert.deepEqual(draw(unpaid, "owner", false), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here, read-only, until 6 Jan 2027 - your account contact can restart it.", link: null });
   // As Sidebar drew it on 8 Oct 2026 (review of 2379757).
   assert.deepEqual(draw({ status: "ended" }), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here.", link: { href: BILLING, label: "Ask us to restart it" } });
   assert.deepEqual(draw({ status: "ended" }, "editor"), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here - an owner can ask us to restart it.", link: null });
   assert.deepEqual(draw({ status: "ended" }, "owner", false), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here - your account contact can restart it.", link: null });
+  // 18 Oct 2026: with the end known (ended_at, any reason), the 90 days it is kept are said (retention.ts).
+  assert.deepEqual(draw({ status: "ended", ended_at: "2026-10-18T14:00:00Z" }), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here, read-only, until 16 Jan 2027.", link: { href: BILLING, label: "Ask us to restart it" } });
   // Ended beats a past-due record the invoice wrote after the end (payment.ts: an invoice never moves the status).
   assert.equal(draw({ ...due, status: "ended", payment_ended_at: "2026-10-08T12:00:00Z" })!.tone, "ended");
 });
@@ -58,7 +60,7 @@ test("ended for payment says why; ended any other way reads as before", () => {
  */
 test("an unpaid end gives the owner the invoice to pay, for a week; other payment ends still ask us", () => {
   const ended = { status: "ended", payment_status: "unpaid", payment_ended_at: "2026-10-08T12:00:00Z", payment_invoice_url: PAGE };
-  const pay = { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here, and tracking starts again once the invoice is paid.", link: { href: PAGE, label: "Pay the invoice", external: true } };
+  const pay = { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here, read-only, until 6 Jan 2027, and tracking starts again once the invoice is paid.", link: { href: PAGE, label: "Pay the invoice", external: true } };
   assert.deepEqual(draw(ended), pay);
   assert.deepEqual(draw(ended, "owner", false), pay, "the owner pays Stripe whoever bills the account");
   // Not the owner: told as before, never handed the invoice.

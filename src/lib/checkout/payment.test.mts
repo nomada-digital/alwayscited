@@ -178,7 +178,7 @@ test("the dashboard's payment read failing costs the banner, never the clients",
   const clients = [{ id: "a", slug: "a" }, { id: "b", slug: "b" }];
   assert.deepEqual(withPayment(clients, null), clients, "a failed read: every client as if nothing were wrong");
   const got = withPayment(clients, [{ id: "a", payment_status: "past_due", payment_retry_at: iso(T0), payment_invoice_url: INVOICE_URL, payment_ended_at: null }, { id: "b", payment_invoice_url: "https://evil.example/pay" }]);
-  assert.deepEqual(got[0], { id: "a", slug: "a", payment_status: "past_due", payment_retry_at: iso(T0), payment_invoice_url: INVOICE_URL, payment_ended_at: null });
+  assert.deepEqual(got[0], { id: "a", slug: "a", payment_status: "past_due", payment_retry_at: iso(T0), payment_invoice_url: INVOICE_URL, payment_ended_at: null, ended_at: null });
   assert.equal(got[1]!.payment_invoice_url, null, "checked again on the way out");
   assert.equal(got[1]!.payment_status, null);
 });

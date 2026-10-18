@@ -200,6 +200,9 @@ const RECORDED: Record<string, string> = {
   "src/lib/email/lifecycle-sweep.ts :: CLIENT_COLUMNS":
     "the daily cron's lifecycle sweep and Stripe's trial_will_end read a client's account to skip agency mode and mail its live owners; the cron answers with sent and unsent labels of email name and client id, the webhook with a status only.",
   // 1 Oct 2026, R159 part 5: first_reading finds the client's account mode and owners.
+  // 18 Oct 2026: the 90-day retention purge (retention-purge.ts), run from the signed 03:30 cron.
+  "src/lib/tracking/retention-purge.ts :: id, slug, domain, account_id, status, ended_at":
+    "the retention purge, to delete an ended client and, with its last client, its account; started only by the cron behind CRON_SECRET, it returns slugs and dates, never the id.",
   "src/lib/tracking/runner.ts :: account_id, tier":
     "the tracking runner, after a run, for first_reading's agency check and owners; started only by the cron's signed dispatch, it returns a status only.",
   // 2 Oct 2026, R166 / R159: setup_confirmed's agency check, after the setup route writes its one row.
@@ -252,6 +255,9 @@ const MENTIONED: Record<string, string> = {
     "paid checkout from a scan becomes a client. Writes, behind the Stripe signature; " +
     "the webhook answers with no row. Also reads it back when a subscription ends, to mail " +
     "plan_ended (R159, 1 Oct 2026; widened 8 Oct 2026 - its RECORDED entry above).",
+  "src/lib/tracking/retention-purge.ts":
+    "18 Oct 2026: the 90-day retention purge filters on account_id to count, and then delete, an ended client's account " +
+    "and its members' sign-ins. Started only by the 03:30 cron behind CRON_SECRET; its report carries slugs, domains and dates, never the id.",
   "src/lib/tracking/runner.ts":
     "R159 part 5 (1 Oct 2026): reads the client's account_id after a run to find its upsell mode and " +
     "live owners for first_reading. Started only by the cron's signed dispatch; the run returns a status, never the id.",

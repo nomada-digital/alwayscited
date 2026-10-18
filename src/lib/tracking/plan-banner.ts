@@ -1,4 +1,5 @@
 import { trialMoment, trialStatus } from "../../config/trial.ts";
+import { keptUntil } from "./retention.ts";
 
 /**
  * The plan banner (8 Oct 2026, audit activation-12, activation-5): a strip
@@ -25,6 +26,8 @@ export type BannerClient = {
   payment_retry_at?: string | null;
   payment_invoice_url?: string | null;
   payment_ended_at?: string | null;
+  /** When the plan ended (any reason): the start of the 90 days its data is kept (retention.ts). */
+  ended_at?: string | null;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -72,9 +75,12 @@ export function planBanner(p: {
     // An ended client is not sent to checkout: a new order cannot yet bring the
     // old client back (review of 2379757), so the owner asks us, where billing is.
     // BL-2: ended because Stripe stopped charging says so, not that the plan was cancelled.
+    // 18 Oct 2026: how long it stays (Danny, "customer data should be kept for 90 days"), when the end is known.
+    const until = keptUntil(c.ended_at ?? c.payment_ended_at);
+    const kept = until ? `, read-only, until ${paymentDay(`${until}T12:00:00Z`, c.market)}` : "";
     const text = c.payment_ended_at
-      ? `Tracking has stopped for ${c.name} because the plan is unpaid. Everything read so far stays here`
-      : `Tracking has ended for ${c.name}. Everything read so far stays here`;
+      ? `Tracking has stopped for ${c.name} because the plan is unpaid. Everything read so far stays here${kept}`
+      : `Tracking has ended for ${c.name}. Everything read so far stays here${kept}`;
     // Review of 355d223 (9 Oct 2026): an unpaid end is one the owner can undo
     // without us. Paying the invoice moves an unpaid subscription back to
     // active (Stripe's docs, /billing/subscriptions/overview, read

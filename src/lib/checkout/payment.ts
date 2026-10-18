@@ -44,7 +44,8 @@ export const PAYMENT_READ = "status, payment_status, payment_status_at, payment_
  * which is read again without them when it fails, so a failure here still
  * costs the banner and never the dashboard.
  */
-export const PAYMENT_BANNER_READ = "payment_status, payment_retry_at, payment_invoice_url, payment_ended_at";
+// ended_at (18 Oct 2026, migration 20261018060000): when the plan ended, for the 90-day retention line (tracking/retention.ts).
+export const PAYMENT_BANNER_READ = "payment_status, payment_retry_at, payment_invoice_url, payment_ended_at, ended_at";
 
 export type PaymentRow = { status: string | null; payment_status: string | null; payment_status_at: string | null; payment_ended_at: string | null };
 
@@ -156,7 +157,7 @@ export function afterFailedInvoice(row: PaymentRow, invoice: Record<string, unkn
 }
 
 /** What the dashboard knows about a client's payment. */
-export type PaymentView = { payment_status: string | null; payment_retry_at: string | null; payment_invoice_url: string | null; payment_ended_at: string | null };
+export type PaymentView = { payment_status: string | null; payment_retry_at: string | null; payment_invoice_url: string | null; payment_ended_at: string | null; ended_at: string | null };
 
 /**
  * The banner's columns joined onto the clients (tracking/shell.ts). Their
@@ -179,6 +180,7 @@ export function withPayment<C extends { id: string }>(clients: C[], rows: Record
       // Checked again on the way out, as on the way in.
       payment_invoice_url: hostedInvoiceUrl({ hosted_invoice_url: r.payment_invoice_url }),
       payment_ended_at: str(r.payment_ended_at) || null,
+      ended_at: str(r.ended_at) || null,
     };
   });
 }

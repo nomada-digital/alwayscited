@@ -5,6 +5,7 @@ import { dispatchDiyWork } from "@/lib/diy/core/dispatch";
 import { freeRead } from "@/lib/diy/core/doors";
 import { JOB_HANDLERS } from "@/lib/diy/wiring";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { retentionPass as runRetention } from "@/lib/tracking/retention-purge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -89,9 +90,23 @@ export async function GET(req: Request) {
     diy = { error };
   }
 
+  // The retention pass (18 Oct 2026, lib/tracking/retention-purge.ts), in its own try. A dry run until
+  // app_settings.retention_purge_enabled is switched on: it reports which ended clients are past their 90 days.
+  let retentionPass: Record<string, unknown>;
+  try {
+    retentionPass = await runRetention(supabaseAdmin());
+    if ((retentionPass.errors as string[]).length) console.warn(`[retention] ${(retentionPass.errors as string[]).join("; ")}`);
+    if ((retentionPass.due as unknown[]).length) console.info(`[retention] ${retentionPass.enabled ? "purged" : "due (dry run, switch off)"}: ${JSON.stringify(retentionPass.enabled ? retentionPass.purged : retentionPass.due)}`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.warn(`[retention] pass failed: ${error}`);
+    retentionPass = { error };
+  }
+
   return NextResponse.json({
     ok: true,
     diy,
+    retention_pass: retentionPass,
     purged: false,
     answers_cleared: 0,
     retention: "indefinite",

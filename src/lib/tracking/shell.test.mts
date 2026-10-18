@@ -68,7 +68,8 @@ test("one request: live memberships, each with its live scope and its account's 
   assert.equal(u.searchParams.get("dashboard_member_clients.removed_at"), "is.null", "a removed scope row neither limits nor grants");
   assert.equal(u.searchParams.get("accounts.client_domains.slug"), "not.is.null", "a client with no slug is not on /app");
   assert.match(SHELL_READ, /accounts\(client_domains!client_domains_account_id_fkey\(/, "the client embed is held to its foreign key");
-  assert.match(SHELL_READ, /payment_status, payment_retry_at, payment_invoice_url, payment_ended_at\)\)$/, "the banner's columns are in the one read");
+  // ended_at joined 18 Oct 2026: the banner's 90-day retention line (retention.ts).
+  assert.match(SHELL_READ, /payment_status, payment_retry_at, payment_invoice_url, payment_ended_at, ended_at\)\)$/, "the banner's columns are in the one read");
 });
 
 test("AG-1: a limited member sees only their clients on that account, every client on an unlimited one, oldest first", async () => {

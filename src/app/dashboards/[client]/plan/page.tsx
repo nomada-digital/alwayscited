@@ -8,6 +8,7 @@ import { PageHead } from "@/components/dash/Shell";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, trackingPackPrice } from "@/config/pricing";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { pageData } from "@/lib/dash/page-data";
+import { RETENTION_DAYS } from "@/lib/tracking/retention";
 import { TIER_ORDER, packLine, planCopy, tierInfo } from "@/lib/dash/plan";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +72,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
         <div className="dash-card-head">
           <div>
             <h2>Billing</h2>
-            <p className="intro">Invoices, your card, and cancelling are on Stripe&rsquo;s secure billing page. Cancelling stops at the end of the period you have paid for.</p>
+            <p className="intro">Invoices, your card, and cancelling are on Stripe&rsquo;s secure billing page. Cancelling stops at the end of the period you have paid for. After that, this dashboard and everything in it stay open, read-only, for {RETENTION_DAYS} days, and then your data is deleted.</p>
           </div>
           {ws.role === "owner" && !demo ? (
             <form action={`/api/dash/${slug}/billing`} method="post">

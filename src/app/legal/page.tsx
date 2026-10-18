@@ -6,6 +6,7 @@ import { OG_IMAGE } from "@/config/og";
 import { COMPANY_LINE, CONTACT_EMAIL } from "@/config/contact";
 import { CARD, GRID12, MICRO, SHELL, T } from "@/config/tokens";
 import { TRIAL, TRIAL_TERMS } from "@/config/trial";
+import { RETENTION_DAYS } from "@/lib/tracking/retention";
 
 export const metadata: Metadata = {
   title: "Privacy policy",
@@ -116,7 +117,10 @@ const SECTIONS: Section[] = [
         Scan results are kept indefinitely, so you can come back to the link, and so is what each engine said. We used
         to delete the text after seven days on a scan nobody claimed; we do not any more. It is the evidence behind every figure in
         your report, and a number you cannot read back to the words that produced it is not evidence. On a tracked account, every daily
-        answer is kept for the life of the account, and you can download it from the dashboard. The dashboard also records which of
+        answer is kept while the plan runs, and you can download it from the dashboard. When a plan ends, its dashboard and everything in
+        it stay available, read-only, for {RETENTION_DAYS} days; after that we delete that site&rsquo;s tracking data and, if it was the
+        account&rsquo;s last site, the account and its logins. Free scan results, and the order and billing records we need for our
+        accounts, are kept. The dashboard also records which of
         its features are used - which page was opened, which control was pressed - to improve it; it stores ids and counts, never what you type.
       </>
     ),
