@@ -9,7 +9,7 @@
  *
  * The scan tokens are the two real scans Danny pasted into docs/inbox.md,
  * read from there at run time so no capability URL is written into this
- * public repo. Playwright is resolved from ~/code/.parity, as in e2e/app.
+ * public repo. Playwright is resolved from ~/code/.parity.
  *
  * Journeys (R148): (1) / -> free scan -> result -> its next step; (2)
  * /alwaystracked -> checkout; (3) /packages -> each tier's next page, US and
@@ -332,54 +332,26 @@ for (const width of [1280, 390]) {
       assert.equal(await page.evaluate(() => document.activeElement?.textContent), "UK £", "focus stays on the pill");
       await ctx.close();
     });
-
-    // Pass 6 (R148/R153, 1 Oct 2026): the money path's sign-in leg, signed
-    // out. /app sends you to the login form; each note and the link landing
-    // has its one way on, 44px or more, and nothing is submitted.
-    test("(8) /app -> login -> the link landing, every state with a tappable way on", async () => {
-      const LEG: [string, RegExp, string][] = [
-        ["/app", /^Log in to your dashboard$/, "Email me a link"],
-        ["/app/login?link=expired", /^Log in to your dashboard$/, "Email me a link"],
-        ["/app/login?access=none", /^Log in to your dashboard$/, "Email me a link"],
-        ["/app/auth", /^That link is not valid$/, "Ask for a new link"],
-        // R148 pass 11 (1 Oct 2026): since R163 (c6c1dbd) the GET reads the
-        // token's row, and a well-shaped token with no row is "not valid", not
-        // "Log in". The fresh face (auto-submit, "Open my dashboard") needs a
-        // real token, so it is held by e2e/app/auth.spec.mts on the fixture.
-        [`/app/auth?token=${"0".repeat(64)}`, /^That link is not valid$/, "Ask for a new link"],
-      ];
-      for (const [route, h1, action] of LEG) {
-        const { page, ctx, status } = await open(width, route);
-        assert.equal(status, 200, route);
-        if (route === "/app") assert.match(page.url(), /\/app\/login$/);
-        assert.match((await page.locator("h1").first().textContent()) ?? "", h1, route);
-        assert.ok(await page.evaluate(() => (document.querySelector("main")?.textContent ?? "").startsWith("alwaystracked")), `${route}: opens with the lockup`);
-        const box = await page.locator("a, button", { hasText: action }).first().boundingBox();
-        assert.ok(box && box.height >= 44, `${route}: "${action}" is ${box?.height}px`);
-        assert.ok((await overflow(page)) <= 0, `${route}: no sideways scroll`);
-        await ctx.close();
-      }
-    });
+    // (8), /app -> login -> the link landing, went with /app (19 Oct 2026, brief 2d): sign-in is the dashboards host's.
   });
 }
 
 // (9) Stripe's return page, R148 pass 8 (1 Oct 2026). An order carrying a
 // scan has a dashboard built by the webhook and a sign-in link mailed, so the
-// page names the link and gives one way on to /app/login. Without a scan it
+// page names the link and gives one way on to the dashboards host's /login (19 Oct 2026, brief 2d). Without a scan it
 // still points at the onboarding call. Opened by GET only, as Stripe would.
 for (const width of [1280, 390]) {
   describe(`(9) after checkout at ${width}`, () => {
-    test("from a scan: the dashboard, the sign-in link, and a 44px way to /app/login", async () => {
+    test("from a scan: the dashboard, the sign-in link, and a 44px way to the dashboards sign-in", async () => {
       const { page, ctx, status } = await open(width, "/checkout/done?session=cs_placeholder&plan=tracked&from=scan");
       try {
         assert.equal(status, 200);
         assert.match((await page.locator("h1").first().textContent()) ?? "", /dashboard is being set up/);
         const go = page.getByRole("link", { name: "Go to sign in" });
-        assert.equal(await go.getAttribute("href"), "/app/login");
+        assert.match((await go.getAttribute("href")) ?? "", LOGIN);
         assert.ok(((await go.boundingBox())?.height ?? 0) >= 44, "sign-in button under 44px");
         assert.equal(await page.locator("text=onboarding call").count(), 0, "alwaystracked from a scan has no onboarding call line");
         assert.ok((await overflow(page)) <= 0, "sideways scroll");
-        assert.equal(await statusOf("/app/login"), 200);
       } finally {
         await ctx.close();
       }
@@ -417,11 +389,11 @@ const SHOTS = path.join(ROOT, "test-results", "site");
 mkdirSync(SHOTS, { recursive: true });
 
 /**
- * Where the dashboard's sign-in is: /app/login while it shares the site's host,
+ * Where the dashboard's sign-in is (19 Oct 2026, brief 2d): the dashboards host's /login, in production or local.
  * the app host's /login once APP_HOST is set (app-host.ts appHref). Either is
  * right; anything else is not.
  */
-const LOGIN = /^(\/app\/login|https:\/\/app\.alwayscited\.com\/login|http:\/\/app\.localhost:\d+\/login)$/;
+const LOGIN = /^(https:\/\/dashboards\.alwayscited\.com\/login|http:\/\/dashboards\.localhost(:\d+)?\/login)$/;
 
 // (10) Danny, 13 Oct 2026: "a login option in the nav for companies with a
 // profile that takes them to the app subdomain sign in screen". On the bar at
@@ -451,7 +423,7 @@ for (const width of [1280, 1024, 768, 390, 320]) {
             assert.ok(l && f && l.x + l.width <= f.x, `${route}: Log in sits before Free scan`);
             const ground = await login.evaluate((e) => getComputedStyle(e).backgroundColor);
             assert.match(ground, /^rgba\(0, 0, 0, 0\)$|^transparent$/, `${route}: Log in is a plain link, not a second filled button (${ground})`);
-            if (route === "/") assert.equal(await statusOf(href), 200, "the sign-in answers");
+            if (route === "/" && href.startsWith("/")) assert.equal(await statusOf(href), 200, "the sign-in answers");
             await page.screenshot({ path: path.join(SHOTS, `header-${name}-${width}.png`), clip: { x: 0, y: 0, width, height: Math.ceil(h) + 4 } });
           } else {
             assert.equal(await page.locator('nav[aria-label="Main navigation"]').first().isVisible(), false, `${route}: no desktop nav at ${width}`);

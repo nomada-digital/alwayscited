@@ -8,8 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "check": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.mts\"",
-    "capture": "node src/app/dynamic-render.mts",
-    "e2e:app": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test --test-concurrency=1 \"e2e/app/*.spec.mts\""
+    "capture": "node src/app/dynamic-render.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

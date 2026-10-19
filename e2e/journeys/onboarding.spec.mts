@@ -9,8 +9,7 @@
  * For every tier page and every tier /checkout takes, from the UK and the US
  * scan in docs/inbox.md: the page loads, names its tier, and shows the 3-step
  * strip with src/config/onboarding.ts's steps word for word and no placement
- * timeline (step 8). After payment, /app/[client]/setup is the fixture's, held
- * by docs/parity/r166-setup.mjs and r166-check.mjs.
+ * timeline (step 8). After payment, setup is the dashboards host's /<client>/setup (19 Oct 2026, brief 2d).
  */
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
