@@ -270,7 +270,8 @@ const RETENTION_CLAIMS: {
     needle: "could not store the answers",
     why:
       "not a published surface - the daily tracking runner's thrown Error on its answer upsert (T1, 29 Sep " +
-      "2026). Tracked answers are kept for the life of the account, per the dashboard brief",
+      "2026). Tracked answers are kept while the plan runs and for 90 days after it ends (Danny, 18 Oct 2026; " +
+      "was 'the life of the account', per the dashboard brief)",
     holds: (src) => /throw new Error\(`could not store the answers/.test(src),
   },
   {
@@ -278,15 +279,16 @@ const RETENTION_CLAIMS: {
     needle: "What we keep of each answer is what each engine said",
     why:
       "the help centre's daily-check article (MK-2, 9 Oct 2026), about tracked answers, not a scan. Its bound " +
-      "is the next sentence - kept for the life of the account, the bound the runner.ts entry cites and /legal " +
+      "is the next sentence - kept while the plan runs and 90 days after (Danny's 18 Oct 2026 decision, also in " +
+      "the plan-ended email), the bound the runner.ts entry cites and /legal " +
       "states - and what earns the bound is that nothing in the tree deletes or clears a tracking_answers row",
     holds: (src) =>
-      /What we keep of each answer is what each engine said[^"]*\.\s*Both are kept for the life of the account\./.test(src) &&
+      /What we keep of each answer is what each engine said[^`]*\.\s*Both are kept while your plan runs, and for \$\{KEPT_DAYS\} days after it ends\./.test(src) &&
       !trackedAnswerRemovers().length,
   },
   {
     file: "src/config/help.ts",
-    needle: "on a tracked account, what each engine said every day is kept for the life of the account",
+    needle: "on a tracked account, what each engine said every day is kept in your account for ${KEPT_DAYS} days after the plan ends",
     why:
       "the help centre's data section (MK-2, 9 Oct 2026): stopping a prompt and a plan ending delete nothing. " +
       "The bound is inside the sentence, and what earns it is the same as the entry above: nothing in the " +

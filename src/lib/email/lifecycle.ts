@@ -652,7 +652,7 @@ export function trialEnding(d: { domain: string; link: string; recap: TrialRecap
       h1(`Your trial ends on ${dayOf(d.trial)}.`),
       para(`Your free trial of ${plan} for ${d.domain} ends **${d.trial.ends}**. From then it is **${d.trial.charge}**, charged to the card you gave at checkout, ${TERMS}.`),
       para("To keep tracking, there is nothing to do."),
-      cancelNote(d.trial, "To stop, cancel before then in", " and nothing is charged. Your clusters, prompts and readings stay in your account for 90 days if you come back."),
+      cancelNote(d.trial, "To stop, cancel before then in", ` and nothing is charged. Your clusters, prompts and readings stay in your account for ${KEPT_DAYS} days if you come back.`),
       tiles.length > 0 && stats(tiles),
       ...recapLines(d.domain, d.recap).map(para),
       button(d.link, "Keep tracking"),
@@ -703,8 +703,9 @@ export function paymentAmount(cents: unknown, currency: unknown): string | null 
 
 // ------------------------------------------------------------------ #12
 
-/** Danny, 18 Oct 2026: readings are kept for 90 days after a plan ends. */
-export const KEPT_DAYS = 90;
+/** Danny, 18 Oct 2026: readings are kept for KEPT_DAYS after a plan ends (config/retention.ts, one number for every surface). */
+export { KEPT_DAYS } from "../../config/retention.ts";
+import { KEPT_DAYS } from "../../config/retention.ts";
 
 /**
  * #12 the plan has ended (customer.subscription.deleted, or an .updated whose

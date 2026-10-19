@@ -2,6 +2,7 @@ import EngineLogo from "@/components/EngineLogo";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { fullness } from "@/lib/dash/allowance";
 import { targetLabel } from "@/lib/dash/target";
+import { SERP_DEPTH } from "@/lib/scan/dataforseo-request";
 
 /**
  * The dashboards host's small figures. No hooks, so both server pages and the
@@ -16,7 +17,7 @@ export function pct(r: number | null): string {
 }
 
 export function Pos({ pos }: { pos: number | null }) {
-  if (pos === null) return <span className="pos none" title="Not in the top 100">-</span>;
+  if (pos === null) return <span className="pos none" title={`Not in the top ${SERP_DEPTH}`}>-</span>;
   return <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>;
 }
 

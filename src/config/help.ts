@@ -5,6 +5,7 @@ import { OG_IMAGE } from "@/config/og";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, TRACKED_BASIS, TRACKED_PRICE, TRACKING_ENGINES, trackingPackPrice } from "@/config/pricing";
 import { listOf } from "@/config/scan-shape";
 import { SITE_URL } from "@/config/schema";
+import { KEPT_DAYS } from "@/config/retention";
 import { PLAN_TERMS, TRIAL, TRIAL_TERMS, trialCharge, trialLine } from "@/config/trial";
 import { dashOrigin } from "@/lib/dash/host";
 import { SERP_DEPTH } from "@/lib/scan/dataforseo-request";
@@ -314,7 +315,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           blocks: [
             `${listOf(READ_DIRECT)} ${verb(READ_DIRECT)} read from the product a buyer uses. ${listOf(ASKED_DIRECT)} ${verb(ASKED_DIRECT)} asked through ${ASKED_DIRECT.length === 1 ? "its" : "their"} model directly, not read from ${ASKED_DIRECT.length === 1 ? "its app" : "their apps"}; so ${ASKED_DIRECT.length === 1 ? "is" : "are"} ${ENGINE_SPECS.claude.label} on the higher plans.`,
             "When a Google results page carries no AI Overview for a prompt, we record no answer for that day, not a miss.",
-            "What we keep of each answer is what each engine said, with link addresses taken out of the text, and the pages it cited, kept separately. Both are kept for the life of the account.",
+            `What we keep of each answer is what each engine said, with link addresses taken out of the text, and the pages it cited, kept separately. Both are kept while your plan runs, and for ${KEPT_DAYS} days after it ends.`,
           ],
         },
         {
@@ -583,7 +584,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           id: "data",
           heading: "Your data",
           blocks: [
-            "Stopping a prompt or a cluster deletes nothing, and neither does a plan ending: on a tracked account, what each engine said every day is kept for the life of the account.",
+            `Stopping a prompt or a cluster deletes nothing, and neither does a plan ending: on a tracked account, what each engine said every day is kept in your account for ${KEPT_DAYS} days after the plan ends.`,
             `To keep your own copy, write to ${MAIL} and we send it to you as a file. To have your data deleted, see ${link("your rights in our privacy policy", "/legal#rights")}.`,
           ],
         },
