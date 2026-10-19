@@ -31,7 +31,9 @@ test("R168: writes are on only with both switches exactly 1, outside production"
 
 test("R168: the stop and undo routes ask the writable fixture before refusing", () => {
   // "keyword" added 2 Oct 2026 (R179): Use this keyword on a pending cluster.
-  for (const route of ["stop", "prompt", "edit", "member", "check", "cluster", "group", "setup", "keyword"]) {
+  // 19 Oct 2026: stop, prompt, edit, check, cluster, group, setup and keyword were deleted with the old /app dashboard's
+  // remaining code (commit 78b1023); member is the /api/app/[client] route left.
+  for (const route of ["member"]) {
     const src = readFileSync(new URL(`../../app/api/app/[client]/${route}/route.ts`, import.meta.url), "utf8");
     assert.match(src, route === "setup" ? /confirmFixtureSetup\(\)/ : route === "check" ? /writableFixture\(\)/ : /writeFixture\(/, `${route} writes to the fixture`);
   }

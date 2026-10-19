@@ -127,8 +127,12 @@ test("every route that spends money refuses GET, except the email link", () => {
   // track/run), the DIY night three (diy/run and the two night crons), and wave 2's opportunity and pages doors.
   // Raised 13 Oct 2026 (DIY P10, wave 3): 22 - and Links' door, app/[client]/links (Check a link's paid fallback
   // through runOnDemand; reveal and Pursue read stored rows only). POST only, as every one of them.
+  // Lowered 19 Oct 2026: 18 - the measured set again. The dashboards host's setup pair (dash/[client]/setup/keyword
+  // and /finish) joined on 18 Oct 2026, and six /app doors left on 19 Oct with the old /app dashboard's remaining code
+  // (commit 78b1023): app/[client]/ask, check, setup, opportunity, pages and links. spend-gates.test.mts pins the 18
+  // by name.
   assert.ok(
-    paid.length >= 22,
+    paid.length >= 18,
     `only ${paid.length} paid routes detected - the spend walk in spenders.mts has gone blind: ` +
       paid.map((r) => r.name).join(", "),
   );

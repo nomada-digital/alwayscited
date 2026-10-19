@@ -3,19 +3,15 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { clusterCards, clusterChart, clusterDetail, promptBrands, promptStrip } from "./cluster-figures.ts";
-import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, firstReadComplete, resolveComparison, ungroupedRead } from "./figures.ts";
-import { namedEvidence } from "./evidence.ts";
-import { citedWithBrand, namedPage } from "./named-figures.ts";
+import { type Range, addDays, brandGaps, comparisonRange, firstCheckDay, resolveComparison } from "./figures.ts";
 import { type Fixture, expandFixture, fixtureState, placementAllowance } from "./fixture-mode.ts";
 import type { OverviewData } from "./overview-data.ts";
 import { chartSeries, citeRows, placementsView } from "./placement-figures.ts";
-import { placementFirstCited } from "../diy/prompts/placement-lines.ts";
 import { urlKey } from "./placements.ts";
 import { presets } from "./date-range.ts";
 import { PAGE } from "../supabase/page.ts";
-import { ANSWER_SELECT, DAY_SELECT, type AnswersQuery, type AnswersTable, type DayQuery, type DayTable, type ReadOpts, type StoredAnswer, answerPlan, answerRow, boundStated, clusterQuestionIds, dayPlan, monthSlice, namedRead, planPrompts, rangeFloor, readAnswerDay, readAnswers, reportSpan, selectColumns, shapeAnswerDay, shapeRead, withoutBrandsOk } from "./read-shape.ts";
-import { monthFigures, reportMonths } from "./report-months.ts";
-import { askedOnFor, brandGapNote, runNote } from "./run-note.ts";
+import { ANSWER_SELECT, DAY_SELECT, type AnswersQuery, type AnswersTable, type DayQuery, type DayTable, type ReadOpts, type StoredAnswer, answerPlan, answerRow, boundStated, clusterQuestionIds, dayPlan, planPrompts, rangeFloor, readAnswerDay, readAnswers, selectColumns, shapeAnswerDay, shapeRead, withoutBrandsOk } from "./read-shape.ts";
+import { askedOnFor, runNote } from "./run-note.ts";
 
 /**
  * The narrow reads (8 Oct 2026, audit perf-4, perf-9, perf-1). Each page on
@@ -26,6 +22,11 @@ import { askedOnFor, brandGapNote, runNote } from "./run-note.ts";
  * without citations while no row is open (13 Oct 2026). The census at the end
  * names the figures those pages draw from their answers, so a new one has to
  * be checked here before it can read a column the page no longer asks for.
+ *
+ * 19 Oct 2026: the old /app dashboard's remaining code went in commit 78b1023 (the customer dashboard is the
+ * dashboards host only), and with it report-months.ts, named-figures.ts, evidence.ts, placements-screen.ts,
+ * prompts/placement-lines.ts and the /api/app/[client]/report route. The cases whose subject those were are retired
+ * below, each with a note; the reads' own shapes, the one-cluster figures and the range floor are live and held.
  */
 
 const base = expandFixture(JSON.parse(readFileSync(new URL("./fixture.json", import.meta.url), "utf8")));
@@ -407,57 +408,10 @@ test("census: loadOverview takes its plan, prompts and read from read-shape.ts, 
   assert.match(src("./repo.ts"), /shapeRead\(fixture\(\)\.data, opts\)/);
 });
 
-test("Reports reads from the oldest month's own comparison, not the whole span's", () => {
-  const months = reportMonths("2026-06-10", "2026-09-29");
-  const span = reportSpan(months, "2026-09-29");
-  assert.deepEqual(span, { from: comparisonRange({ from: "2026-06-01", to: "2026-06-30" }, "prev")!.from, to: "2026-09-29" });
-  for (const m of months) assert.ok(comparisonRange(m.range, "prev")!.from >= span.from, `${m.label} reaches before the read`);
-  // The old read: the whole span on "prev", as long again before June as June to today.
-  const whole = { from: "2026-06-01", to: "2026-09-29" };
-  assert.ok(comparisonRange(whole, "prev")!.from < span.from);
-  // A year of history read two; it now reads a year and a month (October's 31 days before 1 Oct).
-  const year = reportMonths("2025-10-01", "2026-09-29");
-  assert.equal(reportSpan(year, "2026-09-29").from, "2025-08-31");
-  assert.equal(comparisonRange({ from: "2025-10-01", to: "2026-09-29" }, "prev")!.from, "2024-10-02", "the old read");
-});
-
-test("every Reports card is the same on the verdicts-only, month-sliced read, on every fixture state", () => {
-  let cards = 0;
-  for (const [state, f] of fixtures) {
-    const months = reportMonths(f.client.started_on, f.today);
-    const span = reportSpan(months, f.today);
-    const narrow = within(shapeRead(f.data, { answers: "verdicts" }), span);
-    const opts = { startedOn: f.client.started_on, today: f.today, engines };
-    for (const m of months) {
-      assert.deepEqual(monthFigures(monthSlice(narrow, m.range), m.range, opts), monthFigures(f.data, m.range, opts), `${state} ${m.label}`);
-      cards++;
-    }
-  }
-  assert.ok(cards >= 30, `only ${cards} cards compared`);
-});
-
-/**
- * Merge of audit packages B and C (8 Oct 2026): Reports shows the picked range's lost checks (runNote, audit
- * data-3) from its verdicts-only read. runNote reads the runs and, for a failed day, whether it stored an
- * answer - run_date and answered, which verdicts keep - so the note is the full read's. A day that failed
- * after storing its answers is added to the states, as the fixture has none.
- */
-test("Reports' range note is the same on the verdicts-only read as on the whole read", () => {
-  let notes = 0;
-  let said = 0;
-  const stored = (f: Fixture): Fixture => ({ ...f, data: { ...f.data, runs: f.data.runs?.map((r) => (r.run_date === f.today ? { ...r, status: "failed", error: "could not store the keyword positions: timeout" } : r)) } });
-  for (const [state, f] of [...fixtures, ["failed-after-storing", stored(base)] as [string, Fixture]]) {
-    const span = reportSpan(reportMonths(f.client.started_on, f.today), f.today);
-    const narrow = within(shapeRead(f.data, { answers: "verdicts" }), span);
-    for (const range of [{ from: addDays(f.today, -27), to: f.today }, { from: addDays(f.today, -13), to: addDays(f.today, -1) }, { from: span.from, to: f.today }]) {
-      const note = runNote(f.data, range, f.today);
-      assert.equal(runNote(narrow, range, f.today), note, `${state} ${range.from}`);
-      notes++;
-      if (note) said++;
-    }
-  }
-  assert.ok(notes >= 30 && said >= 5, `${notes} notes compared, ${said} of them saying something`);
-});
+// 19 Oct 2026: three Reports cases are retired - "Reports reads from the oldest month's own comparison, not the whole
+// span's", "every Reports card is the same on the verdicts-only, month-sliced read" and "Reports' range note is the same
+// on the verdicts-only read". Each read its months through report-months.ts (reportMonths, monthFigures), deleted with
+// the old /app Reports page (commit 78b1023).
 
 /** The one-cluster page's figures, as clusters/[cluster]/page.tsx and OneCluster.tsx draw them. */
 function oneCluster(data: OverviewData, f: Fixture, range: Range, before: Range | null, id: string) {
@@ -518,7 +472,8 @@ function placements(data: OverviewData, f: Fixture, range: Range, id: string) {
   const questionIds = data.questions.filter((q) => q.cluster_id === id && (q.stopped_on === null || q.stopped_on > range.from)).map((q) => q.id);
   const rows = f.placements.filter((p) => p.cluster_id === id).map((p) => ({ ...p, url_key: urlKey(p.url) ?? "" }));
   // 13 Oct 2026, DIY P2: each live placement's first citation per engine, from the same cites (spec 10 section 4.11).
-  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart), firstCited: placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines) };
+  // 19 Oct 2026: firstCited (prompts/placement-lines.ts placementFirstCited) left with the old /app dashboard (78b1023).
+  return { view: placementsView({ chart, questionIds, placements: rows, cites: citeRows(data.answers), engines }), series: chartSeries(chart) };
 }
 
 test("Placements draws the same from its cluster's prompts, without brands, as from the whole read", () => {
@@ -536,118 +491,18 @@ test("Placements draws the same from its cluster's prompts, without brands, as f
   assert.ok(base.placements.length > 0, "no placements in the fixture, so the table compared nothing");
 });
 
-/**
- * Who is named's figures as Named.tsx draws them (13 Oct 2026, dashboard
- * speed, payload), on the filters the page takes. The page reads brands
- * without citations while no row is open (read-shape.ts namedRead).
- */
-function named(data: OverviewData, f: Fixture, range: Range, compare: "prev" | "month" | "none", cluster: string | null, engine: string | null) {
-  const firstCheck = firstCheckDay(f.client.started_on, data.questions);
-  const before = resolveComparison(range, compare, f.client.started_on, firstCheck, firstReadComplete(data.runs, firstCheck)).range;
-  const cards = clusterCards({ clusters: data.clusters ?? [], questions: data.questions, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before, today: f.today, engines });
-  const picked = cluster ? (cards.find((c) => c.id === cluster) ?? null) : null;
-  const only = picked ? new Set(picked.prompts.map((p) => p.id)) : null;
-  const you = f.client.brand;
-  const page = namedPage({ answers: data.answers, range, before, you, only, engine });
-  return {
-    cards,
-    page,
-    gap: brandGapNote(brandGaps(data.answers.filter((a) => (!only || only.has(a.question_id)) && (!engine || a.engine === engine)), range)),
-    partial: runNote(data, range, f.today),
-    loose: picked || !cards.length ? 0 : ungroupedRead(data.questions, data.answers, range),
-    // An open row's prompt links read verdicts and brands, so they are the same on the brands read too.
-    evidence: page.rows.slice(0, 6).map((r) => [...namedEvidence({ answers: data.answers, range, key: r.key, you, only, engine, engines })]),
-  };
-}
+// 19 Oct 2026: "Who is named draws the same without citations as from the whole read, until a row is open" is retired:
+// its figures were named-figures.ts's and evidence.ts's, read only by the old /app Who is named page and deleted with
+// that dashboard (commit 78b1023).
 
-test("Who is named draws the same without citations as from the whole read, until a row is open", () => {
-  let pages = 0;
-  let cited = 0;
-  for (const [state, f] of fixtures) {
-    const ranges: [Range, "prev" | "month" | "none"][] = [
-      [{ from: addDays(f.today, -27), to: f.today }, "prev"],
-      [{ from: "2026-08-10", to: "2026-09-20" }, "month"],
-    ];
-    // Every engine, the first four clusters, and one of each together: every cluster took the test 7 s.
-    const filters: [string | null, string | null][] = [[null, null], ...f.data.clusters.slice(0, 4).map((c): [string, null] => [c.id, null]), ...engines.map((e): [null, string] => [null, e]), [f.data.clusters[0]?.id ?? null, engines[0]!]];
-    for (const [range, compare] of ranges) {
-      const read = comparisonRange(range, compare);
-      const full = within(f.data, { from: read?.from ?? range.from, to: range.to });
-      const narrow = within(shapeRead(f.data, { answers: namedRead(null) }), { from: read?.from ?? range.from, to: range.to });
-      for (const [cluster, engine] of filters) {
-        const page = named(full, f, range, compare, cluster, engine);
-        assert.deepEqual(named(narrow, f, range, compare, cluster, engine), page, `${state} ${cluster ?? "every cluster"} ${engine ?? "every engine"} ${range.from}`);
-        pages++;
-        // An open row's cited pages are the page's one read of a citation, so an open row reads the whole answer.
-        for (const r of page.page.rows.slice(0, 3)) {
-          assert.equal(namedRead(r.key), "full");
-          if (citedWithBrand({ answers: full.answers, range, key: r.key, you: f.client.brand, domain: f.client.domain, only: null, engine }).length) cited++;
-        }
-      }
-    }
-  }
-  // 226 and 554 on 13 Oct 2026.
-  assert.ok(pages >= 226, `only ${pages} pages compared`);
-  assert.ok(cited >= 550, `only ${cited} open rows cite a page, so the full read for an open row proves nothing`);
-});
-
-/**
- * Census, 8 Oct 2026: every use of the answers on a page that reads a narrow
- * shape, each one compared above. A new use fails here until it is compared
- * too - a figure that needs a column the read leaves out would otherwise read
- * it as an empty list, and say zero.
- */
 const src = (p: string) => readFileSync(new URL(p, import.meta.url), "utf8");
 /**
- * Review of the integration of audit packages A, B and C (8 Oct 2026): `data` handed on whole is a use of its
- * answers too. OneCluster's runNote(data, ...) reads them through storedAnswers, and /data\.answers/ never saw
- * it - which is how B's note passed this census on C's narrow read and said "none of its reads came back" of a
- * pending cluster. So the one-cluster page and the placements screen also count a bare `data` that is not a
- * member read, a JSX attribute or a type (`data.questions`, `data={{`, `data: OverviewData`): the structure,
- * runs and positions are read whole on every shape, so their member reads are not uses. `binds` is the
- * destructure that names `data`, which is not a use. Each recorded use is paired with the line above that
- * compares it, so dropping a comparison fails here too.
+ * 19 Oct 2026: "census: the pages on a narrow read use their answers only where compared above" is retired. Since
+ * 18 Oct 2026 (brief 2d) its one entry was the placements screen (placements-screen.ts), and commit 78b1023 deleted
+ * that with the rest of the old /app dashboard. No page reads a narrow shape now: the dashboards host reads through
+ * lib/dash, and repo.ts's shapeRead and overview-data.ts's loadOverview are held by the censuses above. A page that
+ * reads a narrow shape again brings this census back with its uses.
  */
-const WHOLE = /data\.answers|(?<![-\w.])data\b(?![-\w.]|\s*[:=])/g;
-const USES: { what: string; path: string; use: RegExp; binds: number; lines: [page: string, compared: string][] }[] = [
-  // 18 Oct 2026, brief 2d: the one-cluster page (components/app/OneCluster.tsx), Who is named
-  // (components/app/Named.tsx) and Reports (app/app/[client]/reports/page.tsx) retired with /app - every /app address
-  // 308s to the dashboards host - and their entries went with them. The placements screen still reads for the
-  // report route's placements CSV.
-  {
-    what: "the placements screen",
-    path: "./placements-screen.ts",
-    use: WHOLE,
-    binds: 0,
-    lines: [
-      // 13 Oct 2026, DIY P2 review: the chart now reads the cluster's prompts less those added from placements (`named`).
-      ["questions: named, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null", "questions: named, keywords: data.keywords, answers: data.answers, serp: data.serp, range, before: null, today: f.today, engines }, id)"],
-      ["cites: citeRows(data.answers)", "cites: citeRows(data.answers), engines"],
-      // 13 Oct 2026, DIY P2: the first-cited line on each live placement (spec 10 section 4.11), from the same cluster's cites.
-      ["placementFirstCited(rows, cluster.id, citeRows(data.answers)", "placementFirstCited(rows, id, citeRows(data.answers), questionIds, engines)"],
-    ],
-  },
-];
-
-test("census: the pages on a narrow read use their answers only where compared above", () => {
-  // The comparisons are this file's own lines above the census, so a recorded pair cannot match itself.
-  const self = src("./read-shape.test.mts");
-  const compared = self.slice(0, self.indexOf("const WHOLE = "));
-  for (const { what, path, use, binds, lines } of USES) {
-    const text = src(path);
-    const hits = [...text.matchAll(use)].length;
-    for (const [l, c] of lines) {
-      assert.ok(text.includes(l), `${what}: "${l}" is gone - check its figures above and update this census`);
-      assert.ok(compared.includes(c), `${what}: "${l}" is no longer compared above ("${c}") - compare it again before updating this census`);
-    }
-    const expected = lines.length + binds;
-    assert.equal(hits, expected, `${what} uses its answers ${hits} times, ${expected} recorded`);
-  }
-  assert.match(src("./placements-screen.ts"), /\{ answers: "cites", cluster: cluster\.id, structure \}/);
-  // 18 Oct 2026, brief 2d: the /app pages' narrow reads (Reports' verdicts, one cluster's, Who is named's, and Settings
-  // and setup reading no answers) retired with /app; every /app address 308s to the dashboards host.
-  assert.ok(USES.length >= 1, "the census reads no page");
-});
 
 /**
  * perf-8 (8 Oct 2026): a stated range has a lower bound. On the fixture dev
@@ -668,25 +523,8 @@ test("a stated from before the floor starts on it; one wholly before it is no ra
   assert.deepEqual(boundStated({ from: "2025-08-20", to: "2025-09-03" }, today, null), { from: "2025-09-01", to: "2025-09-03" });
 });
 
-test("every Reports month card's range, which its CSV links state, passes the floor unmoved", () => {
-  // Review, 8 Oct 2026: on the day-exact floor a client started 15 Sep 2025 had its September card's
-  // files cut to start on the 15th, and one started 20 Oct 2025 had October's cut to the 8th.
-  let cards = 0;
-  for (const today of ["2026-10-08", "2026-09-29", "2026-03-31", "2026-01-01", "2028-02-29"]) {
-    const ages = [0, 27, 200, 330, 360, 364, 365, 366, 370, 380, 400, 500, 800];
-    for (const back of ages) {
-      const started = addDays(today, -back);
-      for (const m of reportMonths(started, today)) {
-        assert.deepEqual(boundStated(m.range, today, started), m.range, `${m.label} for a client started ${started}, today ${today}`);
-        cards++;
-      }
-    }
-    for (const started of ["2025-09-15", "2025-10-20", "2024-03-17"]) {
-      for (const m of reportMonths(started, today)) assert.deepEqual(boundStated(m.range, today, started), m.range, `${m.label}, started ${started}`);
-    }
-  }
-  assert.ok(cards >= 200, `only ${cards} cards checked`);
-});
+// 19 Oct 2026: "every Reports month card's range, which its CSV links state, passes the floor unmoved" is retired: the
+// month cards were report-months.ts's, deleted with the old /app Reports page (commit 78b1023).
 
 test("a from before tracking began is honoured inside the year: the default range and its links state one", () => {
   const today = "2026-09-29";
@@ -702,12 +540,12 @@ test("a from before tracking began is honoured inside the year: the default rang
   }
 });
 
-test("rangeFrom applies the floor, and every page and the CSV route pass it the client's start", () => {
+test("rangeFrom applies the floor", () => {
   const data = src("./overview-data.ts");
   assert.match(data, /boundStated\(\{ from, to \}, today, startedOn\)/, "rangeFrom no longer bounds a stated range");
-  assert.match(src("../../app/api/app/[client]/report/route.ts"), /rangeFrom\(Object\.fromEntries\(sp\), repo\.today\(\), client\.started_on\)/);
-  assert.match(src("./placements-screen.ts"), /rangeFrom\(sp, today, client\.started_on \?\? null\)/);
   // 18 Oct 2026, brief 2d: the six /app pages that read a stated range (the overview, Clusters, one cluster, Who is
   // named, Cited pages and Reports; floor 6) retired with /app - every /app address 308s to the dashboards host, whose
   // pages take no stated range. The CSV route and the placements screen above are rangeFrom's callers now.
+  // 19 Oct 2026: the CSV route (/api/app/[client]/report) and the placements screen went too, with the rest of the old
+  // /app dashboard (commit 78b1023); rangeFrom's caller left is overview-data.ts's own loader, whose bound is held above.
 });

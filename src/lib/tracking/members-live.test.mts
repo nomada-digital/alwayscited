@@ -168,7 +168,10 @@ test("every read and update of dashboard_members and dashboard_member_clients sk
 });
 
 test("the sign-in sets last_login_at", () => {
-  const auth = MEMBERS.filter((c) => c.file.endsWith(join("api", "app", "auth", "route.ts")));
+  // 19 Oct 2026: read off the dashboards host's sign-in, /api/dash/auth. The /api/app/auth hop it read before was
+  // deleted with the old /app dashboard's remaining code (commit 78b1023); the dashboards host's sets the column the
+  // same way, on a live member only.
+  const auth = MEMBERS.filter((c) => c.file.endsWith(join("api", "dash", "auth", "route.ts")));
   assert.ok(auth.some((c) => /last_login_at/.test(c.chain)), "the auth route no longer records the sign-in");
 });
 

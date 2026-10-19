@@ -240,22 +240,12 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     why: "Vercel Cron calls it on a schedule (the daily tracking check, 29 Sep 2026); nothing in the app does.",
     earns: () => declaredCron("/api/cron/track"),
   },
-  {
-    route: "/api/app/auth",
-    method: "POST",
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the plain HTML form on /app/auth (the login link's button); the dashboards host's /auth posts to /api/dash/auth instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("auth"),
-  },
-  {
-    route: "/api/app/logout",
-    method: "POST",
-    // The sidebar moved out of /app/[client]/page.tsx into its own component
-    // on 29 Sep 2026 (T4), so the parity fixture draws the same one.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the plain HTML Sign out form in the /app sidebar; the dashboards host's sidebar posts to /api/dash/logout instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("logout"),
-  },
+  // 19 Oct 2026: the 22 entries "Orphaned on 18 Oct 2026 (brief 2d)" - POST /api/app/auth and /logout, and under
+  // /api/app/[client] stop, group, prompt, edit, note, report (GET), ask, hide, check, setup, cluster, keyword, trial,
+  // event, plan, keywords, opportunity, prompt-offer, links and pages - left with their routes. Each was "kept until the
+  // /api/app routes are retired as their own batch", and commit 78b1023 was that batch. An exemption whose route is
+  // gone is one the next route of that name would inherit, so they go. orphanedByAppRetirement, which earned them, went
+  // with them; /api/app/[client]/member below is the /api/app route left, earned by the dashboards host's Settings.
   {
     route: "/api/dash/auth",
     method: "POST",
@@ -283,111 +273,6 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/components/dash/Shell.tsx"), "utf8").includes('action="/api/dash/logout"'),
   },
   {
-    route: "/api/app/[client]/stop",
-    method: "POST",
-    // BRIEF-3 T6 part 2b, 30 Sep 2026: stop and Undo on the Clusters page.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the stop and Undo forms on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("stop"),
-  },
-  {
-    route: "/api/app/[client]/group",
-    method: "POST",
-    // R170 part 2, 2 Oct 2026: Move into a cluster on the Clusters page's ungrouped prompts.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Move into a cluster form on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("group"),
-  },
-  {
-    route: "/api/app/[client]/prompt",
-    method: "POST",
-    // BRIEF-3 T6 part 2c, 30 Sep 2026: the free slot on the Clusters page.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the free-slot form on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("prompt"),
-  },
-  {
-    route: "/api/app/[client]/edit",
-    method: "POST",
-    // BRIEF-3 T6 part 2d, 30 Sep 2026: the pending cluster editor's Save changes.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the pending-cluster editor on the /app Clusters page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("edit"),
-  },
-  {
-    route: "/api/app/[client]/note",
-    method: "POST",
-    // BRIEF-3 T7 part 4b, 30 Sep 2026: Add a note on the one-cluster page.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Add a note form on the /app one-cluster page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("note"),
-  },
-  {
-    route: "/api/app/[client]/report",
-    method: "GET",
-    // R90 T8 v1, 30 Sep 2026: Download report, two CSVs of the range.
-    // R97 part 4, 30 Sep 2026: also the placements screen's Download CSV (?kind=placements).
-    // R151, 3 Oct 2026: the Overview's links go through `download`, which is `report` once the
-    // range has readings - withheld with nothing read, as the Reports page already does.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the /app Overview's and placements screen's CSV links, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("report"),
-  },
-  {
-    route: "/api/app/[client]/ask",
-    method: "POST",
-    // BRIEF-2 T11 /ask, 30 Sep 2026: first caller is Add a cluster's "Ask us to pick one".
-    // DS16, 2 Oct 2026: the action now carries the page's view in its query (fact moved).
-    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): also "Suggest this to your account lead" on one
-    // opportunity, kind=opportunity&id=<uuid> and nothing typed (paths.ts oppAskAction).
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the /app Clusters page's Ask us to pick one and one opportunity's Suggest this to your account lead (paths.ts oppAskAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("ask", ["oppAskAction"]),
-  },
-  {
-    route: "/api/app/[client]/hide",
-    method: "POST",
-    // BRIEF-2 T11 part 5, 30 Sep 2026: the upgrade prompt's x, "Hide for 30 days".
-    // DS16, 2 Oct 2026: the action carries the Clusters view (`kept`); fact moved.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was UpgradePrompt's Hide for 30 days form on the /app pages, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("hide"),
-  },
-  {
-    route: "/api/app/[client]/check",
-    method: "POST",
-    // BRIEF-3 T6 part 3b, 30 Sep 2026: Check keyword in Add a cluster.
-    // DS15, 2 Oct 2026: the action carries the page's view as a query, so the literal ends `/check${view ...`.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Check keyword form in the /app Clusters page's Add panel, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("check"),
-  },
-  {
-    route: "/api/app/[client]/setup",
-    method: "POST",
-    // R166 part 3b, 1 Oct 2026: step 3's Confirm on the setup page.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Confirm form on /app/[client]/setup; the dashboards host's setup posts to /api/dash/[client]/setup/finish instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("setup"),
-  },
-  {
-    route: "/api/app/[client]/cluster",
-    method: "POST",
-    // BRIEF-3 T6 part 3c, 30 Sep 2026: Start tracking this cluster.
-    // DS15, 2 Oct 2026: as /check above, the action carries the page's view.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was step 2 of the /app Clusters page's Add panel, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("cluster"),
-  },
-  {
-    route: "/api/app/[client]/keyword",
-    method: "POST",
-    // R179, 2 Oct 2026: Use this keyword, after a pending cluster's Change keyword passes - on a setup card and on Clusters.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Use this keyword forms on the /app setup and Clusters pages; the dashboards host's setup posts to /api/dash/[client]/setup/keyword instead, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("keyword"),
-  },
-  {
     route: "/api/app/[client]/member",
     method: "POST",
     // R142 part 2, 1 Oct 2026 (BRIEF-4 P2 Team): invite, change a role, remove.
@@ -395,22 +280,6 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     // DS40, 2 Oct 2026: the action now carries the page's stated range (`keep`), so the 303 lands back on it.
     // 18 Oct 2026, brief 2d: /app retired; the dashboards host's Settings draws the Invite and Remove forms now (fact moved).
     earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/settings/page.tsx"), "utf8").includes("action={`/api/app/${slug}/member`}"),
-  },
-  {
-    route: "/api/app/[client]/trial",
-    method: "POST",
-    // 8 Oct 2026: the alwaystracked trial's Cancel trial, owners only, built dark.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the Cancel trial form in /app Settings > Billing; the dashboards host's Settings draws none, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("trial"),
-  },
-  {
-    route: "/api/app/[client]/event",
-    method: "POST",
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. UsageBeacon's fetch was the
-    // caller and went with src/components/app, so the fetch scanner no longer finds one; the reason is recorded here.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was UsageBeacon's keepalive fetch on the /app pages, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("event"),
   },
   {
     route: "/api/checkout",
@@ -448,54 +317,6 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
       "Posted by the DIY dispatcher with an HMAC of the body, at an absolute URL built from SITE_URL, " +
       "so the path scanner reads no literal call to it.",
     earns: () => readFileSync(join(ROOT, "src/lib/diy/core/dispatch.ts"), "utf8").includes("/api/diy/run`"),
-  },
-  {
-    route: "/api/app/[client]/plan",
-    method: "POST",
-    // 13 Oct 2026, DIY P5 (P3's handoff, spec 10 section 3.6): every form on Actions and on the Overview's This week.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Actions and the /app Overview's This week (paths.ts planAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("plan", ["planAction"]),
-  },
-  {
-    route: "/api/app/[client]/keywords",
-    method: "POST",
-    // 13 Oct 2026, DIY P9 (P6's handoff, spec 10 section 3.6): gaining ground's Dismiss, Restore and the toast's Undo on Google.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was gaining ground's Dismiss, Restore and Undo on the /app Google page, retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("keywords"),
-  },
-  {
-    route: "/api/app/[client]/opportunity",
-    method: "POST",
-    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 section 3.6): every status form, Log a site and Verify now on Opportunities.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the status, Log a site and Verify now forms on /app Opportunities (paths.ts oppAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("opportunity", ["oppAction"]),
-  },
-  {
-    route: "/api/app/[client]/prompt-offer",
-    method: "POST",
-    // 13 Oct 2026, DIY P9 (P7's handoff, spec 10 sections 3.6 and 6.7): the prompt step on one opportunity - add, swap, undo, watch.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the prompt step on one /app opportunity (paths.ts promptOfferAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("prompt-offer", ["promptOfferAction"]),
-  },
-  {
-    route: "/api/app/[client]/links",
-    method: "POST",
-    // 13 Oct 2026, DIY P10 (spec 10 section 3.6): Show the next 5, Pursue and Check a link on Links.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Links (paths.ts linksAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("links", ["linksAction"]),
-  },
-  {
-    route: "/api/app/[client]/pages",
-    method: "POST",
-    // 13 Oct 2026, DIY P9 (P8's handoff, spec 10 section 3.6): add, remove, check, example and Add to Actions on Your pages.
-    // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.
-    why: "Orphaned on 18 Oct 2026 (brief 2d): its only caller was the forms on /app Your pages and one key page (paths.ts pagesAction and pageAction, now unused), retired with /app. Kept until the /api/app routes are retired as their own batch.",
-    earns: () => orphanedByAppRetirement("pages", ["pagesAction", "pageAction"]),
   },
   {
     route: "/api/verify/[vtoken]",
@@ -544,27 +365,6 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => true,
   },
 ];
-
-/**
- * 18 Oct 2026, brief 2d: /app is retired and every /app address 308s to the
- * dashboards host, so the /api/app routes only its pages posted to have no
- * caller. The reason is earned, not trusted: no live page or component (src/app
- * outside src/app/api, and src/components) has a line naming `/api/app` and
- * the route's last segment, nor calls a lib builder that made its action. The
- * moment one does, the entry is stale and says so.
- */
-function orphanedByAppRetirement(segment: string, builders: string[] = []): boolean {
-  const live = [...walk("src/app").filter((f) => !f.startsWith("src/app/api/")), ...walk("src/components")].filter(
-    (f) => /\.tsx?$/.test(f) && !/\.test\./.test(f),
-  );
-  if (live.length < 50) return false; // the walk has drifted, and a blind walk earns nothing
-  const seg = new RegExp(`/${segment}(?![\\w-])`);
-  return live.every((f) => {
-    const src = readFileSync(join(ROOT, f), "utf8");
-    if (builders.some((b) => new RegExp(`\\b${b}\\(`).test(src))) return false;
-    return !src.split("\n").some((l) => l.includes("/api/app") && seg.test(l));
-  });
-}
 
 function declaredCron(path: string): boolean {
   const json = JSON.parse(readFileSync(join(ROOT, "vercel.json"), "utf8")) as {

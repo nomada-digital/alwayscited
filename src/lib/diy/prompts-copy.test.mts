@@ -28,10 +28,15 @@ import { test } from "node:test";
  * must still walk at least one file. The dashboards host's tree was never under this census and is not added to it
  * here: walked on 18 Oct 2026 it reads differently, which is a copy decision for its own change, not this one.
  */
-const ROOTS = ["src/lib/diy/changes", "src/lib/diy/ai"];
+/**
+ * 19 Oct 2026: src/lib/diy/ai is gone - the AI page's rows were the old /app dashboard's and were deleted with it
+ * (commit 78b1023), as were changes/story.ts and the rest of changes/ but diff.ts. The rule holds over what is left:
+ * 1 file walked that day, so the floor moves from 5 to 1 and the one root must still walk it.
+ */
+const ROOTS = ["src/lib/diy/changes"];
 // data-figure="questions" is the figure's id, read by e2e/app specs, never shown.
 const IDENTIFIERS = [/figure: "questions"/];
-const FLOOR = 5;
+const FLOOR = 1;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {

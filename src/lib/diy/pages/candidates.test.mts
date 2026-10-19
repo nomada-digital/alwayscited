@@ -5,13 +5,11 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { cleanCandidate } from "../plan/refresh.ts";
-import { actCandidate } from "./act.ts";
-import { type GatherInput, closestKey, pageCandidates } from "./candidates.ts";
+import { type GatherInput, pageCandidates } from "./candidates.ts";
 import { found, keyPage, ownCheck, readings, serp } from "./fake-pages.mts";
 import { type PagesFixture, botOf, checkOf, fixtureSerp, latestTop, topOf } from "./data.ts";
 import { keyPageOf } from "./key-pages.ts";
 import type { BotCheck } from "./types.ts";
-import { type PagesInput, clusterFits, pageState, servedClusters } from "./view.ts";
 
 /**
  * Your pages' Actions candidates (13 Oct 2026, DIY P8; spec 10 section 6.1):
@@ -82,23 +80,8 @@ test("Closest win: a page that is not the one ranking raises none - the homepage
   assert.deepEqual(pageCandidates(elsewhere, "2026-09-29"), []);
 });
 
-test("one Closest win per cluster: 'Add to Actions' on a drafted example writes the nightly pick's own key and title, and is refused on a page that is not the one ranking", () => {
-  const lists = Array.from({ length: 8 }, (_, i) => `https://list-${i}.example/best-cloud-accounting-software`);
-  const g = base({ serp: [serp("k8", readings("2026-09-29", days(28, 14, PAGE)), lists)] });
-  const night = pageCandidates(g, "2026-09-29").find((x) => x.kind === "rework_page")!;
-  const input: PagesInput = { ...g, prompts: [], examples: [], items: [], cited: new Map() };
-  const s = pageState(cloud, input);
-  const verdicts = new Map(clusterFits(s, input).map((f) => [f.cluster.id, f.verdict] as const));
-  const pressed = actCandidate({ page: cloud, state: s, item: "rework:c8", served: servedClusters(cloud, input), keywords: input.keywords, domain: "tallyroo.com", verdicts })!;
-  assert.equal(pressed.dedupeKey, night.dedupeKey);
-  assert.equal(pressed.dedupeKey, closestKey("c8"));
-  assert.deepEqual([pressed.kind, pressed.title], [night.kind, night.title]);
-  const moved = base({ serp: [serp("k8", readings("2026-09-29", days(28, 14, "https://tallyroo.com/features/cloud")), lists)] });
-  const mi: PagesInput = { ...moved, prompts: [], examples: [], items: [], cited: new Map() };
-  const ms = pageState(cloud, mi);
-  const mv = new Map(clusterFits(ms, mi).map((f) => [f.cluster.id, f.verdict] as const));
-  assert.equal(actCandidate({ page: cloud, state: ms, item: "rework:c8", served: servedClusters(cloud, mi), keywords: mi.keywords, domain: "tallyroo.com", verdicts: mv }), null);
-});
+// 19 Oct 2026: "one Closest win per cluster: 'Add to Actions' on a drafted example..." is retired: its subject,
+// pages/act.ts (the old /app Pages screen's Add to Actions), was deleted with that dashboard (commit 78b1023).
 
 test("Blocking, judged by each page's own host: a key page on a subdomain is read against that subdomain's robots.txt, never the domain's", () => {
   // A made-up client on a .example domain, so its subdomain is one too (privacy.test.mts).

@@ -7,12 +7,9 @@ import { fakeDb } from "../../tracking/fake-db.mts";
 import { addDays } from "../../tracking/figures.ts";
 import { expandFixture } from "../../tracking/fixture-mode.ts";
 import { DIY_FIXTURE_STATES } from "../core/fixture.ts";
-import { arrange } from "./board.ts";
 import { fixtureRows, itemOf, loadPlanItems, planFixture, readPlan, section } from "./data.ts";
-import { readout } from "./readout.ts";
 import { PLAN_STATUSES, type PlanItem } from "./types.ts";
 import { thisWeek, weekCounts } from "./week.ts";
-import { whyFirst, itemChip } from "./why-first.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
 const ENV = { TRACKING_FIXTURE: "1", VERCEL_ENV: "development" };
@@ -30,16 +27,13 @@ test("full: 23 items across every status, 3 this week with 1 done, 2 done 21+ da
   assert.deepEqual(weekCounts(all, TODAY), { done: 1, of: 3, open: 16 });
   assert.equal(new Set(week.map((i) => i.severity)).size, 3, "one per severity");
   assert.equal(new Set(week.map((i) => i.clusterId)).size, 3, "never two in one cluster");
-  const done = all.filter((i) => i.status === "done");
-  const kinds = done.map((i) => readout(i, { today: TODAY, clusters: [], keywords: [], prompts: [], answers: [], serp: [], placements: [], items: [] })?.kind).sort();
-  assert.deepEqual(kinds, ["early", "read", "read"]);
-  assert.equal(arrange(all, { kind: null, cluster: null, status: null }, TODAY).hidden, 1, "one hidden with Not now");
+  assert.equal(all.filter((i) => i.status === "done").length, 3);
+  // 19 Oct 2026: the done items' readouts (readout.ts) and the board's Not now count (board.ts arrange) left with the
+  // old /app Plan page, deleted with that dashboard (commit 78b1023).
 });
 
-test("every fixture item's grade can render, and every severity's 'Why this is first' line does", () => {
-  for (const i of items()) if (i.grade) assert.ok(itemChip(i), `${i.id}: ${i.grade} ${i.sourceId ?? ""}`);
-  for (const s of ["blocking", "slipping", "closest", "gap", "tidy"] as const) assert.ok(whyFirst(s), s);
-});
+// 19 Oct 2026: "every fixture item's grade can render, and every severity's 'Why this is first' line does" is retired:
+// why-first.ts, its subject, was the old /app Plan page's and was deleted with that dashboard (commit 78b1023).
 
 test("every fixture link is a dashboard path, and the hosts are the tracking fixture's made-up ones", () => {
   const raw = readFileSync(join(ROOT, "src/lib/diy/fixtures/plan.json"), "utf8");
@@ -55,7 +49,8 @@ test("day0 is empty; zero has nothing open; the states the Plan does not draw di
   const zero = items("zero");
   assert.ok(zero.length > 0);
   assert.ok(zero.every((i) => i.status === "done" || i.status === "dropped"));
-  assert.equal(arrange(zero, { kind: null, cluster: null, status: null }, TODAY).nothingOpen, true);
+  // 19 Oct 2026: "nothing open" was read through board.ts arrange, deleted with the old /app dashboard (78b1023); the
+  // every-row-closed assertion above is the same fact read straight off the items.
   for (const s of DIY_FIXTURE_STATES) if (!["day0", "zero"].includes(s)) assert.equal(items(s).length, 23, s);
   assert.throws(() => items("nope"), /not a DIY fixture state/);
 });

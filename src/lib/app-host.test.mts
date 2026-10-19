@@ -196,7 +196,9 @@ test("the dashboard's paths go through the helper, and there are plenty of them"
     if (rel === "src/lib/app-host.ts") continue;
     if (/\bappPath\s*\(/.test(readFileSync(file, "utf8"))) callers += 1;
   }
-  assert.ok(callers >= 24, `only ${callers} files call appPath(); 24 is the recorded floor`);
+  // 19 Oct 2026: down on purpose, from 24 to 8 - commit 78b1023 deleted the /api/app routes and the lib modules only
+  // the old /app dashboard reached, and with them the files that built /app paths through appPath(). 8 measured that day.
+  assert.ok(callers >= 8, `only ${callers} files call appPath(); 8 is the recorded floor`);
 });
 
 /* ------------------------------------------------------------------ */

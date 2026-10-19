@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -82,26 +82,10 @@ const FATGRID_ROOTS = ["src/app/dashboards", "src/components/dash", "src/lib/das
  * /links page, its two components, the links library and fixtures/links.json.
  * 18 Oct 2026, brief 2d: /app retired; the walk is src/lib/diy, the dashboards host's four DIY page directories and
  * src/components/dash (see SOURCE_ROOTS). 178 files that day.
+ * Lowered 19 Oct 2026: 131, measured - the src/lib/diy modules only the old /app dashboard read (under ai, changes,
+ * keywords, links, opportunities, pages, plan, prompts and shell) were deleted with it (commit 78b1023).
  */
-const SOURCE_FLOOR = 178;
-/**
- * Saved route files swept. 13 Oct 2026, DIY P1: 0 - no DIY page exists yet. P5 raises it with P3's /plan and P4's /ai.
- * Raised 13 Oct 2026 (DIY P5, wave 1 merged): 11 on a built tree - P3's six Actions pages (board full and viewer,
- * day 0, list full, placed and placed-agency), P4's three AI visibility pages (default, missing, new), and the
- * shell's ai-shell and plan-shell. Held on a built tree only, as the test above is: on an unbuilt tree the e2e
- * specs have not run either, and that tree's capture and sweeps skip.
- * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 40 - wave 1's 11, P6's six Google pages, P7's eight Opportunities
- * pages, P8's eleven Your pages pages, and the wave 2 journey's Google, Opportunities, key page and Actions
- * (e2e/app/diy-wave2.spec.mts).
- * Raised 13 Oct 2026 (DIY P10, wave 3): 51 - wave 2's 40 and P10's eleven Links pages (profile full, dark and
- * nolinks; gap full and fewcompetitors; targets full, revealed and capped; mentions; check full and nolinks).
- * 13 Oct 2026 (Danny, Actions simple by default): the list is Actions' default, so diy-plan.spec saves the viewer's
- * list (plan-list-viewer) beside the viewer's board, and plan-list-full is the page with no view: seven Actions pages,
- * one more than wave 1 counted. Merged after wave 3: the floor stays 51 - a minimum - and the saved pages are 52.
- * 18 Oct 2026, brief 2d: unchanged. The saved pages come from e2e/app/diy-*.spec.mts, which still visit /app
- * addresses (each 308s to the dashboards host now); moving the specs onto the dashboards host is their own change.
- */
-const SAVED_FLOOR = 51;
+const SOURCE_FLOOR = 131;
 
 function walk(dir: string): string[] {
   const abs = join(ROOT, dir);
@@ -300,8 +284,10 @@ test("no payload built under src/lib/diy puts a price beside a link or placement
  * 2026 (DIY P1); a walk that stops matching reports a clean tree.
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 569, measured on the merged tree.
  * Raised 13 Oct 2026 (DIY P10, wave 3): 598, measured with the Links page, route, components and library.
+ * Lowered 19 Oct 2026: 531, measured - commit 78b1023 deleted 21 /api/app routes and 59 lib modules only the old /app
+ * dashboard reached; src/app/api is still walked (the assertion below names a route in it).
  */
-const ALL_SOURCE_FLOOR = 598;
+const ALL_SOURCE_FLOOR = 531;
 const ALL_SOURCE = walk("src").filter((f) => /\.(tsx?|mts)$/.test(f) && !f.endsWith(".test.mts"));
 
 test("only the worker and runOnDemand mint a ReadCtx, anywhere in src", () => {
@@ -325,38 +311,11 @@ test("only the worker and runOnDemand mint a ReadCtx, anywhere in src", () => {
 
 // ------------------------------------------------------------ the rendered pages
 
-const SAVED_DIR = join(ROOT, "test-results", "diy");
-
-function savedFiles(): { route: string; file: string }[] {
-  if (!existsSync(SAVED_DIR)) return [];
-  const out: { route: string; file: string }[] = [];
-  for (const pkg of readdirSync(SAVED_DIR)) {
-    const dir = join(SAVED_DIR, pkg);
-    if (!statSync(dir).isDirectory()) continue;
-    for (const name of readdirSync(dir).filter((n) => n.endsWith(".html"))) {
-      const route = Object.entries(DIY_ROUTES).find(([, re]) => re.test(name))?.[0];
-      if (route) out.push({ route, file: join(dir, name) });
-    }
-  }
-  return out;
-}
-
-/** The DIY routes this tree has a page for. 18 Oct 2026, brief 2d: on the dashboards host, /app's pages being gone. */
-function builtRoutes(): string[] {
-  // Not plan: the dashboards host's /plan is the plan and allowances page, not Actions (see SOURCE_ROOTS).
-  return Object.keys(DIY_ROUTES).filter((r) => r !== "plan" && existsSync(join(ROOT, "src", "app", "dashboards", "[client]", r, "page.tsx")));
-}
-
-test("every DIY page this tree has, built, has its rendered HTML saved by its e2e spec", () => {
-  if (!existsSync(join(ROOT, ".next"))) return; // unbuilt: capture and the e2e specs have not run either
-  const saved = new Set(savedFiles().map((s) => s.route));
-  const missing = builtRoutes().filter((r) => !saved.has(r));
-  assert.deepEqual(missing, [], `no saved HTML for ${missing.join(", ")}: run npx playwright test e2e/app/diy-*.spec.mts on the fixture`);
-});
-
-test("the saved DIY pages say nothing the gating rules forbid", () => {
-  const files = savedFiles();
-  if (existsSync(join(ROOT, ".next"))) assert.ok(files.length >= SAVED_FLOOR, `swept ${files.length} saved pages, floor ${SAVED_FLOOR}: run npx playwright test e2e/app/diy-*.spec.mts on the fixture`);
-  const bad = files.flatMap(({ route, file }) => renderedProblems(route, readFileSync(file, "utf8")).map((p) => `${relative(ROOT, file)}: ${p}`));
-  assert.deepEqual(bad, []);
-});
+/**
+ * 19 Oct 2026: retired - "every DIY page this tree has, built, has its rendered HTML saved by its e2e spec" and "the
+ * saved DIY pages say nothing the gating rules forbid" (floor 51), with the SAVED_FLOOR, savedFiles and builtRoutes
+ * they read. Both read the pages e2e/app/diy-*.spec.mts saved under test-results/diy, and those specs were deleted on
+ * the owner's instruction (19 Oct 2026: remove the journeys that target /app) in commit 78b1023. The dashboards host
+ * has no saved-page spec yet, so there is nothing for them to sweep; a spec that saves the dashboards host's DIY pages
+ * brings them back with a measured floor. renderedProblems, the rule they applied, is still held by its probe above.
+ */

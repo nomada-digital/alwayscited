@@ -40,8 +40,11 @@ const ROOT = join(fileURLToPath(import.meta.url), "..", "..", "..", "..", "..");
  * and P8's 56 schema lines (pages/schema.advice.ts).
  * Raised 13 Oct 2026 (DIY P10, wave 3): 119 - wave 2's 104 and P10's 15 link playbook lines (links/links.advice.ts:
  * Earn a link's 7, Ask for a link's 6, who to write to, and the Reclaim method line).
+ * Lowered 19 Oct 2026: 56 - P8's schema lines (pages/schema.advice.ts) alone. why-first.advice.ts (5),
+ * playbooks.advice.ts (43) and links.advice.ts (15) were read only by the old /app dashboard and were deleted with it
+ * (commit 78b1023); the rule holds over the advice file left, at exactly what it carries.
  */
-const ADVICE_FLOOR = 119;
+const ADVICE_FLOOR = 56;
 /**
  * Rendered (not internal) sources. 13 Oct 2026, DIY P1: 5 at seed - G1, G2, G3, G4 and S41 (core.sources.ts).
  * Raised 13 Oct 2026 (DIY P9, wave 2 merged): 11 - the seed's 5 and P8's 6 crawler sources (pages.sources.ts), which

@@ -246,11 +246,8 @@ const SENDERS: { file: string; sends: number; why: string }[] = [
     sends: 1,
     why: "the order email, 30 Sep 2026 (BRIEF-3 C4, pricing spec section 5) - to us at the contact destination, only from the signed Stripe webhook, once per event id",
   },
-  {
-    file: "src/lib/tracking/ask-mail.ts",
-    sends: 1,
-    why: "a signed-in member's ask, 30 Sep 2026 (BRIEF-2 T11 /ask) - to us, or to the account's agency contact in agency mode, member as reply-to, 3 per member a day",
-  },
+  // 19 Oct 2026: src/lib/tracking/ask-mail.ts (a signed-in member's ask, BRIEF-2 T11 /ask, 30 Sep 2026) left: it and
+  // its route were deleted with the old /app dashboard (commit 78b1023).
   {
     file: "src/lib/tracking/invite-mail.ts",
     sends: 1,
@@ -303,8 +300,9 @@ test("every send takes its From from the one reader", () => {
   // invite (R142 part 2, BRIEF-4 P2). 10 since 1 Oct 2026: the lifecycle
   // emails (R159 part 3), flag-gated. 11 since 2 Oct 2026: setup confirmed
   // (R166 step 4). 12 since 9 Oct 2026: the run-health summary (audit
-  // reliability-6, OP-1).
-  assert.equal(all.length, 12, `expected 12 sends, the walk found ${all.length}`);
+  // reliability-6, OP-1). 11 since 19 Oct 2026: the member's ask (ask-mail.ts) was
+  // deleted with the old /app dashboard (commit 78b1023).
+  assert.equal(all.length, 11, `expected 11 sends, the walk found ${all.length}`);
 
   // 18 Oct 2026 (brief 2e): the lifecycle sender passes the rendered email's sender, so #3 and #12 go out under
   // Danny's name on the same address. Still the one reader; the argument picks a display name, never an address.
@@ -359,10 +357,9 @@ const RECIPIENTS: { to: string; why: string }[] = [
     to: "input.email",
     why: "the visitor's own address, for their own scan - the verification mail proves it and the report mail is sent after it was proved. Not a third party's under any branch: nothing else writes that field",
   },
-  {
-    to: "input.agencyContact ?? process.env.CONTACT_EMAIL_DESTINATION ?? CONTACT_EMAIL",
-    why: "us, or the account's agency contact (T11 /ask, 30 Sep 2026) - accounts.upsell_contact_email, which only Nomada writes through /admin/tracking setUpsell; the /ask route reads it from the member's own account, never from the request",
-  },
+  // 19 Oct 2026: "input.agencyContact ?? process.env.CONTACT_EMAIL_DESTINATION ?? CONTACT_EMAIL" (us, or the account's
+  // agency contact; T11 /ask, 30 Sep 2026) left with its one send, ask-mail.ts, deleted with the old /app dashboard
+  // (commit 78b1023). An allowed recipient with no send is one the next send could take without a reason.
   {
     to: "input.to",
     why: "the address a signed-in owner invited to their own client's dashboard (R142 part 2, 1 Oct 2026; BRIEF-4 P2) - typed by the owner, not a stranger: the member route checks session, membership and the owner role, writes the member row first, and caps it at INVITES_PER_OWNER_PER_DAY",
@@ -383,7 +380,8 @@ test("every send is addressed to somebody we are allowed to write to", () => {
   // 10 since 1 Oct 2026: the lifecycle emails (R159 part 3), to a stored owner.
   // 11 since 2 Oct 2026: setup confirmed (R166 step 4), to the contact destination.
   // 12 since 9 Oct 2026: the run-health summary (audit reliability-6, OP-1), to the contact destination.
-  assert.equal(all.length, 12, `expected 12 sends, the walk found ${all.length}`);
+  // 11 since 19 Oct 2026: the member's ask (ask-mail.ts) was deleted with the old /app dashboard (commit 78b1023).
+  assert.equal(all.length, 11, `expected 11 sends, the walk found ${all.length}`);
 
   const allowed = new Map(RECIPIENTS.map((r) => [r.to, r.why]));
   for (const s of all) {

@@ -288,13 +288,8 @@ test("trigger jsonb: the surface, and id-shaped facts on the recorded keys only"
   assert.equal(readSurface("admin"), null);
 });
 
-test("trigger jsonb is written: the hide and ask routes record the surface the prompt carried (review of P4, 13 Oct 2026)", async () => {
-  // The helper existed and nothing called it, so a hide or ask on /ai could not be told from one on Clusters.
-  const { readFileSync } = await import("node:fs");
-  const read = (f: string) => readFileSync(new URL(`../../${f}`, import.meta.url), "utf8");
-  assert.match(read("app/api/app/[client]/hide/route.ts"), /recordHidden\(supabaseAdmin\(\), \{[^}]*trigger: upgradeTrigger\(surface\) \}\)/);
-  assert.match(read("app/api/app/[client]/ask/route.ts"), /trigger: upgradeTrigger\(surface \?\? "clusters", \{ items: String\(items\.length\) \}\)/);
-  // 18 Oct 2026, brief 2d: the prompt half - UpgradePrompt putting `surface` in both actions' query and /ai saying "ai"
-  // (src/components/app) - retired with /app; every /app address 308s to the dashboards host, which draws no
-  // UpgradePrompt. The routes still record what a posted surface says.
-});
+// 19 Oct 2026: "trigger jsonb is written: the hide and ask routes record the surface the prompt carried (review of P4,
+// 13 Oct 2026)" is retired. Its subject was the two routes' calls, and /api/app/[client]/hide and /ask were deleted
+// with the old /app dashboard's remaining code (commit 78b1023); the prompt half had gone on 18 Oct 2026 (brief 2d).
+// Nothing posts a surface now. upgradeTrigger's own rule is held by "trigger jsonb: the surface, and id-shaped facts
+// on the recorded keys only" above.

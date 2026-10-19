@@ -146,16 +146,9 @@ function selectsIn({ file, src }: Source): Select[] {
  * keep the suite green is an entry nobody re-reads.
  */
 const RECORDED: Record<string, string> = {
-  // 30 Sep 2026, T11 /ask: the member's own client, already membership-checked;
-  // the id picks the account's recipient and is not in the 303. 1 Oct 2026
-  // (R142 part 3): brand_aliases joins it for the alias ask's mail, which goes
-  // to us or the agency contact, never back to the requester's page.
-  "src/app/api/app/[client]/ask/route.ts :: account_id, brand_aliases":
-    "the ask route's recipient lookup; the redirect carries only sent|refused and us|agency.",
-  // 13 Oct 2026, DIY P7 (spec 10 section 4.7): the opportunity ask's own recipient lookup, on the member's own
-  // client, already membership-checked; the 303 carries only Opportunities' done and why codes.
-  "src/app/api/app/[client]/ask/route.ts :: account_id":
-    "the opportunity ask's recipient lookup; the redirect carries only the asked or refused code, never the id.",
+  // 19 Oct 2026: the ask route's two reads (T11 /ask, 30 Sep 2026, with R142 part 3's brand_aliases; and DIY P7's
+  // opportunity ask, 13 Oct 2026) left this list: /api/app/[client]/ask was deleted with the old /app dashboard
+  // (commit 78b1023), as it had no caller left.
   // 29 Sep 2026, T2. Both render only on /admin/tracking, behind the /admin
   // Basic auth; the requester is Nomada, and the id is used only to group
   // members and post it back as a hidden field to the admin's own action.
@@ -248,10 +241,8 @@ const MENTIONED: Record<string, string> = {
   // 13 Oct 2026 (dashboard speed work): the read moved from member.ts to shell.ts, which member.ts clientsFor calls.
   "src/lib/tracking/shell.ts":
     "T3: reads the column to join a signed-in member to their clients (readShell, behind member.ts clientsFor); returns none of it.",
-  "src/app/api/app/[client]/ask/route.ts":
-    "T11 /ask (30 Sep 2026): reads the member's own client's account_id to find its upsell mode " +
-    "and agency contact. Used only to pick the recipient; the route answers with a 303 carrying " +
-    "sent|refused and us|agency, never the id.",
+  // 19 Oct 2026: /api/app/[client]/ask (T11 /ask, 30 Sep 2026) left this list, deleted with the old /app dashboard
+  // (commit 78b1023).
   // settings-data.ts left this list 13 Oct 2026 (dashboard speed work): its team read embeds the account's members
   // through the foreign key and no longer names the column (R142, 1 Oct 2026, read it to filter the members).
   "src/app/api/dash/[client]/email/route.ts":

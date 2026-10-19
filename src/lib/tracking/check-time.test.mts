@@ -140,7 +140,7 @@ test("census: CHECK_HOUR_UTC is the hour vercel.json runs the track cron at", ()
  */
 // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host. src/components/app and src/app/app
 // went with it; the dashboard a client reads is src/app/dashboards, src/components/dash and src/lib/dash now.
-const ROOTS = ["src/components/dash", "src/app/dashboards", "src/lib/dash", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config", "src/lib/diy/changes", "src/lib/diy/ai"];
+const ROOTS = ["src/components/dash", "src/app/dashboards", "src/lib/dash", "src/app/api/app", "src/app/checkout", "src/lib/email", "src/lib/tracking", "src/lib/checkout", "src/config", "src/lib/diy/changes"];
 /**
  * Files walked on 9 Oct 2026: 151. A walk that stops matching reports a clean tree.
  * 13 Oct 2026, DIY P4 (review of P4): src/lib/diy/changes and src/lib/diy/ai added - the Overview's change lines
@@ -149,6 +149,9 @@ const ROOTS = ["src/components/dash", "src/app/dashboards", "src/lib/dash", "src
  * packages' (spec 10 section 7.0); the shell widens the roots when they merge.
  * 18 Oct 2026, brief 2d: the /app roots swapped for the dashboards host's three; 214 files walked that
  * day, so the floor stays 165.
+ * 19 Oct 2026: src/lib/diy/ai left the roots - the AI page's rows were deleted with the old /app dashboard's remaining
+ * code (commit 78b1023), as were the /api/app routes but login and member and the tracking modules only /app read.
+ * 182 files walked that day, so the floor stays 165.
  */
 const FLOOR = 165;
 
@@ -221,6 +224,9 @@ test("census: only check-time.ts writes a zone label", () => {
  * Settings, Clusters, OneCluster, Reports and the setup page) went with it; the dashboards host's two - the
  * overview's next check and the day-zero line every page draws (dash/first-check.ts) - are recorded in their place.
  * 13 calls that day, so the floor moves from 17 to 13.
+ * 19 Oct 2026: tracking/activation.ts and its two calls went with the old /app dashboard's remaining code (commit
+ * 78b1023; it was read only from the deleted /app tree, and was never one of CALLERS). 11 calls that day, so the
+ * floor moves from 13 to 11.
  */
 const CALLERS = [
   "src/app/dashboards/[client]/page.tsx",
@@ -230,7 +236,7 @@ const CALLERS = [
   "src/lib/tracking/setup-landing.ts",
   "src/config/trial.ts",
 ];
-const CALLS_FLOOR = 13;
+const CALLS_FLOOR = 11;
 
 /** A call of the helper or a wrapper of it; a declaration, `function checkTime(`, is not one. */
 const CALL = /(?<!\bfunction\s+)\b(?:checkTime|clockIn|firstCheckWhen|setupChecks)\(/g;

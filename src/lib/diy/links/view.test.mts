@@ -8,7 +8,6 @@ import type { DiyFixtureState } from "../core/fixture.ts";
 
 import { fixtureLinksWorld, linksChecksUsedFixture, linksFixture } from "./data.ts";
 import type { Opportunity } from "../opportunities/types.ts";
-import { linksToast, readDone, readWhy } from "./toast.ts";
 import { type LinksPage, type WorldPart, linksPage, revealFacts, stateOf } from "./view.ts";
 
 /**
@@ -124,17 +123,8 @@ test("the trial: 10 gap rows, 2 targets a month", () => {
   assert.equal(page.targets!.limit, 2);
 });
 
-test("the toast's words are fixed: a code outside the list says nothing, and nothing is echoed", () => {
-  const p = { cap: 10, resets: "1 Oct", revealLine: "You've used this month's 5 link targets. They reset on 1 Oct.", checkLine: null };
-  assert.equal(linksToast("revealed", null, p)!.text, "Revealed. These pages stay on your list.");
-  assert.equal(linksToast("refused", "reveal_cap", p)!.text, p.revealLine);
-  assert.equal(linksToast("refused", "cap", p)!.text, "You're working 10 pages at once. Mark one won, declined or not for us to pursue another.");
-  assert.equal(linksToast("refused", "running", p)!.text, "Your daily check is running. Try again in a few minutes.");
-  assert.equal(linksToast("refused", "<script>", p)!.text, "That didn't save. Try again in a moment.");
-  assert.equal(linksToast("<b>hi</b>", null, p), null);
-  assert.equal(readDone("checked"), "checked");
-  assert.equal(readWhy("nope"), null);
-});
+// 19 Oct 2026: "the toast's words are fixed" is retired: links/toast.ts was the old /app Links page's toast, deleted
+// with that dashboard (commit 78b1023).
 
 test("link checks: one count - the ledger's paid checks and verifications, and the sites logged; a check our own fetch answered uses none", () => {
   const since = "2026-09-01T04:00:00.000Z";

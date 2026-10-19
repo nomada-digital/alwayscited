@@ -21,10 +21,13 @@ const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
  * 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host, so src/components/app/plan and
  * src/app/app/[client]/plan went with it; the library and the plan route are what is left to hold.
  */
-const DIRS = ["src/lib/diy/plan", "src/app/api/app/[client]/plan"];
+/** 19 Oct 2026: the plan route (/api/app/[client]/plan) left with the old /app dashboard's remaining code (commit 78b1023). */
+const DIRS = ["src/lib/diy/plan"];
 /** 13 Oct 2026: 13 + 10 + 1 + 1 files. A walk that stops matching reports a clean tree. 18 Oct 2026 (brief 2d): the
- * library's 17 files and the route's 1, measured once the /app components and page were gone, so the floor moves from 24 to 18. */
-const FLOOR = 18;
+ * library's 17 files and the route's 1, measured once the /app components and page were gone, so the floor moves from 24 to 18.
+ * 19 Oct 2026: the library's 9 files, measured once commit 78b1023 deleted the route and the eight plan modules only
+ * /app read (board, card, paths, placements, readout, why-first, why-first.advice, worklog), so the floor moves to 9. */
+const FLOOR = 9;
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((n) => {
@@ -66,9 +69,11 @@ test("no score, no index, no causal ranking word in the rule-written lines", () 
 test("the brand never takes a capital, and Nomada is named only as the owner label agency mode replaces", () => {
   assert.deepEqual(hits(/AlwaysCited|Alwayscited|always cited/), []);
   const nomada = hits(/["'`][^"'`]*nomada digital/i);
+  // 19 Oct 2026: placements.ts, whose NOMADA_OWNER (swapped for 'Your account contact' in agency mode) was the one
+  // naming, was deleted with the old /app dashboard (commit 78b1023). No Plan file names Nomada now.
   assert.deepEqual(
     nomada.map((h) => h.split(": ")[0]),
-    ["src/lib/diy/plan/placements.ts"],
-    "only placements.ts's NOMADA_OWNER, which ownerLabel swaps for 'Your account contact' in agency mode",
+    [],
+    "a Plan line names Nomada: agency mode cannot replace it here",
   );
 });

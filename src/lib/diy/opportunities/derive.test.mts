@@ -1,14 +1,11 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { addDays } from "../../tracking/figures.ts";
 import { ANSWER_SELECT, answerRow, selectColumns } from "../../tracking/read-shape.ts";
 
-import { citedFacts } from "./cited.ts";
 import { type DeriveAnswer, type DeriveInput, COMPETITOR_MIN, citedSummary, competitorBrands, derive, excludeNomadaPlacements, firstCitedAfter, isCompetitorDomain, withoutPlaced } from "./derive.ts";
 import { compareOrder, orderKey } from "./order.ts";
-import { headerCounts, listRow, tabCounts } from "./payload.ts";
 import { opportunityOf } from "./status.ts";
 import { storedRow } from "./data.ts";
 import type { KindRow, PageFacts } from "./types.ts";
@@ -112,7 +109,10 @@ test("exclusions: the client's own pages, the engines' properties, government an
   assert.deepEqual(keys(r).filter((k) => !k.startsWith("own:")), ["cited:kept.example/best-invoicing-apps"]);
 });
 
-test("Nomada's placements for other clients: absent from every lens, from the counts, from Cited's leaves and from the payload; the client's own are not", async () => {
+// 19 Oct 2026: the counts, Cited's leaves and the payload halves (payload.ts headerCounts, tabCounts and listRow; cited.ts
+// citedFacts) left with the old /app Opportunities page, deleted with that dashboard (commit 78b1023). The derivation's
+// and the read-time subtraction's halves are live and held.
+test("Nomada's placements for other clients: absent from every lens and from the read-time rows; the client's own are not", async () => {
   const placedKey = "placed.example/best-invoicing-apps";
   const listKey = "placedlist.example/best-bookkeeping-software";
   const spec = input(
@@ -140,23 +140,7 @@ test("Nomada's placements for other clients: absent from every lens, from the co
   const stored = [...r.rows, stale].map((d) => opportunityOf(storedRow("c", d, undefined, TODAY))!);
   const kept = await excludeNomadaPlacements(stored, "c", async () => new Set([placedKey]));
   assert.ok(!kept.some((o) => o.urlKey === placedKey));
-  assert.equal(headerCounts(kept).total, headerCounts(stored).total - 1, "the header count drops it too");
-  assert.equal(tabCounts(kept).cited, tabCounts(stored).cited - 1);
-  const ctx = { today: TODAY, brand: "Tallyroo", clusters: new Map(), reads: new Map(), dark: false, answerLink: () => null, path: (p: string) => p };
-  assert.ok(!JSON.stringify(kept.map((o) => listRow(o, ctx))).includes("placed.example"), "nothing in the payload names it");
   assert.deepEqual(withoutPlaced([{ urlKey: "a" }, { urlKey: "b" }], new Set(["b"])), [{ urlKey: "a" }], "the rows to keep, never the matches");
-
-  // Cited pages ?leaves=1: the same subtraction.
-  const facts = citedFacts({
-    pages: [{ page: placedKey, host: "placed.example" }, { page: "other.example/best-invoicing-apps", host: "other.example" }],
-    answers: spec.answers,
-    range: { from: addDays(TODAY, -27), to: TODAY },
-    reads: new Map([[placedKey, read(placedKey)], ["other.example/best-invoicing-apps", read("other.example/best-invoicing-apps")]]),
-    kinds: new Map(),
-    placedKeys: new Set([placedKey]),
-    rows: kept,
-  });
-  assert.deepEqual([...facts.leaves], ["other.example/best-invoicing-apps"]);
 });
 
 test("competitors, path 1: Shopify named 5 times and classified a platform is no competitor, and its pages are listed", () => {
@@ -331,10 +315,6 @@ test("the cited tab's empty-state summary is the same on its citations-only read
   const summary = citedSummary({ ...at, answers: whole }, reads);
   assert.deepEqual(summary, { pages: 2, readNamingYou: 1, own: 1 }, "the whole read's summary is not the one this test was written for, so it compares less than it says");
   assert.deepEqual(citedSummary({ ...at, answers: narrow }, reads), summary);
-  const world = readFileSync(new URL("./world.ts", import.meta.url), "utf8");
-  assert.match(world, /return trackingWorld\(repo, client, \{ structure, answers: "cites" \}\);/, "citedWorld no longer reads the narrow shape");
-  assert.match(world, /answers: opts\.answers \?\? "full"/, "the derivation's read is no longer whole by default");
-  // 18 Oct 2026, brief 2d: the /app Opportunities page, which began citedWorld on the cited tab, retired with /app
-  // (every address 308s to the dashboards host); world.ts's own default read below is the caller left.
-  assert.match(world, /const t = await \(started \?\? citedWorld\(repo, client\)\);/, "the cited tab's default read is no longer the narrow one");
+  // 19 Oct 2026: the three reads of world.ts (citedWorld's narrow read and its default) are retired: world.ts was read
+  // only by the old /app Opportunities page and was deleted with that dashboard (commit 78b1023).
 });

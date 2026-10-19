@@ -7,7 +7,6 @@ import { fileURLToPath } from "node:url";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { code } from "../../../lib/source-read.mts";
-import { addNote } from "../../../lib/tracking/note.ts";
 import { stop, undoStop } from "../../../lib/tracking/stop.ts";
 
 /**
@@ -36,34 +35,25 @@ const ROUTES = join(ROOT, "src", "app", "api", "app", "[client]");
 
 /**
  * Routes that write what a client tracks, its plan, or its setup: each judges the role through writeRole(client).
- * 13 Oct 2026, DIY P6: `keywords` joins - gaining ground's Dismiss and Restore (spec 10 section 3.6), owner and
- * editor only, refused through refuseRole(writeRole(client)) on the fixture and in Supabase alike.
- * 13 Oct 2026, DIY P8: `pages` joins - it adds and removes a client's key pages, spends its page checks and drafted
- * examples, and adds Actions items, each judged through writeRole(client).
+ * 13 Oct 2026, DIY P6-P10: keywords, pages, opportunity, prompt-offer and links joined check, cluster, edit, group,
+ * keyword, note, plan, prompt, setup and stop.
+ * 19 Oct 2026: empty. Every one of those routes was deleted with the old /app dashboard (commit 78b1023, owner's
+ * instruction: the customer dashboard is the dashboards host only); none had a caller left. The rule stands for any
+ * tracked write added under /api/app/[client] again.
  */
-const TRACKED_WRITES = [
-  "check", "cluster", "edit", "group", "keyword", "keywords", "note", "pages", "plan", "prompt", "setup", "stop",
-  // 13 Oct 2026, DIY P7 (spec 10 section 3.6): Opportunities' statuses, with the Plan items and prompts a pursuit
-  // writes, and the prompt step's add, undo and swap. Both judge writeRole(client), so an ended client is read-only.
-  "opportunity", "prompt-offer",
-  // 13 Oct 2026, DIY P10 (spec 10 section 3.6): Links' reveal, Pursue and Check a link. Judged through
-  // writeRole(client), so an ended client is read-only; a viewer is refused before any read.
-  "links",
-];
+const TRACKED_WRITES: string[] = [];
 
-/** Routes that read the member's own role, and why that is not writeRole's question. */
+/**
+ * Routes that read the member's own role, and why that is not writeRole's question.
+ * 19 Oct 2026: `trial` left with the old /app dashboard (commit 78b1023); `member` remains.
+ */
 const ACCOUNT_ROLE: Record<string, string> = {
   member: "the team: refuseActor(client.role) decides who may invite or remove, which is the account's, not the tracking's",
-  trial: "cancelling a trial at Stripe: cancelTrial's own rule, and an ended client has no trial left to cancel",
 };
 
 /** Routes that judge no role at all, and why. */
-const NO_ROLE: Record<string, string> = {
-  ask: "any member may ask Nomada or their agency (spec 10 section 2.2: viewers too), three a day",
-  event: "a usage beacon: an event name and a route shape, never content",
-  hide: "hides an upgrade prompt for the member who pressed it, for 30 days",
-  report: "a CSV of what was read: a read, not a write",
-};
+/** 19 Oct 2026: empty. ask, event, hide and report were deleted with the old /app dashboard (commit 78b1023). */
+const NO_ROLE: Record<string, string> = {};
 
 const routes = readdirSync(ROUTES, { withFileTypes: true })
   .filter((d) => d.isDirectory())
@@ -72,7 +62,9 @@ const routes = readdirSync(ROUTES, { withFileTypes: true })
 const src = (r: string) => code(readFileSync(join(ROUTES, r, "route.ts"), "utf8"));
 
 test("the walk finds the client routes, and every one is sorted into a list", () => {
-  assert.ok(routes.length >= 16, `only ${routes.length} routes under /api/app/[client]: the walk has drifted`);
+  // Floor 16 until 19 Oct 2026; now 1: commit 78b1023 deleted every /api/app/[client] route but `member` with the old
+  // /app dashboard, so one route is the whole tree. Fewer than one means the walk found nothing.
+  assert.ok(routes.length >= 1, `only ${routes.length} routes under /api/app/[client]: the walk has drifted`);
   const sorted = new Set([...TRACKED_WRITES, ...Object.keys(ACCOUNT_ROLE), ...Object.keys(NO_ROLE)]);
   assert.deepEqual(
     routes.filter((r) => !sorted.has(r)),
@@ -90,11 +82,8 @@ test("every tracked write judges its Supabase path through writeRole(client), ne
   }
 });
 
-test("stop and note, the two the inventory found, hand writeRole's role to their writers", () => {
-  assert.match(src("stop"), /stop\(supabaseAdmin\(\), \{ kind: "prompt", clientId: client\.id, id, today, role: writeRole\(client\), by: email \}\)/, "the bulk stop");
-  assert.match(src("stop"), /const p = \{ kind: f\.kind, clientId: client\.id, id: f\.id, today: trackingDay\(\), role: writeRole\(client\) \};/, "the one-row stop and its undo");
-  assert.match(src("note"), /addNote\(supabaseAdmin\(\), \{[^}]*role: writeRole\(client\),[^}]*\}\)/, "the note");
-});
+// 19 Oct 2026: "stop and note, the two the inventory found, hand writeRole's role to their writers" is retired. Its
+// subject was the /api/app/[client]/stop and /note routes, deleted with the old /app dashboard (commit 78b1023).
 
 test("the account routes read the member's own role, and the rest judge none", () => {
   for (const r of Object.keys(ACCOUNT_ROLE)) assert.match(src(r), /\bclient\.role\b/, `${r} no longer reads the member's role: move it`);
@@ -109,9 +98,9 @@ test("writeRole makes an ended client's member a viewer (member.ts is server-onl
 /** A database that fails the test if anything touches it: a refusal comes before any read or write. */
 const untouched = new Proxy({}, { get: (_, k) => assert.fail(`the writer touched the database (${String(k)}) before refusing`) }) as unknown as SupabaseClient;
 
-test("stop, undo and note refuse the viewer writeRole makes of an ended client's owner, before any read", async () => {
+test("stop and undo refuse the viewer writeRole makes of an ended client's owner, before any read", async () => {
   const refused = { ok: false, message: "Only owners and editors can change what is tracked." };
   assert.deepEqual(await stop(untouched, { kind: "prompt", clientId: "cl", id: "q1", today: "2026-10-13", by: "owner@example.com", role: "viewer" }), refused);
   assert.deepEqual(await undoStop(untouched, { kind: "cluster", clientId: "cl", id: "c1", today: "2026-10-13", role: "viewer" }), refused);
-  assert.deepEqual(await addNote(untouched, { clientId: "cl", clusterId: "c1", questionId: "q1", text: "Relaunched.", email: "owner@example.com", role: "viewer", today: "2026-10-13" }), refused);
+  // 19 Oct 2026: the note writer (tracking/note.ts) was deleted with the old /app dashboard (commit 78b1023).
 });

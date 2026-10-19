@@ -254,15 +254,11 @@ const SENDERS: Record<
     evidence: /export const INVITES_PER_OWNER_PER_DAY = \d+/,
     where: "src/lib/tracking/team.ts",
   },
-  "src/lib/tracking/ask-mail.ts": {
-    reach: "signed-in member, limited per member",
-    bound:
-      "Needs a dashboard session and membership of the client. Mails only our contact destination " +
-      "or accounts.upsell_contact_email (written only in /admin/tracking), member as reply-to. At most " +
-      "ASKS_PER_MEMBER_PER_DAY asks a member a day, counted off cta_events before the send; off mode sends none.",
-    evidence: /export const ASKS_PER_MEMBER_PER_DAY = \d+/,
-    where: "src/lib/tracking/ask.ts",
-  },
+  /**
+   * 19 Oct 2026: src/lib/tracking/ask-mail.ts (a signed-in member's ask, BRIEF-2 T11, 30 Sep 2026) left this list. It
+   * and its only door, /api/app/[client]/ask, were deleted with the old /app dashboard (commit 78b1023); nothing
+   * live could reach it.
+   */
   /**
    * 30 Sep 2026, BRIEF-2 T12 (R96): the Sunday link check's alert to Danny.
    * Called only from runTrackingDay, which runs a claimed tracking_runs row
@@ -326,6 +322,10 @@ const SENDERS: Record<
    * us. Sent only after the setup route writes the one setup_confirmed row;
    * a client already confirmed returns before the write, so it is once a
    * client, whoever presses it again.
+   *
+   * 19 Oct 2026: the bound is read off the dashboards host's Confirm (/api/dash/[client]/setup/finish, brief 2d,
+   * 18 Oct 2026), the one caller left: /api/app/[client]/setup was deleted with the old /app dashboard (commit
+   * 78b1023). Same order - the one setup_confirmed row written before the send, a confirmed client returning first.
    */
   "src/lib/tracking/setup-mail.ts": {
     reach: "signed-in owner or editor, once a client",
@@ -333,8 +333,8 @@ const SENDERS: Record<
       "Needs a dashboard session and an owner or editor role on the client (refuseRole). Mails only our own " +
       "contact destination, member as reply-to. Sent after the setup_confirmed insert, which is reached only " +
       "when loadSetupConfirmed found none, so one message a client.",
-    evidence: /if \(already\) return done;[\s\S]*?\.insert\(\{[^}]*event: SETUP_CONFIRMED_EVENT[\s\S]*?await sendSetupConfirmed\(/,
-    where: "src/app/api/app/[client]/setup/route.ts",
+    evidence: /if \(already\) return Response\.json\(\{ ok: true, already: true \}\);[\s\S]*?\.insert\(\{[^}]*event: SETUP_CONFIRMED_EVENT[\s\S]*?await sendSetupConfirmed\(/,
+    where: "src/app/api/dash/[client]/setup/finish/route.ts",
   },
   "src/app/contact/actions.ts": {
     reach: "anonymous",

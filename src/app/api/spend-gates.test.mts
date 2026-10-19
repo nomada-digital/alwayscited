@@ -275,18 +275,6 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     where: "src/lib/tracking/team.ts",
   },
   /**
-   * 2 October 2026, R166 step 4: setup confirmed - one Resend message to our
-   * own contact destination, and no scan.
-   */
-  "app/[client]/setup": {
-    why:
-      "Sends one internal mail when a signed-in owner or editor confirms the client's setup, and starts " +
-      "no scan. Once a client: the send follows the setup_confirmed insert, which a client already " +
-      "confirmed never reaches.",
-    evidence: /if \(already\) return done;[\s\S]*?await sendSetupConfirmed\(/,
-    where: "src/app/api/app/[client]/setup/route.ts",
-  },
-  /**
    * 18 October 2026, brief 2d: setup's Confirm on the dashboards host - the
    * same once-only internal mail as app/[client]/setup, as JSON.
    */
@@ -313,31 +301,6 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     where: "src/app/api/dash/[client]/setup/keyword/route.ts",
   },
   /**
-   * 30 September 2026, BRIEF-2 T11 /ask: a member's ask - one Resend message,
-   * to us or the account's agency contact, and no scan.
-   */
-  "app/[client]/ask": {
-    why:
-      "Sends one ask for a signed-in member of the client, to our contact destination or the account's " +
-      "agency contact, and starts no scan. At most ASKS_PER_MEMBER_PER_DAY a member a day, counted off " +
-      "cta_events asked rows before the send; off mode sends none.",
-    evidence: /export const ASKS_PER_MEMBER_PER_DAY = \d+/,
-    where: "src/lib/tracking/ask.ts",
-  },
-  /**
-   * 30 September 2026, BRIEF-3 T6 part 3b: "Check keyword" on the Clusters
-   * page. Not a visitor's scan, so checkCeilings is the wrong guard.
-   */
-  "app/[client]/check": {
-    why:
-      "Reads one typed keyword's volume and intent (two DataForSEO reads, a few cents) for a signed-in " +
-      "owner or editor. Nothing is read until the free prechecks pass, and a client may make " +
-      "CHECKS_PER_CLIENT_PER_DAY paid checks a day, counted off keyword_checked rows in dashboard_events, " +
-      "written before the reads; an unread count refuses.",
-    evidence: /export const CHECKS_PER_CLIENT_PER_DAY = \d+/,
-    where: "src/lib/tracking/check-keyword.ts",
-  },
-  /**
    * 13 October 2026, DIY P1 (spec 10 sections 5.6 and 5.7): the DIY night.
    * Not a visitor's scan, so checkCeilings is the wrong guard; the DIY ledger
    * is its own, and it is read before every paid read rather than at the
@@ -356,48 +319,13 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     where: "src/app/api/diy/run/route.ts",
   },
   /**
-   * 13 October 2026, DIY P9 (P7's and P8's handoffs, spec 10 sections 3.6 and
-   * 5.6): wave 2's two on-demand doors. A member's button, not a visitor's
-   * scan, so checkCeilings is the wrong guard; each paid read goes through
-   * runOnDemand, which refuses an inactive client, refuses while a tracking run
-   * is reading, counts the allowance and preflights the DIY caps before
-   * anything is reserved, and the DIY ledger reserves and caps every read as
-   * it goes out ("the DIY ledger holds the caps" below).
+   * 19 October 2026: six exemptions left with their routes, deleted with the old /app dashboard (commit 78b1023; the
+   * customer dashboard is the dashboards host only, and none of the six had a caller left): app/[client]/setup (R166
+   * step 4), app/[client]/ask (BRIEF-2 T11), app/[client]/check (BRIEF-3 T6 part 3b), app/[client]/opportunity and
+   * app/[client]/pages (DIY P9) and app/[client]/links (DIY P10). An exemption whose route is gone is an allowance the
+   * next route of that name would inherit, so they go rather than stay. Setup's keyword check and Confirm live on as
+   * dash/[client]/setup/keyword and dash/[client]/setup/finish above.
    */
-  "app/[client]/opportunity": {
-    why:
-      "Verify now and Log a site, for a signed-in owner or editor (writeRole). Each reads the page with our own fetch " +
-      "first, which is free; only the content_parsing fallback is paid, and it goes through runOnDemand: refused for an " +
-      "inactive client, while a tracking run is reading, past the month's 30 link checks (10 in trial; a logged site " +
-      "counts as one) or past the DIY caps, and refused while diy_enabled is off.",
-    evidence: /await runOnDemand\(\{ db, client: diy, member: email!, action: "verify" \}/,
-    where: "src/app/api/app/[client]/opportunity/route.ts",
-  },
-  "app/[client]/pages": {
-    why:
-      "Check this page now (an inline instant_pages read) and Draft an example (one model call in after()), for a " +
-      "signed-in owner or editor (writeRole). Both go through runOnDemand: refused for an inactive client, while a " +
-      "tracking run is reading, past the month's 30 page checks or 10 drafted examples (10 and 3 in trial) or past the " +
-      "DIY caps, and refused while diy_enabled is off; each read is reserved in diy_reads before it goes out.",
-    evidence: /await runOnDemand\(\{ db, client: diy, member: email, action: "page_check", now: \(\) => nowMs \}/,
-    where: "src/app/api/app/[client]/pages/route.ts",
-  },
-  /**
-   * 13 October 2026, DIY P10 (spec 10 sections 3.6 and 4.8): Links' one
-   * on-demand door, Check a link. A member's button, not a visitor's scan, so
-   * checkCeilings is the wrong guard. Show the next 5 and Pursue read stored
-   * rows only and spend nothing.
-   */
-  "app/[client]/links": {
-    why:
-      "Check a link, for a signed-in owner or editor (writeRole). It reads the page with our own fetch first, which is " +
-      "free; only the content_parsing fallback is paid, and it goes through runOnDemand: refused for an inactive client, " +
-      "while a tracking run is reading, past the month's 30 link checks (10 in trial, shared with Verify now and Log a " +
-      "site and counted before anything is read) or past the DIY caps, and refused while diy_enabled is off. Reveal and " +
-      "Pursue read stored rows only.",
-    evidence: /await runOnDemand\(\{ db, client: diy, member: email!, action: "link_check" \}/,
-    where: "src/app/api/app/[client]/links/route.ts",
-  },
   "cron/purge-responses": {
     why:
       "DIY night pass 1 at 03:30 UTC, behind CRON_SECRET. Makes the two free vendor reads (cost 0) once a UTC day, " +
@@ -723,8 +651,15 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * keyword check (per-client daily cap) and once-only internal mail as
      * `app/[client]/check` and `app/[client]/setup`. They start no scan, so
      * `scans_enabled` has nothing to refuse and the decision is not moved.
+     *
+     * Fourteen on 19 Oct 2026: six left with their routes when the old /app
+     * dashboard's remaining code was deleted (commit 78b1023) -
+     * `app/[client]/setup`, `ask`, `check`, `opportunity`, `pages` and
+     * `links`. Doors that stopped existing, not doors that were closed; the
+     * decision is not moved, and setup's two live on as
+     * `dash/[client]/setup/keyword` and `dash/[client]/setup/finish`.
      */
-    20,
+    14,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });

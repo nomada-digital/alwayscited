@@ -57,5 +57,6 @@ test("next is re-validated on every hop", () => {
   // 18 Oct 2026, brief 2d: the two page hops, /app/login and /app/auth, retired with /app (every /app address 308s to
   // the dashboards host); the two route hops remain and still re-validate.
   assert.match(read("api/app/login/route.ts"), /const next = safeNext\(body\.next\)/);
-  assert.match(read("api/app/auth/route.ts"), /const next = safeNext\(form\?\.get\("next"\)\)/);
+  // 19 Oct 2026: the /api/app/auth hop was deleted with the old /app dashboard's remaining code (commit 78b1023); the
+  // login route is the route hop left.
 });

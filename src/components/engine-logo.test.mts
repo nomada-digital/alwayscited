@@ -50,9 +50,12 @@ const SPRITE_FILES = [
  * 18 Oct 2026, brief 2d: the floors as measured on the dashboards host the day /app was retired - 9 sprite logos
  * (22 before), 2,407 resolved value imports over the whole tree (floor 2,200; 2,500 before) and 24 files reaching a
  * sprite logo (27 before).
+ * 19 Oct 2026: the edge floor moves from 2,200 to 1,900 - 1,976 resolved value imports measured that day, after
+ * commit 78b1023 deleted the 21 /api/app routes and 59 lib modules only the old /app dashboard reached (and their
+ * imports with them). The sprite and reach floors hold as they were.
  */
 const SPRITE_FLOOR = 9;
-const EDGE_FLOOR = 2200;
+const EDGE_FLOOR = 1900;
 const REACH_FLOOR = 24;
 
 const INLINE_FILES = [

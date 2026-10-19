@@ -97,15 +97,24 @@ test("every usage event has a sender, bar the recorded exemption", async () => {
   // src/components/app went with it - the beacon (UsageBeacon), every data-usage control and panel, UpgradePrompt's
   // data-usage-shown and the copy buttons (CopyButton, CopyBlock) - so the walk is the routes and the dashboards
   // host's tree. 93 files that day; the floor moves from 30 to 80.
+  // 19 Oct 2026: commit 78b1023 deleted every app/api/app route but login and [client]/member with the old /app
+  // dashboard's remaining code; 71 files that day, so the floor moves from 80 to 70.
   for (const d of ["app/api/app", "app/dashboards", "components/dash", "lib/dash"]) walk(join(root, d));
-  assert.ok(files.length >= 80, `walked ${files.length} files, floor 80`);
+  assert.ok(files.length >= 70, `walked ${files.length} files, floor 70`);
   const src = files.map((f) => readFileSync(f, "utf8")).join("\n");
   // No range control exists yet: the date on /app is display only (30 Sep 2026).
   const EXEMPT: Record<string, string> = { range_change: "no range picker is built; the date range is display only" };
   // 18 Oct 2026, brief 2d: the events only /app's pages sent. The dashboards host sends no usage event, so each of
   // these is a column /admin/tracking/usage shows as zero from today - recorded, not hidden: each is re-earned
   // below (still no sender), so the list can only shrink as the dashboards host takes events up.
-  const RETIRED_WITH_APP: string[] = ["view", "compare_change", "engine_toggle", "add_open", "add_abandon", "detail_open", "placement_select", "cta_shown", "cta_click", "ai_filter", "gaining_track", "brief_copy", "fix_copy", "example_copy"];
+  // 19 Oct 2026: the second row - the events only the /api/app routes recorded (recordUsage), each route deleted with
+  // the old /app dashboard's remaining code (commit 78b1023): cluster, stop, report, ask, hide, plan, keywords,
+  // opportunity, prompt-offer, pages and links. Recorded on the same terms as the first row: still no sender, re-earned
+  // below, and the list can only shrink as the dashboards host takes events up.
+  const RETIRED_WITH_APP: string[] = [
+    "view", "compare_change", "engine_toggle", "add_open", "add_abandon", "detail_open", "placement_select", "cta_shown", "cta_click", "ai_filter", "gaining_track", "brief_copy", "fix_copy", "example_copy",
+    "add_save", "stop", "undo", "csv", "cta_ask", "cta_hide", "plan_move", "plan_task_added", "plan_hidden", "gaining_dismiss", "opportunity_status", "opportunity_log", "prompt_offer", "key_page_add", "page_check", "example_request", "link_reveal", "link_check", "link_pursue",
+  ];
   const sent = (e: string) =>
     src.includes(`data-usage="${e}"`) ||
     src.includes(`usage="${e}"`) ||

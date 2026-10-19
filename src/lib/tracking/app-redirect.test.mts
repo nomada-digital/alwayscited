@@ -32,7 +32,9 @@ function walk(dir: string, out: string[] = []): string[] {
 
 test("every dashboard route redirects through dashUrl, never new URL(..., req.url)", () => {
   const files = walk(ROOT);
-  assert.ok(files.length >= 15, `only ${files.length} dashboard routes walked`);
+  // Floor 15 until 19 Oct 2026; now 2: commit 78b1023 deleted every /api/app route but login and [client]/member with
+  // the old /app dashboard's remaining code (none had a caller left).
+  assert.ok(files.length >= 2, `only ${files.length} dashboard routes walked`);
   let redirects = 0;
   const bad: string[] = [];
   for (const f of files) {
@@ -42,6 +44,7 @@ test("every dashboard route redirects through dashUrl, never new URL(..., req.ur
     if (/new URL\([\s\S]{0,400}?,\s*req\.url\s*\)/.test(src.replace(/new URL\(req\.url\)/g, ""))) bad.push(`${f.slice(ROOT.length)}: new URL(..., req.url)`);
   }
   // The floor: 34 redirects on 8 Oct 2026. A matcher that stops matching reports a clean tree.
-  assert.ok(redirects >= 34, `only ${redirects} redirects found`);
+  // 19 Oct 2026: 3 - login's one and member's two, the routes left after commit 78b1023 removed the rest of /api/app.
+  assert.ok(redirects >= 3, `only ${redirects} redirects found`);
   assert.deepEqual(bad, []);
 });

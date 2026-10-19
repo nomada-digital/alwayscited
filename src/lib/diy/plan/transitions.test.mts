@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { test } from "node:test";
 
 import { APP_LIMITS } from "../../../config/contact.ts";
@@ -27,7 +25,6 @@ import {
 } from "./transitions.ts";
 import type { PlanForm } from "./transitions.ts";
 
-const ROOT = join(import.meta.dirname, "..", "..", "..", "..");
 const ctx = { role: "owner", today: "2026-10-13", now: "2026-10-13T10:00:00.000Z", by: "owner@example.com", members: [{ email: "owner@example.com" }, { email: "Editor@example.com" }], clusters: ["c1", "c2"] };
 const form = (o: Partial<PlanForm>): PlanForm => ({ do: "move", id: "i1", to: null, changed: null, note: null, owner: null, title: null, cluster: null, ...o });
 const item = (status: "suggested" | "todo" | "doing" | "done" | "dropped", startedOn: string | null = null) => ({ id: "i1", status, startedOn });
@@ -46,8 +43,8 @@ test("an ended client is read-only: the route judges writes by writeRole(client)
   // member.ts writeRole imports server-only, so its use is held here by source; its rule is member.ts's own.
   // 18 Oct 2026, brief 2d: the page half (the /app Actions page drawing its controls disabled with ENDED_REASON)
   // retired with /app; every address 308s to the dashboards host. The route still refuses.
-  const route = readFileSync(join(ROOT, "src/app/api/app/[client]/plan/route.ts"), "utf8");
-  assert.match(route, /role: writeRole\(client\)/);
+  // 19 Oct 2026: the route half went too - /api/app/[client]/plan was deleted with the old /app dashboard's remaining
+  // code (commit 78b1023). The refusal's words, and decide()'s refusal of a viewer (held above), remain.
   assert.match(ENDED_REASON, /read-only/);
 });
 
@@ -178,6 +175,6 @@ test("the Overview's way back: one key, the refusal's reason folded in, fixed wo
   assert.equal(overviewPlanToast("nonsense"), null);
   assert.equal(overviewPlanToast(null), null);
   for (const d of PLAN_DONE) for (const w of [null, ...PLAN_WHY]) assert.ok(overviewPlanToast(overviewPlanCode(d, w)), `${d} ${w}`);
-  const route = readFileSync(join(ROOT, "src/app/api/app/[client]/plan/route.ts"), "utf8");
-  assert.match(route, /plan: overviewPlanCode\(done, why\)/, "the route answers the Overview through it");
+  // 19 Oct 2026: the route half ("the route answers the Overview through it") went with /api/app/[client]/plan, deleted
+  // with the old /app dashboard's remaining code (commit 78b1023).
 });

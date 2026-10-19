@@ -165,10 +165,17 @@ const PRODUCT = ["src/app/dashboards", "src/components/dash", "src/lib/dash", "s
  * (still named by the help, still drawn nowhere), so the list can only shrink, and a new label the dashboard does
  * not draw still fails rule 2 exactly as before.
  */
+/*
+ * 19 Oct 2026: "Make editor" and "Make viewer" came off - the dashboards host's Settings draws them again since
+ * 70613b5 (an owner changes a member between editor and viewer), so rule 2 holds them as it holds any drawn control.
+ * "Invite someone" went on: its last drawing was the old /app activation checklist (tracking/activation.ts), deleted
+ * with the old /app dashboard's remaining code (commit 78b1023). The dashboards host's Settings draws "Invite"; the
+ * help's sentence is client-facing copy and is rewritten in its own change, not here.
+ */
 const RETIRED_WITH_APP = new Set([
   "Add a cluster", "Answers CSV", "Answers naming you", "Ask us to change these", "Ask us to pick one", "Cancel trial",
   "Change keyword", "Check keyword", "Cited pages", "Cluster keywords on page 1", "Clusters in use", "Every check, day by day",
-  "Every daily check, by cluster", "Keywords CSV", "Latest answers", "Make editor", "Make viewer", "Move", "Names we match",
+  "Every daily check, by cluster", "Invite someone", "Keywords CSV", "Latest answers", "Move", "Names we match",
   "Notes on this cluster", "Open cluster", "Other sites", "Pages the engines cite most", "Prompts you are named in",
   "Reports", "Review and confirm", "Send invite", "Share of voice", "Sign out of every device", "Start tracking this cluster",
   "Stop", "Who is named", "Who is named instead", "Who they see", "Yes, cancel the trial", "Your clusters", "Your site",

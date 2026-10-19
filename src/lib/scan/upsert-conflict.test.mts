@@ -282,12 +282,9 @@ test("the upsert sites are the ones we think they are", () => {
       // the same key, clearing removed_at so a removed member comes back on their row.
       // 9 Oct 2026 (AG-1): one site still - team.ts writeMember, called not yet live and then live.
       "dashboard_members:account_id,email",
-      // 13 Oct 2026, DIY P6 (spec 10 sections 3.6 and 4.3): gaining ground's
-      // Dismiss writes one dismissal per client, kind and keyword on
-      // diy_dismissals' primary key in 20261014010000_footprint.sql, again
-      // on a second dismiss so the newest is the one a toast's Undo restores
-      // (keywords/write.ts writeDismissal).
-      "diy_dismissals:client_domain_id,key,kind",
+      // 19 Oct 2026: "diy_dismissals:client_domain_id,key,kind" (DIY P6, gaining ground's Dismiss, keywords/write.ts
+      // writeDismissal) left: keywords/write.ts was deleted with the old /app dashboard's remaining code (commit
+      // 78b1023), and its route with it. The table and its key stay; nothing upserts into it now.
       // 13 Oct 2026, DIY P1 (spec 10 section 5.7), each on its own key in
       // 20261013000000_diy_core.sql and each ignoring a duplicate: the night
       // dispatch and setup's enqueueOnboarding queue one diy_jobs row per
