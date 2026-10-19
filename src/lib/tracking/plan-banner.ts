@@ -1,3 +1,4 @@
+import { CONTACT_EMAIL } from "../../config/contact.ts";
 import { trialMoment, trialStatus } from "../../config/trial.ts";
 
 /**
@@ -26,6 +27,12 @@ export type BannerClient = {
   payment_invoice_url?: string | null;
   payment_ended_at?: string | null;
 };
+
+/**
+ * 19 Oct 2026: asking us to restart is an email. The link used to open Settings' Billing, where /app drew an Ask us
+ * button; the dashboards host's Plan has no such button, so the banner's own link writes to us instead.
+ */
+const restartAsk = (name: string) => `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Restart tracking for ${name}`)}`;
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -85,19 +92,20 @@ export function planBanner(p: {
       return { tone: "ended", text: `${text}, and tracking starts again once the invoice is paid.`, link: { href: c.payment_invoice_url, label: "Pay the invoice", external: true } };
     }
     return owner && upsell
-      ? { tone: "ended", text: `${text}.`, link: { href: billing, label: "Ask us to restart it" } }
+      ? { tone: "ended", text: `${text}.`, link: { href: restartAsk(c.name), label: "Ask us to restart it" } }
       : { tone: "ended", text: `${text} - ${upsell ? "an owner can ask us to restart it" : "your account contact can restart it"}.`, link: null };
   }
 
   // BL-2 (9 Oct 2026): Stripe is retrying a failed payment. The owner pays, so
   // only the owner is told; tracking carries on meanwhile. The fix is the
-  // invoice's own Stripe page when the webhook has it, else Billing's Ask us.
+  // invoice's own Stripe page when the webhook has it, else Plan's Billing, whose Open billing is Stripe's billing
+  // page where the card is changed (19 Oct 2026: was Billing's Ask us, which went with /app).
   if (c.payment_status === "past_due" && owner) {
     const retry = c.payment_retry_at && Date.parse(c.payment_retry_at) > now ? ` We try the card again on ${paymentDay(c.payment_retry_at, c.market)}.` : "";
     const link: BannerLink | null = c.payment_invoice_url
       ? { href: c.payment_invoice_url, label: "Pay the invoice", external: true }
       : upsell
-        ? { href: billing, label: "Ask us about it" }
+        ? { href: billing, label: "Update your card" }
         : null;
     return { tone: "payment", text: `Your last payment did not go through.${retry}${link ? "" : " Your account contact can help."}`, link };
   }

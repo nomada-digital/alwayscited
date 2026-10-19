@@ -100,7 +100,7 @@ export const PLAN_TERMS = "monthly, no minimum term, thirty days to stop";
 export const TRIAL_TERMS: readonly string[] = [
   "alwaystracked comes with a 14-day free trial for a website and an email address that have not used us before. There is one trial per website and one per email address, ever; a repeat order is taken as a paid one, and the order form says so before you pay.",
   "The trial starts when you complete checkout, not at the first check, so days spent setting up count towards the 14.",
-  "We take a card at checkout and charge nothing during the trial. The first charge is the monthly price - plus VAT in the UK - on day 15. The date is in your dashboard under Settings, and Stripe shows it before you pay.",
-  "To cancel during the trial, an owner uses Cancel trial in the dashboard, under Settings and then Billing, or emails us. Tracking carries on until the trial ends and nothing is charged.",
+  "We take a card at checkout and charge nothing during the trial. The first charge is the monthly price - plus VAT in the UK - on day 15. The date is in the strip across the top of your dashboard, and Stripe shows it before you pay.",
+  "To cancel during the trial, an owner opens Plan in the dashboard and uses Open billing, under Billing, to cancel on Stripe's billing page, or emails us. Tracking carries on until the trial ends and nothing is charged.",
   `Once the first charge is taken, the plan's usual terms apply: ${PLAN_TERMS}. Orders with extra tracking packs, and the other plans, have no trial.`,
 ];

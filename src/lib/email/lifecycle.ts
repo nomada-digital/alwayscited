@@ -98,8 +98,11 @@ export type Links = { dashboard: string; setup: string; plan: string; settings: 
 const base = (origin: string) => origin.replace(/\/+$/, "");
 export const dashboardUrl = (slug: string, origin: string) => `${base(origin)}/${slug}`;
 export const setupUrl = (slug: string, origin: string) => `${base(origin)}/${slug}/setup`;
-/** The plan and billing section of Settings, where an owner cancels a trial, updates a card or asks us to restart. */
-export const planUrl = (slug: string, origin: string) => `${base(origin)}/${slug}/settings#plan`;
+/**
+ * Billing on the client's Plan page, where an owner opens Stripe's billing page to cancel a trial, update a card or
+ * see invoices. 19 Oct 2026: was Settings' plan section, which on the dashboards host only links on to Plan.
+ */
+export const planUrl = (slug: string, origin: string) => `${base(origin)}/${slug}/plan#billing`;
 /** The old name, kept for the send sites that call it. */
 export const billingUrl = planUrl;
 export const emailSettingsUrl = (slug: string, origin: string) => `${base(origin)}/${slug}/settings#email`;
@@ -133,8 +136,8 @@ const SIGN_IN_ASKS = "If you are signed out, sign in with this email address and
 /** The plan terms as the trial emails say them (config/trial.ts PLAN_TERMS, its first two clauses). */
 const TERMS = "monthly, no minimum term";
 
-/** "... in Settings > Plan ...", linked to the client's plan section. */
-const cancelNote = (t: TrialTerms, text: string, after: string): Block => note(text, { label: "Settings > Plan", href: t.billing, after });
+/** "... in Plan > Billing ...", linked to the client's billing section (19 Oct 2026: was "Settings > Plan"). */
+const cancelNote = (t: TrialTerms, text: string, after: string): Block => note(text, { label: "Plan > Billing", href: t.billing, after });
 
 function render(p: {
   subject: string;
@@ -708,8 +711,10 @@ export const KEPT_DAYS = 90;
  * status is canceled: signup.ts endClient, once whichever lands first), from
  * Danny. A trial that ended without a charge says so, with no receipt line
  * and no second trial (audit copy-4, 8 Oct 2026). A new order cannot bring an
- * ended client back (cbdffad), so the owner is sent to the plan section, where
- * Ask us is, to ask us to restart it. The history is kept for KEPT_DAYS days.
+ * ended client back (cbdffad), so the owner asks us to restart it. 19 Oct 2026:
+ * by replying - the plan section's Ask us was /app's, and the dashboards host's
+ * Plan has none - with the plan itself one click away. The history is kept for
+ * KEPT_DAYS days.
  */
 export function planEnded(d: { tier: TierKey; domain: string; billing: string; trial?: boolean; endedOn?: string | null; settings?: string | null }): Rendered {
   const plan = TIER_PLAIN[d.tier];
@@ -728,10 +733,10 @@ export function planEnded(d: { tier: TierKey; domain: string; billing: string; t
       ),
       para(
         d.trial
-          ? `${kept} Restarting starts a paid plan; there is no second free trial. To restart, ask us from your plan settings.`
-          : `${kept} Ask us to restart it and the daily check carries on from where it stopped, on the same questions, so the trend stays comparable.`,
+          ? `${kept} Restarting starts a paid plan; there is no second free trial. To restart, reply to this email.`
+          : `${kept} Reply to this email to restart it, and the daily check carries on from where it stopped, on the same questions, so the trend stays comparable.`,
       ),
-      button(d.billing, "Ask us to restart it"),
+      button(d.billing, "See your plan"),
       para("If something didn't work for you, reply and tell me. I read every one."),
       signature(),
       note(SIGN_IN_ASKS),

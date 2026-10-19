@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { APP_LIMITS } from "../../config/contact.ts";
 import { isPlausibleEmail, normalizeEmail } from "../email-address.ts";
-import { appOrigin, appPath } from "../app-host.ts";
+import { appPath } from "../app-host.ts";
+import { dashOrigin } from "../dash/host.ts";
 import { count } from "../plural.ts";
 import { type ClientScope, type InviteScope, addScope, clearScope, dropScope, readScopes, sees } from "./scope.ts";
 
@@ -32,8 +33,11 @@ import { type ClientScope, type InviteScope, addScope, clearScope, dropScope, re
  * the member route's order - and the writers are the network half.
  */
 
-/** Where an invited member signs in, printed in the invite email (M1, 5 Oct 2026). */
-const DASHBOARD_SIGN_IN = `${appOrigin("https://alwayscited.com").replace(/^https?:\/\//, "")}${appPath("/login")}`;
+/**
+ * Where an invited member signs in, printed in the invite email (M1, 5 Oct 2026). 19 Oct 2026: the dashboards
+ * host's /login - /app is retired and its sign-in only 308s there (brief 2d), so the email names the page itself.
+ */
+const DASHBOARD_SIGN_IN = `${dashOrigin().replace(/^https?:\/\//, "")}/login`;
 
 /** Live members who see one client (AG-1, 9 Oct 2026: was 10 an account, MEMBERS_PER_ACCOUNT). */
 export const MEMBERS_PER_CLIENT = 10;
