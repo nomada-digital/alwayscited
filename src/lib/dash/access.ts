@@ -1,10 +1,12 @@
 import "server-only";
 
+import { headers } from "next/headers";
 import { cache } from "react";
 
 import { trackingDay } from "@/lib/tracking/decide";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
 import { hashToken } from "@/lib/tracking/session";
+import { isPrefetch } from "@/lib/prefetch";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -95,11 +97,17 @@ export const viewAs = cache(async (token: string, slug: string): Promise<{ by: s
   }
   const row = data as { token_hash: string; slug: string; created_by: string; as_email: string; expires_at: string; first_used_at: string | null; uses: number } | null;
   if (!row || row.slug !== slug) return null;
-  const { error: uErr } = await db
-    .from("dashboard_view_tokens")
-    .update({ uses: row.uses + 1, last_used_at: now, ...(row.first_used_at ? {} : { first_used_at: now }) })
-    .eq("token_hash", row.token_hash);
-  if (uErr) console.warn(`[dash] could not count a view-as use: ${uErr.message}`);
+  // 19 Oct 2026: a use is a page someone opened. The sidebar's links prefetch whole pages and in-app moves are RSC
+  // fetches, so counting every request wrote a row per link in view; only a full navigation (or the link's first
+  // request, so first_used_at is never missed) is counted now. Reading is unchanged: every request is still checked.
+  const h = await headers();
+  if (!row.first_used_at || !isPrefetch((n) => h.get(n))) {
+    const { error: uErr } = await db
+      .from("dashboard_view_tokens")
+      .update({ uses: row.uses + 1, last_used_at: now, ...(row.first_used_at ? {} : { first_used_at: now }) })
+      .eq("token_hash", row.token_hash);
+    if (uErr) console.warn(`[dash] could not count a view-as use: ${uErr.message}`);
+  }
   // as_email is the owner as hub_view_as found them at mint time; dashRaw still checks they are a live member.
   return { by: row.created_by, ownerEmail: row.as_email, expiresAt: row.expires_at };
 });
