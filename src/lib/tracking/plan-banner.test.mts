@@ -18,12 +18,15 @@ const BILLING = "/app/tallyroo-com/settings#set-billing";
 const base: BannerClient = { name: "Tallyroo", market: "US", status: "active" };
 const draw = (client: Partial<BannerClient>, role = "owner", upsell = true) => planBanner({ client: { ...base, ...client }, role, upsell, billing: BILLING, price: PRICE, now: NOW });
 const PAGE = "https://invoice.stripe.com/i/acct_fixture/test_fixture_invoice";
+/** 19 Oct 2026: the restart ask, an email to us about this client. */
+const RESTART = "mailto:hello@alwayscited.com?subject=Restart%20tracking%20for%20Tallyroo";
 const due = { payment_status: "past_due", payment_retry_at: "2026-10-12T15:00:00Z", payment_invoice_url: PAGE };
 
 test("a failed payment Stripe is retrying: the owner is told, with the retry day and the invoice to pay", () => {
   assert.deepEqual(draw(due), { tone: "payment", text: "Your last payment did not go through. We try the card again on 12 Oct 2026.", link: { href: PAGE, label: "Pay the invoice", external: true } });
-  // No invoice page recorded: Billing's Ask us, where Billing is ours; the account contact where it is not.
-  assert.deepEqual(draw({ ...due, payment_invoice_url: null }), { tone: "payment", text: "Your last payment did not go through. We try the card again on 12 Oct 2026.", link: { href: BILLING, label: "Ask us about it" } });
+  // No invoice page recorded: Billing, where Billing is ours; the account contact where it is not. 19 Oct 2026: the
+  // label was "Ask us about it", /app's Billing's Ask us; the dashboards host's Billing changes the card in Stripe.
+  assert.deepEqual(draw({ ...due, payment_invoice_url: null }), { tone: "payment", text: "Your last payment did not go through. We try the card again on 12 Oct 2026.", link: { href: BILLING, label: "Update your card" } });
   assert.deepEqual(draw({ ...due, payment_invoice_url: null }, "owner", false), { tone: "payment", text: "Your last payment did not go through. We try the card again on 12 Oct 2026. Your account contact can help.", link: null });
   // No retry to come, or one already past: no date is promised.
   assert.equal(draw({ ...due, payment_retry_at: null })!.text, "Your last payment did not go through.");
@@ -38,11 +41,12 @@ test("only the owner sees the failed payment, and tracking is not said to have s
 test("ended for payment says why; ended any other way reads as before", () => {
   // No invoice to pay (or one too old to offer, below): the owner asks us, as any end does.
   const unpaid = { status: "ended", payment_status: "unpaid", payment_ended_at: "2026-10-08T12:00:00Z", payment_invoice_url: null };
-  assert.deepEqual(draw(unpaid), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here.", link: { href: BILLING, label: "Ask us to restart it" } });
+  // 19 Oct 2026: asking is an email to us; the dashboards host's Plan has no Ask us to link to.
+  assert.deepEqual(draw(unpaid), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here.", link: { href: RESTART, label: "Ask us to restart it" } });
   assert.deepEqual(draw({ ...unpaid, payment_invoice_url: PAGE }, "viewer"), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here - an owner can ask us to restart it.", link: null });
   assert.deepEqual(draw(unpaid, "owner", false), { tone: "ended", text: "Tracking has stopped for Tallyroo because the plan is unpaid. Everything read so far stays here - your account contact can restart it.", link: null });
   // As Sidebar drew it on 8 Oct 2026 (review of 2379757).
-  assert.deepEqual(draw({ status: "ended" }), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here.", link: { href: BILLING, label: "Ask us to restart it" } });
+  assert.deepEqual(draw({ status: "ended" }), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here.", link: { href: RESTART, label: "Ask us to restart it" } });
   assert.deepEqual(draw({ status: "ended" }, "editor"), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here - an owner can ask us to restart it.", link: null });
   assert.deepEqual(draw({ status: "ended" }, "owner", false), { tone: "ended", text: "Tracking has ended for Tallyroo. Everything read so far stays here - your account contact can restart it.", link: null });
   // Ended beats a past-due record the invoice wrote after the end (payment.ts: an invoice never moves the status).

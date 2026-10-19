@@ -42,7 +42,8 @@ const all = previews(PRICE);
 const sets = previewSets(PRICE);
 /** Every case of every email, as the preview page draws them. */
 const every = Object.entries(sets).flatMap(([name, list]) => list.map((p) => [`${name} (${p.label})`, p.mail, name] as const));
-const PLAN = "https://dashboards.alwayscited.com/tallyroo-com/settings#plan";
+// 19 Oct 2026: Plan's Billing, where Open billing is, not Settings' plan card that only links on to it.
+const PLAN = "https://dashboards.alwayscited.com/tallyroo-com/plan#billing";
 
 /**
  * Ten flags until 18 Oct 2026, when payment_failed joined (brief 2e, #11).
@@ -221,7 +222,8 @@ test("copy-2: setup_confirmed says when checks run in the client's zone, and pro
  * trialMoment words it for the market, the charge as trialCharge words it,
  * and the cancel route, linked to the client's plan settings ("Settings >
  * Billing" on /app until 18 Oct 2026; the dashboards host's Settings > Plan
- * since). None says bought or receipt.
+ * that day; Plan > Billing, where Open billing is, since 19 Oct 2026). None
+ * says bought or receipt.
  */
 const US_END = trialMoment("2026-10-22T19:30:00Z", "US");
 const UK_END = trialMoment("2026-10-22T13:30:00Z", "UK");
@@ -238,8 +240,8 @@ test("activation-1, copy-4: trial_started, trial_midpoint and trial_ending name 
       const where = `${name} (${label})`;
       assert.ok(mail.text.includes(end), `${where}: names ${end}`);
       assert.ok(mail.text.includes(charge), `${where}: names ${charge}`);
-      assert.match(mail.text, new RegExp(`cancel[^\\n]*Settings > Plan \\(${PLAN.replace(/[.#/]/g, "\\$&")}\\)`, "i"), `${where}: the cancel route, linked`);
-      assert.ok(mail.html.includes(`<a href="${PLAN}" style="color:#0f1115;font-weight:600">Settings &gt; Plan</a>`), `${where}: the link in the HTML`);
+      assert.match(mail.text, new RegExp(`cancel[^\\n]*Plan > Billing \\(${PLAN.replace(/[.#/]/g, "\\$&")}\\)`, "i"), `${where}: the cancel route, linked`);
+      assert.ok(mail.html.includes(`<a href="${PLAN}" style="color:#0f1115;font-weight:600">Plan &gt; Billing</a>`), `${where}: the link in the HTML`);
       assert.doesNotMatch(mail.subject + mail.text, /You bought|\bbought\b|receipt/i, where);
     }
   }
@@ -301,7 +303,8 @@ test("L3: the nothing-set-up recap names when new prompts are first asked, worke
 /**
  * copy-4 (8 Oct 2026): the ended trial says it was not charged and that there
  * is no second trial; the paid one sends the owner to ask us - a new order
- * cannot bring an ended client back (cbdffad). 18 Oct 2026 (Danny): readings
+ * cannot bring an ended client back (cbdffad). 19 Oct 2026: asking is a reply
+ * to the email, and the button opens the plan - its Ask us was /app's. 18 Oct 2026 (Danny): readings
  * are kept for 90 days after a plan ends, and both say so - never "kept" with
  * no end, and never "indefinitely".
  */
@@ -316,7 +319,8 @@ test("copy-4: plan_ended - the trial not charged, no second trial; the paid one 
   assert.match(paid.text, /ended on 1 Nov 2026/);
   assert.doesNotMatch(paid.text, /pick the plan again|picks up where it stopped/);
   for (const m of [trial, paid]) {
-    assert.match(m.html, />Ask us to restart it &rarr;<\/a>/);
+    assert.match(m.html, />See your plan &rarr;<\/a>/);
+    assert.match(m.text, /reply to this email/i);
     assert.match(m.text, /stay in your account for 90 days/);
     assert.doesNotMatch(m.text + m.html, /indefinitely|for ever|forever|still in your account\./i);
   }

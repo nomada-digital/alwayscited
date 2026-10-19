@@ -73,7 +73,7 @@ type Skin = { cls: string; brand: React.ReactNode; domain: string; accent: strin
 /** The reskin claims the agency's domain, so it is gated with the hero that draws it (LB1, 8 Oct 2026). */
 const SKINS: Skin[] = listIf<Skin>(
   ["dashboardBranding", "reportBranding", "ownDomain"],
-  { cls: "wl-ours", brand: <TierName tier="cited" />, domain: "app.alwayscited.com", accent: T.accent, tint: T.wash },
+  { cls: "wl-ours", brand: <TierName tier="cited" />, domain: "dashboards.alwayscited.com", accent: T.accent, tint: T.wash },
   { cls: "wl-theirs", brand: "Northlight Digital", domain: "insights.northlight.agency", ...NORTHLIGHT },
 );
 

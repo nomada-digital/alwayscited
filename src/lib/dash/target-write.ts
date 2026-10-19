@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { insertKeyPage, readKeyPages, removeKeyPage, setKeyPageClusters } from "../diy/pages/key-pages.ts";
+import { CONTACT_EMAIL } from "../../config/contact.ts";
 import { urlKey } from "../tracking/placements.ts";
 
 import { TARGET_BAD, refuseTargetUrl } from "./target.ts";
@@ -18,7 +19,9 @@ import { TARGET_BAD, refuseTargetUrl } from "./target.ts";
  * - a new page is added as a member page, giving way to the oldest automatic
  *   page at the 10-page limit, as Your pages does (key-pages.ts memberAdd).
  *
- * Refusals are words for the page; a failed write throws.
+ * Refusals are words for the page; a failed write throws. 19 Oct 2026: the
+ * full-list refusal sent the customer to "Your pages", a /app screen the
+ * dashboards host does not draw; it now says what they can do instead.
  */
 export type TargetResult = { ok: true; id: string; url: string } | { ok: false; message: string };
 
@@ -45,7 +48,7 @@ export async function setClusterTarget(db: SupabaseClient, client: { id: string;
 
   const auto = rows.filter((r) => r.origin !== "member" && r.origin !== "homepage").sort((a, b) => (a.addedOn < b.addedOn ? -1 : a.addedOn > b.addedOn ? 1 : 0));
   if (rows.length >= 10) {
-    if (!auto.length) return { ok: false, message: "Your 10 key pages are all ones you chose. Remove one on Your pages first." };
+    if (!auto.length) return { ok: false, message: `Your 10 key pages are all ones you chose. Use one of them as this cluster's target page, or email ${CONTACT_EMAIL} and we free one.` };
     await removeKeyPage(db, client.id, auto[0]!.id, p);
   }
   const put = await insertKeyPage(db, client.id, { url, urlKey: key, origin: "member", clusterIds: [clusterId], by: p.by, today: p.today });

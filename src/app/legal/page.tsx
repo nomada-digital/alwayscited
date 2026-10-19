@@ -116,7 +116,7 @@ const SECTIONS: Section[] = [
         Scan results are kept indefinitely, so you can come back to the link, and so is what each engine said. We used
         to delete the text after seven days on a scan nobody claimed; we do not any more. It is the evidence behind every figure in
         your report, and a number you cannot read back to the words that produced it is not evidence. On a tracked account, every daily
-        answer is kept for the life of the account, and you can download it from the dashboard. The dashboard also records which of
+        answer is kept for the life of the account; you can read it in the dashboard, and ask us for a copy. The dashboard also records which of
         its features are used - which page was opened, which control was pressed - to improve it; it stores ids and counts, never what you type.
       </>
     ),

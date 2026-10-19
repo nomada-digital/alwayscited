@@ -195,7 +195,9 @@ test("every price surface draws the line through trialLine, so the one constant 
 test("the legal clause is drawn only while the trial is on, and says what Danny asked for", () => {
   assert.match(read("app/legal/page.tsx"), /\.\.\.\(TRIAL\.enabled\s*\?/);
   const terms = TRIAL_TERMS.join(" ");
-  for (const must of [/14-day free trial/, /starts when you complete checkout/, /take a card at checkout/, /day 15/, /Cancel trial/, /one trial per website/, /thirty days to stop/]) {
+  // 19 Oct 2026: /Cancel trial/ became /Open billing/. /app's Cancel trial went with /app (brief 2d); on the dashboards
+  // host an owner cancels a trial from Plan's Open billing, Stripe's billing page, and the clause says so.
+  for (const must of [/14-day free trial/, /starts when you complete checkout/, /take a card at checkout/, /day 15/, /Open billing/, /one trial per website/, /thirty days to stop/]) {
     assert.match(terms, must);
   }
   assert.doesNotMatch(terms, /[–—]/);
