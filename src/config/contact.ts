@@ -203,6 +203,8 @@ export const SCAN_LIMITS = {
   topicVariant: { min: 2, max: 80 },
   /** The ?ref= a partner site hands a scan over with (18 Oct 2026, lib/scan/handoff.ts); scans.ref's own check. */
   ref: 32,
+  /** Each utm_* a partner hand-off carries (19 Oct 2026, lib/scan/handoff.ts cleanUtm); cut, never refused. */
+  utm: 200,
 };
 
 /**

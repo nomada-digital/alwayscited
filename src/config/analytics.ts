@@ -36,6 +36,8 @@ export type ConsentChoice = "accepted" | "declined";
  */
 export const GA_EVENTS = [
   "free_scan_start",
+  // A free scan a partner site handed over, by its ref (19 Oct 2026).
+  "scan_started",
   "free_scan_complete",
   "scan_confirmed",
   "free_scan_email",

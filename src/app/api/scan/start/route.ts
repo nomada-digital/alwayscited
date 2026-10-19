@@ -10,7 +10,7 @@ import { readRankingFootprint } from "@/lib/scan/dataforseo";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
 import { clientIp, hashIp } from "@/lib/scan/ip";
 import { needsRankings, pickMarket } from "@/lib/scan/market-pick";
-import { handoffMarket, scanRef } from "@/lib/scan/handoff";
+import { cleanUtm, handoffMarket, scanRef } from "@/lib/scan/handoff";
 import { getSettings } from "@/lib/scan/settings";
 import { recordModelCallDebit } from "@/lib/scan/spend";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
@@ -97,7 +97,7 @@ const THIN_CAUSE: Record<ThinReason, string> = {
 };
 
 export async function POST(req: Request) {
-  let body: { domain?: string; turnstileToken?: string; market?: string; ref?: string };
+  let body: { domain?: string; turnstileToken?: string; market?: string; ref?: string; utm?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -156,6 +156,8 @@ export async function POST(req: Request) {
   const chosen = isMarket(handed) ? handed : null;
   // Where the visitor was handed over from, so these leads can be routed (scans.ref, 20261018030000). Checked, never trusted.
   const ref = scanRef(body.ref);
+  // Its campaign tags, only with a ref (scans.utm, 20261019000000): a hand-off's lead keeps its campaign.
+  const utm = ref ? cleanUtm(body.utm) : null;
   const rankings = needsRankings(chosen, domain) ? await readRankingFootprint(domain) : null;
   if (rankings) console.log(`[scan] market read for ${domain} cost $${rankings.cost.toFixed(4)}`);
   const picked = pickMarket({ chosen, domain, rankings });
@@ -240,7 +242,11 @@ export async function POST(req: Request) {
   if (cached?.public_token) {
     // A hand-off onto a cached report still says where it came from, without overwriting a ref an earlier visit set.
     if (ref) {
-      const { error: refErr } = await db.from("scans").update({ ref }).eq("public_token", cached.public_token).is("ref", null);
+      const { error: refErr } = await db
+        .from("scans")
+        .update({ ref, ...(utm ? { utm } : {}) })
+        .eq("public_token", cached.public_token)
+        .is("ref", null);
       if (refErr) console.warn(`[scan] could not note ref ${ref} on the cached scan for ${domain}: ${refErr.message}`);
     }
     return Response.json({
@@ -341,10 +347,14 @@ export async function POST(req: Request) {
       gated_engines: settings.scan_engines_gated,
       anthropic_calls: billed.calls,
     };
-  const { data: firstScan, error: firstErr } = await db.from("scans").insert({ ...row, ...(ref ? { ref } : {}) }).select("public_token").single();
+  const { data: firstScan, error: firstErr } = await db
+    .from("scans")
+    .insert({ ...row, ...(ref ? { ref } : {}), ...(utm ? { utm } : {}) })
+    .select("public_token")
+    .single();
   let scan = firstScan;
   let error = firstErr;
-  if (error && ref && /\bref\b/.test(error.message) && /column|schema cache/i.test(error.message)) {
+  if (error && ref && /\b(ref|utm)\b/.test(error.message) && /column|schema cache/i.test(error.message)) {
     console.warn(`[scan] scans.ref is not there yet, so ${domain} starts without its ref (${ref}): ${error.message}`);
     const { data: retryScan, error: retryErr } = await db.from("scans").insert(row).select("public_token").single();
     scan = retryScan;

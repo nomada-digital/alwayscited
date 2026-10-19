@@ -7,6 +7,7 @@ import { D } from "@/components/home/dark";
 import { T } from "@/config/tokens";
 import { track } from "@/lib/analytics";
 import { isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
+import type { Utm } from "@/lib/scan/handoff";
 
 import ScanBox, { type ScanBoxCopy } from "./ScanBox";
 import { DomainScreen } from "./screens";
@@ -31,6 +32,9 @@ import Turnstile from "./Turnstile";
  * /scan/[token]. The card is still a GET form to /scan, so with no JavaScript
  * it lands on /scan with the domain filled in, as before.
  */
+/** Marks a history entry whose hand-off has already started a scan. */
+const HANDOFF_STARTED = "acHandoffStarted";
+
 export default function LiveScanChecker({
   initialDomain = "",
   autoStart = false,
@@ -47,7 +51,7 @@ export default function LiveScanChecker({
    */
   autoStart?: boolean;
   /** The hand-off's ref and market, already checked (lib/scan/handoff.ts); sent to the start route as they are. */
-  handoff?: { ref: string | null; market: "UK" | "US" | null };
+  handoff?: { ref: string | null; market: "UK" | "US" | null; utm?: Utm | null };
   dark?: boolean;
   /** Told every time busy flips, so a parent can hide its own lines (R49). */
   onBusyChange?: (busy: boolean) => void;
@@ -120,19 +124,6 @@ export default function LiveScanChecker({
     setAttempt((a) => a + 1);
   }
 
-  async function onDomain(e: React.FormEvent) {
-    e.preventDefault();
-    await start(domain);
-  }
-
-  // The hand-off: one automatic start per page load (the ref survives a re-render and React's double effect in dev).
-  useEffect(() => {
-    if (!willAuto || autoFired.current) return;
-    autoFired.current = true;
-    void start(initialDomain, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   /** A refused or failed start: the step 1 form again, with its message, and a fresh bot check. */
   function refuse(message: string) {
     stopSteps();
@@ -199,6 +190,7 @@ export default function LiveScanChecker({
           turnstileToken: tokenRef.current ?? turnstileToken,
           ...(handoff?.market ? { market: handoff.market } : {}),
           ...(handoff?.ref ? { ref: handoff.ref } : {}),
+          ...(handoff?.utm ? { utm: handoff.utm } : {}),
         }),
       });
       const data = await res.json();
@@ -219,11 +211,41 @@ export default function LiveScanChecker({
         market: typeof data.market === "string" ? data.market : undefined,
         cta_location: automatic ? "handoff" : box ? "card" : "hero",
       });
+      // The partner's own event (Danny, 18 Oct 2026), so GA counts hand-offs by source. Behind consent like the rest.
+      if (automatic && handoff?.ref) track("scan_started", { source: handoff.ref });
       router.push("/scan/" + data.token);
     } catch {
       refuse("We could not reach the checker. Please try again.");
     }
   }
+
+  async function onDomain(e: React.FormEvent) {
+    e.preventDefault();
+    await start(domain);
+  }
+
+  // The hand-off: one automatic start per page load (the ref survives a re-render and React's double effect in dev).
+  useEffect(() => {
+    if (!willAuto || autoFired.current) return;
+    autoFired.current = true;
+    /**
+     * Once per history entry, not only per mount (19 Oct 2026). Back from the result restores this page from the
+     * router's cache with autoStart still true, and the journey spec caught it starting a second scan. So the entry
+     * is marked as started, and the ref comes off its address: Back and reload land on the prefilled form instead.
+     * A new hand-off from the partner is a new entry, and starts as it should.
+     */
+    const state = (window.history.state ?? {}) as Record<string, unknown>;
+    if (state[HANDOFF_STARTED]) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- history.state is only readable after mount; once, on arrival
+      setAuto(false);
+      return;
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.delete("ref");
+    window.history.replaceState({ ...state, [HANDOFF_STARTED]: true }, "", url);
+    void start(initialDomain, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The hand-off in progress: a status panel, not a form waiting for input. The bot check stays mounted below it, so an
   // interactive challenge shows here and the scan goes on as soon as it passes.

@@ -56,6 +56,10 @@ const DOMAINS = new Set([
   // types as the personal address the walkthrough form must refuse. A mail
   // provider's, never a client's, and the one WORK_EMAIL_REFUSAL itself names.
   "gmail.com",
+  // 19 Oct 2026, the scan hand-off: Nomada Digital's own site (the company that
+  // runs alwayscited, named in every footer), which scan-handoff.spec.mts and
+  // lib/scan/handoff.ts name as the one partner allowed to start a scan. Not a client's.
+  "nomadadigital.co.uk",
   // 13 Oct 2026, DIY P1 (spec 10 section 6.10 item 3): the hosts the DIY
   // platform's rules and evidence register name, none of them a client's.
   // The engines' own hosts, which crawler and answer rules name:

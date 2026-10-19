@@ -1,6 +1,8 @@
 import { scanReady } from "@/lib/scan/readiness";
 import { MICRO, T } from "@/config/tokens";
 
+import type { Utm } from "@/lib/scan/handoff";
+
 import LiveScanChecker from "./LiveScanChecker";
 import RequestScanForm from "./RequestScanForm";
 
@@ -42,7 +44,7 @@ export default function HeroSection({
   notice?: string | null;
   /** /scan only: a domain handed over in the URL starts the scan without a click (LiveScanChecker autoStart). */
   autoStart?: boolean;
-  handoff?: { ref: string | null; market: "UK" | "US" | null };
+  handoff?: { ref: string | null; market: "UK" | "US" | null; utm?: Utm | null };
 }) {
   // No background is set here: body carries the page ground, so every board
   // sits on #f6f6f7 and the white cards read as surfaces.
