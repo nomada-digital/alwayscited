@@ -62,6 +62,15 @@ export default async function Settings({ params, searchParams }: { params: Promi
                     <td className="muted">{m.role}</td>
                     <td className="r">
                       {owner && m.role !== "owner" ? (
+                        <form method="post" action={`/api/app/${slug}/member`} style={{ display: "inline", marginRight: 6 }}>
+                          <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
+                          <input type="hidden" name="op" value="role" maxLength={ADMIN_LIMITS.email} />
+                          <input type="hidden" name="email" value={m.email} maxLength={ADMIN_LIMITS.email} />
+                          <input type="hidden" name="role" value={m.role === "editor" ? "viewer" : "editor"} maxLength={ADMIN_LIMITS.email} />
+                          <button className="btn sm">{m.role === "editor" ? "Make viewer" : "Make editor"}</button>
+                        </form>
+                      ) : null}
+                      {owner && m.role !== "owner" ? (
                         <form method="post" action={`/api/app/${slug}/member`} style={{ display: "inline" }}>
                           <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
                           <input type="hidden" name="op" value="remove" maxLength={ADMIN_LIMITS.email} />
