@@ -569,7 +569,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           id: "paid",
           heading: "Stopping a paid plan",
           blocks: [
-            `The plan's terms are ${PLAN_TERMS}. To stop it, an owner opens ${ui("Plan")}, chooses ${ui("Open billing")} under ${ui("Billing")}, and cancels on Stripe's billing page. As Plan says, cancelling stops the plan at the end of the period you have paid for. Or write to ${MAIL}.`,
+            `The plan's terms are ${PLAN_TERMS}. To stop it, an owner opens ${ui("Plan")}, chooses ${ui("Open billing")} under ${ui("Billing")}, and cancels on Stripe's billing page. Or write to ${MAIL}.`,
             "If your plan is billed through an agency or an account contact rather than by card with us, ask them instead.",
           ],
         },

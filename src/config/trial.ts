@@ -90,7 +90,9 @@ export function trialStatus(p: { trialEndsAt: string | null; cancelled: boolean;
  * days to stop" beside this one, a second copy of the notice period that
  * nothing held to the first. One string, so the two cannot drift.
  */
-export const PLAN_TERMS = "monthly, no minimum term, thirty days to stop";
+// 19 Oct 2026 (Danny): cancelling takes effect at the end of the paid period, as Plan and Stripe's billing page say.
+// Was "thirty days to stop", a notice period nothing enforced.
+export const PLAN_TERMS = "monthly, no minimum term, and cancelling stops the plan at the end of the period you have paid for";
 
 /**
  * The trial clause for /legal, drawn only while the trial is on. A draft:
