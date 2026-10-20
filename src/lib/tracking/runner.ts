@@ -55,7 +55,7 @@ import {
   retryKeywords,
   rerunVerdict,
 } from "./rerun.ts";
-import { readTrackable } from "./run-health.ts";
+import { readTrackable, recordSkips } from "./run-health.ts";
 
 /**
  * The daily alwaystracked runner - T1 of
@@ -169,6 +169,10 @@ export async function dispatchTrackingRuns(now: Date = new Date()): Promise<{
   dispatched: number;
   skipped: number;
   refused?: string;
+  /** Every client not read today and why (run-health.ts recordSkips), paused ones included. */
+  skips?: { domain: string; reason: string; liveClusters: number }[];
+  /** How many of them have live clusters: each one is in the day's run-health mail. */
+  skipAlerts?: number;
 }> {
   const db = supabaseAdmin();
   const day = trackingDay(now);
@@ -207,7 +211,10 @@ export async function dispatchTrackingRuns(now: Date = new Date()): Promise<{
       console.warn(`[track] could not dispatch run ${runId}: ${message(err)}`);
     }
   }
-  return { day, dispatched, skipped };
+  // Who was not read and why, logged and recorded (20 Oct 2026). The day's run-health mail lists the ones with
+  // live clusters - paused alwayscited.com and nomadadigital.co.uk went two days unread and unreported.
+  const rec = await recordSkips(db, day);
+  return { day, dispatched, skipped, skips: rec.skips.map((s) => ({ domain: s.domain, reason: s.reason, liveClusters: s.liveClusters })), skipAlerts: rec.alerts };
 }
 
 type AnswerRow = {

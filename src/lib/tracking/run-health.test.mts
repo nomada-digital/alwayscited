@@ -15,8 +15,11 @@ import {
   healthAnswer,
   healthMail,
   readRunHealth,
+  readSkips,
   readTrackable,
+  recordSkips,
   reportRunHealth,
+  TRACKING_SKIP_EVENT,
   runHealth,
   runState,
 } from "./run-health.ts";
@@ -345,4 +348,75 @@ test("census: the dispatch opens runs off readTrackable's verdict, and every hea
   assert.doesNotMatch(health, /reportRunHealth|from "resend"|health-mail|health-io/, "the public health JSON sends nothing");
   const page = read("../../app/admin/tracking/page.tsx");
   assert.match(page, /readRunHealth\(db, today, now\)/);
+});
+
+/** 19 Oct 2026 as it was: the two in-house profiles paused, with live clusters and prompts, and nothing else. */
+function pausedDay(over: { status?: string; clusters?: Row[] } = {}) {
+  const status = over.status ?? "paused";
+  return {
+    client_domains: [
+      { id: "ac", domain: "alwayscited.com", status, started_on: "2026-10-19", tier: "cited" },
+      { id: "nd", domain: "nomadadigital.co.uk", status, started_on: "2026-10-19", tier: "cited" },
+      { id: "gone", domain: "ended.example", status: "ended", started_on: "2026-09-01", tier: "tracked" },
+      { id: "new", domain: "starts-later.example", status: "active", started_on: "2026-10-25", tier: "tracked" },
+    ],
+    tracked_questions: [
+      { id: "q1", client_domain_id: "ac", added_on: "2026-10-19", stopped_on: null },
+      { id: "q2", client_domain_id: "nd", added_on: "2026-10-19", stopped_on: null },
+      { id: "q3", client_domain_id: "gone", added_on: "2026-09-01", stopped_on: null },
+      { id: "q4", client_domain_id: "new", added_on: "2026-10-25", stopped_on: null },
+    ],
+    tracked_clusters: over.clusters ?? [
+      { id: "k1", client_domain_id: "ac", started_on: "2026-10-19", stopped_on: null },
+      { id: "k2", client_domain_id: "nd", started_on: "2026-10-19", stopped_on: null },
+      { id: "k3", client_domain_id: "nd", started_on: "2026-10-19", stopped_on: null },
+      { id: "k4", client_domain_id: "gone", started_on: "2026-09-01", stopped_on: null },
+      { id: "k5", client_domain_id: "new", started_on: "2026-10-25", stopped_on: null },
+    ],
+    tracking_runs: [] as Row[],
+    dashboard_events: [] as Row[],
+  };
+}
+const OCT19 = "2026-10-19";
+
+test("20 Oct 2026: readSkips names every client the dispatch does not read, paused ones included, ended ones not", async () => {
+  const { db } = fakeDb(pausedDay());
+  const skips = await readSkips(db, OCT19);
+  assert.deepEqual(
+    skips.map((s) => [s.domain, s.reason, s.liveClusters]).sort(),
+    [["alwayscited.com", "status is paused", 1], ["nomadadigital.co.uk", "status is paused", 2], ["starts-later.example", "starts on 2026-10-25", 0]],
+  );
+  assert.deepEqual(await readTrackable(db, OCT19).then((t) => t.filter((c) => c.track)), [], "and the dispatch reads none of them");
+});
+
+test("20 Oct 2026: a day that skips clients with live clusters sends the run-health mail, naming them; a paused client with nothing set up does not", async () => {
+  const { db } = fakeDb(pausedDay());
+  const box = outbox();
+  assert.equal(await reportRunHealth(db, box.health, { day: OCT19, now: Date.parse(`${OCT19}T05:00:05Z`) }), "sent", "19 Oct went unreported; now it mails");
+  assert.equal(box.sent.length, 1);
+  assert.match(box.sent[0]!.subject, /2 clients with live clusters skipped/);
+  assert.match(box.sent[0]!.text, /- alwayscited\.com: skipped - status is paused, 1 live cluster\n/);
+  assert.match(box.sent[0]!.text, /- nomadadigital\.co\.uk: skipped - status is paused, 2 live clusters/);
+  assert.doesNotMatch(box.sent[0]!.text, /ended\.example|starts-later\.example/, "ended and not-yet-started clients are not alerts");
+  assert.equal(await reportRunHealth(db, box.health, { day: OCT19, now: Date.parse(`${OCT19}T05:01:00Z`) }), "taken", "once a day");
+
+  const quiet = fakeDb(pausedDay({ clusters: [] }));
+  assert.equal(await reportRunHealth(quiet.db, outbox().health, { day: OCT19, now: Date.parse(`${OCT19}T05:00:05Z`) }), "healthy", "no live cluster, nothing to say");
+  const active = fakeDb(pausedDay({ status: "active" }));
+  assert.equal(await readSkips(active.db, OCT19).then((s) => s.filter((x) => x.reason.startsWith("status")).length), 0, "set back to active: no longer skipped");
+});
+
+test("20 Oct 2026: recordSkips records each skipped client once a day, with its reason", async () => {
+  const { db, tables } = fakeDb(pausedDay());
+  const first = await recordSkips(db, OCT19);
+  assert.equal(first.alerts, 2);
+  assert.equal(first.recorded, 3);
+  const rows = tables.dashboard_events!.filter((e) => e.event === TRACKING_SKIP_EVENT);
+  assert.deepEqual(rows.map((e) => [e.client_domain_id, (e.props as Row).reason, (e.props as Row).alert]).sort(), [
+    ["ac", "status is paused", true],
+    ["nd", "status is paused", true],
+    ["new", "starts on 2026-10-25", false],
+  ]);
+  assert.equal((await recordSkips(db, OCT19)).recorded, 0, "a second call the same day records nothing twice");
+  assert.equal(tables.dashboard_events!.filter((e) => e.event === TRACKING_SKIP_EVENT).length, 3);
 });

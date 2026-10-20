@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { selectAll } from "../supabase/page.ts";
-import { liveOn, shouldTrack, trackingDay } from "./decide.ts";
+import { type SkippedClient, clusterLiveOn, liveOn, shouldTrack, skipAlerts, skipReason, trackingDay } from "./decide.ts";
 import { CHECK_HOUR_UTC } from "./check-time.ts";
 import { runIsStalled, runIsStuck } from "./dispatch.ts";
 import { RERUN_BUTTON } from "./rerun.ts";
@@ -90,6 +90,8 @@ export type RunHealth = {
   settled: boolean;
   /** Every client listed was read, complete or partial. */
   ok: boolean;
+  /** Clients with live clusters the dispatch skipped (decide.ts skipAlerts), for the summary mail. */
+  skippedLive: SkippedClient[];
 };
 
 /** One run's state at `now`. A status this file does not know reads as failed rather than as fine. */
@@ -113,7 +115,7 @@ export function runState(run: HealthRun | undefined, now: number): RunState {
 /** Problems first, worst first, then by domain - the order the summary and the strip list them in. */
 const ORDER: Record<RunState, number> = { missing: 0, undispatched: 1, stuck: 2, stalled: 3, failed: 4, partial: 5, running: 6, queued: 7, complete: 8 };
 
-export function runHealth(p: { day: string; now: number; clients: readonly TrackableClient[]; runs: readonly HealthRun[] }): RunHealth {
+export function runHealth(p: { day: string; now: number; clients: readonly TrackableClient[]; runs: readonly HealthRun[]; skips?: readonly SkippedClient[] }): RunHealth {
   const byClient = new Map(p.runs.map((r) => [r.client_domain_id, r]));
   const domains = new Map(p.clients.map((c) => [c.id, c.domain]));
   const expected = p.clients.filter((c) => c.track);
@@ -133,8 +135,13 @@ export function runHealth(p: { day: string; now: number; clients: readonly Track
     counts,
     settled: clients.every((c) => !IN_FLIGHT.has(c.state)),
     ok: clients.every((c) => READ.has(c.state)),
+    skippedLive: skipAlerts(p.skips ?? [], p.day),
   };
 }
+
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+/** One skipped client as the summary lists it. */
+export const skipLine = (s: SkippedClient) => `- ${s.domain}: skipped - ${s.reason}, ${plural(s.liveClusters, "live cluster")}`;
 
 /**
  * By when a day's runs should all be read: two hours after the check, 07:00
@@ -199,7 +206,17 @@ export const STATE_WORDS: Record<RunState, string> = {
  */
 export function healthMail(h: RunHealth, p: { today: string; adminUrl: string; note?: string | null }): { subject: string; text: string } {
   const looking = h.clients.filter((c) => c.state !== "complete");
-  const total = h.clients.length;
+  const skipped = h.skippedLive ?? [];
+  const total = h.clients.length + skipped.length;
+  const skipBlock = skipped.length
+    ? ["", `Skipped by the daily check, though ${skipped.length === 1 ? "it has" : "they have"} live clusters - nothing was read for ${skipped.length === 1 ? "it" : "them"}:`, ...skipped.map(skipLine), "A paused client is set back with client_domains.status = 'active'; it is read from the next daily check."]
+    : [];
+  if (!looking.length && skipped.length) {
+    return {
+      subject: `alwaystracked run health ${h.day}: ${plural(skipped.length, "client")} with live clusters skipped`,
+      text: [`The daily check for ${h.day} (London) read ${h.clients.length ? `all ${plural(h.clients.length, "client")} it dispatched` : "no client"}, and skipped ${plural(skipped.length, "client")} that ${skipped.length === 1 ? "has" : "have"} live clusters.`, ...(p.note ? ["", p.note] : []), ...skipBlock].join("\n"),
+    };
+  }
   if (!looking.length) {
     // 13 Oct 2026, DIY P1: every tracking run complete, sent for the DIY line the send appends.
     return {
@@ -215,13 +232,14 @@ export function healthMail(h: RunHealth, p: { today: string; adminUrl: string; n
       ? `"${RERUN_BUTTON}" on /admin/tracking reads a failed, partial or stalled run's missing reads again, today only: ${p.adminUrl}`
       : `This is ${h.day}'s summary, sent the morning after because the day never settled or the mail did not go. That day can no longer be re-run: ${p.adminUrl}`;
   return {
-    subject: `alwaystracked run health ${h.day}: ${looking.length} of ${total} client${total === 1 ? "" : "s"} to look at`,
+    subject: `alwaystracked run health ${h.day}: ${looking.length + skipped.length} of ${total} client${total === 1 ? "" : "s"} to look at`,
     text: [
       `The daily check for ${h.day} (London) has ${looking.length} of ${total} client${total === 1 ? "" : "s"} not complete.`,
       tally,
       ...(p.note ? ["", p.note] : []),
       "",
       ...looking.map((c) => `- ${c.domain}: ${STATE_WORDS[c.state]}${c.error ? ` - ${c.error}` : ""}`),
+      ...skipBlock,
       "",
       act,
     ].join("\n"),
@@ -274,6 +292,92 @@ export async function readTrackable(db: SupabaseClient, day: string): Promise<Tr
     };
     return { ...client, domain: c.domain as string, tier: c.tier as string | null, track: shouldTrack(client, day) };
   });
+}
+
+/**
+ * Every client the daily dispatch does not read on `day`, and why (decide.ts skipReason): paused clients, which
+ * readTrackable never reads, and active ones it reads and skips (no live prompt, a start still to come). Ended
+ * clients are left out - stopped on purpose, and kept only for the 90 days of retention. Each carries its live
+ * clusters and prompts, so skipAlerts can tell a client somebody expects to be tracked from one that is not
+ * ready. Paged like readTrackable (20 Oct 2026).
+ */
+export async function readSkips(db: SupabaseClient, day: string): Promise<SkippedClient[]> {
+  let clients: Record<string, unknown>[];
+  let prompts: { client_domain_id: string; added_on: string; stopped_on: string | null }[];
+  let clusters: { client_domain_id: string; started_on: string | null; stopped_on: string | null }[];
+  try {
+    clients = await selectAll<Record<string, unknown>>((from, to) =>
+      db.from("client_domains").select("id, domain, status, started_on").in("status", ["active", "paused"]).order("id", { ascending: true }).range(from, to),
+    );
+    prompts = await selectAll<{ client_domain_id: string; added_on: string; stopped_on: string | null }>((from, to) =>
+      db.from("tracked_questions").select("client_domain_id, added_on, stopped_on").is("stopped_on", null).order("id", { ascending: true }).range(from, to),
+    );
+    clusters = await selectAll<{ client_domain_id: string; started_on: string | null; stopped_on: string | null }>((from, to) =>
+      db.from("tracked_clusters").select("client_domain_id, started_on, stopped_on").is("stopped_on", null).order("id", { ascending: true }).range(from, to),
+    );
+  } catch (err) {
+    throw new Error(`could not read the skipped clients: ${msg(err)}`);
+  }
+  const count = <T extends { client_domain_id: string }>(rows: T[], live: (r: T) => boolean) => {
+    const m = new Map<string, number>();
+    for (const r of rows) if (live(r)) m.set(r.client_domain_id, (m.get(r.client_domain_id) ?? 0) + 1);
+    return m;
+  };
+  const livePrompts = count(prompts, (q) => liveOn(q, day));
+  const liveClusters = count(clusters, (c) => clusterLiveOn(c, day));
+  const out: SkippedClient[] = [];
+  for (const c of clients) {
+    const id = c.id as string;
+    const client = { id, status: c.status as string | null, started_on: c.started_on as string | null, activeQuestions: livePrompts.get(id) ?? 0 };
+    const reason = skipReason(client, day);
+    if (reason) out.push({ ...client, domain: c.domain as string, reason, liveClusters: liveClusters.get(id) ?? 0 });
+  }
+  return out;
+}
+
+/** The dashboard_events row that records one client's skip on one day (props.day, props.reason). */
+export const TRACKING_SKIP_EVENT = "tracking_skip";
+
+/**
+ * The dispatch's record of who it skipped and why (20 Oct 2026): a log line per client - a warning when it has
+ * live clusters (decide.ts skipAlerts) - and one tracking_skip row per client per day, so a second call the same
+ * day records nothing twice. Never throws: the dispatch has done its work whatever this does.
+ */
+export async function recordSkips(db: SupabaseClient, day: string): Promise<{ skips: SkippedClient[]; alerts: number; recorded: number; error?: string }> {
+  let skips: SkippedClient[];
+  try {
+    skips = await readSkips(db, day);
+  } catch (err) {
+    console.warn(`[track] skips for ${day} not read: ${msg(err)}`);
+    return { skips: [], alerts: 0, recorded: 0, error: msg(err) };
+  }
+  const alerts = new Set(skipAlerts(skips, day).map((s) => s.id));
+  for (const s of skips) {
+    const line = `[track] skipped ${s.domain} on ${day}: ${s.reason} (${s.liveClusters} live cluster${s.liveClusters === 1 ? "" : "s"}, ${s.activeQuestions} live prompt${s.activeQuestions === 1 ? "" : "s"})`;
+    if (alerts.has(s.id)) console.warn(line);
+    else console.log(line);
+  }
+  if (!skips.length) return { skips, alerts: 0, recorded: 0 };
+  const { data: had, error: rErr } = await db.from("dashboard_events").select("client_domain_id").eq("event", TRACKING_SKIP_EVENT).eq("props->>day", day);
+  if (rErr) {
+    console.warn(`[track] skips for ${day} not recorded: ${rErr.message}`);
+    return { skips, alerts: alerts.size, recorded: 0, error: rErr.message };
+  }
+  const done = new Set(((had ?? []) as { client_domain_id: string }[]).map((r) => r.client_domain_id));
+  let recorded = 0;
+  for (const s of skips) {
+    if (done.has(s.id)) continue;
+    const { error } = await db.from("dashboard_events").insert({
+      client_domain_id: s.id,
+      member_email: null,
+      event: TRACKING_SKIP_EVENT,
+      path: null,
+      props: { day, reason: s.reason, status: s.status, live_clusters: s.liveClusters, live_prompts: s.activeQuestions, alert: alerts.has(s.id) },
+    });
+    if (error) console.warn(`[track] skip of ${s.domain} on ${day} not recorded: ${error.message}`);
+    else recorded += 1;
+  }
+  return { skips, alerts: alerts.size, recorded };
 }
 
 /** Every run on `day`, every page. */
@@ -371,9 +475,9 @@ export type ReportOutcome = "sent" | "unsent" | "taken" | "healthy" | "pending";
 export async function reportRunHealth(db: SupabaseClient, io: HealthIo, p: { day: string; now: number; note?: string | null }): Promise<ReportOutcome> {
   const runs = await readDayRuns(db, p.day);
   if (runs.some((r) => IN_FLIGHT.has(runState(r, p.now)))) return "pending";
-  const h = runHealth({ day: p.day, now: p.now, clients: await readTrackable(db, p.day), runs });
+  const h = runHealth({ day: p.day, now: p.now, clients: await readTrackable(db, p.day), runs, skips: await readSkips(db, p.day) });
   if (!h.settled) return "pending";
-  if (h.clients.every((c) => c.state === "complete")) {
+  if (h.clients.every((c) => c.state === "complete") && h.skippedLive.length === 0) {
     const diy = io.diyAttention && p.day === trackingDay(new Date(p.now)) ? await io.diyAttention(p.now) : null;
     if (!diy) return "healthy";
   }

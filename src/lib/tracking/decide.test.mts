@@ -18,6 +18,9 @@ import {
   runOutcome,
   retryExtraction,
   shouldTrack,
+  skipAlerts,
+  skipReason,
+  clusterLiveOn,
   signRun,
   stillUnread,
   trackingDay,
@@ -261,4 +264,34 @@ test("a missing brands_ok column is recognised in both of PostgREST's wordings, 
   assert.equal(missingColumn({ message: "column tracking_answers.brands does not exist" }, "brands_ok"), false, "another column");
   assert.equal(missingColumn({ message: "duplicate key value violates unique constraint" }, "brands_ok"), false);
   assert.equal(missingColumn(null, "brands_ok"), false);
+});
+
+test("20 Oct 2026: every skip has a reason, and shouldTrack is exactly 'no reason'", () => {
+  const c = (o: Partial<{ status: string | null; started_on: string | null; activeQuestions: number }>) => ({ id: "a", status: "active", started_on: null, activeQuestions: 5, ...o });
+  const day = "2026-10-20";
+  assert.equal(skipReason(c({ status: "paused" }), day), "status is paused");
+  assert.equal(skipReason(c({ status: "ended" }), day), "status is ended");
+  assert.equal(skipReason(c({ status: null }), day), "status is not set");
+  assert.equal(skipReason(c({ activeQuestions: 0 }), day), "no live prompts");
+  assert.equal(skipReason(c({ started_on: "2026-10-21" }), day), "starts on 2026-10-21");
+  assert.equal(skipReason(c({ started_on: "2026-10-19" }), day), null);
+  for (const o of [{ status: "paused" }, { activeQuestions: 0 }, { started_on: "2026-10-21" }, {}]) {
+    assert.equal(shouldTrack(c(o), day), skipReason(c(o), day) === null);
+  }
+});
+
+test("20 Oct 2026: a skip is an alert when the client has live clusters, unless it ended or has not started", () => {
+  const s = (o: object) => ({ id: "a", domain: "a.example", status: "paused", started_on: "2026-10-19", reason: "status is paused", liveClusters: 2, activeQuestions: 10, ...o });
+  const day = "2026-10-20";
+  assert.equal(skipAlerts([s({})], day).length, 1, "paused with live clusters: the 19-20 Oct case");
+  assert.equal(skipAlerts([s({ status: "active", reason: "no live prompts", activeQuestions: 0 })], day).length, 1, "active, clusters but no live prompt");
+  assert.equal(skipAlerts([s({ liveClusters: 0 })], day).length, 0, "nothing set up yet");
+  assert.equal(skipAlerts([s({ status: "ended", reason: "status is ended" })], day).length, 0, "ended on purpose");
+  assert.equal(skipAlerts([s({ status: "active", started_on: "2026-10-21", reason: "starts on 2026-10-21" })], day).length, 0, "starts tomorrow");
+});
+
+test("a cluster is live from its start, if it has one, until it is stopped", () => {
+  assert.equal(clusterLiveOn({ started_on: null, stopped_on: null }, "2026-10-20"), true);
+  assert.equal(clusterLiveOn({ started_on: "2026-10-21", stopped_on: null }, "2026-10-20"), false);
+  assert.equal(clusterLiveOn({ started_on: "2026-10-19", stopped_on: "2026-10-20" }, "2026-10-20"), false);
 });

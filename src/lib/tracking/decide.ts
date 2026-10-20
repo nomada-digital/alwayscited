@@ -48,10 +48,50 @@ export type ClientForDispatch = {
 };
 
 export function shouldTrack(client: ClientForDispatch, today: string): boolean {
-  if (client.status !== "active") return false;
-  if (client.activeQuestions < 1) return false;
-  if (client.started_on && client.started_on > today) return false;
-  return true;
+  return skipReason(client, today) === null;
+}
+
+/**
+ * Why the daily dispatch skips a client on `today`, or null when it reads it -
+ * shouldTrack's verdict with its reason, so the two cannot disagree.
+ *
+ * Every skip is now said (20 Oct 2026): alwayscited.com and nomadadigital.co.uk
+ * sat at `paused` from 18 Oct, set by hand during the customer reset, and the
+ * dispatch skipped them on 19 and 20 Oct without a log line or an email - run
+ * health read active clients only, so the day looked clean.
+ */
+export function skipReason(client: ClientForDispatch, today: string): string | null {
+  if (client.status !== "active") return `status is ${client.status ?? "not set"}`;
+  // the start before the prompts: a client starting later has none live yet either, and its start is the reason
+  if (client.started_on && client.started_on > today) return `starts on ${client.started_on}`;
+  if (client.activeQuestions < 1) return "no live prompts";
+  return null;
+}
+
+/** A skipped client, as the dispatch records it and run health reports it. */
+export type SkippedClient = {
+  id: string;
+  domain: string;
+  status: string | null;
+  started_on: string | null;
+  reason: string;
+  liveClusters: number;
+  activeQuestions: number;
+};
+
+/**
+ * The skips somebody should hear about today: a client with live clusters that
+ * is not being read. An ended client was stopped on purpose and one that starts
+ * later is waiting for its first day, so neither is an alert; a paused client,
+ * or an active one whose clusters have no live prompt, is.
+ */
+export function skipAlerts(skips: readonly SkippedClient[], today: string): SkippedClient[] {
+  return skips.filter((s) => s.liveClusters > 0 && s.status !== "ended" && !(s.started_on && s.started_on > today));
+}
+
+/** A cluster is live on `day` once it has started, if it has a start, and until it is stopped. */
+export function clusterLiveOn(row: { started_on: string | null; stopped_on: string | null }, day: string): boolean {
+  return (row.started_on === null || row.started_on <= day) && (row.stopped_on === null || row.stopped_on > day);
 }
 
 /** A question or keyword is live on `day` if it was added by then and not yet stopped. */
