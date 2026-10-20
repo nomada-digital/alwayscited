@@ -310,6 +310,20 @@ export async function POST(req: Request) {
     return fail(502, "read_failed", "We could not read that site just now. Please try again.");
   }
 
+  /**
+   * A low-confidence read stores no topic, but its guess is not thrown away:
+   * it leads the variants, and the confirm screen offers that list as options
+   * the visitor picks from or types over (Danny, 20 Oct 2026). glassray.ai
+   * opened on an empty field with five good variants stored behind it. The
+   * routes fold the picked option out of the variants, so choosing the guess
+   * does not make it a cluster twice.
+   */
+  const confident = read.confidence === "high";
+  const variants = normaliseTopicVariants(
+    confident ? read.suggested_topic : null,
+    confident ? (read.topic_variants ?? []) : [read.suggested_topic, ...(read.topic_variants ?? [])],
+    { min: SCAN_LIMITS.topicVariant.min, max: SCAN_LIMITS.topicVariant.max, cap: TOPIC_VARIANT_COUNT },
+  );
   // 6. Insert, awaiting the topic the visitor confirms. `ref` only when there is one, and the insert is tried again
   // without it if the column is not there yet: a deploy landing before 20261018030000 must not stop every scan.
   const row = {
@@ -323,7 +337,7 @@ export async function POST(req: Request) {
         services: (read.services ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 5),
         industries: (read.industries ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 4),
       },
-      topic: read.confidence === "high" ? read.suggested_topic : null,
+      topic: confident ? read.suggested_topic : null,
       /**
        * Cleaned on the way in, rather than stored raw and cleaned twice later.
        *
@@ -333,11 +347,7 @@ export async function POST(req: Request) {
        * is the one being stored, so a null topic folds nothing while the dedupe
        * still applies. See `topic-variants.test.mts`.
        */
-      topic_variants: normaliseTopicVariants(
-        read.confidence === "high" ? read.suggested_topic : null,
-        read.topic_variants ?? [],
-        { min: SCAN_LIMITS.topicVariant.min, max: SCAN_LIMITS.topicVariant.max, cap: TOPIC_VARIANT_COUNT },
-      ),
+      topic_variants: variants,
       market,
       status: "pending_topic",
       ip_hash: ipHash,
@@ -410,12 +420,12 @@ export async function POST(req: Request) {
     // Named so the gate can say what the email actually buys.
     gated_engines: settings.scan_engines_gated,
     brand_name: read.brand_name,
-    // A low-confidence guess is withheld: the field opens empty rather than
-    // pre-filled with something wrong.
-    suggested_topic: read.confidence === "high" ? read.suggested_topic : null,
+    // A low-confidence guess is not pre-filled: it leads topic_variants, which
+    // the confirm screen offers as options instead.
+    suggested_topic: confident ? read.suggested_topic : null,
     // Shown at step 2 so the agency can see how the site narrowed the category,
     // and correct it before fourteen questions are built on top of it.
-    topic_variants: read.topic_variants ?? [],
+    topic_variants: variants,
     positioning: read.positioning,
     confidence: read.confidence,
     market,

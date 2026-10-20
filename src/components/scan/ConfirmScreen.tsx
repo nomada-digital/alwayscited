@@ -353,6 +353,8 @@ export default function ConfirmScreen(p: {
   }
 
   const busy = writing || p.running;
+  /** No category from the read, but options to offer: see the start route. */
+  const lowConfidence = p.initialTopic.trim().length < 2 && p.variants.length > 0;
   const primaryLabel = p.running
     ? "Starting"
     : writing
@@ -419,10 +421,51 @@ export default function ConfirmScreen(p: {
             type="text"
             maxLength={SCAN_LIMITS.topic}
             value={topic}
-            placeholder="b2b seo agency"
+            placeholder={lowConfidence ? "or type your own" : "b2b seo agency"}
             onChange={(e) => setTopic(e.target.value)}
             style={fieldStyle}
           />
+          {/* A low-confidence read opens with no category, so its guesses are
+              offered here instead (Danny, 20 Oct 2026). Buttons rather than a
+              select: every option is visible without opening anything, and the
+              field above stays free to type in. Picking one writes the prompts. */}
+          {lowConfidence ? (
+            <div style={{ margin: "10px 0 0" }}>
+              <p id="confirm-options" style={{ margin: "0 0 8px", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
+                The site did not make the category clear. Pick the closest, or type your own.
+              </p>
+              <div role="group" aria-labelledby="confirm-options" style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                {p.variants.map((v) => {
+                  const on = topic.trim().toLowerCase() === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-pressed={on}
+                      disabled={busy}
+                      onClick={() => {
+                        setTopic(v);
+                        void write(v, market);
+                      }}
+                      style={{
+                        fontFamily: "inherit",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        padding: "7px 11px",
+                        borderRadius: "999px",
+                        cursor: busy ? "default" : "pointer",
+                        color: on ? T.surface : T.ink,
+                        background: on ? T.accent : T.surface,
+                        border: "1px solid " + (on ? T.accent : T.line),
+                      }}
+                    >
+                      {v}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           {/* A legend's top margin is not honoured inside a fieldset, so the
               board's 14px gap above "Market" lives on the fieldset instead. */}
           <fieldset style={{ border: 0, padding: 0, margin: "14px 0 0" }}>
@@ -582,7 +625,9 @@ export default function ConfirmScreen(p: {
             <p style={{ margin: 0, padding: "18px 26px", fontSize: "13.5px", color: T.soft }}>
               {writing
                 ? "Checking the Google keyword and writing the prompts a buyer in this category would type. It takes a few seconds."
-                : "Tell us the category above and we will write the prompts before anything runs."}
+                : lowConfidence
+                  ? "Pick a category above, or type your own, and we will write the prompts before anything runs."
+                  : "Tell us the category above and we will write the prompts before anything runs."}
             </p>
           ) : null}
 
