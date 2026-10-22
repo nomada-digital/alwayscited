@@ -2,7 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { APP_LIMITS } from "../../config/contact.ts";
 import { isPlausibleEmail, normalizeEmail } from "../email-address.ts";
-import { appOrigin, appPath } from "../app-host.ts";
+import { appPath } from "../app-host.ts";
+import { dashLink } from "../dash/host.ts";
 import { count } from "../plural.ts";
 import { type ClientScope, type InviteScope, addScope, clearScope, dropScope, readScopes, sees } from "./scope.ts";
 
@@ -33,7 +34,7 @@ import { type ClientScope, type InviteScope, addScope, clearScope, dropScope, re
  */
 
 /** Where an invited member signs in, printed in the invite email (M1, 5 Oct 2026). */
-const DASHBOARD_SIGN_IN = `${appOrigin("https://alwayscited.com").replace(/^https?:\/\//, "")}${appPath("/login")}`;
+const DASHBOARD_SIGN_IN = dashLink("/login").replace(/^https?:\/\//, "");   // the dashboards host (22 Oct 2026)
 
 /** Live members who see one client (AG-1, 9 Oct 2026: was 10 an account, MEMBERS_PER_ACCOUNT). */
 export const MEMBERS_PER_CLIENT = 10;

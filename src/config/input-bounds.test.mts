@@ -209,6 +209,12 @@ const EXEMPT: Record<string, Exemption> = {
     why: "The walkthrough ask's hidden way back, set by the coverage reading page. type=hidden, nobody types in it; walkthroughBack accepts only a /scan/ or /coverage-check/ path of at most 80 token characters, else the scan's own page.",
     holds: [{ file: "lib/scan/walkthrough-outcome.ts", needs: "/^\\/(scan|coverage-check)\\/[A-Za-z0-9_-]{1,80}$/.test(raw)" }],
   },
+  // 22 Oct 2026, the cut-over: Plan's Cancel trial confirm. A checkbox with a fixed value; the trial route acts
+  // only on confirm exactly "1" and reads nothing else from the form.
+  "trial-confirm": {
+    why: "Plan's Cancel trial confirm. type=checkbox, nothing typed; the dashboards trial route acts only when confirm is exactly 1.",
+    holds: [{ file: "app/api/dash/[client]/trial/route.ts", needs: 'form?.get("confirm") !== "1"' }],
+  },
   // R140 (1 Oct 2026): step 2's coverage ticks. type=checkbox, nobody types in
   // it and it carries no value; what is posted is the ticked rows' urls, which
   // came from parseCoverageCsv and are cut to MAX_COVERAGE_URLS by tickedRows

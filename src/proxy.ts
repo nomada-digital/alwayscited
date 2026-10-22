@@ -149,10 +149,11 @@ export function proxy(request: NextRequest) {
 
   // 18 Oct 2026 brief 2d: the dashboards host is the one customer dashboard. Every /app address - on the app host,
   // or under /app on this one - answers a 308 to its equivalent there (dash/host.ts dashPathForApp), query kept,
-  // so old emails and bookmarks still arrive. Assets and /api pass as before.
+  // so old emails and bookmarks still arrive. Assets and /api pass as before. A 301 since the cut-over (22 Oct 2026):
+  // the move is permanent, and every /app page it pointed at is gone (/app/auth links still sign in: same token table).
   const appBare = onApp ? (passesThrough(pathname) ? null : (stripPrefix(pathname) ?? pathname)) : stripPrefix(pathname);
   if (appBare !== null && pathname !== "/robots.txt") {
-    return NextResponse.redirect(new URL(`${dashPathForApp(appBare)}${search}`, dashOrigin()), 308);
+    return NextResponse.redirect(new URL(`${dashPathForApp(appBare)}${search}`, dashOrigin()), 301);
   }
 
   if (onApp) {

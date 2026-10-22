@@ -23,6 +23,11 @@ const PACK_WHY: Record<string, string> = {
   failed: "Stripe did not open just now. Nothing was charged. Try again in a minute.",
 };
 
+const TRIAL_DONE = {
+  cancelled: "Your trial is cancelled. Nothing will be charged, and the dashboard stays open until the trial ends.",
+  refused: "The trial was not cancelled - it may already be cancelled or over. Email us and we will sort it.",
+};
+
 const BILLING_WHY: Record<string, string> = {
   owner: "Only the account owner can open billing.",
   none: "There is no card subscription on this site yet. Email us and we will sort it.",
@@ -34,6 +39,9 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
   const sp = await searchParams;
   const { ws, demo, base, nudge } = await pageData(slug);
   const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
+  const trialWhy = sp.trial === "cancelled" ? TRIAL_DONE.cancelled : sp.trial === "refused" ? TRIAL_DONE.refused : null;
+  // a running card trial: the owner can cancel it here (api/dash/[client]/trial), as /app's Settings > Billing did
+  const trialEnds = ws.client.trial_ends_at && !ws.client.payment_status && Date.parse(ws.client.trial_ends_at) > Date.now() ? ws.client.trial_ends_at : null;
   const packWhy = typeof sp.pack === "string" ? (PACK_WHY[sp.pack] ?? null) : null;
   const a = ws.allowances;
   const at = TIER_ORDER.indexOf(ws.client.tier);
@@ -83,6 +91,21 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
           )}
         </div>
         {billingWhy ? <div className="field-err" role="alert">{billingWhy}</div> : null}
+        {trialEnds ? (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }} id="trial">
+            <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Your free trial</h3>
+            <p className="intro">It ends on {new Date(trialEnds).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}. Cancel before then and you pay nothing; tracking stops when the trial ends.</p>
+            {ws.role === "owner" && !demo ? (
+              <form action={`/api/dash/${slug}/trial`} method="post" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
+                <label style={{ fontSize: 13 }}><input type="checkbox" id="trial-confirm" name="confirm" value="1" required /> Yes, cancel my trial</label>
+                <button type="submit" className="btn">Cancel trial</button>
+              </form>
+            ) : (
+              <span className="muted" style={{ fontSize: 12.5 }}>{demo ? "Not available in a read-only view." : "The account owner can cancel the trial."}</span>
+            )}
+          </div>
+        ) : null}
+        {trialWhy ? <div className={sp.trial === "cancelled" ? "banner" : "field-err"} role="status" style={{ marginTop: 10 }}>{trialWhy}</div> : null}
       </div>
       <div className="dash-card">
         <h2>The four plans</h2>

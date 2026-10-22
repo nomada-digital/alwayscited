@@ -6,7 +6,7 @@ import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, TRACKED_BASIS, TRACKED_CLUS
 import { listOf } from "@/config/scan-shape";
 import { SITE_URL } from "@/config/schema";
 import { PLAN_TERMS, TRIAL, TRIAL_TERMS, trialCharge, trialLine } from "@/config/trial";
-import { appUrl } from "@/lib/app-host";
+import { dashLink } from "@/lib/dash/host";
 import { SERP_DEPTH } from "@/lib/scan/dataforseo-request";
 import { ENGINE_SPECS } from "@/lib/scan/engines";
 import { TIER_PLAIN } from "@/lib/tier-text";
@@ -85,7 +85,7 @@ export const helpHref = (slug: string, section?: string) => `${HELP_PATH}/${slug
 
 const TRACKED = TIER_PLAIN.tracked;
 const MAIL = link(CONTACT_EMAIL, `mailto:${CONTACT_EMAIL}`);
-const SIGN_IN = appUrl("/login", SITE_URL);
+const SIGN_IN = dashLink("/login");
 
 const LOGIN_MINUTES = Math.round(LOGIN_TTL_MS / 60_000);
 const SESSION_DAYS = Math.round(SESSION_TTL_MS / 86_400_000);
@@ -465,7 +465,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
       slug: "trial-and-cancelling",
       title: trialOn ? "The free trial, and cancelling" : "Cancelling your plan",
       description: trialOn
-        ? `How the ${TRACKED} ${TRIAL.days}-day free trial works, how an owner cancels it in Settings > Billing, how a paid plan is stopped, and what happens to your data when tracking ends.`
+        ? `How the ${TRACKED} ${TRIAL.days}-day free trial works, how an owner cancels it in Plan > Billing, how a paid plan is stopped, and what happens to your data when tracking ends.`
         : `How an ${TRACKED} plan is stopped, and what happens to your data when tracking ends.`,
       standfirst: trialOn
         ? "How the free trial works, how to cancel it before the first charge, and what happens when tracking ends."

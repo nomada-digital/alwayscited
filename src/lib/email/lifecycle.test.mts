@@ -159,8 +159,8 @@ test("activation-1, copy-4: trial_started, trial_midpoint and trial_ending name 
       const where = `${name} (${label})`;
       assert.ok(mail.text.includes(end), `${where}: names ${end}`);
       assert.ok(mail.text.includes(charge), `${where}: names ${charge}`);
-      assert.match(mail.text, /cancel[^\n]*Settings > Billing \(https:\/\/alwayscited\.com\/app\/tallyroo-com\/settings#set-billing\)/i, `${where}: the cancel route, linked`);
-      assert.match(mail.html, /<a href="https:\/\/alwayscited\.com\/app\/tallyroo-com\/settings#set-billing"[^>]*>Settings &gt; Billing<\/a>/, `${where}: the link in the HTML`);
+      assert.match(mail.text, /cancel[^\n]*Plan > Billing \(https:\/\/dashboards\.alwayscited\.com\/tallyroo-com\/plan#billing\)/i, `${where}: the cancel route, linked`);
+      assert.match(mail.html, /<a href="https:\/\/dashboards\.alwayscited\.com\/tallyroo-com\/plan#billing"[^>]*>Plan &gt; Billing<\/a>/, `${where}: the link in the HTML`);
       assert.doesNotMatch(mail.subject + mail.text, /You bought|\bbought\b|receipt/i, where);
     }
   }
@@ -240,7 +240,7 @@ test("the welcome carries the sign-in link on its one button and the 3-step stri
   const m = all.welcome;
   assert.equal(m.subject, "You're in - set up your clusters");
   assert.match(m.html, />Set up your clusters<\/a>/);
-  assert.match(m.html, /app\/auth\?token=preview-only/);
+  assert.match(m.html, /https:\/\/dashboards\.alwayscited\.com\/auth\?token=preview-only/);
   assert.equal(m.html.match(/<li /g)?.length, 3);
   assert.match(m.text, /\n1\. .*\n2\. .*\n3\. /);
 });

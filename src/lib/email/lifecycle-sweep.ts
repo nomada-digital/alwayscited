@@ -151,8 +151,8 @@ async function trialMail(db: SupabaseClient, io: SweepIo, c: Client, name: Trial
   // L3 (12 Oct 2026, email review): with nothing set up, when prompts saved now are first asked, in the client's zone.
   const firstAsk = firstAsked({ today, startedOn: c.started_on ?? null, market: c.market, now });
   const recap = trialRecap({ rows, firstDay, today, you: c.brand_name ?? c.domain, clustersInUse: live.clusters, clusterLimit: c.cluster_limit ?? CLUSTER_BASE, livePrompts: live.prompts, firstAsk });
-  const trial = trialTerms({ endsAt: c.trial_ends_at!, market: c.market, price: io.price, billing: billingUrl(c.slug, io.origin) });
-  const d = { domain: c.domain, link: dashboardUrl(c.slug, io.origin), recap, trial };
+  const trial = trialTerms({ endsAt: c.trial_ends_at!, market: c.market, price: io.price, billing: billingUrl(c.slug) });
+  const d = { domain: c.domain, link: dashboardUrl(c.slug), recap, trial };
   return name === "trial_midpoint" ? trialMidpoint(d) : trialEnding(d);
 }
 
@@ -283,7 +283,7 @@ export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: n
       // Every cluster already has prompts: the reminder would say "0 of your 10 are still empty" (review of 7e133a7).
       if (!setupStillEmpty({ withPrompts: live.withPrompts, clusterLimit })) continue;
       const tier = (["tracked", "mentioned", "cited", "everywhere"].includes(c.tier ?? "") ? c.tier : "tracked") as TierKey;
-      const mail = setupReminder({ tier, domain: c.domain, link: setupUrl(c.slug, io.origin), withPrompts: live.withPrompts, clusterLimit });
+      const mail = setupReminder({ tier, domain: c.domain, link: setupUrl(c.slug), withPrompts: live.withPrompts, clusterLimit });
       const r = await deliver(db, io, c, due, mail);
       if (r !== "taken") out[r].push(`${due} ${c.id}`);
     } catch (err) {
@@ -319,7 +319,7 @@ async function sweepThisWeek(db: SupabaseClient, io: SweepIo, now: number, out: 
     try {
       const tier = (["tracked", "mentioned", "cited", "everywhere"].includes(c.tier ?? "") ? c.tier : "tracked") as TierKey;
       const content = await io.thisWeek({ id: c.id, domain: c.domain, brand: c.brand_name ?? c.domain, market: c.market, tier, startedOn: c.started_on }, today);
-      const data = { tier, domain: c.domain, weekOf: event.slice(-10), items: content.items, changes: content.changes, link: actionsUrl(c.slug, io.origin) };
+      const data = { tier, domain: c.domain, weekOf: event.slice(-10), items: content.items, changes: content.changes, link: actionsUrl(c.slug) };
       if (!worthSending(data)) continue;
       const r = await deliverWeek(db, io, c, event, thisWeek(data));
       if (r !== "taken") out[r].push(`this_week ${c.id}`);

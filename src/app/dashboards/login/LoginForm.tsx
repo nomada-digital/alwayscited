@@ -6,7 +6,7 @@ import LoginHoneypot from "@/components/LoginHoneypot";
 import { SCAN_LIMITS } from "@/config/contact";
 
 /** Email in, link out: the same endpoint as /app's sign-in, which links back to the host it was asked from. */
-export default function LoginForm() {
+export default function LoginForm({ next = null }: { next?: string | null }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [msg, setMsg] = useState<string | null>(null);
@@ -15,7 +15,7 @@ export default function LoginForm() {
     e.preventDefault();
     setState("sending");
     setMsg(null);
-    const r = await fetch("/api/app/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ...(trapRef.current?.value ? { website: trapRef.current.value } : {}) }) }).catch(() => null);
+    const r = await fetch("/api/app/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, ...(next ? { next } : {}), ...(trapRef.current?.value ? { website: trapRef.current.value } : {}) }) }).catch(() => null);
     const j = (await r?.json().catch(() => null)) as { ok?: boolean; message?: string } | null;
     if (r?.ok && j?.ok) {
       setState("sent");

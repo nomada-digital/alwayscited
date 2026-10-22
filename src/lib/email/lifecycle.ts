@@ -2,7 +2,7 @@ import { COMPANY_LINE, CONTACT_EMAIL } from "../../config/contact.ts";
 import { NEXT_STEPS, nextSteps } from "../../config/onboarding.ts";
 import { T } from "../../config/tokens.ts";
 import { TRIAL, trialCharge, trialMoment } from "../../config/trial.ts";
-import { appUrl } from "../app-host.ts";
+import { dashLink } from "../dash/host.ts";
 import { count } from "../plural.ts";
 import { escapeHtml, shell, type Palette } from "../scan/email-render.ts";
 import { TIER_PLAIN, type TierKey } from "../tier-text.ts";
@@ -70,10 +70,13 @@ const FONT = "-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-ser
 /** Book a call goes to /contact with the tier prefilled, as contactUrlFor builds it. */
 const callUrl = (tier: TierKey) => `${ORIGIN}/contact?tier=${encodeURIComponent(TIER_PLAIN[tier])}`;
 
-/** A client's dashboard, its setup page, and its Billing section, where an owner cancels a trial or asks us to restart. */
-export const dashboardUrl = (slug: string, origin: string) => appUrl(`/${slug}`, origin);
-export const setupUrl = (slug: string, origin: string) => appUrl(`/${slug}/setup`, origin);
-export const billingUrl = (slug: string, origin: string) => `${appUrl(`/${slug}/settings`, origin)}#set-billing`;
+/**
+ * A client's dashboard, its setup page, and its Billing section, where an owner cancels a trial or asks us to
+ * restart - all on the dashboards host (22 Oct 2026; Billing is on Plan there).
+ */
+export const dashboardUrl = (slug: string) => dashLink(`/${slug}`);
+export const setupUrl = (slug: string) => dashLink(`/${slug}/setup`);
+export const billingUrl = (slug: string) => dashLink(`/${slug}/plan#billing`);
 
 /**
  * A running trial's terms, as every trial email states them: when it ends in
@@ -157,8 +160,8 @@ const SIGN_IN_ONCE = "The button signs you in. It works once, for 15 minutes; af
 /** The cron's and the webhook's later emails carry no login token: signed out, the reader asks for a link at sign in. */
 const SIGN_IN_ASKS = "If you are signed out, sign in with this email address and we send you a one-time link.";
 
-/** "... in Settings > Billing ...", the trial's one way out, linked to the client's Billing. */
-const cancelLine = (t: TrialTerms, text: string, after: string): Line => ({ text, link: { label: "Settings > Billing", href: t.billing }, after });
+/** "... in Plan > Billing ...", the trial's one way out, linked to the client's Billing (on Plan on the dashboards host since 22 Oct 2026). */
+const cancelLine = (t: TrialTerms, text: string, after: string): Line => ({ text, link: { label: "Plan > Billing", href: t.billing }, after });
 
 /**
  * The welcome, sent at signup in place of the bare login link once its flag
@@ -448,7 +451,7 @@ export function thisWeek(d: ThisWeekData): Rendered {
 }
 
 /** A client's Actions page, where the This week email's button goes. */
-export const actionsUrl = (slug: string, origin: string) => appUrl(`/${slug}/plan`, origin);
+export const actionsUrl = (slug: string) => dashLink(`/${slug}/plan`);
 
 export type Preview = { label: string; mail: Rendered };
 
@@ -460,11 +463,11 @@ export type Preview = { label: string; mail: Rendered };
  * `node --test`.
  */
 export function previewSets(price: { us: number; uk: number }): Record<LifecycleEmail, Preview[]> {
-  const link = appUrl("/auth?token=preview-only", ORIGIN);
+  const link = dashLink("/auth?token=preview-only");
   const domain = "tallyroo.com";
   const slug = "tallyroo-com";
-  const dash = dashboardUrl(slug, ORIGIN);
-  const billing = billingUrl(slug, ORIGIN);
+  const dash = dashboardUrl(slug);
+  const billing = billingUrl(slug);
   // A trial that ends at 3:30pm in New York, and one at 2:30pm in London.
   const us = trialTerms({ endsAt: "2026-10-22T19:30:00Z", market: "US", price, billing });
   const uk = trialTerms({ endsAt: "2026-10-22T13:30:00Z", market: "UK", price, billing });
@@ -489,21 +492,21 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
       { label: "alwaystracked free trial, UK", mail: welcome({ tier: "tracked", clusters: 1, clusterLimit: 10, domain, link, trial: uk, market: "UK", startedOn: "2026-10-10" }) },
     ],
     setup_reminder: [
-      { label: "a scan buyer: 1 cluster with prompts", mail: setupReminder({ tier: "tracked", domain, link: setupUrl(slug, ORIGIN), withPrompts: 1, clusterLimit: 10 }) },
-      { label: "no prompts yet", mail: setupReminder({ tier: "tracked", domain, link: setupUrl(slug, ORIGIN), withPrompts: 0, clusterLimit: 10 }) },
+      { label: "a scan buyer: 1 cluster with prompts", mail: setupReminder({ tier: "tracked", domain, link: setupUrl(slug), withPrompts: 1, clusterLimit: 10 }) },
+      { label: "no prompts yet", mail: setupReminder({ tier: "tracked", domain, link: setupUrl(slug), withPrompts: 0, clusterLimit: 10 }) },
     ],
     // 9 Oct 2026 (audit copy-2): the check time in each market's zone, a UK one after the clocks go back, a confirm after
     // checks began, and (review of 3eaa592) a no-scan order whose clusters have no prompt yet, so no check is promised.
     // 12 Oct 2026 (email review H3): each confirm has its moment, as setup-mail.ts passes it, and a US confirm at
     // 9:30pm ET - already the next day in London - is drawn, whose first check is two nights away, not "tomorrow".
     setup_confirmed: [
-      { label: "alwaysmentioned, US, confirmed the day it was bought", mail: setupConfirmed({ tier: "mentioned", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-09T18:00:00Z") }) },
-      { label: "alwaystracked, US, confirmed late in the evening it was bought, already the next day in London", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "US", today: "2026-10-10", startedOn: "2026-10-11", livePrompts: 15, now: Date.parse("2026-10-10T01:30:00Z") }) },
-      { label: "alwaystracked, UK, confirmed the day it was bought", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-26", startedOn: "2026-10-27", livePrompts: 15, now: Date.parse("2026-10-26T12:00:00Z") }) },
-      { label: "alwaystracked, UK, confirmed after checks began", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: appUrl("/", ORIGIN), market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-12T12:00:00Z") }) },
-      { label: "alwaystracked, US, no prompts yet", mail: setupConfirmed({ tier: "tracked", clusters: ["invoicing software"], link: appUrl("/", ORIGIN), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0, now: Date.parse("2026-10-09T18:00:00Z") }) },
+      { label: "alwaysmentioned, US, confirmed the day it was bought", mail: setupConfirmed({ tier: "mentioned", clusters: setupClusters, link: dashLink("/"), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-09T18:00:00Z") }) },
+      { label: "alwaystracked, US, confirmed late in the evening it was bought, already the next day in London", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: dashLink("/"), market: "US", today: "2026-10-10", startedOn: "2026-10-11", livePrompts: 15, now: Date.parse("2026-10-10T01:30:00Z") }) },
+      { label: "alwaystracked, UK, confirmed the day it was bought", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: dashLink("/"), market: "UK", today: "2026-10-26", startedOn: "2026-10-27", livePrompts: 15, now: Date.parse("2026-10-26T12:00:00Z") }) },
+      { label: "alwaystracked, UK, confirmed after checks began", mail: setupConfirmed({ tier: "tracked", clusters: setupClusters, link: dashLink("/"), market: "UK", today: "2026-10-12", startedOn: "2026-10-10", livePrompts: 15, now: Date.parse("2026-10-12T12:00:00Z") }) },
+      { label: "alwaystracked, US, no prompts yet", mail: setupConfirmed({ tier: "tracked", clusters: ["invoicing software"], link: dashLink("/"), market: "US", today: "2026-10-09", startedOn: "2026-10-10", livePrompts: 0, now: Date.parse("2026-10-09T18:00:00Z") }) },
     ],
-    first_reading: [{ label: "alwaystracked", mail: firstReading({ tier: "tracked", domain, named: 7, answers: 20, page1: 3, keywords: 10, link: appUrl("/", ORIGIN) }) }],
+    first_reading: [{ label: "alwaystracked", mail: firstReading({ tier: "tracked", domain, named: 7, answers: 20, page1: 3, keywords: 10, link: dashLink("/") }) }],
     trial_midpoint: [
       { label: "a week in, US", mail: trialMidpoint({ domain, link: dash, recap, trial: us }) },
       { label: "a week in with nothing set up, UK", mail: trialMidpoint({ domain, link: dash, recap: unreadOn("2026-10-15"), trial: uk }) },
@@ -516,9 +519,9 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
       { label: "three days before the end with nothing set up, UK", mail: trialEnding({ domain, link: dash, recap: unreadOn("2026-10-19"), trial: uk }) },
     ],
     invite: [
-      { label: "a viewer", mail: invite({ tier: "tracked", domain, link: appUrl("/login", ORIGIN), inviter: "sam@tallyroo.com", role: "viewer" }) },
+      { label: "a viewer", mail: invite({ tier: "tracked", domain, link: dashLink("/login"), inviter: "sam@tallyroo.com", role: "viewer" }) },
       // AG-1 (9 Oct 2026): an invite to every client on an account with three.
-      { label: "an editor on every client of three", mail: invite({ tier: "tracked", domain, link: appUrl("/login", ORIGIN), inviter: "sam@tallyroo.com", role: "editor", everyClient: 3 }) },
+      { label: "an editor on every client of three", mail: invite({ tier: "tracked", domain, link: dashLink("/login"), inviter: "sam@tallyroo.com", role: "editor", everyClient: 3 }) },
     ],
     plan_ended: [
       { label: "the alwayscited plan, paid", mail: planEnded({ tier: "cited", domain, billing }) },
@@ -527,7 +530,7 @@ export function previewSets(price: { us: number; uk: number }): Record<Lifecycle
     // 13 Oct 2026, DIY P9: every body this_week can take - three items with changes and more on the dashboard, a
     // Blocking item new since Monday, a week with items before the second check, and a week with changes only.
     this_week: (() => {
-      const actions = actionsUrl(slug, ORIGIN);
+      const actions = actionsUrl(slug);
       // Each title and fact in the words the candidate rules write them (pages/candidates.ts), on made-up rows.
       const items = [
         { severity: "blocking" as const, title: "Let Googlebot crawl /pricing", why: "robots.txt line 'Disallow: /pricing' blocks Googlebot from 1 key page of 8 (checked 17 Oct)." },

@@ -227,7 +227,7 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   // copy-4): the paid welcome says "bought", so a trialist never gets it, whichever flag is on.
   // 18 Oct 2026 brief 2d: the sign-in link opens the dashboards host, the one customer dashboard.
   const link = `${dashOrigin()}/auth?token=${token}`;
-  const trial = trialEndsAt ? trialTerms({ endsAt: trialEndsAt, market, price: TRACKED_PRICE, billing: billingUrl(made.slug, siteUrl()) }) : null;
+  const trial = trialEndsAt ? trialTerms({ endsAt: trialEndsAt, market, price: TRACKED_PRICE, billing: billingUrl(made.slug) }) : null;
   const clusterLimit = made.cluster_limit ?? CLUSTER_BASE;
   const welcomeOn = !tErr && (await lifecycleOn(db, trial ? "trial_started" : "welcome"));
   const sent =
@@ -402,7 +402,7 @@ async function endClient(db: SupabaseClient, clientId: string, sub: Record<strin
   if (row && (await lifecycleOn(db, "plan_ended"))) {
     const owners = await planEndedOwners(db, row.account_id as string);
     const trial = planEndedInTrial({ trialEndsAt: (row.trial_ends_at as string | null) ?? null, sub, now: Date.now() });
-    const mail = planEnded({ tier: (TIERS.includes(row.tier as string) ? row.tier : "tracked") as TierKey, domain: row.domain as string, billing: billingUrl(row.slug as string, siteUrl()), trial });
+    const mail = planEnded({ tier: (TIERS.includes(row.tier as string) ? row.tier : "tracked") as TierKey, domain: row.domain as string, billing: billingUrl(row.slug as string), trial });
     for (const m of owners) {
       if (!(await sendLifecycle({ memberEmail: m.email as string, mail }))) console.warn(`[stripe] plan_ended not sent for ${clientId}`);
     }

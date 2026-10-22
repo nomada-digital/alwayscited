@@ -6,8 +6,7 @@ import type { TierKey } from "@/components/TierName";
 import { headerSafe } from "@/lib/email-header";
 import { setupConfirmed } from "@/lib/email/lifecycle";
 import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
-import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
+import { dashLink } from "@/lib/dash/host";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { upsellMode } from "./ask.ts";
@@ -45,7 +44,7 @@ export async function sendSetupConfirmed(input: {
       text: [
         `${input.member} confirmed setup for ${input.domain} (tier: ${input.tier}).`,
         "",
-        `Their clusters and prompts are as shown on /app/${input.slug}/clusters and in /admin/tracking.`,
+        `Their clusters and prompts are as shown on ${dashLink(`/${input.slug}/clusters`)} and in /admin/tracking.`,
         ...(input.checked
           ? [
               "",
@@ -95,7 +94,7 @@ export async function mailSetupConfirmed(clientId: string, member: string): Prom
     // 12 Oct 2026 (email review H3): and the confirm's own moment, so "tomorrow" is the client's tomorrow - the setup
     // page's words for the same moment - not London's.
     const now = Date.now();
-    const mail = setupConfirmed({ tier, clusters: (clusters ?? []).map((k) => k.name as string), link: appUrl("/", siteUrl()), market: (c.market as string | null) ?? "US", today: trackingDay(new Date(now)), startedOn: (c.started_on as string | null) ?? null, livePrompts: livePrompts ?? 0, now });
+    const mail = setupConfirmed({ tier, clusters: (clusters ?? []).map((k) => k.name as string), link: dashLink("/"), market: (c.market as string | null) ?? "US", today: trackingDay(new Date(now)), startedOn: (c.started_on as string | null) ?? null, livePrompts: livePrompts ?? 0, now });
     if (!(await sendLifecycle({ memberEmail: member, mail }))) console.warn("[app] setup_confirmed not sent");
   } catch (err) {
     console.warn(`[app] setup_confirmed skipped: ${err instanceof Error ? err.message : String(err)}`);

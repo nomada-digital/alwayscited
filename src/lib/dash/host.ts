@@ -102,6 +102,26 @@ export function dashInternal(pathname: string): string {
   return `${DASH_PREFIX}${pathname}`;
 }
 
+/**
+ * Where a sign-in lands (cut-over, 22 Oct 2026): `next` from the login page, the link and the auth POST, as a
+ * path on the dashboards host, or null. An old `/app/...` next (a bookmark, an email from before the cut-over)
+ * is mapped to its dashboards page with dashPathForApp. A redirect target read from a URL, so only a client page
+ * passes: one slug then plain path segments, an optional query, no `//`, backslash, scheme or control character,
+ * never the sign-in pages themselves.
+ */
+export const DASH_NEXT_MAX = 512;
+export function dashNext(raw: unknown): string | null {
+  if (typeof raw !== "string" || !raw || raw.length > DASH_NEXT_MAX) return null;
+  if (raw.includes("//") || raw.includes("\\") || raw.includes(":") || /[\u0000-\u001f\u007f]/.test(raw)) return null;
+  const at = raw.indexOf("?");
+  const head = (at < 0 ? raw : raw.slice(0, at)).split("#")[0]!;
+  const query = at < 0 ? "" : raw.slice(at).split("#")[0]!;
+  const path = head === "/app" || head.startsWith("/app/") ? dashPathForApp(head.slice(4)) : head;
+  if (!/^\/[A-Za-z0-9-]{1,64}(?:\/[A-Za-z0-9._~%-]+)*\/?$/.test(path)) return null;
+  if (/^\/(login|auth|demo|view|api|dashboards)(?:\/|$)/.test(path)) return null;
+  return `${path}${query.length > 1 ? query : ""}`;
+}
+
 /** `/dashboards/x` as it is spelled on its own host, or null when the path has no prefix. */
 export function dashStrip(pathname: string): string | null {
   if (pathname === DASH_PREFIX) return "/";
@@ -114,6 +134,15 @@ export function dashOrigin(env?: { DASH_HOST?: string }): string {
   const h = dashHost(env);
   const local = h.split(":")[0]!.endsWith("localhost");
   return `${local ? "http" : "https"}://${h}`;
+}
+
+/**
+ * A link on the dashboards host, for an email (cut-over, 22 Oct 2026): every customer email - sign-in,
+ * welcome, trial, lifecycle, the weekly mail - links here, never to /app, which only redirects now.
+ * `rest` starts with a slash: `/login`, `/<slug>/setup`.
+ */
+export function dashLink(rest: string, env?: { DASH_HOST?: string }): string {
+  return `${dashOrigin(env)}${rest.startsWith("/") ? rest : `/${rest}`}`;
 }
 
 /**
