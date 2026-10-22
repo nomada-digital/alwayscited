@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { brandKey, displayNamesFor, domainStem, namesBrand, namesSubject, pickDisplayName, subjectKeys } from "./brand-name.ts";
+import { brandKey, cleanBrandName, displayNamesFor, domainStem, namesBrand, namesSubject, pickDisplayName, subjectKeys } from "./brand-name.ts";
 
 /**
  * `namesBrand` decides `scan_answers.brand_named`, which is the number this
@@ -211,4 +211,17 @@ test("domainStem reads the name out of the host", () => {
   assert.equal(domainStem("https://www.acme.co.uk/about"), "acme");
   assert.equal(domainStem("higgsllp.co.uk"), "higgsllp");
   assert.equal(domainStem("localhost"), null);
+});
+
+test("a trade mark on the stored name does not stop it matching (goodtrip, 22 Oct 2026)", () => {
+  // A live alwaysmentioned order stored "goodtrip®", which matched only its own literal spelling.
+  for (const prose of ["Try Goodtrip", "GoodTrip Clothing makes souvenir tees.", "Order from goodtrip.co.uk today."]) {
+    assert.equal(namesSubject(prose, "goodtrip®", "goodtrip.co.uk"), true, prose);
+    assert.equal(namesSubject(prose, "goodtrip®"), true, `${prose} (no domain)`);
+  }
+  assert.equal(namesSubject("Have a good trip!", "goodtrip®", "goodtrip.co.uk"), false);
+  assert.equal(namesBrand("Acme Tools are cheap", "Acme™ Tools"), true);
+  assert.equal(cleanBrandName("goodtrip®"), "goodtrip");
+  assert.equal(cleanBrandName("Acme™ Tools ©"), "Acme Tools");
+  assert.equal(cleanBrandName("Plain"), "Plain");
 });

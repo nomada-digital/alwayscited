@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { isPlausibleDomain, normalizeDomain } from "../scan/domain.ts";
+import type { CouponTerms } from "./stripe.ts";
 
 /**
  * The Stripe webhook's rules - BRIEF-3 C4 (docs/tracked-dashboard-2026-09-29/
@@ -82,6 +83,10 @@ export type CompletedOrder = {
   trialDays: number | null;
   /** The buyer's GA client id, set at checkout only after a yes to analytics (15 Oct 2026), else null. */
   gaClientId: string | null;
+  /** The promotion code's id when the buyer entered one at Stripe (22 Oct 2026), else null. */
+  promotionId: string | null;
+  /** What the discount took off this first payment, in the smallest unit; null when none. */
+  amountDiscount: number | null;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -113,7 +118,85 @@ export function completedOrder(session: Record<string, unknown>): CompletedOrder
     currency: str(session.currency) || null,
     trialDays: /^\d{1,2}$/.test(str(m.trial_days)) ? Number(str(m.trial_days)) : null,
     gaClientId: /^\d{1,12}\.\d{1,12}$/.test(str(m.ga_client_id)) ? str(m.ga_client_id) : null,
+    promotionId: promotionOf(session),
+    amountDiscount: discountOf(session),
   };
+}
+
+/** The Session's promotion code id: `discounts[].promotion_code`, an id or an expanded object. */
+function promotionOf(session: Record<string, unknown>): string | null {
+  const list = Array.isArray(session.discounts) ? (session.discounts as Record<string, unknown>[]) : [];
+  for (const d of list) {
+    const p = d?.promotion_code;
+    const id = typeof p === "string" ? p : typeof (p as { id?: unknown } | null)?.id === "string" ? (p as { id: string }).id : "";
+    if (/^promo_[A-Za-z0-9]{1,200}$/.test(id)) return id;
+  }
+  return null;
+}
+
+function discountOf(session: Record<string, unknown>): number | null {
+  const v = ((session.total_details ?? {}) as Record<string, unknown>).amount_discount;
+  return typeof v === "number" && v > 0 ? v : null;
+}
+
+/** What the promotion line is built from: the code's read, and the subscription's next invoice dates. */
+export type PromotionFacts = {
+  read: ({ ok: true; code: string } & CouponTerms) | { ok: false; reason: string };
+  /** Unix seconds; null when the subscription was not read. */
+  trialEnd: number | null;
+  currentPeriodEnd: number | null;
+};
+
+function addMonths(sec: number, n: number): number {
+  const d = new Date(sec * 1000);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + n);
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).getUTCDate();
+  d.setUTCDate(Math.min(day, last));
+  return Math.floor(d.getTime() / 1000);
+}
+
+/**
+ * When the first invoice at full price is due, unix seconds, or null when none is (a forever code) or it cannot be
+ * told. The plans bill monthly. `once` takes the first invoice only - the one at checkout, or the trial's - so the
+ * next invoice is full price. `repeating` covers every invoice for its months from checkout (`now`), so the first
+ * renewal on or after that.
+ */
+export function firstFullPrice(terms: { duration: string | null; months: number | null }, next: { trialEnd: number | null; currentPeriodEnd: number | null }, now: number): number | null {
+  const upcoming = next.trialEnd && next.trialEnd > now ? next.trialEnd : next.currentPeriodEnd;
+  if (!upcoming || terms.duration === "forever" || !terms.duration) return null;
+  if (terms.duration === "once") return upcoming;
+  if (!terms.months || terms.months < 1) return null;
+  const ends = addMonths(now, terms.months);
+  let at = upcoming;
+  for (let i = 0; at < ends && i < 240; i++) at = addMonths(upcoming, i + 1);
+  return at;
+}
+
+/**
+ * The order email's promotion line (22 Oct 2026, after the goodtrip order went through at 0 on a 100% test code and
+ * read like a sale): the code, the discount and the first full-price charge. Null when no code was used.
+ */
+export function promotionLine(o: CompletedOrder, facts: PromotionFacts | null, now: number, when: (sec: number) => string): string | null {
+  if (!o.promotionId && !o.amountDiscount) return null;
+  const cur = (o.currency ?? "").toUpperCase();
+  const took = o.amountDiscount ? `, ${(o.amountDiscount / 100).toFixed(2)} ${cur} off this payment` : "";
+  if (!facts || !facts.read.ok) {
+    const why = facts && !facts.read.ok ? facts.read.reason : "not read";
+    return `Promotion code: ${o.promotionId ?? "applied"}${took}. Code, duration and first full-price charge NOT read (${why}) - check the subscription in Stripe.`;
+  }
+  const r = facts.read;
+  const off = r.percentOff !== null ? `${r.percentOff}% off` : r.amountOff !== null ? `${(r.amountOff / 100).toFixed(2)} ${(r.currency ?? cur).toUpperCase()} off` : "discount";
+  const lasts = r.duration === "once" ? "once" : r.duration === "repeating" ? `for ${r.months ?? "?"} month(s)` : r.duration === "forever" ? "forever" : "duration unknown";
+  const at = firstFullPrice(r, facts, now);
+  const full =
+    r.duration === "forever"
+      ? "none - the code applies to every invoice"
+      : at
+        ? when(at)
+        : "not known - check the subscription in Stripe";
+  return `Promotion code: ${r.code} (${off}, ${lasts})${took}. First full-price charge: ${full}.`;
 }
 
 /**
@@ -319,7 +402,7 @@ export async function handleWebhook(raw: string, signature: string | null, secre
 }
 
 /** The order email to Danny (pricing spec section 5): plain text, what was bought and what the webhook did. */
-export function orderEmailText(o: CompletedOrder, outcome: string, siteOrigin: string, trial: { firstCharge: string; amount: string } | null = null): { subject: string; text: string } {
+export function orderEmailText(o: CompletedOrder, outcome: string, siteOrigin: string, trial: { firstCharge: string; amount: string } | null = null, promotion: string | null = null): { subject: string; text: string } {
   const amount = o.amountTotal !== null && o.currency ? `${(o.amountTotal / 100).toFixed(2)} ${o.currency.toUpperCase()}` : "unknown";
   const text = [
     "A checkout completed on alwayscited.com.",
@@ -331,6 +414,7 @@ export function orderEmailText(o: CompletedOrder, outcome: string, siteOrigin: s
     `Email: ${o.email ?? "none given"}`,
     `Keyword target: ${o.keyword || "-"}`,
     `First payment: ${amount}`,
+    ...(promotion ? [promotion] : []),
     ...(trial ? [`Trial started - first charge ${trial.firstCharge}, ${trial.amount}`] : []),
     // Which path the signup took (R158, 1 Oct 2026): from the scan, or with no scan from the website.
     `Path: ${o.scanToken ? "scan" : "no scan"}`,

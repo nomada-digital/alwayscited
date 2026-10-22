@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { checkoutRequest } from "./session.ts";
-import { clustersToMake, completedOrder, eventTime, HANDLED_EVENTS, handleWebhook, orderEmailText, orderRow, packsOn, signStripePayload, signupMarket, signupResume, subscriptionScanToken, trialEndsAtAfter, trialStillRunning, verifyStripeSignature, type WebhookDeps } from "./webhook.ts";
+import { clustersToMake, completedOrder, eventTime, firstFullPrice, promotionLine, HANDLED_EVENTS, handleWebhook, orderEmailText, orderRow, packsOn, signStripePayload, signupMarket, signupResume, subscriptionScanToken, trialEndsAtAfter, trialStillRunning, verifyStripeSignature, type WebhookDeps } from "./webhook.ts";
 import { invoiceSubscription } from "./payment.ts";
 
 /**
@@ -315,4 +315,49 @@ test("a signup is tracked in the market paid for, and a scan from the other mark
   assert.deepEqual(signupMarket("", "US"), { market: "US", useScan: true }, "an order with no market of its own falls back to the scan's");
   assert.deepEqual(signupMarket("", null), { market: null, useScan: false });
   assert.deepEqual(signupMarket("fr", "XX"), { market: null, useScan: false }, "neither is a market we track");
+});
+
+test("a promotion code is named in the order email with its discount and first full-price charge (22 Oct 2026)", () => {
+  // The goodtrip order went through at 0 on a 100% test code and read like a sale.
+  const o = completedOrder({
+    ...completed.data.object,
+    amount_total: 0,
+    currency: "gbp",
+    discounts: [{ coupon: "TESTCOUPON", promotion_code: "promo_1ABC" }],
+    total_details: { amount_discount: 129500 },
+  });
+  assert.equal(o.promotionId, "promo_1ABC");
+  assert.equal(o.amountDiscount, 129500);
+  const now = Date.UTC(2026, 9, 22, 15) / 1000;
+  const next = Date.UTC(2026, 10, 22, 15) / 1000;
+  const when = (sec: number) => new Date(sec * 1000).toISOString().slice(0, 10);
+  const once = promotionLine(o, { read: { ok: true, code: "TESTCODE", percentOff: 100, amountOff: null, currency: null, duration: "once", months: null }, trialEnd: null, currentPeriodEnd: next }, now, when);
+  assert.equal(once, "Promotion code: TESTCODE (100% off, once), 1295.00 GBP off this payment. First full-price charge: 2026-11-22.");
+  const m = orderEmailText(o, "made", "https://alwayscited.com", null, once);
+  assert.match(m.text, /First payment: 0\.00 GBP\nPromotion code: TESTCODE \(100% off, once\)/);
+
+  const forever = promotionLine(o, { read: { ok: true, code: "X", percentOff: 100, amountOff: null, currency: null, duration: "forever", months: null }, trialEnd: null, currentPeriodEnd: next }, now, when);
+  assert.match(forever!, /First full-price charge: none - the code applies to every invoice\./);
+  const unread = promotionLine(o, { read: { ok: false, reason: "no_key" }, trialEnd: null, currentPeriodEnd: null }, now, when);
+  assert.match(unread!, /Promotion code: promo_1ABC, 1295\.00 GBP off this payment\. Code, duration and first full-price charge NOT read \(no_key\)/);
+
+  // No code, no line, and the email is as before.
+  const plain = completedOrder(completed.data.object);
+  assert.equal(promotionLine(plain, null, now, when), null);
+  assert.doesNotMatch(orderEmailText(plain, "made", "https://alwayscited.com").text, /Promotion code/);
+});
+
+test("the first full-price charge follows the coupon's duration", () => {
+  const now = Date.UTC(2026, 9, 22) / 1000;
+  const nov = Date.UTC(2026, 10, 22) / 1000;
+  const jan = Date.UTC(2027, 0, 22) / 1000;
+  const next = { trialEnd: null, currentPeriodEnd: nov };
+  assert.equal(firstFullPrice({ duration: "once", months: null }, next, now), nov);
+  assert.equal(firstFullPrice({ duration: "repeating", months: 3 }, next, now), jan);
+  assert.equal(firstFullPrice({ duration: "repeating", months: 1 }, next, now), nov);
+  assert.equal(firstFullPrice({ duration: "forever", months: null }, next, now), null);
+  // A trial's end is the next invoice when it is still to come.
+  const trial = Date.UTC(2026, 10, 5) / 1000;
+  assert.equal(firstFullPrice({ duration: "once", months: null }, { trialEnd: trial, currentPeriodEnd: trial }, now), trial);
+  assert.equal(firstFullPrice({ duration: "once", months: null }, { trialEnd: null, currentPeriodEnd: null }, now), null);
 });

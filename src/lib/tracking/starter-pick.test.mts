@@ -59,7 +59,12 @@ test("signup fills every cluster left with no keyword or prompt after the webhoo
   assert.match(route, /onCheckoutCompleted\(supabaseAdmin\(\), order, eventId, after\)/);
   assert.match(route, /export const maxDuration = 120;/);
   const starter = read("src/lib/tracking/starter.ts");
-  assert.match(starter, /added_by: STARTER_BY/, "a picked keyword is marked, so the board can say it is a suggestion");
+  // 22 Oct 2026: the checkout keyword, when it passes the check, is the buyer's own and is marked as such; a keyword
+  // picked from the site is still STARTER_BY.
+  assert.match(starter, /added_by: own \? CHECKOUT_BY : STARTER_BY/, "a picked keyword is marked, so the board can say it is a suggestion");
+  assert.match(starter, /precheckKeyword\(typedText/, "the checkout keyword takes Check keyword's free prechecks first");
+  assert.match(starter, /pickClusterKeyword\(\[pre\.keyword\], v\.volumes, i\.intents\)/, "and its volume and intent rule");
+  assert.match(signup, /typedKeyword: orderKeyword\(\{ keyword: o\.keyword, scan_token: o\.scanToken \}\)/, "only when no scan was behind the order, as the setup prefill");
   assert.match(starter, /pick keywords and prompts in \/admin\/tracking/, "what could not be made is named, with the admin page, as before");
   const board = read("src/components/dash/ClustersBoard.tsx");
   assert.match(board, /c\.suggested \? <span className="pill"[^>]*>Suggested - yours to edit<\/span>/);

@@ -40,7 +40,7 @@ export async function createCheckoutSession(form: URLSearchParams, fetchImpl: ty
  * "Cancel trial" - the subscription ends when the trial does and nothing is
  * charged. Neither bills anybody.
  */
-export type SubscriptionRead = { ok: true; status: string; trialEnd: number | null; cancelAtPeriodEnd: boolean } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
+export type SubscriptionRead = { ok: true; status: string; trialEnd: number | null; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
 
 async function subscriptionCall(id: string, form: URLSearchParams | null, fetchImpl: typeof fetch): Promise<SubscriptionRead> {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -57,9 +57,17 @@ async function subscriptionCall(id: string, form: URLSearchParams | null, fetchI
   } catch {
     return { ok: false, reason: "unreachable" };
   }
-  const body = (await res.json().catch(() => null)) as { status?: unknown; trial_end?: unknown; cancel_at_period_end?: unknown } | null;
+  const body = (await res.json().catch(() => null)) as { status?: unknown; trial_end?: unknown; cancel_at_period_end?: unknown; current_period_end?: unknown; items?: { data?: { current_period_end?: unknown }[] } } | null;
   if (!res.ok || typeof body?.status !== "string") return { ok: false, reason: "refused", status: res.status };
-  return { ok: true, status: body.status, trialEnd: typeof body.trial_end === "number" ? body.trial_end : null, cancelAtPeriodEnd: body.cancel_at_period_end === true };
+  // The period end is on the subscription in older API versions and on its items from 2025-03-31 on; either is read.
+  const periodEnd = body.current_period_end ?? body.items?.data?.[0]?.current_period_end;
+  return {
+    ok: true,
+    status: body.status,
+    trialEnd: typeof body.trial_end === "number" ? body.trial_end : null,
+    cancelAtPeriodEnd: body.cancel_at_period_end === true,
+    currentPeriodEnd: typeof periodEnd === "number" ? periodEnd : null,
+  };
 }
 
 export function readSubscription(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
@@ -68,6 +76,58 @@ export function readSubscription(id: string, fetchImpl: typeof fetch = fetch): P
 
 export function cancelAtPeriodEnd(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
   return subscriptionCall(id, new URLSearchParams({ cancel_at_period_end: "true" }), fetchImpl);
+}
+
+/**
+ * The promotion code a Checkout Session used, and its coupon (22 Oct 2026): for the order email's line naming the
+ * code, the discount and when full price starts, so a test order on a 100% code reads as one. Read only; it bills
+ * nobody. The coupon is on the code in older API versions and under `promotion` from 2025-09-30 on, where it can be
+ * an id - then it is read too.
+ */
+export type CouponTerms = { percentOff: number | null; amountOff: number | null; currency: string | null; duration: "once" | "repeating" | "forever" | null; months: number | null };
+export type PromotionRead = ({ ok: true; code: string } & CouponTerms) | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
+
+async function stripeGet(path: string, fetchImpl: typeof fetch): Promise<{ ok: true; body: Record<string, unknown> } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number }> {
+  const key = process.env.STRIPE_SECRET_KEY;
+  if (!key) return { ok: false, reason: "no_key" };
+  let res: Response;
+  try {
+    res = await fetchImpl(`https://api.stripe.com/v1/${path}`, { method: "GET", headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
+  } catch {
+    return { ok: false, reason: "unreachable" };
+  }
+  const body = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!res.ok || !body) return { ok: false, reason: "refused", status: res.status };
+  return { ok: true, body };
+}
+
+function couponTerms(c: Record<string, unknown>): CouponTerms {
+  const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const d = c.duration;
+  return {
+    percentOff: num(c.percent_off),
+    amountOff: num(c.amount_off),
+    currency: typeof c.currency === "string" ? c.currency : null,
+    duration: d === "once" || d === "repeating" || d === "forever" ? d : null,
+    months: num(c.duration_in_months),
+  };
+}
+
+export async function readPromotionCode(id: string, fetchImpl: typeof fetch = fetch): Promise<PromotionRead> {
+  if (!/^promo_[A-Za-z0-9]{1,200}$/.test(id)) return { ok: false, reason: "refused" };
+  const r = await stripeGet(`promotion_codes/${id}`, fetchImpl);
+  if (!r.ok) return r;
+  const code = typeof r.body.code === "string" ? r.body.code : "";
+  const promotion = (r.body.promotion ?? {}) as Record<string, unknown>;
+  let coupon = (r.body.coupon ?? promotion.coupon) as Record<string, unknown> | string | undefined;
+  if (typeof coupon === "string") {
+    if (!/^[A-Za-z0-9_-]{1,200}$/.test(coupon)) return { ok: false, reason: "refused" };
+    const c = await stripeGet(`coupons/${coupon}`, fetchImpl);
+    if (!c.ok) return c;
+    coupon = c.body;
+  }
+  if (!code || !coupon || typeof coupon !== "object") return { ok: false, reason: "refused" };
+  return { ok: true, code, ...couponTerms(coupon) };
 }
 
 /**

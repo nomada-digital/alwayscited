@@ -117,6 +117,24 @@ test("an unset variable falls back, and a set one wins", () => {
   }
 });
 
+test("a bare address is given the name, and a named one is left alone (22 Oct 2026)", () => {
+  // Production's value is bare, and inboxes showed the sender as "hello".
+  const before = process.env.SCAN_FROM_EMAIL;
+  try {
+    process.env.SCAN_FROM_EMAIL = "hello@alwayscited.com";
+    assert.equal(mailFrom(), "alwayscited <hello@alwayscited.com>");
+    process.env.SCAN_FROM_EMAIL = "  hello@alwayscited.com ";
+    assert.equal(mailFrom(), "alwayscited <hello@alwayscited.com>");
+    process.env.SCAN_FROM_EMAIL = "Danny at alwayscited <danny@alwayscited.com>";
+    assert.equal(mailFrom(), "Danny at alwayscited <danny@alwayscited.com>");
+    process.env.SCAN_FROM_EMAIL = '"alwayscited" <hello@alwayscited.com>';
+    assert.equal(mailFrom(), '"alwayscited" <hello@alwayscited.com>');
+  } finally {
+    if (before === undefined) delete process.env.SCAN_FROM_EMAIL;
+    else process.env.SCAN_FROM_EMAIL = before;
+  }
+});
+
 test("a variable set to nothing falls back rather than sending from nowhere", () => {
   /**
    * The one behavioural change in this push, and the reason the four call

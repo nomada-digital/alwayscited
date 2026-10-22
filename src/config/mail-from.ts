@@ -57,5 +57,22 @@ export const MAIL_FROM_FALLBACK = "alwayscited <onboarding@resend.dev>";
  * exactly the case where the variable cannot be used.
  */
 export function mailFrom(): string {
-  return process.env.SCAN_FROM_EMAIL || MAIL_FROM_FALLBACK;
+  return withDisplayName(process.env.SCAN_FROM_EMAIL || MAIL_FROM_FALLBACK);
+}
+
+/** The name an inbox shows beside the address. */
+export const MAIL_FROM_NAME = "alwayscited";
+
+/**
+ * A bare address gets the product's name in front of it - 22 Oct 2026.
+ *
+ * Production's `SCAN_FROM_EMAIL` is the bare `hello@alwayscited.com`, and an
+ * inbox with no display name to show shows the local part: the goodtrip order
+ * mail arrived from "hello". A value that already names itself
+ * (`Name <address>`) is left exactly as it is.
+ */
+export function withDisplayName(from: string): string {
+  const v = from.trim();
+  if (v.includes("<")) return v;
+  return `${MAIL_FROM_NAME} <${v}>`;
 }

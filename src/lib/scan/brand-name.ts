@@ -125,6 +125,22 @@ export function displayNamesFor(
   return out;
 }
 
+/** ®, ™, © and ℠: marks a site prints beside its name and an answer never does. */
+const MARKS = /[®™©℠]/g;
+
+/**
+ * The name without its trade marks - 22 Oct 2026.
+ *
+ * A brand read off its own site as "goodtrip®" was matched as the literal
+ * "goodtrip®", so "Try Goodtrip", "GoodTrip Clothing" and "goodtrip.co.uk"
+ * all read as not naming it: the mark is not a separator, so it stayed inside
+ * the pattern, and the single word could not take the domain-stem alias
+ * either. Stripped here, before matching, and where the name is stored.
+ */
+export function cleanBrandName(name: string): string {
+  return name.replace(MARKS, "").replace(/\s+/g, " ").trim();
+}
+
 /** Folded away only at the end of a name. See namesBrand. */
 const COMPANY_SUFFIX = /\s+(ltd|limited|inc|llc|plc|gmbh|co|company)$/;
 
@@ -224,7 +240,7 @@ function brandPattern(name: string): string {
 export function namesBrand(prose: string, brand: string): boolean {
   if (!prose || !brand) return false;
 
-  let stripped = brand
+  let stripped = cleanBrandName(brand)
     .toLowerCase()
     // A comma always separates. A full stop does not, so it survives to
     // brandPattern - which is what tells "Booking.com" from "Acme Inc.".
@@ -328,7 +344,8 @@ export type BrandAlias = {
  * Group" is not the brand, and counting it would flatter the subject every
  * time an engine named the group for something else.
  */
-export function brandAliases(brand: string, domain?: string | null): BrandAlias[] {
+export function brandAliases(raw: string, domain?: string | null): BrandAlias[] {
+  const brand = cleanBrandName(raw);
   const out: BrandAlias[] = [];
   const seen = new Set<string>();
   const add = (name: string, capitalOnly: boolean) => {

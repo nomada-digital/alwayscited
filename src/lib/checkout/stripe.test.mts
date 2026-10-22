@@ -62,3 +62,26 @@ test("the route never reads an amount from the request and never logs the key", 
   assert.ok(!/console\.[a-z]+\([^)]*STRIPE_SECRET_KEY/.test(src));
   assert.ok(!src.includes("process.env.STRIPE_SECRET_KEY"), "the key is read only in stripe.ts");
 });
+
+test("a promotion code is read with its coupon, on either API shape, and only by a promo id (22 Oct 2026)", async () => {
+  const { readPromotionCode } = await import("./stripe.ts");
+  process.env.STRIPE_SECRET_KEY = KEY;
+  const old = stub(200, { code: "TESTCODE", coupon: { percent_off: 100, duration: "once" } });
+  assert.deepEqual(await readPromotionCode("promo_1ABC", old.f), { ok: true, code: "TESTCODE", percentOff: 100, amountOff: null, currency: null, duration: "once", months: null });
+  assert.equal(old.calls[0]!.url, "https://api.stripe.com/v1/promotion_codes/promo_1ABC");
+  assert.equal(old.calls[0]!.init.method, "GET");
+
+  const calls: string[] = [];
+  const fresh = (async (url: string) => {
+    calls.push(url);
+    const body = url.includes("/coupons/") ? { amount_off: 5000, currency: "gbp", duration: "repeating", duration_in_months: 3 } : { code: "NEWCODE", promotion: { type: "coupon", coupon: "co_1" } };
+    return new Response(JSON.stringify(body), { status: 200 });
+  }) as unknown as typeof fetch;
+  assert.deepEqual(await readPromotionCode("promo_2", fresh), { ok: true, code: "NEWCODE", percentOff: null, amountOff: 5000, currency: "gbp", duration: "repeating", months: 3 });
+  assert.deepEqual(calls, ["https://api.stripe.com/v1/promotion_codes/promo_2", "https://api.stripe.com/v1/coupons/co_1"]);
+
+  const none = stub(200, {});
+  assert.deepEqual(await readPromotionCode("../customers", none.f), { ok: false, reason: "refused" });
+  assert.equal(none.calls.length, 0);
+  delete process.env.STRIPE_SECRET_KEY;
+});

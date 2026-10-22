@@ -130,7 +130,8 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           heading: "After checkout",
           blocks: [
             `${trialOn ? "Stripe emails a receipt for each charge. On the free trial nothing is charged at checkout, so your first receipt comes with the first charge after it." : "Stripe emails your receipt."} We set up your dashboard for the website on your order, and email a sign-in link to the address you checked out with.`,
-            `If you ordered from a scan, your first cluster starts from it: the scan's keyword, when it picked one, and its prompts. Otherwise it starts as ${ui("Needs a keyword")}, with any keyword you typed at checkout waiting in its keyword field.`,
+            `If you ordered from a scan, your first cluster starts from it: the scan's keyword, when it picked one, and its prompts. Otherwise we check the keyword you typed at checkout the way ${ui("Check keyword")} does - Google searches in your market and a buying intent - and when it passes it becomes your first cluster's keyword, with ${PROMPTS_PER_CLUSTER} prompts drafted from it for you to review on the setup page.`,
+            `A cluster still without a keyword after that gets one we pick from your website, with its ${PROMPTS_PER_CLUSTER} drafted prompts, marked ${ui("Suggested - yours to edit")} on ${ui("Clusters")}. If none can be picked, it stays ${ui("Needs a keyword")} and your keyword waits in its keyword field.`,
             `Your plan has ${TRACKED_CLUSTERS} clusters and your dashboard starts with that one. You add the others on ${ui("Clusters")} when you are ready - see ${link("adding a cluster", helpHref("clusters", "add"))}.`,
           ],
         },

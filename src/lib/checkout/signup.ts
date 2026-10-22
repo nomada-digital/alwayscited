@@ -4,18 +4,20 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { siteUrl } from "@/lib/scan/verify-email";
 import { dashOrigin } from "@/lib/dash/host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
-import { clustersToMake, orderEmailText, orderRow, packsOn, signupMarket, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
+import { clustersToMake, orderEmailText, orderRow, promotionLine, type PromotionFacts, packsOn, signupMarket, signupResume, trialCancelPending, trialConverted, trialEndsAtAfter, trialStillRunning, type CompletedOrder } from "@/lib/checkout/webhook";
 import { livePacks } from "@/lib/checkout/packs";
-import { readSubscription } from "@/lib/checkout/stripe";
+import { readPromotionCode, readSubscription } from "@/lib/checkout/stripe";
 import { afterSubscription } from "@/lib/checkout/payment";
 import { clientOfSubscription, recordPayment } from "@/lib/checkout/subscription-events";
 import { recordTrialCancel } from "@/lib/checkout/trial-cancel";
 import { siteFacts } from "@/lib/scan/anthropic";
+import { cleanBrandName } from "@/lib/scan/brand-name";
 import { fillStarters, type StarterInput } from "@/lib/tracking/starter";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { trialCharge, trialMoment } from "@/config/trial";
 import { dayAfter, slugFor, trackingDay } from "@/lib/tracking/decide";
 import { angleFor, CLUSTER_BASE, clusterLimitFor, insertCluster, insertKeyword, insertPrompts, namesBrandIn, PROMPTS_PER_CLUSTER } from "@/lib/tracking/limits";
+import { orderKeyword } from "@/lib/tracking/order-keyword";
 import { promptKey } from "@/lib/tracking/prompt-text";
 import { billingUrl, planEnded, trialTerms, welcome } from "@/lib/email/lifecycle";
 import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
@@ -109,7 +111,8 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   const clientRow = {
     account_id: accountId,
     domain,
-    brand_name: scan?.brand_name ?? null,
+    // Without a ® or ™ (cleanBrandName, 22 Oct 2026): a scan stored before the read stripped them still carries one.
+    brand_name: scan?.brand_name ? cleanBrandName(scan.brand_name) || null : null,
     topic: scan?.topic ?? null,
     market,
     slug: slugFor(domain),
@@ -260,6 +263,10 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
       positioning: scan?.positioning ?? null,
       ...siteFacts(scan?.site_facts),
       topicVariants: Array.isArray(scan?.topic_variants) ? scan!.topic_variants!.map(String) : [],
+      // 22 Oct 2026: the keyword typed at checkout is checked for cluster 1 first, only when no scan was behind the
+      // order - the same rule as the setup page's prefill (orderKeyword, R180).
+      typedKeyword: orderKeyword({ keyword: o.keyword, scan_token: o.scanToken }),
+      brand: clientRow.brand_name,
     },
   };
 }
@@ -281,6 +288,26 @@ async function trialEndOf(o: CompletedOrder): Promise<string | null> {
 }
 
 /**
+ * The promotion code's terms and the subscription's next invoice, for the order email's promotion line (22 Oct
+ * 2026). Two reads, only when the buyer used a code; a failed read is named on the line, never fatal.
+ */
+async function promotionFacts(o: CompletedOrder): Promise<PromotionFacts | null> {
+  if (!o.promotionId && !o.amountDiscount) return null;
+  const read = o.promotionId ? await readPromotionCode(o.promotionId) : ({ ok: false, reason: "no promotion code id on the Session" } as const);
+  const sub = o.subscriptionId ? await readSubscription(o.subscriptionId) : null;
+  return {
+    read: read.ok ? read : { ok: false, reason: read.reason },
+    trialEnd: sub?.ok ? sub.trialEnd : null,
+    currentPeriodEnd: sub?.ok ? sub.currentPeriodEnd : null,
+  };
+}
+
+async function promotionText(o: CompletedOrder): Promise<string | null> {
+  const facts = await promotionFacts(o).catch(() => null);
+  return promotionLine(o, facts, Math.floor(Date.now() / 1000), (sec) => trialMoment(new Date(sec * 1000).toISOString(), o.market));
+}
+
+/**
  * `later` runs work after the webhook has answered (the route passes next/server's `after`); without it the work
  * is awaited here, as in the tests. The starter clusters and the order email go there: the reads take seconds and
  * Stripe should have its 200 first, and the order email reports what the starter made, or what it could not.
@@ -297,7 +324,7 @@ export async function onCheckoutCompleted(db: SupabaseClient, o: CompletedOrder,
     // the row and stays quiet. Still false, so Stripe retries the signup.
     const order = await writeOrder(db, o, r.clientId ?? null, trialEndsAt);
     if (order.inserted) {
-      const mail = orderEmailText(o, `FAILED, Stripe will retry it: ${r.outcome} Order row: ${order.text}.`, siteUrl(), trial);
+      const mail = orderEmailText(o, `FAILED, Stripe will retry it: ${r.outcome} Order row: ${order.text}.`, siteUrl(), trial, await promotionText(o));
       await sendOrderEmail({ ...mail, subject: `SIGNUP FAILED - ${mail.subject}`, replyTo: o.email });
     }
     return false;
@@ -323,7 +350,7 @@ export async function onCheckoutCompleted(db: SupabaseClient, o: CompletedOrder,
       }
       if (starter) console.log(`[stripe] ${eventId}: ${starter}`);
     }
-    const mail = orderEmailText(o, `${r.outcome}${starter ? ` ${starter}` : ""} Order row: ${order.text}.`, siteUrl(), trial);
+    const mail = orderEmailText(o, `${r.outcome}${starter ? ` ${starter}` : ""} Order row: ${order.text}.`, siteUrl(), trial, await promotionText(o));
     await sendOrderEmail({ ...mail, replyTo: o.email });
   };
   if (later) later(finish);

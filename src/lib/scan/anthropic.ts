@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { QUESTIONS } from "@/config/scan-shape";
 
-import { brandedQuestions, withoutBrand } from "./brand-name";
+import { brandedQuestions, cleanBrandName, withoutBrand } from "./brand-name";
 import type { Market } from "./domain";
 import { batchBlocks, runBatches } from "./prose-batches";
 import { countingFetch, withRetry } from "./retry-policy";
@@ -190,7 +190,8 @@ export async function readBrand(siteText: string, billed?: { calls: number }): P
 
   const out = res.parsed_output;
   if (!out) throw new Error("could not read the brand from that site");
-  return out;
+  // 22 Oct 2026: the name as the site writes it can carry a ® or ™, which no answer does (cleanBrandName).
+  return { ...out, brand_name: cleanBrandName(out.brand_name) || out.brand_name };
 }
 
 // ------------------------------------------------------------ question build

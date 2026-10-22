@@ -25,6 +25,8 @@ const ORDER: CompletedOrder = {
   currency: "gbp",
   trialDays: null,
   gaClientId: "123456789.1700000000",
+  promotionId: null,
+  amountDiscount: null,
 };
 
 const ID = "G-TEST123456";
