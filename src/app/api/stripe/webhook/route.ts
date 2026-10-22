@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { onCheckoutCompleted, onSubscriptionDeleted, onSubscriptionUpdated, onTrialWillEnd } from "@/lib/checkout/signup";
 import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
@@ -7,6 +9,8 @@ import { handleWebhook } from "@/lib/checkout/webhook";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// the starter clusters run after the answer (signup.ts onCheckoutCompleted): a site read, up to three model calls, two DataForSEO reads
+export const maxDuration = 120;
 
 /**
  * Stripe's webhook (BRIEF-3 C4, R92/R110/R117, 30 Sep 2026). Registered in
@@ -40,7 +44,7 @@ export async function POST(req: Request) {
     // event: a replay is answered as a duplicate before this runs. Never fatal
     // and bounded by a 3s timeout (lib/checkout/ga4.ts, 15 Oct 2026).
     completed: async (order, eventId) => {
-      const done = await onCheckoutCompleted(supabaseAdmin(), order, eventId);
+      const done = await onCheckoutCompleted(supabaseAdmin(), order, eventId, after);
       if (done) await sendGa4Purchase(order);
       return done;
     },

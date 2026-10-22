@@ -249,6 +249,12 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/plan/page.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/billing`} method=\"post\">"),
   },
   {
+    route: "/api/dash/[client]/trial",
+    method: "POST",
+    why: "Posted by the plain HTML Cancel trial form on the dashboards host's Plan page (22 Oct 2026, the cut-over), which the fetch scanner does not read.",
+    earns: () => readFileSync(join(ROOT, "src/app/dashboards/[client]/plan/page.tsx"), "utf8").includes("<form action={`/api/dash/${slug}/trial`} method=\"post\""),
+  },
+  {
     route: "/api/dash/[client]/pack",
     method: "POST",
     why: "Posted by the plain HTML form PackButton draws wherever an allowance runs out, and by Plan's Track more (17 Oct 2026); it answers with Stripe Checkout. The fetch scanner does not read forms.",

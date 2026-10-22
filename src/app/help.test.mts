@@ -165,13 +165,14 @@ const PRODUCT = ["src/app/dashboards", "src/components/dash", "src/lib/dash", "s
  * (still named by the help, still drawn nowhere), so the list can only shrink, and a new label the dashboard does
  * not draw still fails rule 2 exactly as before.
  */
+// 22 Oct 2026, the cut-over: "Cancel trial" and "Yes, cancel the trial" are drawn again, on Plan (api/dash/[client]/trial).
 const RETIRED_WITH_APP = new Set([
-  "Add a cluster", "Answers CSV", "Answers naming you", "Ask us to change these", "Ask us to pick one", "Cancel trial",
+  "Add a cluster", "Answers CSV", "Answers naming you", "Ask us to change these", "Ask us to pick one",
   "Change keyword", "Check keyword", "Cited pages", "Cluster keywords on page 1", "Clusters in use", "Every check, day by day",
   "Every daily check, by cluster", "Keywords CSV", "Latest answers", "Make editor", "Make viewer", "Move", "Names we match",
   "Notes on this cluster", "Open cluster", "Other sites", "Pages the engines cite most", "Prompts you are named in",
   "Reports", "Review and confirm", "Send invite", "Share of voice", "Sign out of every device", "Start tracking this cluster",
-  "Stop", "Who is named", "Who is named instead", "Who they see", "Yes, cancel the trial", "Your clusters", "Your site",
+  "Stop", "Who is named", "Who is named instead", "Who they see", "Your clusters", "Your site",
 ]);
 
 type Block = HelpContent["articles"][number]["sections"][number]["blocks"][number];

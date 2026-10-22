@@ -31,6 +31,9 @@ export type RawClient = {
   brand_aliases: string[];
 };
 
+/** tracked_keywords.added_by for a keyword picked for the buyer at signup (tracking/starter.ts, 22 Oct 2026). */
+export const STARTER_BY = "starter";
+
 export type RawCluster = { id: string; name: string; keyword_id: string | null; tier: string; started_on: Day; stopped_on: Day | null };
 export type RawGroup = { id: string; cluster_id: string; name: string; note: string | null; terms: string[]; position: number; stopped_on: Day | null };
 export type RawKeyword = {
@@ -45,6 +48,8 @@ export type RawKeyword = {
   pair_of?: string | null;
   cluster_id: string | null;
   group_id: string | null;
+  /** Who added it: "nomada", a member's email, or "starter" - picked for the buyer at signup (starter.ts, 22 Oct 2026). */
+  added_by?: string | null;
 };
 export type RawPrompt = {
   id: string;
@@ -181,6 +186,8 @@ export type ClusterView = {
   tier: string;
   startedOn: Day;
   headKeyword: string | null;
+  /** Picked for the buyer at signup (keyword "starter", starter.ts): the board says so and that it is theirs to change. */
+  suggested: boolean;
   /** The page a person chose for this cluster (target.ts); null until one is set. */
   target: string | null;
   headVolume: number | null;

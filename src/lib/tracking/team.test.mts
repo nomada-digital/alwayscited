@@ -134,10 +134,10 @@ test("R151 (3 Oct 2026): a refusal comes back as its code and says its reason, n
 test("the invite mail: the brief's words, no login token, and no nomada tier in agency mode", () => {
   const m = inviteMail({ inviter: "owner@tallyroo.com", domain: "tallyroo.com", role: "editor", agency: false });
   assert.equal(m.subject, "You've been added to the tallyroo.com dashboard");
-  assert.match(m.text, /^owner@tallyroo\.com added you to the alwayscited dashboard for tallyroo\.com as an editor\. Sign in with this email address at alwayscited\.com\/app\/login - we'll send you a link\./);
+  assert.match(m.text, /^owner@tallyroo\.com added you to the alwayscited dashboard for tallyroo\.com as an editor\. Sign in with this email address at dashboards\.alwayscited\.com\/login - we'll send you a link\./);
   assert.doesNotMatch(m.text, /token|https?:\/\//);
   const a = inviteMail({ inviter: "owner@tallyroo.com", domain: "tallyroo.com", role: "viewer", agency: true });
-  assert.doesNotMatch(`${a.subject} ${a.text.replace("alwayscited.com/app/login", "")}`, /always(cited|tracked|mentioned|everywhere)|nomada/i);
+  assert.doesNotMatch(`${a.subject} ${a.text.replace("dashboards.alwayscited.com/login", "")}`, /always(cited|tracked|mentioned|everywhere)|nomada/i);
 });
 
 // ---- AG-1 (9 Oct 2026): per-client scope. The writers' order and fail-closed behaviour are in scope.test.mts. ----
@@ -217,10 +217,10 @@ test("AG-1: an invite to every client says so in the mail; an invite to one clie
   assert.doesNotMatch(one.text, /other client|more/, "names this client only");
   const every = inviteMail({ inviter: "owner@tallyroo.com", domain: "tallyroo.com", role: "editor", agency: false, everyClient: 3 });
   assert.equal(every.subject, "You've been added to the tallyroo.com dashboard and 2 more");
-  assert.match(every.text, /^owner@tallyroo\.com added you to the alwayscited dashboard for tallyroo\.com and the 2 other clients on their account, as an editor\. Sign in with this email address at alwayscited\.com\/app\/login - we'll send you a link\./);
+  assert.match(every.text, /^owner@tallyroo\.com added you to the alwayscited dashboard for tallyroo\.com and the 2 other clients on their account, as an editor\. Sign in with this email address at dashboards\.alwayscited\.com\/login - we'll send you a link\./);
   const agency = inviteMail({ inviter: "owner@tallyroo.com", domain: "tallyroo.com", role: "viewer", agency: true, everyClient: 2 });
   assert.match(agency.text, /for tallyroo\.com and the 1 other client on their account, as a viewer/);
-  assert.doesNotMatch(`${agency.subject} ${agency.text.replace("alwayscited.com/app/login", "")}`, /always(cited|tracked|mentioned|everywhere)|nomada/i);
+  assert.doesNotMatch(`${agency.subject} ${agency.text.replace("dashboards.alwayscited.com/login", "")}`, /always(cited|tracked|mentioned|everywhere)|nomada/i);
 });
 
 // ---- AG-1 review (9 Oct 2026): planTeam is every rule the member route runs, and the route and the fixture both call it. ----

@@ -62,6 +62,7 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
                     {c.headKeyword ? <>Keyword <b style={{ color: "var(--ink)" }}>{c.headKeyword}</b>{c.headVolume ? ` · ${c.headVolume.toLocaleString("en-GB")}/mo` : ""}</> : "No keyword yet"} · <TargetPage url={c.target} prefix="Target" />
                   </div>
                 </div>
+                {c.suggested ? <span className="pill" title="We picked this keyword and its five prompts from your site when you signed up, so tracking could start straight away. Change any of them whenever you like.">Suggested - yours to edit</span> : null}
                 {c.managed ? <span className="pill accent" title="We work on this cluster each month. Its keyword changes on request, from your next billing date.">Managed by us</span> : null}
                 {ws.canWrite && !pending && !c.managed ? (
                   <Menu label={`Options for ${c.name}`}>

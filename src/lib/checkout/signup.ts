@@ -10,6 +10,8 @@ import { readSubscription } from "@/lib/checkout/stripe";
 import { afterSubscription } from "@/lib/checkout/payment";
 import { clientOfSubscription, recordPayment } from "@/lib/checkout/subscription-events";
 import { recordTrialCancel } from "@/lib/checkout/trial-cancel";
+import { siteFacts } from "@/lib/scan/anthropic";
+import { fillStarters, type StarterInput } from "@/lib/tracking/starter";
 import { TRACKED_PRICE } from "@/config/pricing";
 import { trialCharge, trialMoment } from "@/config/trial";
 import { dayAfter, slugFor, trackingDay } from "@/lib/tracking/decide";
@@ -47,6 +49,9 @@ type Scan = {
   domain: string;
   brand_name: string | null;
   topic: string | null;
+  positioning: string | null;
+  topic_variants: string[] | null;
+  site_facts: unknown;
   market: string;
   cluster_keyword: string | null;
   cluster_keyword_volume: number | null;
@@ -61,7 +66,7 @@ type Scan = {
  * prefills cluster 1; every other cluster bought starts "Needs a keyword".
  * Before this an order without a scan built nothing and the buyer heard nothing.
  */
-async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsAt: string | null = null): Promise<{ ok: boolean; outcome: string; clientId?: string }> {
+async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsAt: string | null = null): Promise<{ ok: boolean; outcome: string; clientId?: string; starter?: StarterInput }> {
   if (!o.email) return { ok: true, outcome: "no buyer email on the Session, so no client was created" };
   const tier = TIERS.includes(o.tier) ? o.tier : "tracked";
 
@@ -69,7 +74,7 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   if (o.scanToken) {
     const { data, error: sErr } = await db
       .from("scans")
-      .select("id, domain, brand_name, topic, market, status, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status")
+      .select("id, domain, brand_name, topic, positioning, topic_variants, site_facts, market, status, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status")
       .eq("public_token", o.scanToken)
       .maybeSingle();
     if (sErr) return { ok: false, outcome: `could not read the scan: ${sErr.message}` };
@@ -242,7 +247,20 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     outcome:
       `${scan ? (prefill ? "from the scan" : `from a ${scan.market} scan, tracked in ${market} as paid, nothing prefilled from it`) : "no scan, from the website on the order"}: ${domain} at ${tier}, first check ${startedOn}; ` +
       `cluster 1 "${clusterName}" with ${rows.length} prompt(s)${clusters > 1 ? `, ${clusters - 1} more "${NEEDS_A_KEYWORD}"` : ""}` +
-      `${chosen && rows.length && clusters === 1 ? "" : " - pick keywords and prompts in /admin/tracking"}; ${o.email} is owner; ${welcomeOn ? (trial ? "trial_started email" : "welcome email") : "login link"} ${sent ? "sent" : "NOT sent"}.`,
+      `; ${o.email} is owner; ${welcomeOn ? (trial ? "trial_started email" : "welcome email") : "login link"} ${sent ? "sent" : "NOT sent"}.`,
+    // Starter clusters (22 Oct 2026): any cluster left with no keyword or no prompt is filled from the site, in the
+    // market paid for, once the webhook has answered (onCheckoutCompleted). The scan's read of the site is used
+    // when there is one, whichever market it was in: the category does not change with the market, the keyword does.
+    starter: {
+      clientId,
+      domain,
+      market,
+      startedOn,
+      topic: scan?.topic ?? null,
+      positioning: scan?.positioning ?? null,
+      ...siteFacts(scan?.site_facts),
+      topicVariants: Array.isArray(scan?.topic_variants) ? scan!.topic_variants!.map(String) : [],
+    },
   };
 }
 
@@ -262,7 +280,12 @@ async function trialEndOf(o: CompletedOrder): Promise<string | null> {
   return new Date(Date.now() + o.trialDays * 24 * 3600 * 1000).toISOString();
 }
 
-export async function onCheckoutCompleted(db: SupabaseClient, o: CompletedOrder, eventId: string): Promise<boolean> {
+/**
+ * `later` runs work after the webhook has answered (the route passes next/server's `after`); without it the work
+ * is awaited here, as in the tests. The starter clusters and the order email go there: the reads take seconds and
+ * Stripe should have its 200 first, and the order email reports what the starter made, or what it could not.
+ */
+export async function onCheckoutCompleted(db: SupabaseClient, o: CompletedOrder, eventId: string, later?: (task: () => Promise<void>) => void): Promise<boolean> {
   const trialEndsAt = await trialEndOf(o);
   const trial = trialEndsAt ? { firstCharge: trialMoment(trialEndsAt, o.market), amount: trialCharge(o.market, TRACKED_PRICE) } : null;
   const r = await clientFromOrder(db, o, trialEndsAt);
@@ -290,8 +313,21 @@ export async function onCheckoutCompleted(db: SupabaseClient, o: CompletedOrder,
     }
   }
   const order = await writeOrder(db, o, r.clientId ?? null, trialEndsAt);
-  const mail = orderEmailText(o, `${r.outcome} Order row: ${order.text}.`, siteUrl(), trial);
-  await sendOrderEmail({ ...mail, replyTo: o.email });
+  const finish = async () => {
+    let starter = "";
+    if (r.starter) {
+      try {
+        starter = (await fillStarters(db, r.starter)).text;
+      } catch (err) {
+        starter = `Starter: NOT generated (${err instanceof Error ? err.message : String(err)}) - pick keywords and prompts in /admin/tracking.`;
+      }
+      if (starter) console.log(`[stripe] ${eventId}: ${starter}`);
+    }
+    const mail = orderEmailText(o, `${r.outcome}${starter ? ` ${starter}` : ""} Order row: ${order.text}.`, siteUrl(), trial);
+    await sendOrderEmail({ ...mail, replyTo: o.email });
+  };
+  if (later) later(finish);
+  else await finish();
   return true;
 }
 

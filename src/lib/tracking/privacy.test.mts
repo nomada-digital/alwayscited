@@ -47,6 +47,8 @@ const DOMAINS = new Set([
   // client of it. Named in session.ts's comment on the __Host- cookie and in
   // the two specs that exercise the host comparison.
   "app.alwayscited.com",
+  // The dashboards host (cut-over, 22 Oct 2026): where every customer email and sign-in now points, never a client.
+  "dashboards.alwayscited.com",
   // Stripe's hosted invoice host (BL-2, 9 Oct 2026): a vendor's, never a
   // client's. The past-due fixture state carries a made-up invoice URL on it
   // (fixture-mode.ts), because the banner keeps a payment link only when it is

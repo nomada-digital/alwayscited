@@ -81,6 +81,8 @@ const KEYS: Record<string, Record<string, string>> = {
   "/plan": {
     billing: 'typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null',
     pack: 'typeof sp.pack === "string" ? (PACK_WHY[sp.pack] ?? null) : null',
+    // 22 Oct 2026, the cut-over: the trial route's 303, two codes read only against TRIAL_DONE's fixed words.
+    trial: 'sp.trial === "cancelled" ? TRIAL_DONE.cancelled : sp.trial === "refused" ? TRIAL_DONE.refused : null',
   },
   // The member route's 303 (from=dash): a done code through DONE's fixed words, a refusal's code through teamWhy.
   "/settings": {

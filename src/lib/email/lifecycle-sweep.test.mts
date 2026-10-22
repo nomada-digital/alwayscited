@@ -250,7 +250,7 @@ test("one run mails each due email once, to live owners only, and a second run m
   // What io carries is what the email says: the charge from io.price, the links on io.origin.
   const midpoint = outbox.find((m) => m.to === "owner1@example.com")!.mail;
   assert.ok(midpoint.text.includes(trialCharge("US", PRICE)), "the charge is worded from the price the sweep was handed");
-  assert.ok(midpoint.text.includes(dashboardUrl("c1-com", ORIGIN)), "the button goes to the client's dashboard on the origin the sweep was handed");
+  assert.ok(midpoint.text.includes(dashboardUrl("c1-com")), "the button goes to the client's dashboard on the origin the sweep was handed");
   assert.match(midpoint.text, /since the first check on 9 Oct, c1\.com was named in 1 of 2 AI answers/i);
 
   const second = await sweepLifecycleMail(db, io, NOW + HOUR);
@@ -475,7 +475,7 @@ test("This week on a Monday: owners and the editors who see the client, once a M
     "no viewer, no removed editor, and the editor limited to w2 gets only w2's",
   );
   const w1 = outbox.find((m) => m.mail.subject.startsWith("This week for w1.com"))!.mail;
-  assert.ok(w1.text.includes(`Open your actions: ${actionsUrl("w1-com", ORIGIN)}`), "the button opens the client's Actions on the origin the sweep was handed");
+  assert.ok(w1.text.includes(`Open your actions: ${actionsUrl("w1-com")}`), "the button opens the client's Actions on the origin the sweep was handed");
   assert.match(w1.text, /week of 19 Oct/);
 
   const again = await sweepLifecycleMail(db, io, MONDAY + 2 * HOUR);

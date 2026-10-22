@@ -38,7 +38,8 @@ test("every dashboard route redirects through dashUrl, never new URL(..., req.ur
   for (const f of files) {
     const src = readFileSync(f, "utf8");
     redirects += (src.match(/NextResponse\.redirect\(/g) ?? []).length;
-    for (const m of src.matchAll(/NextResponse\.redirect\(\s*([a-zA-Z]+)/g)) if (m[1] !== "dashUrl") bad.push(`${f.slice(ROOT.length)}: redirect(${m[1]}...`);
+    // 22 Oct 2026, the cut-over: signInUrl, the dashboards host's /login, for the login route's plain form post.
+    for (const m of src.matchAll(/NextResponse\.redirect\(\s*([a-zA-Z]+)/g)) if (m[1] !== "dashUrl" && m[1] !== "signInUrl") bad.push(`${f.slice(ROOT.length)}: redirect(${m[1]}...`);
     if (/new URL\([\s\S]{0,400}?,\s*req\.url\s*\)/.test(src.replace(/new URL\(req\.url\)/g, ""))) bad.push(`${f.slice(ROOT.length)}: new URL(..., req.url)`);
   }
   // The floor: 34 redirects on 8 Oct 2026. A matcher that stops matching reports a clean tree.

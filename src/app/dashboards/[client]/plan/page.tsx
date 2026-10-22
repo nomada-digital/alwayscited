@@ -97,7 +97,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
             <p className="intro">It ends on {new Date(trialEnds).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}. Cancel before then and you pay nothing; tracking stops when the trial ends.</p>
             {ws.role === "owner" && !demo ? (
               <form action={`/api/dash/${slug}/trial`} method="post" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 10 }}>
-                <label style={{ fontSize: 13 }}><input type="checkbox" id="trial-confirm" name="confirm" value="1" required /> Yes, cancel my trial</label>
+                <label style={{ fontSize: 13 }}><input type="checkbox" id="trial-confirm" name="confirm" value="1" required /> Yes, cancel the trial</label>
                 <button type="submit" className="btn">Cancel trial</button>
               </form>
             ) : (

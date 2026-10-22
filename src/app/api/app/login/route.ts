@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 
-
 import { APP_LIMITS, SCAN_LIMITS } from "@/config/contact";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { clientIp, hashIp } from "@/lib/scan/ip";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { signInUrl } from "@/lib/tracking/app-redirect";
 import { sendLoginLink } from "@/lib/tracking/login-mail";
 import { LOGIN_SENT, LOGIN_TTL_MS, LOGIN_PER_EMAIL_PER_HOUR, hashToken, mayRecordStranger, mayRequestLink, newToken } from "@/lib/tracking/session";
 import { dashLinkOrigin, dashNext } from "@/lib/dash/host";
@@ -45,7 +45,7 @@ export async function POST(req: Request) {
     const back = dashNext(body.next);
     if (back) q.set("next", back);
     // back to the dashboards host's sign-in, the only one there is since the cut-over (22 Oct 2026)
-    return NextResponse.redirect(new URL(`/login?${q}`, dashLinkOrigin(req.headers.get("host"))), 303);
+    return NextResponse.redirect(signInUrl(req, q), 303);
   };
   // The honeypot (18 Oct 2026), answered first and as a success, as the contact and waitlist actions do: a person never
   // fills an off-screen field, and an error would tell a bot which field gave it away. Clamped before it is logged.

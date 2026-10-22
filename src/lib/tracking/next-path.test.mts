@@ -56,6 +56,7 @@ test("next is re-validated on every hop", () => {
   const read = (p: string) => readFileSync(join(import.meta.dirname, "../../app", p), "utf8");
   // 18 Oct 2026, brief 2d: the two page hops, /app/login and /app/auth, retired with /app (every /app address 308s to
   // the dashboards host); the two route hops remain and still re-validate.
-  assert.match(read("api/app/login/route.ts"), /const next = safeNext\(body\.next\)/);
+  // 22 Oct 2026, the cut-over: the login route's next is the dashboards host's (dashNext, an old /app next mapped).
+  assert.match(read("api/app/login/route.ts"), /const next = dashNext\(body\.next\)/);
   assert.match(read("api/app/auth/route.ts"), /const next = safeNext\(form\?\.get\("next"\)\)/);
 });

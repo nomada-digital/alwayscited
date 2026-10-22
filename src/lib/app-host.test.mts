@@ -146,6 +146,8 @@ const MAY_WRITE_THE_PREFIX = new Set([
   // robots.ts closes `/app` on the marketing host, which is a crawl rule about
   // that host's own paths and stays true whether or not the dashboard has moved.
   "src/app/robots.ts",
+  // 22 Oct 2026, the cut-over: dashNext maps an old /app next (a bookmark, a link sent before) to its dashboards page.
+  "src/lib/dash/host.ts",
 ]);
 
 /**

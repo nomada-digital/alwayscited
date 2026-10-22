@@ -1,4 +1,5 @@
 import { appHost, appOrigin, appPath } from "../app-host.ts";
+import { dashLinkOrigin } from "../dash/host.ts";
 
 /**
  * Where a dashboard route handler sends somebody (M1, 5 Oct 2026).
@@ -27,4 +28,13 @@ export function dashPath(_req: Request, rest: string): string {
  */
 export function dashUrl(req: Request, path: string, env?: { APP_HOST?: string }): URL {
   return new URL(path, appHost(env) ? appOrigin(new URL(req.url).origin, env) : req.url);
+}
+
+/**
+ * The dashboards host's sign-in, for a route under /api/app that answers a plain form post (cut-over, 22 Oct 2026):
+ * /login there is the only sign-in page, whichever host the form was posted from. The origin is the configured
+ * one (dashLinkOrigin), never the Host header as sent. `query` is the fixed codes the page reads.
+ */
+export function signInUrl(req: Request, query: URLSearchParams): URL {
+  return new URL(`/login?${query}`, dashLinkOrigin(req.headers.get("host")));
 }
