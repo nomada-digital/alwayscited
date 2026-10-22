@@ -49,10 +49,13 @@ import {
   keywordRankRequest,
   keywordVolumeRequest,
   keywordVolumes,
+  mapsPointRequest,
   requestFor,
   SERP_DEPTH,
   taskCost,
 } from "./dataforseo-request.ts";
+import { type MapsHit, parseMapsResult, rankOfCid } from "@/lib/local/grid";
+
 import { type Market } from "./domain";
 import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead } from "./engines";
 
@@ -245,6 +248,24 @@ export async function readKeywordPosition(
   // kept day by day rather than thrown away. No new request and no new cost.
   const top = organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
   return { rank, url, cost: taskCost(task), top };
+}
+
+/**
+ * One point of a map pack geo-grid (22 Oct 2026): the Maps listings there and
+ * where the client's listing (by Google CID) sits among them, null when it is
+ * not inside depth. Called from `lib/local/run.ts` alone - the weekly grid
+ * pass inside the tracking run - and request-shape.test.mts holds it there.
+ */
+export async function readMapsPoint(
+  keyword: string,
+  point: { lat: number; lng: number },
+  opts: { zoom: number; depth: number; cid: string },
+  budgetMs?: number,
+): Promise<{ rank: number | null; hits: MapsHit[]; cost: number }> {
+  const { path, body, timeoutMs } = mapsPointRequest(keyword, point.lat, point.lng, opts.zoom, opts.depth);
+  const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
+  const hits = parseMapsResult(task.result?.[0]);
+  return { rank: rankOfCid(hits, opts.cid), hits, cost: taskCost(task) };
 }
 
 // ───────────────────────────── DIY launch doors ─────────────────────────────

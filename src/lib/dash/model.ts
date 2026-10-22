@@ -390,6 +390,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     consoleLive: sample ? { gsc: false, bing: false } : consoleLive,
     footprintOn: raw.footprint?.pulled_on ?? null,
     groupsReady: raw.groupsReady,
+    localGrids: raw.localGrids ?? 0,
   };
 }
 

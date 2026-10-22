@@ -75,6 +75,8 @@ const KEYS: Record<string, Record<string, string>> = {
     vs: 'typeof sp.vs === "string" && DAY.test(sp.vs) && dates.includes(sp.vs) && sp.vs !== date',
   },
   "/integrations": {},
+  // 22 Oct 2026: the map pack grids. No query keys.
+  "/local": {},
   "/managed": {},
   "/opportunities": {},
   // The billing and pack routes' 303 codes, drawn only through each table's own fixed words; nothing is echoed.

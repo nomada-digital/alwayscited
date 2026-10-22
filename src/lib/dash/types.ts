@@ -125,6 +125,8 @@ export type Raw = {
   groupsReady: boolean;
   /** Live key pages (DIY P8), for each cluster's target page (target.ts). Absent on a snapshot taken before 18 Oct 2026. */
   keyPages?: KeyPageRow[];
+  /** Active map pack grids (lib/local, 22 Oct 2026). Absent on a snapshot or demo, which then has no Map pack page. */
+  localGrids?: number;
 };
 
 // ---------------------------------------------------------------- derived
@@ -233,4 +235,6 @@ export type Workspace = {
   consoleLive: { gsc: boolean; bing: boolean };
   footprintOn: Day | null;
   groupsReady: boolean;
+  /** Active map pack grids: the nav shows "Map pack" when there is one. */
+  localGrids?: number;
 };

@@ -4,6 +4,7 @@ const PATHS: Record<string, string> = {
   clusters: "M2 4.5h5v3H2zM9 3h5v3H9zM9 8.5h5v4.5H9zM2 10h5v3H2z",
   ai: "M8 1.8l1.6 3.9 3.9 1.6-3.9 1.6L8 12.8 6.4 8.9 2.5 7.3l3.9-1.6z",
   google: "M2 12l3.5-4 3 2.5L14 4M10 4h4v4",
+  local: "M8 14s-4.5-4.6-4.5-8a4.5 4.5 0 019 0c0 3.4-4.5 8-4.5 8zM8 7.5h.01",
   sources: "M6.5 9.5l3-3M5 7.5L3.6 8.9a2.5 2.5 0 003.5 3.5L8.5 11M11 8.5l1.4-1.4a2.5 2.5 0 00-3.5-3.5L7.5 5",
   opportunities: "M8 2v3M8 11v3M2 8h3M11 8h3M4 4l2 2M10 10l2 2M12 4l-2 2M6 10l-2 2",
   integrations: "M6 2v3M10 2v3M4.5 5h7v3a3.5 3.5 0 01-7 0zM8 11.5V14",
