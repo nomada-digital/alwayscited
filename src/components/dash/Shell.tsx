@@ -23,6 +23,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: `${root}/clusters`, label: "Clusters", icon: "clusters", n: ws.clusters.length },
     { href: `${root}/ai`, label: "AI visibility", icon: "ai" },
     { href: `${root}/google`, label: "Search positions", icon: "google" },
+    // Map pack geo-grids (22 Oct 2026): only for a client with a grid set up.
+    ...(ws.localGrids ? [{ href: `${root}/local`, label: "Map pack", icon: "local" }] : []),
     { href: `${root}/sources`, label: "Sources", icon: "sources" },
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },

@@ -188,6 +188,34 @@ export function keywordRankRequest(keyword: string, market: Market): EngineReque
 }
 
 /**
+ * One point of a map pack geo-grid (22 Oct 2026, lib/local/grid.ts): Google
+ * Maps read from a GPS point at a zoom, not from a location code, because the
+ * pack changes street by street. `search_this_area: false` asks as a searcher
+ * standing there would, so a listing just outside the viewport still counts.
+ * One task, one point; the weekly pass (lib/local/run.ts) runs the grid's
+ * points together. Built here, sent from `readMapsPoint` alone.
+ */
+export const MAPS_PATH = "/v3/serp/google/maps/live/advanced";
+
+export function mapsPointRequest(keyword: string, lat: number, lng: number, zoom: number, depth: number): EngineRequest {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) throw new Error(`not a point: ${lat},${lng}`);
+  const z = Math.min(21, Math.max(3, Math.round(zoom)));
+  return {
+    path: MAPS_PATH,
+    timeoutMs: 60_000,
+    body: [
+      {
+        keyword,
+        location_coordinate: `${lat.toFixed(5)},${lng.toFixed(5)},${z}z`,
+        language_code: "en",
+        depth: Math.min(100, Math.max(10, Math.round(depth))),
+        search_this_area: false,
+      },
+    ],
+  };
+}
+
+/**
  * The shorter of what this engine needs and what the run has left, floored so a
  * budget that has already run out still makes one honest attempt rather than
  * aborting on a zero and recording an error nobody can read.

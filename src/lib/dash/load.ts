@@ -79,6 +79,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     { data: connRows, error: connErr },
     { data: consoleData, error: consoleErr },
     { data: keyPageRows, error: keyPageErr },
+    { count: gridCount, error: gridErr },
   ] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
     db.from("tracked_keywords").select(kwCols).eq("client_domain_id", cid),
@@ -90,6 +91,8 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     db.from("integration_connections").select("provider, status, property, requested_at, connected_at, last_synced_at").eq("client_domain_id", cid),
     db.from("search_console_queries").select("provider, query, clicks, impressions, ctr, position, period_end").eq("client_domain_id", cid).gte("period_end", addDays(today, -60)).limit(5000),
     db.from("key_pages").select("url, origin, cluster_ids, added_on, removed_on").eq("client_domain_id", cid).is("removed_on", null).limit(50),
+    // Map pack grids (22 Oct 2026, lib/local): only whether there are any, for the nav. The page reads them itself.
+    db.from("local_grids").select("id", { count: "exact", head: true }).eq("client_domain_id", cid).eq("active", true),
   ]);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
   if (core) throw new Error(`could not read what is tracked: ${core.message}`);
@@ -100,6 +103,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   if (connErr && !absent(connErr)) console.warn(`[dash] connections read failed: ${connErr.message}`);
   if (consoleErr && !absent(consoleErr)) console.warn(`[dash] console read failed: ${consoleErr.message}`);
   if (keyPageErr && !absent(keyPageErr)) console.warn(`[dash] key pages read failed: ${keyPageErr.message}`);
+  if (gridErr && !absent(gridErr)) console.warn(`[dash] grid count failed: ${gridErr.message}`);
 
   // Started together, awaited one by one: paged() throws on any page's error, so nothing here is held unchecked.
   const serpRead = paged<RawSerp>(() => db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
@@ -151,5 +155,6 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     consoleRows: (consoleErr ? [] : (consoleData ?? [])) as RawConsoleRow[],
     groupsReady,
     keyPages: (keyPageErr ? [] : (keyPageRows ?? [])) as KeyPageRow[],
+    localGrids: gridErr ? 0 : (gridCount ?? 0),
   };
 }

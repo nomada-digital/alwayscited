@@ -105,6 +105,10 @@
 .pos.top10 { background: var(--wash); color: var(--accent); }
 .pos.none { color: var(--soft); font-weight: 600; }
 
+/* Map pack heatmap (22 Oct 2026): one .pos per grid point, the rank written in each, so colour is never the only signal. */
+.mapgrid { display: grid; gap: 6px; max-width: 420px; }
+.mapgrid .pos { min-width: 0; aspect-ratio: 1; align-items: center; padding: 0; border-radius: 10px; font-size: 12.5px; }
+
 .meter { display: flex; flex-direction: column; gap: 5px; }
 .meter .row { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--soft); }
 .meter .row b { color: var(--ink); font-variant-numeric: tabular-nums; }

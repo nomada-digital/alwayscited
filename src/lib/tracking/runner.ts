@@ -4,6 +4,7 @@ import { enginesFor } from "@/config/pricing";
 import { type TierKey } from "@/components/TierName";
 import { extractBrands } from "@/lib/scan/anthropic";
 import { brandKey, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
+import { runLocalGrids } from "@/lib/local/run";
 import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
 import { type Market } from "@/lib/scan/domain";
 import { type Citation, type Engine, knownEngines } from "@/lib/scan/engines";
@@ -570,6 +571,20 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
         } catch (err) {
           console.warn(`[track] ${runId} link check failed: ${message(err)}`);
         }
+      }
+    }
+
+    // Map pack geo-grids (22 Oct 2026, lib/local/run.ts): each active grid
+    // read once a week, every point together. Never fatal and never on a
+    // re-run, as the link check: the day's reads are stored above. What the
+    // grid billed rides on the run's dfs_cost, so the day's cap sees it.
+    if (!rerun) {
+      try {
+        const grid = await runLocalGrids(db, { clientId: client.id as string, runId, day, remainingMs, billed: billedCost });
+        spend.dfs += grid.cost;
+        if (grid.grids) console.log(`[track] ${runId} map pack: ${grid.grids} grids, ${grid.read} points read, ${grid.failed} failed`);
+      } catch (err) {
+        console.warn(`[track] ${runId} map pack failed: ${message(err)}`);
       }
     }
 

@@ -306,6 +306,9 @@ test("the upsert sites are the ones we think they are", () => {
       "keyword_footprints:client_domain_id,pulled_on",
       // 17 Oct 2026: keyword research's shared 30-day cache (lib/dash/research.ts), one row per market, kind, seed and day.
       "keyword_research:kind,market,read_on,seed",
+      // 22 Oct 2026: a map pack grid's weekly read, one row per grid, day and point on local_grid_points'
+      // unique (grid_id, run_date, row_idx, col_idx) in 20261022010000_local_grids.sql (lib/local/run.ts).
+      "local_grid_points:col_idx,grid_id,row_idx,run_date",
       // 30 Sep 2026, R91: the Stripe webhook's one orders row per completed
       // Session (checkout/signup.ts writeOrder), on the unique column in
       // 20260930020000_orders.sql, so a replayed event writes nothing.

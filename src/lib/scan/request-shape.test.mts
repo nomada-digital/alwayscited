@@ -20,6 +20,8 @@ import {
   keywordRankRequest,
   keywordVolumeRequest,
   keywordVolumes,
+  MAPS_PATH,
+  mapsPointRequest,
   requestFor,
   taskCost,
   type Task,
@@ -486,6 +488,37 @@ test("the keyword-rank read (R40) is the Google organic read at SERP_DEPTH, in m
     assert.equal(body.location_code, MARKETS[market].location_code);
     assert.equal(body.load_async_ai_overview, undefined);
   }
+});
+
+/**
+ * The map pack grid read (22 Oct 2026, lib/local): built in one module, sent
+ * from one door, called from the weekly grid pass alone - every point of a
+ * grid is a billed task, so a second caller is a second bill nobody planned.
+ * An exact list, so the sweep is its own floor.
+ */
+test("the map pack read is built in one module, sent from one door, called from the grid pass alone", () => {
+  const senders: Record<string, string[]> = { mapsPointRequest: [], readMapsPoint: [] };
+  const paths: string[] = [];
+  for (const file of sourceFiles(ROOT)) {
+    const src = code(readFileSync(join(ROOT, file), "utf8"));
+    for (const name of Object.keys(senders)) if (new RegExp("(?<![\\w.])(?<!function\\s+)" + name + "\\(").test(src)) senders[name].push(file);
+    if (src.includes("serp/google/maps")) paths.push(file);
+  }
+  assert.deepEqual(senders, { mapsPointRequest: ["src/lib/scan/dataforseo.ts"], readMapsPoint: ["src/lib/local/run.ts"] });
+  assert.deepEqual(paths, ["src/lib/scan/dataforseo-request.ts"]);
+});
+
+test("a map pack read is one point as a searcher standing there, the zoom and depth held to what DataForSEO takes", () => {
+  const req = mapsPointRequest("wedding photographer", 53.79971234, -1.54921234, 13, 20);
+  assert.equal(req.path, MAPS_PATH);
+  const body = req.body as Record<string, unknown>[];
+  assert.equal(body.length, 1);
+  assert.deepEqual(body[0], { keyword: "wedding photographer", location_coordinate: "53.79971,-1.54921,13z", language_code: "en", depth: 20, search_this_area: false });
+  const [clamped] = mapsPointRequest("x", 0, 0, 40, 900).body as Record<string, unknown>[];
+  assert.equal(clamped!.location_coordinate, "0.00000,0.00000,21z");
+  assert.equal(clamped!.depth, 100);
+  assert.throws(() => mapsPointRequest("x", 91, 0, 13, 20), /not a point/);
+  assert.throws(() => mapsPointRequest("x", Number.NaN, 0, 13, 20), /not a point/);
 });
 
 test("a request DataForSEO refused whole says why, and an account's 'not now' is retried (9 Oct 2026)", async () => {
