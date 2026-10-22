@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { flagFor, flagOn, type LifecycleEmail } from "./lifecycle.ts";
+import { flagFor, flagOn, type LifecycleEmail, type TransactionalEmail } from "./lifecycle.ts";
 
 /**
  * Is one lifecycle email switched on: its app_settings row
@@ -22,4 +22,15 @@ export async function lifecycleOn(db: SupabaseClient, name: LifecycleEmail): Pro
     return false;
   }
   return flagOn(data?.value);
+}
+
+/**
+ * A transactional email's flag (22 Oct 2026, lifecycle.ts TRANSACTIONAL_EMAILS): on unless Danny has set it off - a
+ * missing row is on, only jsonb false is off. A failed read is on too: a receipt the customer is owed outweighs a
+ * flag we could not read.
+ */
+export async function transactionalOn(db: SupabaseClient, name: TransactionalEmail): Promise<boolean> {
+  const { data, error } = await db.from("app_settings").select("value").eq("key", flagFor(name)).maybeSingle();
+  if (error) console.error(`[mail] ${flagFor(name)} not read, treated as on: ${error.message}`);
+  return data?.value !== false;
 }

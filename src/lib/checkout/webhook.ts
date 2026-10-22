@@ -29,8 +29,11 @@ export const SIGNATURE_TOLERANCE_S = 300;
  * which customer.subscription.updated does not - it fires once, when the
  * status first moves to past_due. The same proviso: Stripe posts it only
  * once the endpoint is subscribed to it.
+ *
+ * invoice.paid joined on 22 Oct 2026 (invoice-mail.ts): our "Payment received - your invoice" email for every
+ * invoice that took money, packs included. Also acted on only once the endpoint is subscribed to it.
  */
-export const HANDLED_EVENTS = ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "customer.subscription.trial_will_end", "invoice.payment_failed"] as const;
+export const HANDLED_EVENTS = ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "customer.subscription.trial_will_end", "invoice.payment_failed", "invoice.paid"] as const;
 export type HandledEvent = (typeof HANDLED_EVENTS)[number];
 
 function hmacHex(secret: string, data: string): string {
@@ -336,6 +339,8 @@ export type WebhookDeps = {
   trialWillEnd: (sub: Record<string, unknown>) => Promise<boolean>;
   /** invoice.payment_failed (BL-2, 9 Oct 2026); the object is the Invoice. */
   paymentFailed: (invoice: Record<string, unknown>, at: number) => Promise<boolean>;
+  /** invoice.paid (22 Oct 2026, invoice-mail.ts onInvoicePaid); the object is the Invoice. Absent: acknowledged, nothing done. */
+  paymentPaid?: (invoice: Record<string, unknown>) => Promise<boolean>;
   /** 17 Oct 2026: an extra tracking pack's Checkout completed (packs.ts onPackCompleted). Absent: acknowledged, nothing done. */
   packCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
   /** A pack subscription changed, or ended when `ended` (packs.ts onPackChanged). */
@@ -407,7 +412,9 @@ export async function handleWebhook(raw: string, signature: string | null, secre
           ? await deps.trialWillEnd(obj)
           : type === "invoice.payment_failed"
             ? await deps.paymentFailed(obj, at)
-            : await deps.deleted(obj, at);
+            : type === "invoice.paid"
+              ? await (deps.paymentPaid?.(obj) ?? Promise.resolve(true))
+              : await deps.deleted(obj, at);
   if (!done) {
     await deps.forget(event.id);
     return { status: 500, body: { error: "handler_failed" } };

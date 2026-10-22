@@ -7,6 +7,7 @@ import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, trackingPackPrice } from "@/config/pricing";
 import { SITE_ORIGIN } from "@/lib/app-host";
+import { readInvoices } from "@/lib/dash/invoices";
 import { pageData } from "@/lib/dash/page-data";
 import { RETENTION_DAYS } from "@/lib/tracking/retention";
 import { TIER_ORDER, packLine, planCopy, tierInfo } from "@/lib/dash/plan";
@@ -37,7 +38,10 @@ const BILLING_WHY: Record<string, string> = {
 export default async function Plan({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { ws, demo, base, nudge } = await pageData(slug);
+  const { ws, demo, base, nudge, raw, viewAs } = await pageData(slug);
+  // the invoice history (22 Oct 2026): the owner's, read live from Stripe; never in a demo or a team member's view-as
+  const inv = ws.role === "owner" && !demo && !viewAs ? await readInvoices(raw.client.id) : null;
+  const invDay = (s: number | null) => (s ? new Date(s * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "-");
   const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
   const trialWhy = sp.trial === "cancelled" ? TRIAL_DONE.cancelled : sp.trial === "refused" ? TRIAL_DONE.refused : null;
   // a running card trial: the owner can cancel it here (api/dash/[client]/trial), as /app's Settings > Billing did
@@ -91,6 +95,32 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
           )}
         </div>
         {billingWhy ? <div className="field-err" role="alert">{billingWhy}</div> : null}
+        {inv ? (
+          <div id="invoices" style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+            <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Invoices</h3>
+            <p className="intro">A VAT invoice from Nomada Digital Ltd for every payment. Each is emailed to you when it is paid.</p>
+            {inv.rows && inv.rows.length ? (
+              <div style={{ overflowX: "auto", marginTop: 10 }}>
+                <table className="tbl">
+                  <thead><tr><th>Date</th><th>Invoice</th><th className="num">Amount</th><th>Status</th><th>PDF</th></tr></thead>
+                  <tbody>
+                    {inv.rows.map((r) => (
+                      <tr key={r.id}>
+                        <td>{invDay(r.date)}</td>
+                        <td>{r.hostedUrl ? <a href={r.hostedUrl} target="_blank" rel="noopener noreferrer">{r.number ?? "View"}</a> : (r.number ?? "-")}</td>
+                        <td className="num">{r.amount}</td>
+                        <td>{r.status}</td>
+                        <td>{r.pdfUrl ? <a href={r.pdfUrl} target="_blank" rel="noopener noreferrer">Download</a> : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="muted" style={{ fontSize: 13, margin: "8px 0 0" }}>{inv.why ?? "No invoices yet. The first one appears here when your first payment is taken."}</p>
+            )}
+          </div>
+        ) : null}
         {trialEnds ? (
           <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }} id="trial">
             <h3 style={{ margin: "0 0 4px", fontSize: 15 }}>Your free trial</h3>

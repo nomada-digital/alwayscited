@@ -144,7 +144,7 @@ test("trial_will_end is handled, and only for a subscription still in its trial"
   // invoice.payment_failed is the fifth, from 9 Oct 2026 (BL-2): each failed attempt's retry date and invoice page
   // for the owner's past-due banner (payment.ts). Like trial_will_end, Stripe posts it only once the endpoint is
   // subscribed to it - Danny's step.
-  assert.deepEqual([...HANDLED_EVENTS], ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "customer.subscription.trial_will_end", "invoice.payment_failed"]);
+  assert.deepEqual([...HANDLED_EVENTS], ["checkout.session.completed", "customer.subscription.updated", "customer.subscription.deleted", "customer.subscription.trial_will_end", "invoice.payment_failed", "invoice.paid"]);
   const nowMs = NOW * 1000;
   assert.equal(trialStillRunning(trialWillEnd.data.object, nowMs), true);
   assert.equal(trialStillRunning({ status: "trialing" }, nowMs), true, "no trial_end on the payload: Stripe's word that it is trialing stands");
@@ -181,7 +181,8 @@ test("trial_ends_at follows Stripe's trial_end when a trial is extended or ends,
 
 test("an event the endpoint is not registered for is answered and not recorded", async () => {
   const { d, calls } = deps();
-  const a = await post({ id: "evt_x", type: "invoice.paid", data: { object: {} } }, d);
+  // invoice.paid is handled since 22 Oct 2026 (invoice-mail.ts); invoice.created stands in for an event we do not take
+  const a = await post({ id: "evt_x", type: "invoice.created", data: { object: {} } }, d);
   assert.equal(a.status, 200);
   assert.deepEqual(calls, []);
 });

@@ -159,3 +159,29 @@ export async function createPortalSession(customer: string, returnUrl: string, f
   }
   return { ok: true, url: body.url };
 }
+
+/**
+ * A customer's invoices, newest first, for Plan > Billing (22 Oct 2026, invoice.ts invoiceRows). Read only; at most
+ * `limit` (Stripe's own cap is 100). The customer id comes from the client's order row, never from a request.
+ */
+export async function listInvoices(customer: string, limit = 24, fetchImpl: typeof fetch = fetch): Promise<{ ok: true; data: Record<string, unknown>[] } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number }> {
+  if (!/^cus_[A-Za-z0-9]{1,200}$/.test(customer)) return { ok: false, reason: "refused" };
+  const r = await stripeGet(`invoices?customer=${encodeURIComponent(customer)}&limit=${Math.max(1, Math.min(100, Math.round(limit)))}`, fetchImpl);
+  if (!r.ok) return r;
+  return { ok: true, data: Array.isArray(r.body.data) ? (r.body.data as Record<string, unknown>[]) : [] };
+}
+
+/**
+ * The read-only Stripe audit (22 Oct 2026, /api/cron/stripe-audit): the account's recent invoices, its tax settings,
+ * its active tax rates and its webhook endpoints' events. GETs only; each answers on its own, so a read the restricted
+ * key may not make is reported as refused rather than failing the rest.
+ */
+export async function stripeAuditReads(fetchImpl: typeof fetch = fetch) {
+  const [invoices, tax, rates, hooks] = await Promise.all([
+    stripeGet("invoices?limit=100", fetchImpl),
+    stripeGet("tax/settings", fetchImpl),
+    stripeGet("tax_rates?active=true&limit=20", fetchImpl),
+    stripeGet("webhook_endpoints?limit=20", fetchImpl),
+  ]);
+  return { invoices, tax, rates, hooks };
+}

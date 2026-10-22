@@ -229,6 +229,12 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => declaredCron("/api/cron/track"),
   },
   {
+    route: "/api/cron/stripe-audit",
+    method: "GET",
+    why: "Vercel Cron calls it weekly (the read-only Stripe invoice audit, 22 Oct 2026); nothing in the app does.",
+    earns: () => declaredCron("/api/cron/stripe-audit"),
+  },
+  {
     route: "/api/app/auth",
     method: "POST",
     // 18 Oct 2026, brief 2d: /app retired, every address 308s to the dashboards host; its only caller went with it.

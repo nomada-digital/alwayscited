@@ -2,6 +2,7 @@ import { COMPANY_LINE, CONTACT_EMAIL } from "../../config/contact.ts";
 import { NEXT_STEPS, nextSteps } from "../../config/onboarding.ts";
 import { T } from "../../config/tokens.ts";
 import { TRIAL, trialCharge, trialMoment } from "../../config/trial.ts";
+import { money } from "../checkout/invoice.ts";
 import { dashLink } from "../dash/host.ts";
 import { count } from "../plural.ts";
 import { escapeHtml, shell, type Palette } from "../scan/email-render.ts";
@@ -54,8 +55,16 @@ export const LIFECYCLE_EMAILS = [
 ] as const;
 export type LifecycleEmail = (typeof LIFECYCLE_EMAILS)[number];
 
-/** The app_settings key that turns one on. Default false; only Danny turns one on. */
-export const flagFor = (name: LifecycleEmail) => `email_${name}_enabled`;
+/**
+ * Transactional emails (22 Oct 2026): sent because money moved, not to nudge - so, unlike the lifecycle ones above,
+ * their flag ships ON (a missing row is on; an explicit false turns one off). payment_received: on invoice.paid, the
+ * invoice's Stripe page and PDF (checkout/invoice-mail.ts).
+ */
+export const TRANSACTIONAL_EMAILS = ["payment_received"] as const;
+export type TransactionalEmail = (typeof TRANSACTIONAL_EMAILS)[number];
+
+/** The app_settings key that turns one on. Default false for a lifecycle email; only Danny turns one on. */
+export const flagFor = (name: LifecycleEmail | TransactionalEmail) => `email_${name}_enabled`;
 
 /** On only for a jsonb true: a missing row, a string or anything else is off. */
 export const flagOn = (value: unknown) => value === true;
@@ -452,6 +461,46 @@ export function thisWeek(d: ThisWeekData): Rendered {
 
 /** A client's Actions page, where the This week email's button goes. */
 export const actionsUrl = (slug: string) => dashLink(`/${slug}/plan`);
+
+/**
+ * payment_received (22 Oct 2026): "Payment received - your invoice", on every invoice.paid that took money - the first
+ * payment, a trial converting, each renewal, a pack. The button is Stripe's own invoice page; the PDF is linked beside
+ * it, and every invoice is also on Plan > Billing. Facts only, all from the invoice: what, how much, the VAT, the number.
+ */
+export function paymentReceived(d: { tier: TierKey; domain: string | null; amount: string; tax: string | null; number: string | null; paidOn: string;
+  kind: string; period: string | null; hostedUrl: string; pdfUrl: string | null; billing: string | null }): Rendered {
+  const what = d.domain ? `${d.domain} on alwayscited` : "your alwayscited plan";
+  return render({
+    tier: d.tier,
+    subject: `Payment received - your invoice${d.number ? " " + d.number : ""}`,
+    preheader: `${d.amount} paid on ${d.paidOn}. Your VAT invoice is one click away.`,
+    heading: "Payment received",
+    body: [
+      `Thank you. We have received ${d.amount} for ${what}: ${d.kind}${d.period ? `, covering ${d.period}` : ""}, paid on ${d.paidOn}.`,
+      `${d.number ? `Invoice ${d.number}` : "Your invoice"} is a VAT invoice from Nomada Digital Ltd${d.tax ? `, including ${d.tax} VAT` : ""}. Keep it for your records.`,
+      ...(d.pdfUrl ? [{ text: "You can also ", link: { label: "download the PDF", href: d.pdfUrl }, after: "." } as Line] : []),
+      ...(d.billing ? [{ text: "Every invoice is in ", link: { label: "Plan > Billing", href: d.billing }, after: " in your dashboard." } as Line] : []),
+    ],
+    cta: { href: d.hostedUrl, label: "View your invoice" },
+    footnote: "The invoice page is Stripe's, where we take payment. It needs no sign-in.",
+  });
+}
+
+/** The previews for the transactional emails, as previewSets draws the lifecycle ones. Made-up figures. */
+export function transactionalPreviews(): Record<TransactionalEmail, Preview[]> {
+  const hosted = "https://invoice.stripe.com/i/acct_preview/test_preview";
+  const pdf = "https://pay.stripe.com/invoice/acct_preview/test_preview/pdf";
+  return {
+    payment_received: [
+      { label: "a trial converting, UK", mail: paymentReceived({ tier: "tracked", domain: "tallyroo.com", amount: money(11880, "gbp"), tax: money(1980, "gbp"), number: "ABCD-0002", paidOn: "5 Nov 2026",
+        kind: "your first payment", period: "5 Nov to 5 Dec 2026", hostedUrl: hosted, pdfUrl: pdf, billing: billingUrl("tallyroo-com") }) },
+      { label: "a renewal, US, no VAT", mail: paymentReceived({ tier: "mentioned", domain: "tallyroo.com", amount: money(159500, "usd"), tax: null, number: "ABCD-0007", paidOn: "5 Dec 2026",
+        kind: "your monthly renewal", period: "5 Dec 2026 to 5 Jan 2027", hostedUrl: hosted, pdfUrl: pdf, billing: billingUrl("tallyroo-com") }) },
+      { label: "no client found for the invoice", mail: paymentReceived({ tier: "tracked", domain: null, amount: money(4680, "gbp"), tax: money(780, "gbp"), number: null, paidOn: "6 Nov 2026",
+        kind: "a payment", period: null, hostedUrl: hosted, pdfUrl: null, billing: null }) },
+    ],
+  };
+}
 
 export type Preview = { label: string; mail: Rendered };
 

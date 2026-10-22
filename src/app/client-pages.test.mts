@@ -104,7 +104,8 @@ const ROLE_READS: Record<string, string[]> = {
   // Only an owner sees Invite and Remove; the member route refuses anyone else too.
   "/settings": ['const owner = raw.role === "owner" && !readOnly;'],
   // Only an owner sees Open billing and Track more; the billing and pack routes refuse anyone else too.
-  "/plan": ['ws.role === "owner" ? (', 'ws.role === "owner" && !demo ? ('],
+  // 22 Oct 2026: the invoice history is read for the owner only, never in a demo or a view-as (lib/dash/invoices.ts).
+  "/plan": ['ws.role === "owner" ? (', 'ws.role === "owner" && !demo ? (', 'const inv = ws.role === "owner" && !demo && !viewAs ? await readInvoices(raw.client.id) : null;'],
 };
 
 /**

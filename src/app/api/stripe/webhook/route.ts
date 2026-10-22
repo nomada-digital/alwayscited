@@ -3,6 +3,7 @@ import { after } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { onCheckoutCompleted, onSubscriptionDeleted, onSubscriptionUpdated, onTrialWillEnd } from "@/lib/checkout/signup";
 import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
+import { onInvoicePaid } from "@/lib/checkout/invoice-mail";
 import { onPackChanged, onPackCompleted } from "@/lib/checkout/packs";
 import { onHubOfferCompleted } from "@/lib/checkout/hub-offer";
 import { sendGa4Purchase } from "@/lib/checkout/ga4";
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
     deleted: (sub, at) => onSubscriptionDeleted(supabaseAdmin(), sub, at),
     trialWillEnd: (sub) => onTrialWillEnd(supabaseAdmin(), sub),
     paymentFailed: (invoice, at) => onInvoicePaymentFailed(supabaseAdmin(), invoice, at),
+    paymentPaid: (invoice) => onInvoicePaid(supabaseAdmin(), invoice),
     packCompleted: (session) => onPackCompleted(supabaseAdmin(), session),
     packChanged: (sub, ended) => onPackChanged(supabaseAdmin(), sub, ended),
     hubOfferCompleted: (session) => onHubOfferCompleted(supabaseAdmin(), session),

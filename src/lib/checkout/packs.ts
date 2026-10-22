@@ -45,6 +45,11 @@ export function packCheckoutForm(p: { customer: string; clientId: string; slug: 
   f.set("line_items[0][price_data][tax_behavior]", "exclusive");
   f.set("automatic_tax[enabled]", "true");
   f.set("customer_update[address]", "auto");
+  // A VAT invoice for every pack too (22 Oct 2026, invoice.ts): the billing address required and a tax ID taken, as
+  // /api/checkout takes them. With an existing customer Stripe needs customer_update[name] for the tax ID.
+  f.set("billing_address_collection", "required");
+  f.set("tax_id_collection[enabled]", "true");
+  f.set("customer_update[name]", "auto");
   for (const [k, v] of Object.entries({ kind: PACK_KIND, client_domain_id: p.clientId, slug: p.slug, market: p.market })) {
     f.set(`metadata[${k}]`, v);
     f.set(`subscription_data[metadata][${k}]`, v);
