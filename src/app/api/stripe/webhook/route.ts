@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { onCheckoutCompleted, onSubscriptionDeleted, onSubscriptionUpdated, onTrialWillEnd } from "@/lib/checkout/signup";
 import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
 import { onPackChanged, onPackCompleted } from "@/lib/checkout/packs";
+import { onHubOfferCompleted } from "@/lib/checkout/hub-offer";
 import { sendGa4Purchase } from "@/lib/checkout/ga4";
 import { handleWebhook } from "@/lib/checkout/webhook";
 
@@ -54,6 +55,7 @@ export async function POST(req: Request) {
     paymentFailed: (invoice, at) => onInvoicePaymentFailed(supabaseAdmin(), invoice, at),
     packCompleted: (session) => onPackCompleted(supabaseAdmin(), session),
     packChanged: (sub, ended) => onPackChanged(supabaseAdmin(), sub, ended),
+    hubOfferCompleted: (session) => onHubOfferCompleted(supabaseAdmin(), session),
   });
   return Response.json(answer.body, { status: answer.status });
 }

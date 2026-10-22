@@ -112,7 +112,9 @@ const HANDLERS = walk(APP)
   .filter(({ file, source }) => /(^|\/)route\.ts$/.test(file) || /^\s*["']use server["']/.test(source))
   .filter(({ source }) => /isPlausibleEmail|get\(\s*["']email["']\s*\)|\b(body|input)\.email\b/.test(source));
 
-const EXEMPT = ["api/checkout/route.ts"];
+// 22 Oct 2026: api/hub/offer takes no visitor's address - the agency hub sends its own client's login, server to
+// server behind HUB_OFFER_SECRET, to prefill that client's Checkout - so the work-email rule has nothing to judge.
+const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts"];
 
 const KNOWN = [
   "contact/actions.ts",

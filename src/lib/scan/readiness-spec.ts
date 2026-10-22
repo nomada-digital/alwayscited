@@ -71,6 +71,9 @@ export const RECOMMENDED: Requirement[] = [
  */
 export const NOT_REQUIRED: Record<string, string> = {
   NODE_ENV: "set by the runtime, never by us",
+  // 22 Oct 2026: the agency hub's subscription offer (api/hub/offer). Unset, that one server-to-server door answers 503
+  // and the hub says it is not connected; nothing a visitor or customer uses depends on it.
+  HUB_OFFER_SECRET: "only the agency hub's offer door reads it, and answers 503 without it",
   VERCEL_ENV: "set by the platform",
   VERCEL_REGION: "set by the platform",
   VERCEL_GIT_COMMIT_SHA: "set by the platform",

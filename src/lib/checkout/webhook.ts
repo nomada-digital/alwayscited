@@ -340,6 +340,8 @@ export type WebhookDeps = {
   packCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
   /** A pack subscription changed, or ended when `ended` (packs.ts onPackChanged). */
   packChanged?: (sub: Record<string, unknown>, ended: boolean) => Promise<boolean>;
+  /** 22 Oct 2026: the agency hub's subscription offer was taken (hub-offer.ts onHubOfferCompleted). Absent: acknowledged, nothing done. */
+  hubOfferCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
 };
 
 /** The event's created time; the moment it arrived when Stripe's is missing, so a write is never undated. */
@@ -351,6 +353,12 @@ export function eventTime(event: { created?: unknown }, nowS: number = Math.floo
 function isPackObject(o: Record<string, unknown>): boolean {
   const m = o.metadata;
   return !!m && typeof m === "object" && (m as Record<string, unknown>).kind === "pack";
+}
+
+/** A Session marked as the agency hub's subscription offer (hub-offer.ts HUB_OFFER_KIND). Inline, as isPackObject. */
+function isHubOfferObject(o: Record<string, unknown>): boolean {
+  const m = o.metadata;
+  return !!m && typeof m === "object" && (m as Record<string, unknown>).kind === "hub_offer";
 }
 
 export type WebhookAnswer = { status: number; body: { ok?: true; ignored?: string; error?: string } };
@@ -379,7 +387,13 @@ export async function handleWebhook(raw: string, signature: string | null, secre
   // 17 Oct 2026: an extra tracking pack (packs.ts) is its own subscription, marked kind=pack. It goes to its own
   // handler before anything else is asked, so a pack never runs the signup path and never makes a client.
   const pack = isPackObject(obj);
-  const done = pack
+  // 22 Oct 2026: the hub's offer (hub-offer.ts) is a subscription for a client that already exists. Its completed
+  // Session goes to its own handler, so it never runs signup and never makes a client; its later subscription events
+  // are the client's own (the order row names the subscription) and take the usual path below.
+  const offer = type === "checkout.session.completed" && isHubOfferObject(obj);
+  const done = offer
+    ? await (deps.hubOfferCompleted?.(obj) ?? Promise.resolve(true))
+    : pack
     ? type === "checkout.session.completed"
       ? await (deps.packCompleted?.(obj) ?? Promise.resolve(true))
       : type === "customer.subscription.updated" || type === "customer.subscription.deleted"

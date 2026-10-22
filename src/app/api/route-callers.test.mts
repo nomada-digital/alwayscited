@@ -203,6 +203,14 @@ function allCalls(): Call[] {
  */
 const NO_CALLER: { route: string; method: string; why: string; earns: () => boolean }[] = [
   {
+    route: "/api/hub/offer",
+    method: "POST",
+    // 22 Oct 2026: Nomada's agency hub (nomada-dashboards, edge function alwayscited-admin, project_offer) asks for a
+    // subscription Checkout link for a client whose project included alwaystracked. Server to server, behind HUB_OFFER_SECRET.
+    why: "Called by the agency hub's edge function (alwayscited-admin, project_offer), never by this app; it answers only to x-hub-secret.",
+    earns: () => /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/app/api/hub/offer/route.ts"), "utf8")),
+  },
+  {
     route: "/api/cron/purge-responses",
     method: "GET",
     why: "Vercel Cron calls it on a schedule; nothing in the app does.",
