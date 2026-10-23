@@ -27,6 +27,7 @@ const ORDER: CompletedOrder = {
   gaClientId: "123456789.1700000000",
   promotionId: null,
   amountDiscount: null,
+  monthlyAmount: null,
 };
 
 const ID = "G-TEST123456";

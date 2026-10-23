@@ -98,7 +98,10 @@ export function checkoutRequest(order: Order, ctx: CheckoutContext): CheckoutReq
   f.set("line_items[0][price_data][unit_amount]", String(Math.round(unit * 100)));
   f.set("line_items[0][price_data][recurring][interval]", "month");
   f.set("line_items[0][price_data][product_data][name]", ctx.names[tier]);
-  for (const [k, v] of Object.entries({ tier, sector: tier === "tracked" ? "" : order.sector, quantity: String(quantity), market, keyword, ...(scan ? { scan_token: scan } : { website }) })) {
+  // monthly_amount (23 Oct 2026): what the plan costs a month, in pence or cents, before VAT and any discount - the
+  // agency hub's book value counts it, and the first payment cannot stand in for it (a trial or a code makes it 0).
+  const monthly = String(Math.round(unit * quantity * 100));
+  for (const [k, v] of Object.entries({ tier, sector: tier === "tracked" ? "" : order.sector, quantity: String(quantity), market, keyword, monthly_amount: monthly, ...(scan ? { scan_token: scan } : { website }) })) {
     f.set(`metadata[${k}]`, v);
     f.set(`subscription_data[metadata][${k}]`, v);
   }

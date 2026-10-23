@@ -69,7 +69,8 @@ export function hubOfferForm(p: {
     f.set("subscription_data[billing_cycle_anchor]", String(p.anchor));
     f.set("subscription_data[proration_behavior]", "none");
   }
-  const m = { kind: HUB_OFFER_KIND, tier: "tracked", quantity: "1", market: p.market, client_domain_id: p.clientId, slug: p.slug, hub_project_id: p.hubProjectId };
+  // monthly_amount: the plan's monthly price before VAT, as session.ts records it (23 Oct 2026).
+  const m = { kind: HUB_OFFER_KIND, tier: "tracked", quantity: "1", market: p.market, client_domain_id: p.clientId, slug: p.slug, hub_project_id: p.hubProjectId, monthly_amount: String(Math.round(p.unitAmount * 100)) };
   for (const [k, v] of Object.entries(m)) {
     f.set(`metadata[${k}]`, v);
     f.set(`subscription_data[metadata][${k}]`, v);

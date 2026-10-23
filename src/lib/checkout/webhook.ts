@@ -90,6 +90,8 @@ export type CompletedOrder = {
   promotionId: string | null;
   /** What the discount took off this first payment, in the smallest unit; null when none. */
   amountDiscount: number | null;
+  /** The plan's monthly price before VAT and discounts, in the smallest unit, as checkout priced it (23 Oct 2026); null on an older Session. */
+  monthlyAmount: number | null;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -122,6 +124,7 @@ export function completedOrder(session: Record<string, unknown>): CompletedOrder
     trialDays: /^\d{1,2}$/.test(str(m.trial_days)) ? Number(str(m.trial_days)) : null,
     gaClientId: /^\d{1,12}\.\d{1,12}$/.test(str(m.ga_client_id)) ? str(m.ga_client_id) : null,
     promotionId: promotionOf(session),
+    monthlyAmount: /^\d{1,9}$/.test(str(m.monthly_amount)) ? Number(str(m.monthly_amount)) : null,
     amountDiscount: discountOf(session),
   };
 }
@@ -224,6 +227,8 @@ export type OrderRow = {
   client_domain_id: string | null;
   /** When a trial ends and the first charge is due; null for a paid order. */
   trial_ends_at: string | null;
+  /** The monthly price before VAT and discounts (migration 20261023010000_order_monthly_amount); null when checkout did not say. */
+  monthly_amount: number | null;
 };
 
 export function orderRow(o: CompletedOrder, clientId: string | null, trialEndsAt: string | null = null): { row: OrderRow } | { row: null; reason: string } {
@@ -249,6 +254,7 @@ export function orderRow(o: CompletedOrder, clientId: string | null, trialEndsAt
       currency: currency === "gbp" || currency === "usd" ? currency : null,
       client_domain_id: clientId,
       trial_ends_at: trialEndsAt,
+      monthly_amount: o.monthlyAmount,
     },
   };
 }

@@ -99,6 +99,10 @@ test("every Session charges tax through Stripe Tax on a tax-exclusive price (R12
       assert.equal(r.form.get("line_items[0][price_data][tax_behavior]"), "exclusive", "prices are before VAT");
       // 23 Oct 2026: the buyer's name has its own field, so Customer.name is never an address line.
       assert.equal(r.form.get("name_collection[individual][enabled]"), "true");
+      // 23 Oct 2026: the monthly price before VAT rides on the Session and the subscription, for the hub's book value.
+      assert.match(r.form.get("metadata[monthly_amount]") ?? "", /^\d+$/);
+      assert.equal(r.form.get("subscription_data[metadata][monthly_amount]"), r.form.get("metadata[monthly_amount]"));
+      assert.equal(Number(r.form.get("metadata[monthly_amount]")), Math.round(r.amount * 100), "unit times quantity, in pence or cents");
     }
   }
 });

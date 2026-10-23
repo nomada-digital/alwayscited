@@ -221,6 +221,8 @@ test("a completed Session becomes one orders row that meets the table's checks",
     client_domain_id: "client-1",
     // 8 Oct 2026: the alwaystracked trial's first-charge date, null on a paid order.
     trial_ends_at: null,
+    // 23 Oct 2026: the monthly price before VAT, null when the Session does not carry it (this fixture predates it).
+    monthly_amount: null,
   });
   // Each check in 20260930020000_orders.sql refuses here before the database would.
   const bad = (m: Record<string, string>, extra: Record<string, unknown> = {}) =>
@@ -240,10 +242,15 @@ test("signup writes the orders row keyed on the Session id, and every column exi
   assert.ok(sql.includes("stripe_session_id text not null unique"));
   // 8 Oct 2026: trial_ends_at, the 14th column, was added by its own additive migration.
   const trial = await readFile(new URL("../../../supabase/migrations/20261008010000_trial_columns.sql", import.meta.url), "utf8");
+  // 23 Oct 2026: monthly_amount, the 15th, by 20261023010000_order_monthly_amount.sql.
+  const monthly = await readFile(new URL("../../../supabase/migrations/20261023010000_order_monthly_amount.sql", import.meta.url), "utf8");
   const cols = Object.keys(orderRow(completedOrder(completed.data.object), null).row ?? {});
-  assert.equal(cols.length, 14);
+  assert.equal(cols.length, 15);
   for (const col of cols) {
-    assert.ok(sql.includes(`\n  ${col} `) || trial.includes(`alter table orders add column if not exists ${col} `), `orders has no ${col} column`);
+    assert.ok(
+      sql.includes(`\n  ${col} `) || trial.includes(`alter table orders add column if not exists ${col} `) || monthly.includes(`alter table public.orders add column if not exists ${col} `),
+      `orders has no ${col} column`,
+    );
   }
 });
 
@@ -361,4 +368,14 @@ test("the first full-price charge follows the coupon's duration", () => {
   const trial = Date.UTC(2026, 10, 5) / 1000;
   assert.equal(firstFullPrice({ duration: "once", months: null }, { trialEnd: trial, currentPeriodEnd: trial }, now), trial);
   assert.equal(firstFullPrice({ duration: "once", months: null }, { trialEnd: null, currentPeriodEnd: null }, now), null);
+});
+
+test("the order row carries the plan's monthly price from the Session, and none from an older Session (23 Oct 2026)", () => {
+  const o = completedOrder({ ...completed.data.object, metadata: { ...completed.data.object.metadata, monthly_amount: "129500" } });
+  assert.equal(o.monthlyAmount, 129500);
+  const built = orderRow(o, "c1");
+  assert.ok(built.row);
+  assert.equal(built.row!.monthly_amount, 129500);
+  assert.equal(completedOrder(completed.data.object).monthlyAmount, null);
+  assert.equal(completedOrder({ ...completed.data.object, metadata: { monthly_amount: "12.5" } }).monthlyAmount, null, "only whole units");
 });
