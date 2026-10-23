@@ -97,6 +97,8 @@ test("every Session charges tax through Stripe Tax on a tax-exclusive price (R12
       assert.equal(r.form.get("tax_id_collection[enabled]"), "true");
       assert.equal(r.form.get("billing_address_collection"), "required");
       assert.equal(r.form.get("line_items[0][price_data][tax_behavior]"), "exclusive", "prices are before VAT");
+      // 23 Oct 2026: the buyer's name has its own field, so Customer.name is never an address line.
+      assert.equal(r.form.get("name_collection[individual][enabled]"), "true");
     }
   }
 });

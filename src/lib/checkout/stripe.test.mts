@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { createCheckoutSession } from "./stripe.ts";
+import { askForNames, createCheckoutSession } from "./stripe.ts";
 
 /** R91 part 2 (29 Sep 2026): the Stripe call, with a stubbed fetch. No request leaves this process. */
 
@@ -83,5 +83,36 @@ test("a promotion code is read with its coupon, on either API shape, and only by
   const none = stub(200, {});
   assert.deepEqual(await readPromotionCode("../customers", none.f), { ok: false, reason: "refused" });
   assert.equal(none.calls.length, 0);
+  delete process.env.STRIPE_SECRET_KEY;
+});
+
+test("name fields are asked for, and a Session refused over them is made without them (23 Oct 2026)", async () => {
+  // goodtrip's Stripe customer was named "11 Heworth Hall Drive": the name came off the billing form.
+  const f = new URLSearchParams({ mode: "subscription" });
+  askForNames(f);
+  assert.equal(f.get("name_collection[individual][enabled]"), "true");
+  assert.equal(f.get("name_collection[business][enabled]"), "true");
+  assert.equal(f.get("name_collection[business][optional]"), "true");
+  assert.equal(f.get("name_collection[individual][optional]"), null, "the full name is required");
+
+  process.env.STRIPE_SECRET_KEY = KEY;
+  const bodies: string[] = [];
+  const older = (async (_url: string, init: RequestInit) => {
+    bodies.push(String(init.body));
+    return bodies.length === 1
+      ? new Response(JSON.stringify({ error: { type: "invalid_request_error", code: "parameter_unknown", param: "name_collection" } }), { status: 400 })
+      : new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/cs_live_y" }), { status: 200 });
+  }) as unknown as typeof fetch;
+  assert.deepEqual(await createCheckoutSession(f, older), { ok: true, url: "https://checkout.stripe.com/c/pay/cs_live_y" });
+  assert.equal(bodies.length, 2);
+  assert.match(bodies[0]!, /name_collection/);
+  assert.doesNotMatch(bodies[1]!, /name_collection/);
+  assert.match(bodies[1]!, /mode=subscription/);
+
+  // Any other refusal is not retried.
+  const other = stub(400, { error: { code: "parameter_invalid_integer", param: "line_items[0][quantity]" } });
+  const r = await createCheckoutSession(f, other.f);
+  assert.equal(r.ok, false);
+  assert.equal(other.calls.length, 1);
   delete process.env.STRIPE_SECRET_KEY;
 });

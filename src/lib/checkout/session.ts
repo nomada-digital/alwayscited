@@ -2,6 +2,7 @@ import { MAX_CLUSTERS, type Market, quoteFor } from "../../config/sector-pricing
 import { CHECKOUT_LIMITS } from "../../config/contact.ts";
 import { TRIAL, type TrialRepeat, noTrialLine, trialApplies } from "../../config/trial.ts";
 import { isPlausibleEmail } from "../email-address.ts";
+import { askForNames } from "./stripe.ts";
 import { isPlausibleDomain, normalizeDomain } from "../scan/domain.ts";
 
 /**
@@ -115,6 +116,8 @@ export function checkoutRequest(order: Order, ctx: CheckoutContext): CheckoutReq
   f.set("automatic_tax[enabled]", "true");
   f.set("tax_id_collection[enabled]", "true");
   f.set("billing_address_collection", "required");
+  // The buyer's name on its own field, not read off the billing form (askForNames, 23 Oct 2026).
+  askForNames(f);
 
   // The free trial (Danny, 8 Oct 2026): alwaystracked with no packs, a first
   // time through. The card is taken now and the first charge is on day 15; a

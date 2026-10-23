@@ -105,6 +105,8 @@ test("every Checkout makes a VAT invoice: subscription mode, Stripe Tax on ex-VA
     for (const k of ['"mode", "subscription"', '"automatic_tax[enabled]", "true"', '"tax_id_collection[enabled]", "true"', '"billing_address_collection", "required"', '[tax_behavior]", "exclusive"']) {
       assert.ok(src.includes(k), `${f}: ${k}`);
     }
+    // 23 Oct 2026: both make a new customer, so both ask for its name on its own field (askForNames).
+    assert.ok(src.includes("askForNames(f);"), `${f}: askForNames`);
   }
   // no one-off (payment mode) Checkout anywhere: that would need invoice_creation[enabled]
   for (const f of fs.readdirSync(path.join(ROOT, "src/lib/checkout")).filter((n) => n.endsWith(".ts"))) {

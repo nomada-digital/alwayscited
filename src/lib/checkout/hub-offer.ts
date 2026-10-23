@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { askForNames } from "./stripe.ts";
 import { completedOrder, orderRow } from "./webhook.ts";
 
 /**
@@ -62,6 +63,8 @@ export function hubOfferForm(p: {
   f.set("automatic_tax[enabled]", "true");
   f.set("tax_id_collection[enabled]", "true");
   f.set("billing_address_collection", "required");
+  // The buyer's name on its own field, not read off the billing form (askForNames, 23 Oct 2026).
+  askForNames(f);
   if (p.anchor) {
     f.set("subscription_data[billing_cycle_anchor]", String(p.anchor));
     f.set("subscription_data[proration_behavior]", "none");

@@ -11,9 +11,40 @@
 
 export type SessionResult = { ok: true; url: string } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number; code?: string };
 
+/**
+ * Name fields of their own on Stripe's form (23 Oct 2026). With none, Stripe took the Customer's name from its
+ * billing form, and the goodtrip order's customer was saved as "11 Heworth Hall Drive" - the address line in the
+ * name field. `name_collection` adds a required full name and an optional business name at the top of the form, and
+ * Stripe sets Customer.name to the business name when one is given, else the full name. Optional for the business
+ * because a required one moves Apple Pay and the other one-click buttons down the form or turns them off.
+ */
+export function askForNames(f: URLSearchParams): void {
+  f.set("name_collection[individual][enabled]", "true");
+  f.set("name_collection[business][enabled]", "true");
+  f.set("name_collection[business][optional]", "true");
+}
+
+/**
+ * `name_collection` arrived in API version 2025-09-30.clover, and these requests send no Stripe-Version, so an
+ * account on an older default refuses it as an unknown parameter - which would refuse every Session. A refusal that
+ * names it is tried once more without the name fields, and logged, so checkout never stops over a name field.
+ */
+function namesRefused(form: URLSearchParams, s: SessionResult, param: unknown): boolean {
+  if (s.ok || s.reason !== "refused" || ![...form.keys()].some((k) => k.startsWith("name_collection["))) return false;
+  return typeof param === "string" && param.startsWith("name_collection");
+}
+
 export async function createCheckoutSession(form: URLSearchParams, fetchImpl: typeof fetch = fetch): Promise<SessionResult> {
+  const first = await sessionCall(form, fetchImpl);
+  if (!namesRefused(form, first.result, first.param)) return first.result;
+  console.warn("[stripe] name_collection refused by the account's API version; the Session is created without name fields");
+  const plain = new URLSearchParams([...form.entries()].filter(([k]) => !k.startsWith("name_collection[")));
+  return (await sessionCall(plain, fetchImpl)).result;
+}
+
+async function sessionCall(form: URLSearchParams, fetchImpl: typeof fetch): Promise<{ result: SessionResult; param?: unknown }> {
   const key = process.env.STRIPE_SECRET_KEY;
-  if (!key) return { ok: false, reason: "no_key" };
+  if (!key) return { result: { ok: false, reason: "no_key" } };
   let res: Response;
   try {
     res = await fetchImpl("https://api.stripe.com/v1/checkout/sessions", {
@@ -23,14 +54,14 @@ export async function createCheckoutSession(form: URLSearchParams, fetchImpl: ty
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    return { ok: false, reason: "unreachable" };
+    return { result: { ok: false, reason: "unreachable" } };
   }
-  const body = (await res.json().catch(() => null)) as { url?: unknown; error?: { code?: unknown; type?: unknown } } | null;
+  const body = (await res.json().catch(() => null)) as { url?: unknown; error?: { code?: unknown; type?: unknown; param?: unknown } } | null;
   if (!res.ok || typeof body?.url !== "string" || !body.url.startsWith("https://checkout.stripe.com/")) {
     const code = body?.error?.code ?? body?.error?.type;
-    return { ok: false, reason: "refused", status: res.status, code: typeof code === "string" ? code : undefined };
+    return { result: { ok: false, reason: "refused", status: res.status, code: typeof code === "string" ? code : undefined }, param: body?.error?.param };
   }
-  return { ok: true, url: body.url };
+  return { result: { ok: true, url: body.url } };
 }
 
 /**
