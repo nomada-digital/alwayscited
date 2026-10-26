@@ -211,6 +211,14 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/app/api/hub/offer/route.ts"), "utf8")),
   },
   {
+    route: "/api/hub/emails",
+    method: "POST",
+    // 26 Oct 2026: the agency hub's Emails tab (alwayscited-admin, emails and email_test) reads every email's previews
+    // and asks for a test send. Server to server, behind HUB_OFFER_SECRET, as /api/hub/offer.
+    why: "Called by the agency hub's edge function (alwayscited-admin, the Emails tab), never by this app; it answers only to x-hub-secret.",
+    earns: () => /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/app/api/hub/emails/route.ts"), "utf8")),
+  },
+  {
     route: "/api/cron/purge-responses",
     method: "GET",
     why: "Vercel Cron calls it on a schedule; nothing in the app does.",

@@ -115,6 +115,16 @@ const GUARDED = [
  * of names is satisfied by a route whose bound was deleted last week.
  */
 const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> = {
+  // 26 Oct 2026: the agency hub's test send, before an email is switched on. Server to server behind HUB_OFFER_SECRET,
+  // and only ever to a @nomadadigital.co.uk address, so the bound is who can reach it and where it can send.
+  "hub/emails": {
+    why:
+      "Sends one email's preview cases to a Nomada address when an agency admin asks for a test before switching it " +
+      "on. Only the hub's edge function holds the secret, and isTestRecipient refuses any address outside " +
+      "nomadadigital.co.uk, so no visitor can make it mail anyone.",
+    evidence: /isTestRecipient\(to\)/,
+    where: "src/app/api/hub/emails/route.ts",
+  },
   "scan/[token]/confirm": {
     why:
       "Runs the free pass for a row that already passed the ceilings at /api/scan/start. " +
@@ -723,8 +733,11 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * keyword check (per-client daily cap) and once-only internal mail as
      * `app/[client]/check` and `app/[client]/setup`. They start no scan, so
      * `scans_enabled` has nothing to refuse and the decision is not moved.
+     *
+     * Twenty-one on 26 Oct 2026: `hub/emails`, the agency hub's test send before an email
+     * is switched on - a Nomada address only, behind the hub secret. It starts no scan.
      */
-    20,
+    21,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });
