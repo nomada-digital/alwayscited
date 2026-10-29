@@ -295,6 +295,8 @@ const nextConfig: NextConfig = {
       { source: "/app/:path*", headers: [appCsp, noIndex] },
       // The order form and its confirmation (R91, 29 Sep 2026): an order in progress.
       { source: "/checkout/:path*", headers: [noIndex] },
+      // An agency's own landing page (29 Oct 2026, /partners/the-lab): linked to by that agency, never by this site.
+      { source: "/partners/:path*", headers: [noIndex] },
       // dashboards.alwayscited.com's tree (17 Oct 2026, src/lib/dash/host.ts). The proxy 404s it on any other host and
       // sets noindex on everything it rewrites there; this covers the internal path the same way /app is covered.
       { source: "/dashboards/:path*", headers: [appCsp, noIndex] },

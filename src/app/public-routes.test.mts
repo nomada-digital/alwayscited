@@ -58,6 +58,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   // with them. The dashboards host's tree below is the private dashboard now.
   // 17 Oct 2026: dashboards.alwayscited.com's tree, served only on that host (src/lib/dash/host.ts).
   "/dashboards": "the dashboards host's root, which only redirects - to the member's first site, or to sign in",
+  // 29 Oct 2026: an agency's own landing page, linked to by that agency (The LAB) and never by this site.
+  "/partners/the-lab": "The LAB's landing page for its own clients' free checks, tagged ref thelab; shared by the agency, not meant to be found",
   "/dashboards/[client]": "one client's overview on the dashboards host; private, behind its sign-in, a 404 for a client outside the member's list",
   "/dashboards/[client]/ai": "one client's AI answers; private, same membership 404",
   "/dashboards/[client]/ai/[prompt]": "one prompt's every answer, its words and sources (17 Oct 2026); private, same membership 404",
