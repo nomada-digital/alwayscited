@@ -352,3 +352,15 @@ test("census: the cron's pass is claimed and closed as before; a re-run is the s
   assert.match(page, /submit=\{rerunnable \? RERUN_BUTTON : "Run now"\}/);
   assert.equal(RERUN_BUTTON, "Re-run failed reads");
 });
+
+test("a staff change asks a complete run again as 'changed'; Run now still refuses it", async () => {
+  const { changeVerdict } = await import("./rerun.ts");
+  assert.deepEqual(changeVerdict(row({ status: "complete" }), DAY, at("08:00")), { ok: true, of: "changed" });
+  assert.deepEqual(rerunVerdict(row({ status: "complete" }), DAY, at("08:00")), { ok: false, message: "Today's run is already complete." });
+  assert.equal(changeVerdict(row({ status: "partial" }), DAY, at("08:00")).ok, true, "otherwise as rerunVerdict");
+  assert.equal(changeVerdict(row({ status: "complete", run_date: "2026-10-01" }), DAY, at("08:00")).ok, false, "only today's");
+  const m = nextMarker(row({ status: "complete" }), "changed", at("08:00"));
+  assert.equal(m.landed, true, "a complete run already landed: first_reading is not sent twice");
+  assert.equal(rerunMarker({ rerun: m })?.of, "changed");
+  assert.equal(restored(m, "refused"), null, "a refused change leaves the run as it was");
+});

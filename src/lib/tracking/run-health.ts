@@ -266,7 +266,7 @@ export async function readTrackable(db: SupabaseClient, day: string): Promise<Tr
   let prompts: { client_domain_id: string; added_on: string; stopped_on: string | null }[];
   try {
     clients = await selectAll<Record<string, unknown>>((from, to) =>
-      db.from("client_domains").select("id, domain, status, started_on, tier").eq("status", "active").order("id", { ascending: true }).range(from, to),
+      db.from("client_domains").select("id, domain, status, started_on, tier").eq("status", "active").is("archived_at", null).order("id", { ascending: true }).range(from, to),
     );
   } catch (err) {
     throw new Error(`could not read the tracked clients: ${msg(err)}`);
@@ -307,7 +307,7 @@ export async function readSkips(db: SupabaseClient, day: string): Promise<Skippe
   let clusters: { client_domain_id: string; started_on: string | null; stopped_on: string | null }[];
   try {
     clients = await selectAll<Record<string, unknown>>((from, to) =>
-      db.from("client_domains").select("id, domain, status, started_on").in("status", ["active", "paused"]).order("id", { ascending: true }).range(from, to),
+      db.from("client_domains").select("id, domain, status, started_on").in("status", ["active", "paused"]).is("archived_at", null).order("id", { ascending: true }).range(from, to),
     );
     prompts = await selectAll<{ client_domain_id: string; added_on: string; stopped_on: string | null }>((from, to) =>
       db.from("tracked_questions").select("client_domain_id, added_on, stopped_on").is("stopped_on", null).order("id", { ascending: true }).range(from, to),

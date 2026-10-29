@@ -73,14 +73,14 @@ async function sessionCall(form: URLSearchParams, fetchImpl: typeof fetch): Prom
  */
 export type SubscriptionRead = { ok: true; status: string; trialEnd: number | null; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
 
-async function subscriptionCall(id: string, form: URLSearchParams | null, fetchImpl: typeof fetch): Promise<SubscriptionRead> {
+async function subscriptionCall(id: string, form: URLSearchParams | null, fetchImpl: typeof fetch, method?: "DELETE"): Promise<SubscriptionRead> {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) return { ok: false, reason: "no_key" };
   if (!/^sub_[A-Za-z0-9]{1,200}$/.test(id)) return { ok: false, reason: "refused" };
   let res: Response;
   try {
     res = await fetchImpl(`https://api.stripe.com/v1/subscriptions/${id}`, {
-      method: form ? "POST" : "GET",
+      method: method ?? (form ? "POST" : "GET"),
       headers: { authorization: `Bearer ${key}`, ...(form ? { "content-type": "application/x-www-form-urlencoded" } : {}) },
       body: form ? form.toString() : undefined,
       signal: AbortSignal.timeout(15_000),
@@ -107,6 +107,15 @@ export function readSubscription(id: string, fetchImpl: typeof fetch = fetch): P
 
 export function cancelAtPeriodEnd(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
   return subscriptionCall(id, new URLSearchParams({ cancel_at_period_end: "true" }), fetchImpl);
+}
+
+/**
+ * Cancel a subscription now, with no proration and no final invoice (29 Oct 2026): the agency view's Archive, for a
+ * customer that was never a customer - a test signup. Stripe answers the cancelled subscription; one already
+ * cancelled answers an error, which the caller reads first with readSubscription so it never asks twice.
+ */
+export function cancelNow(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
+  return subscriptionCall(id, null, fetchImpl, "DELETE");
 }
 
 /**

@@ -86,7 +86,11 @@ test("rule 1: the walk finds the model calls it is written about", () => {
   // reserves it on the DIY ledger's model door and debits model_call_debits
   // with billed.calls. Both are `beta.messages.parse` on `anthropic(billed)`, so
   // the method set and rules 2-4 stand unchanged. An eleventh needs its own.
-  assert.equal(calls.length, 10, "anthropic.ts makes ten model calls; an eleventh needs a decision, not a default");
+  // Eleven since 29 Oct 2026: draftBuyingPrompts, the agency view's "Regenerate prompts" (Danny's brief that day).
+  // Reached only from src/lib/agency/edit.ts draftPrompts, behind /api/hub/agency's HUB_OFFER_SECRET and the hub's
+  // staff check: one call per staff click, never by a customer or a schedule. `beta.messages.parse` on
+  // `anthropic(billed)`, so the method set and rules 2-4 stand unchanged. A twelfth needs its own.
+  assert.equal(calls.length, 11, "anthropic.ts makes eleven model calls; a twelfth needs a decision, not a default");
   assert.deepEqual(
     [...new Set(calls.map((c) => c.method))],
     ["parse"],

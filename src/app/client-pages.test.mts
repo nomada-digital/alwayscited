@@ -75,6 +75,8 @@ const KEYS: Record<string, Record<string, string>> = {
     vs: 'typeof sp.vs === "string" && DAY.test(sp.vs) && dates.includes(sp.vs) && sp.vs !== date',
   },
   "/integrations": {},
+  // 29 Oct 2026: placements and link insertions from the link team's sheets. No query keys.
+  "/links": {},
   // 22 Oct 2026: the map pack grids. No query keys.
   "/local": {},
   "/managed": {},

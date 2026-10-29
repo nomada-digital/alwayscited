@@ -248,7 +248,7 @@ export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: n
       if (!signedUp.has(id) || at < signedUp.get(id)!) signedUp.set(id, at);
     }
     if (signedUp.size) {
-      const { data, error: cErr } = await db.from("client_domains").select(CLIENT_COLUMNS).in("id", [...signedUp.keys()]).eq("status", "active");
+      const { data, error: cErr } = await db.from("client_domains").select(CLIENT_COLUMNS).in("id", [...signedUp.keys()]).eq("status", "active").is("archived_at", null);
       if (cErr) throw new Error(`could not read the new clients: ${cErr.message}`);
       setups.push(...((data ?? []) as Client[]));
     }
@@ -302,7 +302,7 @@ export async function sweepLifecycleMail(db: SupabaseClient, io: SweepIo, now: n
  */
 async function sweepThisWeek(db: SupabaseClient, io: SweepIo, now: number, out: SweepResult): Promise<void> {
   if (!io.thisWeek) return;
-  const clients = await selectAll<Client>((from, to) => db.from("client_domains").select(CLIENT_COLUMNS).eq("status", "active").order("id", { ascending: true }).range(from, to));
+  const clients = await selectAll<Client>((from, to) => db.from("client_domains").select(CLIENT_COLUMNS).eq("status", "active").is("archived_at", null).order("id", { ascending: true }).range(from, to));
   if (!clients.length) return;
   // This Monday's claim for each client, by the day in its own zone.
   const due = new Map(clients.map((c) => [c.id, thisWeekEvent(zoneDay(now, c.market))] as const));

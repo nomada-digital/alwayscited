@@ -53,6 +53,7 @@ import {
   restored,
   retryAnswers,
   retryKeywords,
+  changeVerdict,
   rerunVerdict,
 } from "./rerun.ts";
 import { readTrackable, recordSkips } from "./run-health.ts";
@@ -151,8 +152,8 @@ export async function dispatchTrackingRun(runId: string): Promise<void> {
  * the run's status and error line stay as they are until a pass closes it
  * (review of b2e0019). The caller dispatches it as any run.
  */
-export async function requestRerun(run: RunForRerun, today: string): Promise<{ ok: true } | { ok: false; message: string }> {
-  const verdict = rerunVerdict(run, today);
+export async function requestRerun(run: RunForRerun, today: string, opts: { changed?: boolean } = {}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const verdict = opts.changed ? changeVerdict(run, today) : rerunVerdict(run, today);
   if (!verdict.ok) return verdict;
   const refusal = refuseRun(await trackingSettings(), await trackingSpentOn(today));
   if (refusal) return { ok: false, message: `Not re-run: ${refusal}.` };

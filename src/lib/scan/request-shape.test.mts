@@ -345,7 +345,8 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
     keywordRankRequest: ["src/lib/scan/dataforseo.ts"],
     // 18 Oct 2026 (brief 2c): setup's keyword step reads the plural's volume, after check-keyword.ts's capped check passes.
     // 22 Oct 2026: starter.ts reads the candidates' volume once for a signup left with a cluster with no keyword.
-    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/app/api/scan/[token]/questions/route.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
+    // 29 Oct 2026: agency/edit.ts measures the one keyword staff change a cluster to, once per change, in the agency view.
+    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/app/api/scan/[token]/questions/route.ts", "src/lib/agency/edit.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
     readKeywordRank: ["src/lib/scan/pipeline.ts"],
   });
 });
@@ -366,7 +367,7 @@ test("the keyword intent endpoint is built in one module, sent from one door, ca
     for (const name of Object.keys(senders)) if (new RegExp("(?<![\\w.])(?<!function\\s+)" + name + "\\(").test(src)) senders[name].push(file);
   }
   assert.deepEqual(files, ["src/lib/scan/dataforseo-request.ts"]);
-  assert.deepEqual(senders, { keywordIntentRequest: ["src/lib/scan/dataforseo.ts"], readKeywordIntents: ["src/app/api/scan/[token]/questions/route.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"] });
+  assert.deepEqual(senders, { keywordIntentRequest: ["src/lib/scan/dataforseo.ts"], readKeywordIntents: ["src/app/api/scan/[token]/questions/route.ts", "src/lib/agency/edit.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"] });
 });
 
 test("keyword intent request (C1): one task, keywords in the echoed form, a language and no location", () => {

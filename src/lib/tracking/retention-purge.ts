@@ -49,6 +49,8 @@ export async function retentionPass(db: SupabaseClient, now: number = Date.now()
     .from("client_domains")
     .select("id, slug, domain, account_id, status, ended_at")
     .eq("status", "ended")
+    // An archived customer (29 Oct 2026, lib/agency/edit.ts archive) is kept: archiving never deletes a row.
+    .is("archived_at", null)
     .not("ended_at", "is", null)
     .lt("ended_at", cutoff)
     .order("ended_at", { ascending: true })

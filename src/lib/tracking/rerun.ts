@@ -56,7 +56,7 @@ import { runIsStalled } from "./dispatch.ts";
  * passed in (rerun.test.mts runs it against an in-memory one).
  */
 
-export type RerunOf = "failed" | "partial" | "stalled";
+export type RerunOf = "failed" | "partial" | "stalled" | "changed";
 
 /** Where an asked re-run is: waiting for the run route's claim, claimed and reading, or closed by its pass. */
 export type RerunState = "asked" | "reading" | "closed";
@@ -85,7 +85,7 @@ export const RERUN_BUTTON = "Re-run failed reads";
 export function rerunMarker(stepMs: unknown): RerunMarker | null {
   const m = (stepMs as { rerun?: unknown } | null)?.rerun as Partial<RerunMarker> | undefined;
   if (!m || typeof m !== "object") return null;
-  if (m.of !== "failed" && m.of !== "partial" && m.of !== "stalled") return null;
+  if (m.of !== "failed" && m.of !== "partial" && m.of !== "stalled" && m.of !== "changed") return null;
   return {
     of: m.of,
     error: typeof m.error === "string" ? m.error : null,
@@ -132,6 +132,18 @@ export function rerunVerdict(run: RunForRerun, today: string, now: number = Date
   return { ok: false, message: `Today's run is already ${run.status}.` };
 }
 
+/**
+ * A complete run asked again because staff changed what the client tracks (29 Oct 2026, lib/agency/edit.ts): a
+ * keyword change makes a new cluster with new prompts and a new keyword, and "regenerate prompts and re-run checks
+ * now" reads them today rather than at tomorrow's 05:00. The re-run reads only what has no row yet - the new
+ * prompts and keyword - exactly as a partial run's re-run reads what did not come back; everything the run read
+ * stays as it was. Asked only by that edit, never by "Run now"; otherwise as rerunVerdict.
+ */
+export function changeVerdict(run: RunForRerun, today: string, now: number = Date.now()): { ok: true; of: RerunOf } | { ok: false; message: string } {
+  if (run.run_date === today && run.status === "complete" && rerunMarker(run.step_ms)?.state !== "reading") return { ok: true, of: "changed" };
+  return rerunVerdict(run, today, now);
+}
+
 /** The marker an ask writes: the run as it was, counted, with landed carried forward. */
 export function nextMarker(run: RunForRerun, of: RerunOf, now: number = Date.now()): RerunMarker {
   const prev = rerunMarker(run.step_ms);
@@ -140,7 +152,7 @@ export function nextMarker(run: RunForRerun, of: RerunOf, now: number = Date.now
     error: of === "stalled" ? (run.error ?? "the run was stopped before it could record a result") : run.error,
     at: new Date(now).toISOString(),
     n: (prev?.n ?? 0) + 1,
-    landed: of === "partial" || prev?.landed === true,
+    landed: of === "partial" || of === "changed" || prev?.landed === true,
     state: "asked",
     why: null,
   };
@@ -171,8 +183,8 @@ function asRead<B extends Filters<B>>(swap: B, prev: RerunMarker | null, staleBe
   return prev ? started.eq("step_ms->rerun->>at", prev.at).eq("step_ms->rerun->>state", prev.state) : started.is("step_ms->rerun", null);
 }
 
-/** The statuses a re-run is asked from: failed, partial, and running for a stalled run. */
-const ASKED_FROM = new Set(["failed", "partial", "running"]);
+/** The statuses a re-run is asked from: failed, partial, running for a stalled run, and complete for a change. */
+const ASKED_FROM = new Set(["failed", "partial", "running", "complete"]);
 
 /**
  * The run route's claim of an asked re-run, for a run its queued claim did

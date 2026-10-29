@@ -3,6 +3,7 @@ import TierName, { TIER_PLAIN } from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { CONTACT_EMAIL } from "@/config/contact";
 import type { Workspace } from "@/lib/dash/types";
+import { showsPlacements } from "@/lib/links/gate";
 import type { PlanBanner } from "@/lib/tracking/plan-banner";
 
 import { Meter } from "./Figures";
@@ -20,6 +21,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: root, label: "Overview", icon: "overview" },
     // Paid plans: the clusters we work on, under the plan's own name (Danny, 17 Oct 2026). Plain text - a tier lockup never sits in a link.
     ...(ws.client.tier !== "tracked" ? [{ href: `${root}/managed`, label: TIER_PLAIN[ws.client.tier], icon: "plan", n: ws.clusters.filter((c) => c.managed).length || null }] : []),
+    // 29 Oct 2026: placements (alwaysmentioned and up) and link insertions (the alwayscited plan and up), from the link team's sheets.
+    ...(showsPlacements(ws.client.tier) ? [{ href: `${root}/links`, label: "Your links", icon: "ext" }] : []),
     { href: `${root}/clusters`, label: "Clusters", icon: "clusters", n: ws.clusters.length },
     { href: `${root}/ai`, label: "AI visibility", icon: "ai" },
     { href: `${root}/google`, label: "Search positions", icon: "google" },

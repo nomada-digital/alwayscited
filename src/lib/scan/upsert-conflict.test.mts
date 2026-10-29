@@ -326,6 +326,11 @@ test("the upsert sites are the ones we think they are", () => {
       // 25 Sep 2026: difficulty.ts writes each placeable source's difficulty
       // score back onto its own row, on the same (scan_id, domain) index.
       "scan_sources:domain,scan_id",
+      // 29 Oct 2026: the link team's sheets (links/sheet-store.ts storeSheet), one row per client, kind and live URL on
+      // sheet_links' unique (client_domain_id, kind, url_key), and one sync status per client and kind on sheet_syncs'
+      // primary key, both in 20261029000000_agency_edits_and_link_sheets.sql. A re-sync updates; it never duplicates.
+      "sheet_links:client_domain_id,kind,url_key",
+      "sheet_syncs:client_domain_id,kind",
       // 29 Sep 2026, the daily tracking runner (T1), each on its own unique
       // constraint in 20260929000000_tracking_dashboard.sql: one run per client
       // per day, one answer per run, question and engine, one SERP per keyword.
@@ -334,6 +339,9 @@ test("the upsert sites are the ones we think they are", () => {
       // 17 Oct 2026: an extra tracking pack's subscription, recorded and updated by the webhook (lib/checkout/packs.ts).
       "tracking_packs:stripe_subscription_id",
       "tracking_runs:client_domain_id,run_date",
+      "tracking_runs:client_domain_id,run_date",
+      // 29 Oct 2026: the agency view's "re-run checks now" opens today's run the way /admin/tracking's Run now does
+      // (agency/edit.ts runChecksNow), on the same unique key, ignoring a duplicate.
       "tracking_runs:client_domain_id,run_date",
       "tracking_serp:keyword_id,run_id",
       // 24 Sep 2026: one walkthrough request per scan, address and kind.

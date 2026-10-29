@@ -204,6 +204,10 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/dashboards/[client]/google",
     "/dashboards/[client]/google/[keyword]",
     "/dashboards/[client]/integrations",
+    // 29 Oct 2026: /links (placements and link insertions), and /local (the map pack, 22 Oct 2026), which was never
+    // registered in dynamic-render.mts, so capture aborted on every tree from then. Same reason.
+    "/dashboards/[client]/links",
+    "/dashboards/[client]/local",
     "/dashboards/[client]/managed",
     "/dashboards/[client]/opportunities",
     "/dashboards/[client]/plan",

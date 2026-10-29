@@ -994,3 +994,51 @@ export async function writeReoptExample<T>(input: DiyModelInput<T>, billed: { ca
     messages: [{ role: "user", content: input.user }],
   }));
 }
+
+const BuyingPrompts = z.object({
+  prompts: z
+    .array(z.object({ angle: z.enum(["category", "positioning", "sector", "outcome", "comparison"]), text: z.string() }))
+    .describe("Exactly five prompts, one per angle, in the order category, positioning, sector, outcome, comparison"),
+});
+export type BuyingPrompt = z.infer<typeof BuyingPrompts>["prompts"][number];
+
+/**
+ * Five buying questions for a cluster keyword, one per angle, for the agency view's "Regenerate prompts" (29 Oct
+ * 2026, lib/agency/edit.ts). Written from the client's own site - what it sells, who it works for, the work it shows -
+ * as a buyer choosing a provider would ask an AI assistant, never as a question about the subject itself, and never
+ * naming the brand (a prompt that names the brand nearly always names it back). One call, medium effort; staff read
+ * and edit the drafts before anything is saved.
+ */
+export async function draftBuyingPrompts(
+  input: { keyword: string; market: Market; brand: string | null; domain: string; siteText: string },
+  billed: { calls: number },
+): Promise<BuyingPrompt[]> {
+  const where = input.market === "UK" ? "the UK" : "the US";
+  const system = [
+    "You write the prompts an AI-visibility tracker asks ChatGPT, Gemini, Perplexity, Claude and Google's AI Overviews every day.",
+    "Each prompt is a question a real buyer types while choosing who to hire or buy from. It must be a buying question: who to choose, which is best for a need, how to compare, what to look for in a provider. Never an informational question about the subject (no 'what is', 'how does X work', 'how to').",
+    "Write one prompt per angle: category (the best providers of exactly this), positioning (providers strong at what this client is distinctive for), sector (providers for the industries or client types this client serves), outcome (providers that deliver the results this client's work shows), comparison (how to compare or choose between providers of this).",
+    "Ground every prompt in the site text: its services, specialisms, sectors and case studies. Do not invent services the site does not show.",
+    `Never name the client's brand or domain, or any other company. Write for a buyer in ${where}; say ${where} in the category prompt. Each prompt 30 to 160 characters, one sentence, ending with a question mark. Lower-case the keyword unless it contains a proper noun.`,
+  ].join("\n");
+  const user = [
+    `Cluster keyword: ${input.keyword}`,
+    `Market: ${where}`,
+    `Client (never name it): ${input.brand ?? input.domain} (${input.domain})`,
+    "",
+    "The client's site:",
+    input.siteText.slice(0, 24_000),
+  ].join("\n");
+  const res = await withRetry(() => anthropic(billed).beta.messages.parse({
+    model: DIY_MODEL,
+    max_tokens: 4000,
+    betas: ["server-side-fallback-2026-07-01"],
+    fallbacks: "default",
+    output_config: { effort: "medium", format: betaZodOutputFormat(BuyingPrompts) },
+    system,
+    messages: [{ role: "user", content: user }],
+  }));
+  const parsed = res.parsed_output;
+  if (!parsed) throw new Error(`the model returned no prompts (stop: ${res.stop_reason})`);
+  return parsed.prompts.map((p) => ({ angle: p.angle, text: freshenYears(p.text.replace(/\s+/g, " ").trim()) }));
+}

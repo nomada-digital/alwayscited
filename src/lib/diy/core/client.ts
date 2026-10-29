@@ -152,7 +152,7 @@ export async function loadDiyClients(db: SupabaseClient, now: number): Promise<D
   let events: ConfirmRow[];
   try {
     [rows, events] = await Promise.all([
-      selectAll<ClientRow>((from, to) => db.from("client_domains").select(DIY_CLIENT_COLUMNS).eq("status", "active").order("id", { ascending: true }).range(from, to)),
+      selectAll<ClientRow>((from, to) => db.from("client_domains").select(DIY_CLIENT_COLUMNS).eq("status", "active").is("archived_at", null).order("id", { ascending: true }).range(from, to)),
       selectAll<ConfirmRow>((from, to) => db.from("dashboard_events").select("client_domain_id, created_at").eq("event", SETUP_CONFIRMED_EVENT).order("id", { ascending: true }).range(from, to)),
     ]);
   } catch (err) {
