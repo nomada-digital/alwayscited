@@ -6,6 +6,10 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { QUESTIONS } from "@/config/scan-shape";
 import { CARD, MICRO, T } from "@/config/tokens";
 import type { Market } from "@/lib/scan";
+
+const MARKET_LABEL: Record<Market, string> = { UK: "United Kingdom", US: "United States", JM: "Jamaica" };
+/** "the UK", "the US", "Jamaica" - how "searches a month in ..." ends. */
+const inMarket = (m: Market) => (m === "JM" ? "Jamaica" : "the " + m);
 import { type MarketReason, marketReasonLine } from "@/lib/scan/market-pick";
 
 /**
@@ -168,6 +172,8 @@ export default function ConfirmScreen(p: {
   positioning: string | null;
   initialTopic: string;
   initialMarket: Market;
+  /** The pair the toggle offers; UK and US unless the scan's partner offers Jamaica (29 Oct 2026). */
+  markets?: Market[];
   /** Why the market opened where it did. Null hides the line. */
   marketReason?: MarketReason | null;
   variants: string[];
@@ -471,7 +477,7 @@ export default function ConfirmScreen(p: {
           <fieldset style={{ border: 0, padding: 0, margin: "14px 0 0" }}>
             <legend style={{ ...fieldLabel, margin: "0 0 6px", padding: 0 }}>Market</legend>
             <div style={{ display: "flex", gap: "8px" }}>
-              {(["UK", "US"] as Market[]).map((m) => (
+              {(p.markets ?? (["UK", "US"] as Market[])).map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -490,7 +496,7 @@ export default function ConfirmScreen(p: {
                     border: "1px solid " + (market === m ? T.accent : T.line),
                   }}
                 >
-                  {m === "UK" ? "United Kingdom" : "United States"}
+                  {MARKET_LABEL[m]}
                 </button>
               ))}
             </div>
@@ -591,7 +597,7 @@ export default function ConfirmScreen(p: {
               {keyword.volume != null ? (
                 <div style={{ fontSize: "13.5px", color: T.soft }}>
                   <span style={{ fontWeight: 600, color: T.ink }}>{keyword.volume.toLocaleString("en-GB")}</span>{" "}
-                  searches a month in the {writtenFor?.market ?? market}
+                  searches a month in {inMarket(writtenFor?.market ?? market)}
                 </div>
               ) : null}
               {keyword.intent ? <div style={MICRO}>{KEYWORD_INTENT[keyword.intent] ?? keyword.intent} intent</div> : null}

@@ -44,7 +44,7 @@ export default function HeroSection({
   notice?: string | null;
   /** /scan only: a domain handed over in the URL starts the scan without a click (LiveScanChecker autoStart). */
   autoStart?: boolean;
-  handoff?: { ref: string | null; market: "UK" | "US" | null; utm?: Utm | null };
+  handoff?: { ref: string | null; market: "UK" | "US" | "JM" | null; utm?: Utm | null };
 }) {
   // No background is set here: body carries the page ground, so every board
   // sits on #f6f6f7 and the white cards read as surfaces.

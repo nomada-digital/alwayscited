@@ -19,10 +19,22 @@ export function scanRef(raw: unknown): string | null {
   return r.length <= SCAN_LIMITS.ref && SCAN_REF_PATTERN.test(r) ? r : null;
 }
 
-/** UK or US in any case ("uk" is what the partner form sends), else nothing - the start route then picks the market itself. */
-export function handoffMarket(raw: unknown): "UK" | "US" | null {
+/** UK, US or JM in any case ("uk" is what the partner form sends), else nothing - the start route then picks the market itself. */
+export function handoffMarket(raw: unknown): "UK" | "US" | "JM" | null {
   const m = typeof raw === "string" ? raw.trim().toUpperCase() : "";
-  return m === "UK" || m === "US" ? m : null;
+  return m === "UK" || m === "US" || m === "JM" ? m : null;
+}
+
+/**
+ * Markets beyond UK and US, by the partner whose scans may use them (29 Oct 2026). The LAB (Kingston) offers its
+ * clients US and Jamaica on /partners/the-lab. A scan with any other ref, or none, is UK or US whatever it sends.
+ */
+export const PARTNER_MARKETS: ReadonlyMap<string, readonly ("JM")[]> = new Map([["thelab", ["JM"] as const]]);
+
+/** Whether a scan with this ref may be run in this market: UK and US always, JM only for a partner that offers it. */
+export function partnerMayUse(ref: string | null | undefined, market: string): boolean {
+  if (market === "UK" || market === "US") return true;
+  return market === "JM" && !!ref && (PARTNER_MARKETS.get(ref) ?? []).includes("JM");
 }
 
 /**

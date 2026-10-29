@@ -118,7 +118,7 @@ export default function RequestScanForm({ initialDomain = "" }: { initialDomain?
             topic={topic}
             onTopic={setTopic}
             market={market}
-            onMarket={setMarket}
+            onMarket={(m) => { if (m !== "JM") setMarket(m); }}
             onSubmit={onTopic}
             onBack={() => {
               setStep("domain");

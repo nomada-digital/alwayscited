@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import ScanFlow from "@/components/scan/ScanFlow";
-import { isMarket } from "@/lib/scan/domain";
+import { isScanMarket, type Market } from "@/lib/scan/domain";
+import { PARTNER_MARKETS } from "@/lib/scan/handoff";
 import { readMailOutcome } from "@/lib/scan/mail-outcome";
 import type { MarketReason } from "@/lib/scan/market-pick";
 import { publicTeaser } from "@/lib/scan/opportunities";
@@ -43,7 +44,7 @@ export default async function ScanTokenPage({
   const { data: scan, error: scanErr } = await db
     .from("scans")
     .select(
-      "id, brand_name, domain, positioning, topic, topic_variants, market, status, engines, gated_engines, gated_status, unlocked_at, started_at, queued_at",
+      "id, brand_name, domain, positioning, topic, topic_variants, market, ref, status, engines, gated_engines, gated_status, unlocked_at, started_at, queued_at",
     )
     .eq("public_token", token)
     .maybeSingle();
@@ -176,7 +177,9 @@ export default async function ScanTokenPage({
    * deliver, and never took it back.
    */
   const gatedStatus = isGatedPassDead(scan) ? "failed" : ((scan.gated_status as string | null) ?? "none");
-  const market = isMarket(scan.market) ? scan.market : "US";
+  const market = isScanMarket(scan.market) ? scan.market : "US";
+  // The confirm screen's two markets: US and Jamaica on a scan from a partner that offers Jamaica (29 Oct 2026), else UK and US.
+  const markets: Market[] = (PARTNER_MARKETS.get((scan.ref as string | null) ?? "") ?? []).includes("JM") ? ["US", "JM"] : ["UK", "US"];
 
   /**
    * Why that market, for the line under the confirm screen's toggle. Read on
@@ -219,6 +222,7 @@ export default async function ScanTokenPage({
       positioning={positioning}
       topic={topic}
       market={market}
+      markets={markets}
       marketReason={marketReason}
       variants={variants}
       status={status}

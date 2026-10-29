@@ -9,7 +9,8 @@ import {
   TOPIC_VARIANT_COUNT,
 } from "@/lib/scan/anthropic";
 import { readKeywordIntents, readKeywordVolumes } from "@/lib/scan/dataforseo";
-import { isMarket, type Market } from "@/lib/scan/domain";
+import { isScanMarket, type Market } from "@/lib/scan/domain";
+import { partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits, pickClusterKeyword } from "@/lib/scan/target-keyword";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -78,7 +79,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     // Neither counter is read here any more. The ceiling is decided by
     // note_preview_call inside the update, which is the only reading of
     // preview_calls that two concurrent requests cannot disagree about.
-    .select("id, status, domain, brand_name, positioning, topic, topic_variants, market, site_facts, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
+    .select("id, status, domain, brand_name, positioning, topic, topic_variants, market, ref, site_facts, cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
     .eq("public_token", token)
     .maybeSingle();
 
@@ -112,7 +113,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     return Response.json({ error: "bad_topic", message: "Tell us the category in a few words." }, { status: 400 });
   }
 
-  const market = isMarket(body.market) ? body.market : isMarket(scan.market) ? scan.market : "US";
+  // JM only on a scan whose partner offers it (handoff.ts partnerMayUse, 29 Oct 2026); the row's own market stands otherwise.
+  const asked = isScanMarket(body.market) && partnerMayUse(scan.ref as string | null, body.market) ? body.market : null;
+  const market = asked ?? (isScanMarket(scan.market) ? scan.market : "US");
 
   const supplied: unknown[] = Array.isArray(body.topic_variants)
     ? body.topic_variants

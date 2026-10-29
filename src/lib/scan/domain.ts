@@ -55,14 +55,45 @@ export function isPlausibleDomain(domain: string): boolean {
   return /^[a-z]{2,}$/.test(tld);
 }
 
-/** Markets the free scan supports, and their Google location codes. */
+/**
+ * Markets the free scan supports, and their Google location codes.
+ *
+ * JM (29 Oct 2026) is offered only from a partner's page (/partners/the-lab), never by the site's own toggle, which
+ * stays UK and US (SITE_MARKETS). Tested live that day: Google's AI Overview, ChatGPT and Perplexity answer as a
+ * Jamaican searcher (JN Bank, NCB, Hi-Lo, Kingston) at location 2388 / country JM; Gemini answers generically or
+ * errors there, as it often does in the US too. DataForSEO Labs has no Jamaica, so nothing that reads Labs by
+ * market may be given JM (dataforseo.ts readRankingFootprint only ever asks UK and US).
+ */
 export const MARKETS = {
   UK: { location_code: 2826, label: "United Kingdom" },
   US: { location_code: 2840, label: "United States" },
+  JM: { location_code: 2388, label: "Jamaica" },
 } as const;
 
 export type Market = keyof typeof MARKETS;
 
+/** The two the site offers on its own pages; JM is a partner's (see MARKETS). */
+export const SITE_MARKETS: readonly Market[] = ["UK", "US"];
+
+/**
+ * UK or US: what every table outside `scans` holds (client_domains, campaigns, walkthrough_requests, the DIY tools
+ * and tracking all check market in ('UK','US')), so everything but the free check keeps reading it this way.
+ */
 export function isMarket(v: unknown): v is Market {
   return v === "UK" || v === "US";
+}
+
+/** Any market a free scan may be run in, JM included (29 Oct 2026). Only the scan's own doors read this. */
+export function isScanMarket(v: unknown): v is Market {
+  return v === "UK" || v === "US" || v === "JM";
+}
+
+/** "the United Kingdom", "the United States", "Jamaica": the market as a sentence names it. */
+export function marketPlace(m: Market): string {
+  return m === "JM" ? "Jamaica" : `the ${MARKETS[m].label}`;
+}
+
+/** "the UK", "the US", "Jamaica": the short form. */
+export function marketShort(m: Market): string {
+  return m === "JM" ? "Jamaica" : `the ${m}`;
 }

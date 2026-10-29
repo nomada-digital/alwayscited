@@ -8,7 +8,8 @@
  * disagrees - flagged for him.
  */
 
-export type Market = "UK" | "US";
+/** JM only on a partner's scans (29 Oct 2026, domain.ts MARKETS). */
+export type Market = "UK" | "US" | "JM";
 
 /**
  * `ai_search_volume` was a field on the three types below and came out on

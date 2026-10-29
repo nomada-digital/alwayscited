@@ -8,7 +8,7 @@ import { z } from "zod";
 import { QUESTIONS } from "@/config/scan-shape";
 
 import { brandedQuestions, cleanBrandName, withoutBrand } from "./brand-name";
-import type { Market } from "./domain";
+import { type Market, marketPlace, marketShort } from "./domain";
 import { batchBlocks, runBatches } from "./prose-batches";
 import { countingFetch, withRetry } from "./retry-policy";
 import { sourceKindRequest, sourceKindSystem } from "./source-kind-prompt";
@@ -284,7 +284,7 @@ export async function generateQuestions(input: {
   /** The subject's domain, so a question naming it by domain is caught too. */
   domain?: string | null;
 }, billed: { calls: number } = { calls: 0 }): Promise<{ questions: GeneratedQuestion[]; calls: number }> {
-  const marketName = input.market === "UK" ? "the United Kingdom" : "the United States";
+  const marketName = marketPlace(input.market);
   const year = currentYear();
   // Up to three requests behind one question set, and the count belongs to
   // the caller now. It was returned only on the way out, so the attempts a
@@ -429,7 +429,7 @@ export type CoverageDraftRead = z.infer<typeof CoverageDraft>;
  * and freshenYears is applied here for the reason it is there.
  */
 export async function readCoverage(input: { text: string; market: Market }, billed: { calls: number } = { calls: 0 }): Promise<CoverageDraftRead> {
-  const marketName = input.market === "UK" ? "the United Kingdom" : "the United States";
+  const marketName = marketPlace(input.market);
   const year = currentYear();
   const res = await withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
@@ -499,7 +499,7 @@ export async function keywordCandidates(
   input: { category: string; market: Market; questions: { idx: number; question: string }[] },
   billed: { calls: number } = { calls: 0 },
 ): Promise<{ supplierNoun: string; byIdx: Map<number, string[]> }> {
-  const marketName = input.market === "UK" ? "the United Kingdom" : "the United States";
+  const marketName = marketPlace(input.market);
   const res = await withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: Math.min(8000, 400 + input.questions.length * 150),
@@ -558,7 +558,7 @@ export async function clusterKeywordCandidates(
   input: { topic: string; market: Market; positioning: string | null; services?: string[]; industries?: string[] },
   billed: { calls: number } = { calls: 0 },
 ): Promise<string[]> {
-  const marketName = input.market === "UK" ? "the United Kingdom" : "the United States";
+  const marketName = marketPlace(input.market);
   const res = await withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: 400 + CLUSTER_CANDIDATES_MAX * 60,
@@ -1013,7 +1013,7 @@ export async function draftBuyingPrompts(
   input: { keyword: string; market: Market; brand: string | null; domain: string; siteText: string },
   billed: { calls: number },
 ): Promise<BuyingPrompt[]> {
-  const where = input.market === "UK" ? "the UK" : "the US";
+  const where = marketShort(input.market);
   const system = [
     "You write the prompts an AI-visibility tracker asks ChatGPT, Gemini, Perplexity, Claude and Google's AI Overviews every day.",
     "Each prompt is a question a real buyer types while choosing who to hire or buy from. It must be a buying question: who to choose, which is best for a need, how to compare, what to look for in a provider. Never an informational question about the subject (no 'what is', 'how does X work', 'how to').",

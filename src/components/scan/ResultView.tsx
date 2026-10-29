@@ -315,7 +315,7 @@ function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
       <span style={{ fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.25, color: T.ink }}>{c.keyword}</span>
       <span style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "44px", fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1.1, color: T.ink }}>{p.rank}</span>
-        <span style={{ fontSize: "13px", color: T.soft }}>{"on Google, in the " + p.r.market}</span>
+        <span style={{ fontSize: "13px", color: T.soft }}>{"on Google, in " + (p.r.market === "JM" ? "Jamaica" : "the " + p.r.market)}</span>
       </span>
       {c.intent || c.volume != null ? (
         <span style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>

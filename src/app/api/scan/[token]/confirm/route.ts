@@ -2,7 +2,8 @@ import { after } from "next/server";
 
 import { SCAN_LIMITS } from "@/config/contact";
 import { QUESTION_COUNT, QUESTION_KINDS, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
-import { isMarket } from "@/lib/scan/domain";
+import { isScanMarket } from "@/lib/scan/domain";
+import { partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits } from "@/lib/scan/target-keyword";
 import { runScan } from "@/lib/scan/pipeline";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
@@ -74,7 +75,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   // it is the wrong one when the database simply did not answer.
   const { data: scan, error: readErr } = await db
     .from("scans")
-    .select("id, status, market, started_at, queued_at, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
+    .select("id, status, market, ref, started_at, queued_at, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
     .eq("public_token", token)
     .maybeSingle();
 
@@ -134,7 +135,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     return Response.json({ status });
   }
 
-  const market = isMarket(body.market) ? body.market : scan.market;
+  // JM only on a scan whose partner offers it (handoff.ts partnerMayUse, 29 Oct 2026).
+  const market = isScanMarket(body.market) && partnerMayUse(scan.ref as string | null, body.market) ? body.market : scan.market;
 
   /**
    * The variants the agency confirmed are the trusted set from here, capped so

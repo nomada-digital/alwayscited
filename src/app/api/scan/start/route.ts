@@ -5,12 +5,12 @@ import { describeAnthropicError, QUESTION_COUNT, readBrand, TOPIC_VARIANT_COUNT 
 import { checkCeilings } from "@/lib/scan/ceilings";
 import { type ReadFailure, readSite, UnreachableDomain } from "@/lib/scan/crawl";
 import type { ThinReason } from "@/lib/scan/page-read";
-import { isMarket, isPlausibleDomain, normalizeDomain } from "@/lib/scan/domain";
+import { isPlausibleDomain, isScanMarket, normalizeDomain } from "@/lib/scan/domain";
 import { readRankingFootprint } from "@/lib/scan/dataforseo";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
 import { clientIp, hashIp } from "@/lib/scan/ip";
 import { needsRankings, pickMarket } from "@/lib/scan/market-pick";
-import { cleanUtm, handoffMarket, scanRef } from "@/lib/scan/handoff";
+import { cleanUtm, handoffMarket, partnerMayUse, scanRef } from "@/lib/scan/handoff";
 import { getSettings } from "@/lib/scan/settings";
 import { recordModelCallDebit } from "@/lib/scan/spend";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
@@ -151,11 +151,12 @@ export async function POST(req: Request) {
    * fatal) and falls back to the US. Picked here, after the ceilings and
    * before the cache, because the cache is keyed on (domain, market).
    */
-  // A partner hand-off sends "uk"/"us" (lib/scan/handoff.ts); anything else is no choice at all.
-  const handed = handoffMarket(body.market);
-  const chosen = isMarket(handed) ? handed : null;
   // Where the visitor was handed over from, so these leads can be routed (scans.ref, 20261018030000). Checked, never trusted.
   const ref = scanRef(body.ref);
+  // A partner hand-off sends "uk"/"us" (lib/scan/handoff.ts); anything else is no choice at all. "jm" only counts for a
+  // partner that offers Jamaica (partnerMayUse, 29 Oct 2026); from anywhere else it is no choice, as a typo would be.
+  const handed = handoffMarket(body.market);
+  const chosen = handed && isScanMarket(handed) && partnerMayUse(ref, handed) ? handed : null;
   // Its campaign tags, only with a ref (scans.utm, 20261019000000): a hand-off's lead keeps its campaign.
   const utm = ref ? cleanUtm(body.utm) : null;
   const rankings = needsRankings(chosen, domain) ? await readRankingFootprint(domain) : null;

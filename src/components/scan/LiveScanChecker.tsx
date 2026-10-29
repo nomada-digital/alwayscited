@@ -51,7 +51,7 @@ export default function LiveScanChecker({
    */
   autoStart?: boolean;
   /** The hand-off's ref and market, already checked (lib/scan/handoff.ts); sent to the start route as they are. */
-  handoff?: { ref: string | null; market: "UK" | "US" | null; utm?: Utm | null };
+  handoff?: { ref: string | null; market: "UK" | "US" | "JM" | null; utm?: Utm | null };
   dark?: boolean;
   /** Told every time busy flips, so a parent can hide its own lines (R49). */
   onBusyChange?: (busy: boolean) => void;

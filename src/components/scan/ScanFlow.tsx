@@ -315,6 +315,8 @@ export default function ScanFlow(p: {
   positioning: string | null;
   topic: string;
   market: Market;
+  /** The two markets the confirm screen offers: UK and US, or US and Jamaica on a partner that offers it (29 Oct 2026). */
+  markets?: Market[];
   /** Why the market was picked, for the line under the toggle. See market-pick.ts. */
   marketReason?: MarketReason | null;
   variants: string[];
@@ -930,6 +932,7 @@ export default function ScanFlow(p: {
             positioning={p.positioning}
             initialTopic={p.topic}
             initialMarket={p.market}
+            markets={p.markets}
             marketReason={p.marketReason ?? null}
             variants={p.variants}
             onRun={onRun}

@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 
-import PageScanBox from "@/components/scan/PageScanBox";
+import PartnerScan from "@/components/scan/PartnerScan";
 import { CARD, SHELL, T } from "@/config/tokens";
 import { DASH_HOST_DEFAULT, SAMPLE_DEMO_TOKEN, SAMPLE_SLUG } from "@/lib/dash/host";
+import { scanReady } from "@/lib/scan/readiness";
 
 /**
  * The LAB's own page (Danny, 29 Oct 2026). The LAB (TPL Jamaica, thelabjamaica.com) is an agency in Kingston; this
  * is where their clients run the free check, so every scan from here carries ref "thelab" (scans.ref) and is theirs
- * in the leads export. US results by default - Danny's call, until a test reading shows the engines answer
- * differently for Jamaica (market stays UK | US). Linked to directly, never from the site: not indexed, not in the
+ * in the leads export. US or Jamaica, picked on the page (Danny, 29 Oct 2026): Google's AI Overview, ChatGPT and
+ * Perplexity were tested that day answering as a Jamaican searcher; Gemini does not localise (domain.ts MARKETS).
+ * Linked to directly, never from the site: not indexed, not in the
  * sitemap, and it says nothing about The LAB beyond its name.
  */
 export const metadata: Metadata = {
@@ -31,11 +33,11 @@ export default function TheLabPage() {
       <p style={{ margin: "16px 0 0", fontSize: "17px", lineHeight: 1.6, color: T.soft, maxWidth: "58ch" }}>
         Travellers and buyers now ask ChatGPT, Gemini, Perplexity and Google&apos;s AI for recommendations, and each
         answer names a handful of businesses. Enter your website to see whether you are one of them, which businesses
-        are named instead, and which pages the answers are built from. Results are read for searches made in the US.
+        are named instead, and which pages the answers are built from, for searches made in the US or in Jamaica.
       </p>
 
       <div style={{ marginTop: "28px", maxWidth: "620px" }}>
-        <PageScanBox id="thelab-domain" label="Your website" placeholder="yourbusiness.com" handoff={{ ref: PARTNER_REF, market: "US" }} />
+        <PartnerScan id="thelab-domain" label="Your website" placeholder="yourbusiness.com" partner={PARTNER_REF} markets={["US", "JM"]} live={scanReady()} />
       </div>
 
       <section style={{ ...CARD, marginTop: "48px", padding: "24px 26px", maxWidth: "760px", borderRadius: "18px" }}>

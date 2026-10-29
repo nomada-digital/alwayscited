@@ -28,7 +28,7 @@ import { MARKETS, type Market } from "./domain.ts";
 import type { Engine } from "./engines.ts";
 
 /** ISO country codes for the markets we support, for the LLM Responses engines. */
-export const MARKET_ISO: Record<Market, string> = { UK: "GB", US: "US" };
+export const MARKET_ISO: Record<Market, string> = { UK: "GB", US: "US", JM: "JM" };
 
 /** The model each LLM Responses engine is asked. Sonnet, not Opus: same answer, less spend. */
 export const RESPONSE_MODELS = {
