@@ -9,7 +9,9 @@ import { hashToken } from "@/lib/tracking/session";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import { FIXTURE_EMAIL, dashFixturePath, fixtureClient, fixtureRaw } from "./fixture";
+import { SAMPLE_SLUG } from "./host";
 import { type ClientRow, loadRaw } from "./load";
+import { sampleRaw } from "./sample-world";
 import type { Raw } from "./types";
 
 /**
@@ -54,6 +56,8 @@ export const dashRaw = cache(async (email: string, slug: string): Promise<Raw | 
  * draw; there is no session behind it for any write route to accept.
  */
 export const demoRaw = cache(async (slug: string): Promise<Raw | null> => {
+  // The sample client is generated, never read (sample-world.ts): the database is not asked about this slug at all.
+  if (slug === SAMPLE_SLUG) return sampleRaw(trackingDay());
   if (dashFixturePath()) {
     const raw = fixtureRaw();
     return raw.client.slug === slug ? raw : null;

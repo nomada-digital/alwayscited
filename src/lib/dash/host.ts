@@ -31,9 +31,22 @@ export const DEMO_HEADER = "x-dash-demo";
 export const DEMO_STATES = ["tracked-trial", "tracked", "mentioned", "cited", "everywhere"] as const;
 export type DemoState = (typeof DEMO_STATES)[number];
 
+/**
+ * The sample client (29 Oct 2026, sample-world.ts): a fictional tourism brand whose every reading is generated, for
+ * showing an agency the dashboard as if it had run for months. Its link is committed on purpose, unlike every other
+ * demo token: nothing real is behind it - no row, no client, no figure about anybody - so the token protects nothing
+ * and the link can be shared as freely as a page on the site. It opens SAMPLE_SLUG only, and that slug is never read
+ * from the database (access.ts demoRaw).
+ */
+export const SAMPLE_SLUG = "sample-jamaica-tourism";
+export const SAMPLE_CLIENT_ID = "5a3b1e00-0000-4000-8000-000000000001";
+export const SAMPLE_DEMO_TOKEN = "sample-jamaica-tourism-dashboard-2026";
+export const isSampleClient = (id: string | null | undefined): boolean => id === SAMPLE_CLIENT_ID;
+
 /** A demo token's link: the client it opens and, optionally, the plan state it shows the client as. */
 export function demoLink(token: string | null | undefined, env?: { DASH_DEMO_LINKS?: string }): { slug: string; state: DemoState | null } | null {
   if (!token || token.length < DEMO_TOKEN_MIN || !/^[A-Za-z0-9_-]+$/.test(token)) return null;
+  if (token === SAMPLE_DEMO_TOKEN) return { slug: SAMPLE_SLUG, state: null };
   const raw = (env ? env.DASH_DEMO_LINKS : ENV_DEMO_LINKS) ?? "";
   for (const entry of raw.split(",")) {
     const [t, slug, state] = entry.trim().split(":");

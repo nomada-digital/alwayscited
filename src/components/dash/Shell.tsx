@@ -2,6 +2,7 @@ import BrandMark from "@/components/BrandMark";
 import TierName, { TIER_PLAIN } from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { CONTACT_EMAIL } from "@/config/contact";
+import { isSampleClient } from "@/lib/dash/host";
 import type { Workspace } from "@/lib/dash/types";
 import { showsPlacements } from "@/lib/links/gate";
 import type { PlanBanner } from "@/lib/tracking/plan-banner";
@@ -69,13 +70,19 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
         </div>
       </aside>
       {/* A shared demo link (17 Oct 2026): said on every page, and edits there stay in the browser (useOps). */}
-      {demo && !viewAs ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">Demo, read-only</span> : null}
+      {demo && !viewAs ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">{isSampleClient(ws.client.id) ? "Sample data, read-only" : "Demo, read-only"}</span> : null}
       <div className="dash-main" id="dash-content">
         <div className="dash-inner">
           {/* The agency hub's "What the customer sees" (18 Oct 2026): said on every page; nothing here saves or charges. */}
           {viewAs ? (
             <div className="banner warn view-as" style={{ marginBottom: 16 }} role="note">
               <span><b>Viewing as customer</b> · read-only. This is {ws.client.domain}&apos;s dashboard as its owner sees it; nothing you do here is saved or charged. Opened by {viewAs.by}.</span>
+            </div>
+          ) : null}
+          {/* The generated sample client (29 Oct 2026, sample-world.ts): said on every page, above everything else. */}
+          {isSampleClient(ws.client.id) ? (
+            <div className="banner warn" style={{ marginBottom: 16 }} role="note">
+              <span><b>Sample dashboard.</b> {ws.client.brand} is a fictional brand, and every figure, competitor and placement here is generated to show what the dashboard looks like after a few months. Nothing you change is saved.</span>
             </div>
           ) : null}
           {banner ? (
