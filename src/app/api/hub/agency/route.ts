@@ -1,5 +1,4 @@
-import { timingSafeEqual } from "node:crypto";
-
+import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -10,22 +9,19 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 /**
- * The agency view's edits (29 Oct 2026, lib/agency/edit.ts). Server to server only, as /api/hub/offer: the hub's
- * edge function alwayscited-admin sends `x-hub-secret`, which must equal HUB_OFFER_SECRET, after checking the
- * caller is agency staff (is_agency and a @nomadadigital.co.uk login); `by` is that staff member's email, written
- * to the audit log. Its sheet sync, sync-alwayscited-sheets, sends the cells it read (action sheet_cells) the same way.
- * Unset, the door answers 503 and changes nothing. Customers never reach it: the dashboards host has no link here.
+ * The agency view's edits (29 Oct 2026, lib/agency/edit.ts). Server to server only: the hub's edge function
+ * alwayscited-admin calls it after checking the caller is agency staff (is_agency and a @nomadadigital.co.uk login),
+ * with `x-hub-secret` (HUB_OFFER_SECRET, as /api/hub/offer) or `x-ac-key` (the project key the hub already holds;
+ * hub-auth.ts); `by` is that staff member's email, written to the audit log. Its sheet sync, sync-alwayscited-sheets,
+ * sends the cells it read (action sheet_cells) the same way. Customers never reach it: the dashboards host has no
+ * link here, and neither header is anything a browser holds.
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
 const ACTIONS = new Set(["read", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
 
 export async function POST(req: Request) {
-  const secret = process.env.HUB_OFFER_SECRET;
-  if (!secret) return Response.json({ error: "not_configured" }, { status: 503 });
-  const given = Buffer.from(req.headers.get("x-hub-secret") ?? "");
-  const want = Buffer.from(secret);
-  if (given.length !== want.length || !timingSafeEqual(given, want)) return Response.json({ error: "forbidden" }, { status: 403 });
+  if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
 
   let b: Record<string, unknown>;
   try {

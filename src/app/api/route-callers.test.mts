@@ -215,8 +215,8 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     method: "POST",
     // 29 Oct 2026: the agency view's staff edits and the hub's sheet sync (alwayscited-admin agency_*, and
     // sync-alwayscited-sheets). Server to server, behind the same HUB_OFFER_SECRET; customers never reach it.
-    why: "Called by the agency hub's edge functions (alwayscited-admin, sync-alwayscited-sheets), never by this app; it answers only to x-hub-secret.",
-    earns: () => /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/app/api/hub/agency/route.ts"), "utf8")),
+    why: "Called by the agency hub's edge functions (alwayscited-admin, sync-alwayscited-sheets), never by this app; it answers only to x-hub-secret or the project's service key (hub-auth.ts).",
+    earns: () => /hubAuthorised\(req\)/.test(readFileSync(join(ROOT, "src/app/api/hub/agency/route.ts"), "utf8")) && /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/lib/agency/hub-auth.ts"), "utf8")),
   },
   {
     route: "/api/cron/purge-responses",
