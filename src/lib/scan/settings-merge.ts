@@ -69,6 +69,14 @@ export type Settings = {
    */
   scan_cache_exempt_domains: string[];
   /**
+   * New checks one domain may start in a rolling day from "Run a new check" on
+   * a finished report (29 Oct 2026, /api/scan/[token]/rerun). The domain cache
+   * hands every visitor the last reading for 30 days whatever category or
+   * prompts they wanted; this is what bounds stepping round it. Every ceiling
+   * in ceilings.ts still applies on top.
+   */
+  domain_reruns_per_day: number;
+  /**
    * Domains refused on public forms on top of `work-email.ts`'s built-in list
    * (Danny, 8 Oct 2026), so one can be added without a deploy. Stored as
    * comma-separated text, empty by default; split by `parseBlockedExtra`.
@@ -92,6 +100,7 @@ export const SETTINGS_FALLBACK: Settings = {
   anthropic_calls_per_day: 2500,
   coverage_ceiling_exempt_domains: [],
   scan_cache_exempt_domains: [],
+  domain_reruns_per_day: 5,
   work_email_blocked_extra: [],
 };
 

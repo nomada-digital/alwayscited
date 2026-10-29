@@ -140,6 +140,9 @@ test("every door that takes a caller's address is in this file's denominator", (
       // confirmed, which is Danny's first condition on item 5. A2 passes for it:
       // the address it reads goes to `hashIp` and to nothing else.
       "src/app/api/scan/[token]/email-report/route.ts",
+      // The ninth, 29 October 2026: "Run a new check" on a finished report, which
+      // counts against the caller's scan allowance. The address goes to `hashIp` only.
+      "src/app/api/scan/[token]/rerun/route.ts",
       // The fifth, 24 September 2026: the walkthrough request, which rate
       // limits the alert it sends Danny. The address goes to `hashIp` only.
       "src/app/api/scan/[token]/walkthrough/route.ts",

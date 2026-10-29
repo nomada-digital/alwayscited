@@ -40,6 +40,8 @@ export const GA_EVENTS = [
   "scan_started",
   "free_scan_complete",
   "scan_confirmed",
+  // "Run a new check" under a finished report (29 Oct 2026, RerunPanel).
+  "scan_rerun",
   "free_scan_email",
   "generate_lead",
   "coverage_check_start",

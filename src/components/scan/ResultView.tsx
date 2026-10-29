@@ -657,9 +657,10 @@ function ShareOfVoice(p: { r: RunScanResponse }) {
           : "The same question set scored for every brand in the category. This is the gap, and it is the number that has to move."}
       </Head>
       {/* ScanResult.dc.html: name, a 10px rounded bar, the count in bold at the
-          right. The board's "/ 20" is not drawn: these are mention counts and can
-          exceed the answer total (39 against 17 answers on the 25 Sep US scan),
-          so "of N answers" would be false. */}
+          right. The board's "/ 20" is not drawn. Since 29 Oct 2026 a count is answers
+          naming the brand (answers-naming.ts), so it can no longer pass the answer
+          total, but scans stored before then hold mention tallies that did (39
+          against 17 answers on the 25 Sep US scan). */}
       <div style={{ ...CARD, borderRadius: "18px", padding: "10px 22px 18px" }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
           {rows.slice(0, SOV_ROWS).map((b) => {

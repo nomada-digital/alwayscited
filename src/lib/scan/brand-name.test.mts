@@ -213,6 +213,23 @@ test("domainStem reads the name out of the host", () => {
   assert.equal(domainStem("localhost"), null);
 });
 
+test("a name closed by a descriptor counts without it, anchored on the domain (Grace Foods, 29 Oct 2026)", () => {
+  // The two answers on the live gracefoods.com scan that named it and were scored as not naming it.
+  assert.ok(namesSubject("- **Grace** — the essential anchor brand: ackee, canned fish", "Grace Foods", "gracefoods.com"));
+  assert.ok(namesSubject("Grace Tropical Rhythms Mango Carrot", "Grace Foods", "gracefoods.com"));
+  assert.ok(subjectKeys("Grace Foods", "gracefoods.com").has("grace"));
+  // A single word only with a capital.
+  assert.equal(namesSubject("Most suppliers give a 30 day grace period.", "Grace Foods", "gracefoods.com"), false);
+  // Not anchored: the domain does not start with the short name.
+  assert.equal(namesSubject("Grace is a classic.", "Grace Foods", "caribbeanpantry.com"), false);
+  assert.equal(namesSubject("Grace is a classic.", "Grace Foods"), false);
+  // Several descriptors fold, a multi-word lead keeps its own words.
+  assert.ok(namesSubject("Stock Island Spice for jerk.", "Island Spice Foods UK", "islandspicefoods.co.uk"));
+  // Never under four letters, and never down to a descriptor.
+  assert.equal(namesSubject("Buy from Ace today.", "Ace Group", "acegroup.com"), false);
+  assert.equal(subjectKeys("Global Foods", "globalfoods.com").has("global"), false);
+});
+
 test("a trade mark on the stored name does not stop it matching (goodtrip, 22 Oct 2026)", () => {
   // A live alwaysmentioned order stored "goodtrip®", which matched only its own literal spelling.
   for (const prose of ["Try Goodtrip", "GoodTrip Clothing makes souvenir tees.", "Order from goodtrip.co.uk today."]) {

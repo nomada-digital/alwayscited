@@ -105,6 +105,11 @@ const GUARDED = [
   // 1 Oct 2026, R140: step 2's draft - one model call over the placed pieces,
   // no engine read. Behind Turnstile, checkCeilings and DRAFTS_PER_IP_PER_DAY.
   "coverage-check/draft",
+  // 29 Oct 2026: "Run a new check" on a finished report. It makes no paid call
+  // itself - the new scan is paid at /confirm - but it imports anthropic.ts for
+  // TOPIC_VARIANT_COUNT, and it does go through checkCeilings and a per-domain
+  // daily count (domain_reruns_per_day), so it is classified here honestly.
+  "scan/[token]/rerun",
 ];
 
 /**

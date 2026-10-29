@@ -208,11 +208,12 @@ export function placementsNote(sources: readonly SourceEntry[]): string | null {
 /** How many rows of the leaderboard are drawn, and the ceiling its caption counts to. */
 export const SOV_ROWS = 12;
 
+/** Answers, not mentions, since 29 Oct 2026 - see answers-naming.ts. */
 export function leaderboardCaption(rowCount: number, partial: boolean): string {
   const tail = partial ? " we could read." : rowCount > SOV_ROWS ? "." : " in all.";
   const body =
     rowCount > SOV_ROWS ? "top " + SOV_ROWS + " of " + count(rowCount, "brand") : count(rowCount, "brand");
-  return "Mentions across the answers these engines gave, " + body + tail;
+  return "Answers naming each brand across these engines, " + body + tail;
 }
 
 /**

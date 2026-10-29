@@ -11,6 +11,7 @@ import {
   siteFacts,
   QUESTION_COUNT,
 } from "./anthropic";
+import { answersNaming } from "./answers-naming";
 import { brandKey, displayNamesFor, namesSubject, subjectKeys } from "./brand-name";
 import { scoreScanDifficulty } from "./difficulty";
 import { readEngine, readKeywordRank, readKeywordVolumes } from "./dataforseo";
@@ -852,23 +853,30 @@ async function readAndStore(input: {
       if (!suppliers.has(key)) continue;
       perEngine.set(key, (perEngine.get(key) ?? 0) + b.mentions);
     }
-    for (const [key, mentions] of perEngine) {
+    /**
+     * `mentions` holds answers naming the brand, not times named (29 Oct 2026,
+     * answers-naming.ts): one answer listing a brand three times is one answer,
+     * the unit the subject's own "named in X of Y" is counted in.
+     */
+    const prose = answers.filter((a) => a.engine === engine && a.answered && a.prose).map((a) => a.prose);
+    for (const [key, extractedMentions] of perEngine) {
+      const spellings = [displayFor.get(key) ?? key, ...(variants.get(key)?.keys() ?? [])];
       brandRows.push({
         scan_id: scanId,
         engine,
         brand: displayFor.get(key) ?? key,
-        mentions,
+        mentions: answersNaming(prose, spellings, extractedMentions),
         is_subject: false,
       });
     }
 
     // The subject gets a row for every engine that answered, at zero when it
     // was never named. A measured zero is the strongest finding on the page.
+    // Its answers named, as the headline counts them, so the board and the
+    // headline cannot disagree (29 Oct 2026; it was the extractor's tally,
+    // which put the subject on the board at 1 beside a headline of 0).
     const namedCount = answers.filter((a) => a.engine === engine && a.brandNamed).length;
-    const claimed = extracted
-      .filter((b) => subject.has(brandKey(b.brand)))
-      .reduce((n, b) => n + b.mentions, 0);
-    brandRows.push({ scan_id: scanId, engine, brand, mentions: claimed || namedCount, is_subject: true });
+    brandRows.push({ scan_id: scanId, engine, brand, mentions: namedCount, is_subject: true });
   }
 
   if (brandRows.length) {

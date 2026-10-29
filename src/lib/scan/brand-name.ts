@@ -370,7 +370,45 @@ export function brandAliases(raw: string, domain?: string | null): BrandAlias[] 
       }
     }
   }
+
+  const short = withoutDescriptor(core, stem);
+  if (short) add(short, !short.includes(" "));
   return out;
+}
+
+/**
+ * Words that say what kind of company a name is rather than which one, when
+ * they close it: "Grace Foods", "Acme Group", "Tropic Drinks UK".
+ */
+const DESCRIPTOR = new Set([
+  "food", "foods", "drinks", "beverages", "brand", "brands", "products", "group", "holdings", "international",
+  "global", "trading", "industries", "enterprises", "uk", "usa", "us", "online", "shop", "store", "official",
+]);
+
+/**
+ * The name without the descriptor words that close it - 29 Oct 2026.
+ *
+ * The scan of gracefoods.com read the brand as "Grace Foods" and scored 0 of 8,
+ * while two answers named it the way buyers do: "**Grace** - the essential
+ * anchor brand" and "Grace Tropical Rhythms". The domain rule above could not
+ * help, because there the domain spells the whole name, not its leading words.
+ *
+ * Anchored on the domain as that rule is, so this is not the prefix merge
+ * `brandKey`'s header refuses: the short name must be where the domain starts,
+ * which "Grace" is on gracefoods.com and "Moncler" is not on grenoble.com. Four
+ * letters or more, never a descriptor itself, and a single word only counts
+ * with a capital ("grace period" is not the brand).
+ */
+function withoutDescriptor(core: string, stem: string | null): string | null {
+  if (!stem) return null;
+  const words = core.split(" ").filter(Boolean);
+  let n = words.length;
+  while (n > 1 && DESCRIPTOR.has(brandKey(words[n - 1]))) n -= 1;
+  if (n === words.length) return null;
+  const lead = words.slice(0, n).join(" ");
+  const key = brandKey(lead);
+  if (key.length < 4 || DESCRIPTOR.has(key) || !stem.startsWith(key)) return null;
+  return lead;
 }
 
 /** The brand keys that are the subject, so it stays off its own leaderboard. */

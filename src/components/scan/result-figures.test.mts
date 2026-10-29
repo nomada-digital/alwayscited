@@ -299,16 +299,16 @@ test("the placement footnote is absent when nothing was sorted, and agrees with 
 test("the caption counts to the same ceiling the bars are drawn to", () => {
   const under = SOV_ROWS - 1;
   const over = SOV_ROWS + 1;
-  assert.equal(leaderboardCaption(1, false), "Mentions across the answers these engines gave, 1 brand in all.");
-  assert.equal(leaderboardCaption(under, false), "Mentions across the answers these engines gave, " + under + " brands in all.");
+  assert.equal(leaderboardCaption(1, false), "Answers naming each brand across these engines, 1 brand in all.");
+  assert.equal(leaderboardCaption(under, false), "Answers naming each brand across these engines, " + under + " brands in all.");
   assert.equal(
     leaderboardCaption(SOV_ROWS, false),
-    "Mentions across the answers these engines gave, " + SOV_ROWS + " brands in all.",
+    "Answers naming each brand across these engines, " + SOV_ROWS + " brands in all.",
     "the caption said 'top N of N' for a list it drew in full",
   );
   assert.equal(
     leaderboardCaption(over, false),
-    "Mentions across the answers these engines gave, top " + SOV_ROWS + " of " + over + " brands.",
+    "Answers naming each brand across these engines, top " + SOV_ROWS + " of " + over + " brands.",
   );
 });
 

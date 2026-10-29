@@ -33,6 +33,7 @@ import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
 import { isWorkEmail } from "@/lib/work-email";
 
 import ResultView from "./ResultView";
+import RerunPanel from "./RerunPanel";
 import { field } from "./screens";
 
 /**
@@ -1070,6 +1071,8 @@ export default function ScanFlow(p: {
             pending={partial ? { caption: stepCaption(progress), error: restError || null } : null}
           />
         ) : null}
+
+        {phase === "result" && result && !partial ? <RerunPanel token={p.token} domain={p.domain} /> : null}
 
         {phase === "result" && !result && error ? (
           <p role="alert" style={{ fontSize: "13px", color: T.badFg }}>
