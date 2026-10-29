@@ -452,3 +452,16 @@ export function brandedQuestions<T extends { question: string }>(questions: read
 export function withoutBrand<T extends { question: string }>(questions: readonly T[], brand: string, domain?: string | null): T[] {
   return questions.filter((q) => !namesSubject(q.question, brand, domain));
 }
+
+/**
+ * The brand exactly as written, capitals and all (29 Oct 2026): for a client whose name is also an ordinary word,
+ * set per client (client_domains.brand_case_sensitive) from the agency view. "COMMON" counts where an answer writes
+ * "COMMON"; "a common mistake" and "Common pitfalls" do not. Never applied by default: answers write most brands in
+ * more than one case ("ASOS", "Asos"), which namesSubject is built to catch.
+ */
+export function namesExactly(prose: string, brand: string): boolean {
+  const word = cleanBrandName(brand).trim();
+  if (!prose || word.replace(/[^A-Za-z0-9]/g, "").length < 2) return false;
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  return new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9])`).test(prose);
+}

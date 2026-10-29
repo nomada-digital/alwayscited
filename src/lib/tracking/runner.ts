@@ -3,7 +3,7 @@ import "server-only";
 import { enginesFor } from "@/config/pricing";
 import { type TierKey } from "@/components/TierName";
 import { extractBrands } from "@/lib/scan/anthropic";
-import { brandKey, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
+import { brandKey, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
 import { runLocalGrids } from "@/lib/local/run";
 import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
 import { type Market } from "@/lib/scan/domain";
@@ -307,7 +307,7 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
 
     const { data: client, error: clErr } = await db
       .from("client_domains")
-      .select("id, domain, brand_name, topic, market, brand_aliases")
+      .select("id, domain, brand_name, topic, market, brand_aliases, brand_case_sensitive")
       .eq("id", run.client_domain_id)
       .single();
     if (clErr) throw new Error(`could not read the client: ${clErr.message}`);
@@ -328,8 +328,10 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
     const keywords = (ks ?? []).filter((k) => liveOn(k as { added_on: string; stopped_on: string | null }, day));
 
     const engines = knownEngines(run.engines as string[] | null);
+    // 29 Oct 2026: a brand that is also an ordinary word ("COMMON") counts only as written (brand-name.ts namesExactly).
+    const exact = client.brand_case_sensitive === true && !!client.brand_name;
     const names = (prose: string) =>
-      namesSubject(prose, brand, domain) || aliases.some((a) => namesSubject(prose, a));
+      (exact ? namesExactly(prose, brand) : namesSubject(prose, brand, domain)) || aliases.some((a) => namesSubject(prose, a));
 
     // The day's reads. A re-run asks again only those the run holds no
     // answered row or position for (rerun.ts retryAnswers, retryKeywords),

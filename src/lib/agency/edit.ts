@@ -37,9 +37,9 @@ import { marketDrafts } from "@/lib/tracking/starter-pick";
  */
 
 export type Done = { ok: true; message: string; data?: unknown } | { ok: false; message: string };
-export type Client = { id: string; slug: string; domain: string; brand_name: string | null; brand_aliases: string[]; market: string; tier: string; status: string; archived_at: string | null; insertions_sheet_url: string | null; placements_sheet_url: string | null };
+export type Client = { id: string; slug: string; domain: string; brand_name: string | null; brand_aliases: string[]; brand_case_sensitive?: boolean; market: string; tier: string; status: string; archived_at: string | null; insertions_sheet_url: string | null; placements_sheet_url: string | null };
 
-const AGENCY_COLUMNS = "id, slug, domain, brand_name, brand_aliases, market, tier, status, archived_at, archived_by, archived_reason, insertions_sheet_url, placements_sheet_url, cluster_limit, started_on";
+const AGENCY_COLUMNS = "id, slug, domain, brand_name, brand_aliases, brand_case_sensitive, market, tier, status, archived_at, archived_by, archived_reason, insertions_sheet_url, placements_sheet_url, cluster_limit, started_on";
 export const TIERS = ["tracked", "mentioned", "cited", "everywhere"] as const;
 export const STATUSES = ["active", "paused", "ended"] as const;
 /** Who wrote a prompt or keyword staff added here, as /admin/tracking writes it. */
@@ -120,6 +120,23 @@ export async function setSheets(db: SupabaseClient, client: Client, by: string, 
   if (error) return { ok: false, message: `Could not save the sheets: ${error.message}` };
   for (const [field, v] of Object.entries(next)) await audit(db, client.id, by, "set_sheet", field, client[field as keyof Client] ?? null, v);
   return { ok: true, message: "Sheets saved. Sync now reads them." };
+}
+
+/** The names an answer is read for: the brand, its aliases, and whether the brand counts only as written (namesExactly). */
+export async function setBrand(db: SupabaseClient, client: Client, by: string, p: { brand: unknown; aliases: unknown; exactCase: unknown }): Promise<Done> {
+  const brand = String(p.brand ?? "").replace(/\s+/g, " ").trim();
+  if (brand && (brand.length < 2 || brand.length > 80)) return { ok: false, message: "A brand name is 2 to 80 characters." };
+  const raw = Array.isArray(p.aliases) ? p.aliases : String(p.aliases ?? "").split(",");
+  const aliases = [...new Set(raw.map((a) => String(a).replace(/\s+/g, " ").trim()).filter(Boolean))];
+  if (aliases.length > 10 || aliases.some((a) => a.length < 2 || a.length > 80)) return { ok: false, message: "Up to ten aliases, each 2 to 80 characters." };
+  const exact = p.exactCase === true && !!brand;
+  const next = { brand_name: brand || null, brand_aliases: aliases, brand_case_sensitive: exact };
+  const before = { brand_name: client.brand_name, brand_aliases: client.brand_aliases ?? [], brand_case_sensitive: client.brand_case_sensitive === true };
+  if (JSON.stringify(before) === JSON.stringify(next)) return { ok: true, message: "Nothing changed." };
+  const { error } = await db.from("client_domains").update(next).eq("id", client.id);
+  if (error) return { ok: false, message: `Could not save the brand: ${error.message}` };
+  await audit(db, client.id, by, "set_brand", null, before, next);
+  return { ok: true, message: `Brand saved; answers are read for it from the next check${exact ? ", counted only where written exactly as typed" : ""}. Readings already taken are not re-scored.` };
 }
 
 export async function setTier(db: SupabaseClient, client: Client, by: string, tier: string): Promise<Done> {

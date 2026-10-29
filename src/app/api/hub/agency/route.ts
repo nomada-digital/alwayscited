@@ -1,5 +1,5 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
-import { addPrompt, archive, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -18,7 +18,7 @@ export const maxDuration = 120;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["read", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
+const ACTIONS = new Set(["read", "set_brand", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -49,6 +49,8 @@ export async function POST(req: Request) {
         return readAgency(db, client);
       case "set_sheets":
         return setSheets(db, client, by, { insertions: b.insertions, placements: b.placements });
+      case "set_brand":
+        return setBrand(db, client, by, { brand: b.brand, aliases: b.aliases, exactCase: b.exact_case });
       case "set_tier":
         return setTier(db, client, by, str("tier"));
       case "set_status":

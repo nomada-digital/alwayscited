@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { namesSubject } from "../scan/brand-name.ts";
+import { namesExactly, namesSubject } from "../scan/brand-name.ts";
 
 import { PROMPT_TRACKED } from "./prompt-text.ts";
 
@@ -208,18 +208,20 @@ export async function readClusterRefusal(db: SupabaseClient, clientId: string): 
 export const BRANDED_CHIP = "Names the brand";
 export const BRANDED_NOTE = "This prompt names your brand, so answers to it will nearly always name you. Kept because you chose it.";
 
-export type Subject = { brand: string | null; domain: string; aliases?: readonly string[] | null };
+/** `exactCase` (29 Oct 2026, client_domains.brand_case_sensitive): the brand counts only as written - see namesExactly. */
+export type Subject = { brand: string | null; domain: string; aliases?: readonly string[] | null; exactCase?: boolean };
 
 export function namesBrandIn(text: string, s: Subject): boolean {
   const brand = s.brand?.trim() || s.domain;
-  return namesSubject(text, brand, s.domain) || (s.aliases ?? []).filter(Boolean).some((a) => namesSubject(text, a));
+  const own = s.exactCase && s.brand?.trim() ? namesExactly(text, brand) : namesSubject(text, brand, s.domain);
+  return own || (s.aliases ?? []).filter(Boolean).some((a) => namesSubject(text, a));
 }
 
 /** The client's brand, domain and aliases, for the branded chip. */
 export async function readSubject(db: SupabaseClient, clientId: string): Promise<Subject | string> {
-  const { data, error } = await db.from("client_domains").select("domain, brand_name, brand_aliases").eq("id", clientId).single();
+  const { data, error } = await db.from("client_domains").select("domain, brand_name, brand_aliases, brand_case_sensitive").eq("id", clientId).single();
   if (error) return `Could not read the client: ${error.message}`;
-  return { brand: (data.brand_name as string | null) ?? null, domain: data.domain as string, aliases: (data.brand_aliases as string[] | null) ?? [] };
+  return { brand: (data.brand_name as string | null) ?? null, domain: data.domain as string, aliases: (data.brand_aliases as string[] | null) ?? [], exactCase: data.brand_case_sensitive === true };
 }
 
 /**
