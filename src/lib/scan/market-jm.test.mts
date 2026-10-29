@@ -50,3 +50,12 @@ test("the three doors that take a market check the partner, and the start route 
     assert.match(src, /partnerMayUse\(scan\.ref/, door);
   }
 });
+
+test("a partner's check runs fresh, up to the domain's daily count, and a re-run keeps the partner", () => {
+  const start = readFileSync(join(ROOT, "src/app/api/scan/start/route.ts"), "utf8");
+  assert.match(start, /if \(ref && PARTNER_MARKETS\.has\(ref\)\)/);
+  assert.match(start, /partnerFresh = !todayErr && \(today \?\? 0\) < settings\.domain_reruns_per_day;/);
+  assert.ok(start.indexOf("partnerFresh ||") < start.indexOf('.from("scans")\n        .select("public_token, brand_name'), "decided before the cache is read");
+  const rerun = readFileSync(join(ROOT, "src/app/api/scan/[token]/rerun/route.ts"), "utf8");
+  assert.match(rerun, /ref: from\.ref,/);
+});

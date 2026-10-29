@@ -5,6 +5,7 @@ import { useState } from "react";
 import { T } from "@/config/tokens";
 
 import LiveScanChecker from "./LiveScanChecker";
+import MarketFlag from "./MarketFlag";
 import ScanBox, { type ScanBoxCopy } from "./ScanBox";
 
 type PartnerMarket = "US" | "JM";
@@ -31,6 +32,9 @@ export default function PartnerScan(p: ScanBoxCopy & { id: string; partner: stri
               onClick={() => setMarket(m)}
               aria-pressed={market === m}
               style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
                 padding: "8px 16px",
                 fontSize: "14px",
                 fontWeight: 600,
@@ -42,6 +46,7 @@ export default function PartnerScan(p: ScanBoxCopy & { id: string; partner: stri
                 border: "1px solid " + (market === m ? T.accent : T.line),
               }}
             >
+              <MarketFlag market={m} />
               {LABEL[m]}
             </button>
           ))}

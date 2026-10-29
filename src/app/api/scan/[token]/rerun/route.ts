@@ -47,7 +47,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
   const { data: from, error: readErr } = await db
     .from("scans")
-    .select("domain, brand_name, positioning, site_facts, topic, topic_variants, market, market_reason, status, is_tracking_run, campaign_id")
+    .select("domain, brand_name, positioning, site_facts, topic, topic_variants, market, market_reason, ref, status, is_tracking_run, campaign_id")
     .eq("public_token", token)
     .maybeSingle();
   if (readErr) {
@@ -101,6 +101,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       ),
       market: from.market,
       market_reason: from.market_reason,
+      // The partner it came from stays with it, so its lead is still theirs and a partner's markets (Jamaica, for
+      // The LAB) are still offered on the confirm step.
+      ref: from.ref,
       status: "pending_topic",
       ip_hash: ipHash,
       // Today's engine sets, frozen onto the row as /start freezes them.

@@ -10,7 +10,7 @@ import { readRankingFootprint } from "@/lib/scan/dataforseo";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
 import { clientIp, hashIp } from "@/lib/scan/ip";
 import { needsRankings, pickMarket } from "@/lib/scan/market-pick";
-import { cleanUtm, handoffMarket, partnerMayUse, scanRef } from "@/lib/scan/handoff";
+import { PARTNER_MARKETS, cleanUtm, handoffMarket, partnerMayUse, scanRef } from "@/lib/scan/handoff";
 import { getSettings } from "@/lib/scan/settings";
 import { recordModelCallDebit } from "@/lib/scan/spend";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
@@ -215,8 +215,23 @@ export async function POST(req: Request) {
   // altogether (Danny, 15 Oct 2026): a prospect's domain re-run to show a
   // different category, prompts or market has to be a new reading, not the
   // last one handed back. Every ceiling above still applied to get here.
-  const cacheExempt = settings.scan_cache_exempt_domains.includes(domain);
-  if (cacheExempt) console.log(`[scan] ${domain} is cache-exempt, so this runs fresh`);
+  //
+  // A partner's own page runs fresh too (29 Oct 2026): The LAB demos the check live to its clients, often on a site
+  // already read that month, and a report from another day is not the check they just pressed. Bounded by
+  // domain_reruns_per_day, the same count /rerun keeps; past it the cache answers as it would for anyone.
+  let partnerFresh = false;
+  if (ref && PARTNER_MARKETS.has(ref)) {
+    const { count: today, error: todayErr } = await db
+      .from("scans")
+      .select("id", { count: "exact", head: true })
+      .eq("domain", domain)
+      .eq("is_tracking_run", false)
+      .is("campaign_id", null)
+      .gte("created_at", since);
+    partnerFresh = !todayErr && (today ?? 0) < settings.domain_reruns_per_day;
+  }
+  const cacheExempt = partnerFresh || settings.scan_cache_exempt_domains.includes(domain);
+  if (cacheExempt) console.log(`[scan] ${domain} ${partnerFresh ? `is a ${ref} check` : "is cache-exempt"}, so this runs fresh`);
   const { data: cached, error: cacheErr } = cacheExempt
     ? { data: null, error: null }
     : await db

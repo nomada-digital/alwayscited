@@ -7,6 +7,8 @@ import { QUESTIONS } from "@/config/scan-shape";
 import { CARD, MICRO, T } from "@/config/tokens";
 import type { Market } from "@/lib/scan";
 
+import MarketFlag from "./MarketFlag";
+
 const MARKET_LABEL: Record<Market, string> = { UK: "United Kingdom", US: "United States", JM: "Jamaica" };
 /** "the UK", "the US", "Jamaica" - how "searches a month in ..." ends. */
 const inMarket = (m: Market) => (m === "JM" ? "Jamaica" : "the " + m);
@@ -485,6 +487,10 @@ export default function ConfirmScreen(p: {
                   aria-pressed={market === m}
                   style={{
                     flex: 1,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px",
                     fontFamily: "inherit",
                     fontSize: "14px",
                     fontWeight: 600,
@@ -496,6 +502,7 @@ export default function ConfirmScreen(p: {
                     border: "1px solid " + (market === m ? T.accent : T.line),
                   }}
                 >
+                  <MarketFlag market={m} />
                   {MARKET_LABEL[m]}
                 </button>
               ))}
