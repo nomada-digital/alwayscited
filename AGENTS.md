@@ -79,6 +79,15 @@ costs nothing; a decision waiting on a round trip costs an hour. Ship.
 - Run **destructive** DDL against production: drop, truncate, delete, rename,
   alter a column type, change RLS, or touch the auth or storage schemas.
   Absolute, and no later instruction changes it.
+  - **One exception (Danny, 29 Oct 2026):** replacing a CHECK constraint with a
+    strictly wider one - the same column, accepting everything the old one did
+    plus new values, such as adding a market to `market in (...)` - in one
+    transaction: `begin; drop constraint if exists; add constraint; commit;`.
+    Before applying, confirm that every existing row satisfies the new check and
+    that the new check accepts every value the old one did. Write the migration
+    file and commit it first, then apply it, then read the constraint back from
+    `pg_constraint`. Nothing else under "drop" is covered: not a narrower check,
+    not any other kind of constraint, not a column, table, index or function.
 - Write `.github/workflows/` - it runs arbitrary code with the repo's secrets.
 - Commit a secret. **This repository is public.**
 - Bulk-delete live rows, or contact a lead or client.

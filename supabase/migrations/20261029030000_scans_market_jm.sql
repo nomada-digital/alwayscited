@@ -4,8 +4,8 @@
 -- JM scan is tracked in the market paid for (webhook.ts signupMarket), never JM.
 --
 -- Widening a check means replacing it, so this drops and re-adds both constraints in one transaction. Every existing
--- row is UK or US and satisfies the new check. Applied by Danny, not by an agent: AGENTS.md keeps every drop off
--- an agent's list.
+-- row is UK or US and satisfies the new check. Applied under AGENTS.md's one exception for a strictly wider CHECK
+-- (Danny, 29 Oct 2026).
 
 begin;
 
