@@ -589,6 +589,24 @@ export function contentParsingRequest(url: string, markdown = false): DiyRequest
   return { endpoint: "content_parsing", path: DIY_PATHS.content_parsing, timeoutMs: 60_000, rows: 1, body: [{ url: diyPageUrl(url), markdown_view: markdown }] };
 }
 
+/**
+ * A homepage read through a real browser, for the scan's site read when our
+ * own fetch is refused (30 Oct 2026, Luke: couples.com). A Cloudflare bot
+ * filter answers 403 to a plain request from a data centre, ours and
+ * DataForSEO's alike; the same page rendered with JavaScript passes the
+ * challenge and comes back as markdown. Costs more than a plain parse, and is
+ * only asked for once the plain read has already been refused.
+ */
+export function renderedPageRequest(url: string): DiyRequest {
+  return {
+    endpoint: "content_parsing",
+    path: DIY_PATHS.content_parsing,
+    timeoutMs: 25_000,
+    rows: 1,
+    body: [{ url: diyPageUrl(url), markdown_view: true, enable_javascript: true, enable_browser_rendering: true, browser_preset: "desktop" }],
+  };
+}
+
 // ── parsers: named fields only ──
 
 type Obj = Record<string, unknown>;

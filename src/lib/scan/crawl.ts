@@ -3,6 +3,7 @@ import "server-only";
 import { outboundLinks } from "../coverage/draft";
 
 import { checkHost } from "./address";
+import { readRenderedPage } from "./dataforseo";
 import { bodyText, metaDescription, type ReadStop, readPage, type ThinReason, thinReason, whyThin } from "./page-read";
 import { decodeEntities, toProse } from "./prose";
 
@@ -54,6 +55,40 @@ const MAX_REDIRECTS = 5;
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
 const USER_AGENT = "alwayscited-scan/1.0 (+https://alwayscited.com)";
+
+/**
+ * The refusals a browser render can get past: a bot filter's challenge, not a
+ * page that is missing or a server that is down. Cloudflare answers 403 or 503
+ * to a request it will not serve, and 429 is the same filter rate limiting.
+ */
+const RENDER_RETRY = new Set([403, 429, 503]);
+
+/**
+ * Its own budget, on top of the 8 seconds the plain read had: a browser render
+ * is queued and loads the page's scripts. The start route allows 60 seconds and
+ * the brand read after this needs the rest.
+ */
+const RENDER_BUDGET_MS = 25_000;
+
+/**
+ * The homepage as a browser saw it, through DataForSEO, or null. Asked for only
+ * after our own fetch was refused with one of RENDER_RETRY, so the host has
+ * already passed checkHost and answered us from a public address.
+ */
+async function readRendered(domain: string): Promise<{ url: string; text: string } | null> {
+  const url = `https://${domain}/`;
+  try {
+    const got = await readRenderedPage(url, RENDER_BUDGET_MS);
+    const page = got.page;
+    if (!page || (page.status !== null && page.status >= 400)) return null;
+    const text = (page.markdown ?? "").trim();
+    console.info(`[scan] rendered read for ${domain}: ${text.length} chars, $${got.cost}`);
+    return text.length >= 200 ? { url, text } : null;
+  } catch (err) {
+    console.warn(`[scan] rendered read failed for ${domain}: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
 
 /**
  * Why a site could not be read.
@@ -483,7 +518,19 @@ export async function readSite(domain: string): Promise<string> {
     // "Nothing answered at yourdomain.com. Check the address and try again."
     // Something did answer; there was nothing in it. That is `too_thin`, which
     // the length check below reaches now that "" gets there.
-    if (html === null) throw failureFor(domain, controller.signal, firstFailure);
+    if (html === null) {
+      // Judged before the render: the 8 second controller fires while it runs,
+      // and failureFor would then call a refused site slow.
+      const failure = failureFor(domain, controller.signal, firstFailure);
+      // Refused by a bot filter: the same homepage through a real browser
+      // before telling the visitor we could not read it. Homepage only; the
+      // extra pages are not worth a second render each.
+      if (failure.reason === "blocked" && failure.status && RENDER_RETRY.has(failure.status)) {
+        const rendered = await readRendered(domain);
+        if (rendered) return ("Page: " + rendered.url + "\n" + rendered.text).slice(0, 60_000);
+      }
+      throw failure;
+    }
 
     // Empty prose stays empty, so the too_thin check below still measures words.
     const labelled = (url: string, page: string) => {

@@ -50,6 +50,7 @@ import {
   keywordVolumeRequest,
   keywordVolumes,
   mapsPointRequest,
+  renderedPageRequest,
   requestFor,
   SERP_DEPTH,
   taskCost,
@@ -361,6 +362,18 @@ export async function readDiyContentParsing(req: DiyRequest, budgetMs: number): 
   const markdown = (req.body as { markdown_view?: unknown }[])[0]?.markdown_view === true;
   const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
   return { value: parseContentParsing(task, { markdown }), cost: taskCost(task), rows: 1, partial: task.partial === true };
+}
+
+/**
+ * The scan's own door onto a browser-rendered homepage (30 Oct 2026), for a
+ * site whose bot filter refused our plain fetch. Not readDiyContentParsing: that
+ * is a client's DIY read and is reserved on their ledger in doors.ts, and a
+ * free-scan visitor has no ledger. The cost comes back for the caller to log.
+ */
+export async function readRenderedPage(url: string, budgetMs: number): Promise<{ page: ParsedPage | null; cost: number }> {
+  const req = renderedPageRequest(url);
+  const task = firstTask(await post(req.path, req.body, budgetFor(req.timeoutMs, budgetMs)));
+  return { page: parseContentParsing(task, { markdown: true }), cost: taskCost(task) };
 }
 
 /** Free: when Labs data last refreshed. */
