@@ -6,6 +6,8 @@ import { onInvoicePaymentFailed } from "@/lib/checkout/subscription-events";
 import { onInvoicePaid } from "@/lib/checkout/invoice-mail";
 import { onPackChanged, onPackCompleted } from "@/lib/checkout/packs";
 import { onHubOfferCompleted } from "@/lib/checkout/hub-offer";
+import { onContractOfferCompleted } from "@/lib/checkout/contract-offer";
+import { readSubscription, setCancelAt } from "@/lib/checkout/stripe";
 import { sendGa4Purchase } from "@/lib/checkout/ga4";
 import { handleWebhook } from "@/lib/checkout/webhook";
 
@@ -58,6 +60,7 @@ export async function POST(req: Request) {
     packCompleted: (session) => onPackCompleted(supabaseAdmin(), session),
     packChanged: (sub, ended) => onPackChanged(supabaseAdmin(), sub, ended),
     hubOfferCompleted: (session) => onHubOfferCompleted(supabaseAdmin(), session),
+    contractOfferCompleted: (session) => onContractOfferCompleted(supabaseAdmin(), session, { read: (id) => readSubscription(id), setCancelAt: (id, at) => setCancelAt(id, at) }),
   });
   return Response.json(answer.body, { status: answer.status });
 }

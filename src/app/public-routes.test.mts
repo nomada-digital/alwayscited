@@ -85,6 +85,8 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   // R91, 29 Sep 2026: reached from a tier's checkout button with the picks in its query.
   "/checkout": "an order in progress - the form before Stripe's payment page; nothing on it is meant to be found by search",
   "/checkout/done": "where Stripe returns a buyer after payment; reached only from Stripe, nothing on it is meant to be found",
+  // 31 Oct 2026, lib/checkout/contract-offer.ts.
+  "/checkout/offer/[token]": "a client's own offer under a signed agreement - their name and price - reachable only by holding the token",
   "/scan": "the GET form target, noindex and deliberately headerless - see HEADERLESS_ON_PURPOSE",
   "/scan/[token]": "somebody's own scan result, reachable only by holding the token",
   "/coverage-check/[token]": "somebody's own campaign reading, reachable only by holding the token",

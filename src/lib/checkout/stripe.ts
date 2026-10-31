@@ -71,7 +71,7 @@ async function sessionCall(form: URLSearchParams, fetchImpl: typeof fetch): Prom
  * "Cancel trial" - the subscription ends when the trial does and nothing is
  * charged. Neither bills anybody.
  */
-export type SubscriptionRead = { ok: true; status: string; trialEnd: number | null; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
+export type SubscriptionRead = { ok: true; status: string; trialEnd: number | null; cancelAtPeriodEnd: boolean; currentPeriodEnd: number | null; /** When billing is reckoned from: the first payment (31 Oct 2026, contract-offer.ts). */ billingCycleAnchor: number | null } | { ok: false; reason: "no_key" | "refused" | "unreachable"; status?: number };
 
 async function subscriptionCall(id: string, form: URLSearchParams | null, fetchImpl: typeof fetch, method?: "DELETE"): Promise<SubscriptionRead> {
   const key = process.env.STRIPE_SECRET_KEY;
@@ -88,7 +88,7 @@ async function subscriptionCall(id: string, form: URLSearchParams | null, fetchI
   } catch {
     return { ok: false, reason: "unreachable" };
   }
-  const body = (await res.json().catch(() => null)) as { status?: unknown; trial_end?: unknown; cancel_at_period_end?: unknown; current_period_end?: unknown; items?: { data?: { current_period_end?: unknown }[] } } | null;
+  const body = (await res.json().catch(() => null)) as { status?: unknown; trial_end?: unknown; cancel_at_period_end?: unknown; current_period_end?: unknown; billing_cycle_anchor?: unknown; items?: { data?: { current_period_end?: unknown }[] } } | null;
   if (!res.ok || typeof body?.status !== "string") return { ok: false, reason: "refused", status: res.status };
   // The period end is on the subscription in older API versions and on its items from 2025-03-31 on; either is read.
   const periodEnd = body.current_period_end ?? body.items?.data?.[0]?.current_period_end;
@@ -98,6 +98,7 @@ async function subscriptionCall(id: string, form: URLSearchParams | null, fetchI
     trialEnd: typeof body.trial_end === "number" ? body.trial_end : null,
     cancelAtPeriodEnd: body.cancel_at_period_end === true,
     currentPeriodEnd: typeof periodEnd === "number" ? periodEnd : null,
+    billingCycleAnchor: typeof body.billing_cycle_anchor === "number" ? body.billing_cycle_anchor : null,
   };
 }
 
@@ -107,6 +108,15 @@ export function readSubscription(id: string, fetchImpl: typeof fetch = fetch): P
 
 export function cancelAtPeriodEnd(id: string, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
   return subscriptionCall(id, new URLSearchParams({ cancel_at_period_end: "true" }), fetchImpl);
+}
+
+/**
+ * End a subscription at a set moment, with no proration (31 Oct 2026, contract-offer.ts): a contract offer's plan
+ * stops after the agreed number of payments. Bills nobody; `at` is a period end, so nothing is part-charged.
+ */
+export function setCancelAt(id: string, at: number, fetchImpl: typeof fetch = fetch): Promise<SubscriptionRead> {
+  if (!Number.isInteger(at) || at <= 0) return Promise.resolve({ ok: false, reason: "refused" });
+  return subscriptionCall(id, new URLSearchParams({ cancel_at: String(at), proration_behavior: "none" }), fetchImpl);
 }
 
 /**

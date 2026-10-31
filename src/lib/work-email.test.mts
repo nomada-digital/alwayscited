@@ -114,7 +114,9 @@ const HANDLERS = walk(APP)
 
 // 22 Oct 2026: api/hub/offer takes no visitor's address - the agency hub sends its own client's login, server to
 // server behind HUB_OFFER_SECRET, to prefill that client's Checkout - so the work-email rule has nothing to judge.
-const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts"];
+// 31 Oct 2026: api/checkout/offer/[token] is a checkout, as api/checkout is - the client on a signed agreement chooses
+// the address they will sign in with, and only someone holding their private link reaches it.
+const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts", "api/checkout/offer/[token]/route.ts"];
 
 const KNOWN = [
   "contact/actions.ts",

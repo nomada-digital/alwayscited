@@ -165,6 +165,11 @@ export const STATES: Record<string, State> = {
     urls: [],
     blocked: "needs an unpublished hub post and its preview key, which only the agency hub can read",
   },
+  // 31 Oct 2026: a contract offer (lib/checkout/contract-offer.ts). An unknown token renders "This link has expired.",
+  // which is swept here; the open offer needs a contract_offers row and its token, which only Danny holds.
+  "/checkout/offer/[token]": {
+    urls: ["/checkout/offer/" + "0".repeat(64)],
+  },
   "/coverage-check/[token]": {
     urls: [],
     blocked: "needs a campaign row and its token; 404s without a database",

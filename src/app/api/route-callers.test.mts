@@ -203,6 +203,13 @@ function allCalls(): Call[] {
  */
 const NO_CALLER: { route: string; method: string; why: string; earns: () => boolean }[] = [
   {
+    route: "/api/checkout/offer/[token]",
+    method: "POST",
+    // 31 Oct 2026: a contract offer's page posts the buyer's email here as a plain HTML form (contract-offer.ts).
+    why: "A plain form post from the contract offer page (/checkout/offer/[token]); the probe reads fetch calls, not form actions.",
+    earns: () => readFileSync(join(ROOT, "src/app/checkout/offer/[token]/page.tsx"), "utf8").includes('<form method="post" action={`/api/checkout/offer/${token}`}'),
+  },
+  {
     route: "/api/hub/offer",
     method: "POST",
     // 22 Oct 2026: Nomada's agency hub (nomada-dashboards, edge function alwayscited-admin, project_offer) asks for a

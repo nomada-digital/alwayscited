@@ -92,6 +92,8 @@ export type CompletedOrder = {
   amountDiscount: number | null;
   /** The plan's monthly price before VAT and discounts, in the smallest unit, as checkout priced it (23 Oct 2026); null on an older Session. */
   monthlyAmount: number | null;
+  /** A contract offer's agreed number of payments (contract-offer.ts, 31 Oct 2026); absent or null on any other order. */
+  contractCharges?: number | null;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -125,6 +127,7 @@ export function completedOrder(session: Record<string, unknown>): CompletedOrder
     gaClientId: /^\d{1,12}\.\d{1,12}$/.test(str(m.ga_client_id)) ? str(m.ga_client_id) : null,
     promotionId: promotionOf(session),
     monthlyAmount: /^\d{1,9}$/.test(str(m.monthly_amount)) ? Number(str(m.monthly_amount)) : null,
+    contractCharges: str(m.kind) === "contract_offer" && /^\d{1,2}$/.test(str(m.charges)) ? Number(str(m.charges)) : null,
     amountDiscount: discountOf(session),
   };
 }
@@ -353,6 +356,11 @@ export type WebhookDeps = {
   packChanged?: (sub: Record<string, unknown>, ended: boolean) => Promise<boolean>;
   /** 22 Oct 2026: the agency hub's subscription offer was taken (hub-offer.ts onHubOfferCompleted). Absent: acknowledged, nothing done. */
   hubOfferCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
+  /**
+   * 31 Oct 2026: a contract offer's Session completed (contract-offer.ts onContractOfferCompleted) - its end date is
+   * set before the usual signup runs. Absent: the signup runs alone and the subscription has no end date.
+   */
+  contractOfferCompleted?: (session: Record<string, unknown>) => Promise<boolean>;
 };
 
 /** The event's created time; the moment it arrived when Stripe's is missing, so a write is never undated. */
@@ -370,6 +378,12 @@ function isPackObject(o: Record<string, unknown>): boolean {
 function isHubOfferObject(o: Record<string, unknown>): boolean {
   const m = o.metadata;
   return !!m && typeof m === "object" && (m as Record<string, unknown>).kind === "hub_offer";
+}
+
+/** A Session marked as a contract offer (contract-offer.ts CONTRACT_OFFER_KIND). Inline, as isPackObject. */
+function isContractOfferObject(o: Record<string, unknown>): boolean {
+  const m = o.metadata;
+  return !!m && typeof m === "object" && (m as Record<string, unknown>).kind === "contract_offer";
 }
 
 export type WebhookAnswer = { status: number; body: { ok?: true; ignored?: string; error?: string } };
@@ -411,7 +425,8 @@ export async function handleWebhook(raw: string, signature: string | null, secre
         ? await (deps.packChanged?.(obj, type === "customer.subscription.deleted") ?? Promise.resolve(true))
         : true
     : type === "checkout.session.completed"
-      ? await deps.completed(completedOrder(obj), event.id)
+      ? // 31 Oct 2026: a contract offer ends after its agreed payments; that is set first, then the usual signup runs.
+        (!isContractOfferObject(obj) || (await (deps.contractOfferCompleted?.(obj) ?? Promise.resolve(true)))) && (await deps.completed(completedOrder(obj), event.id))
       : type === "customer.subscription.updated"
         ? await deps.updated(obj, event.data.previous_attributes ?? {}, at)
         : type === "customer.subscription.trial_will_end"
@@ -441,6 +456,7 @@ export function orderEmailText(o: CompletedOrder, outcome: string, siteOrigin: s
     `Email: ${o.email ?? "none given"}`,
     `Keyword target: ${o.keyword || "-"}`,
     `First payment: ${amount}`,
+    ...(o.contractCharges ? [`Contract offer: billed under a signed agreement, ${o.contractCharges} monthly payment(s), then the subscription ends`] : []),
     ...(promotion ? [promotion] : []),
     ...(trial ? [`Trial started - first charge ${trial.firstCharge}, ${trial.amount}`] : []),
     // Which path the signup took (R158, 1 Oct 2026): from the scan, or with no scan from the website.
