@@ -61,7 +61,8 @@ test("the census finds every /scan GET form, not the ones a page walk reached", 
   // is the coverage check, and the sitewide header keeps "Free scan".
   // Still 4 in source on 2 Oct 2026 (R181), counted differently: the three
   // page cards (/seo-agencies, /how-it-works, the case study) are now one
-  // form, in ScanBox, beside HomeFaq, PostShell and DarkClosing.
+  // form, in ScanBox, beside HomeFaq, PostShell and DarkClosing. 1 Nov 2026: PostShell's aside form went;
+  // every post's scan is BlogScanCta (in the body, early and at the end), so the count holds.
   assert.ok(
     forms.length >= 4,
     `only ${forms.length} /scan forms were found - there are four, so a shrinking count here means the probe has gone blind, not that a form was removed`,

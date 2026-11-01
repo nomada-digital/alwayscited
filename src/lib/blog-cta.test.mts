@@ -4,7 +4,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { DEFAULT_CATEGORIES, categoryOf, parseCategories, withDefaults } from "./blog-categories.ts";
-import { blocks, placeCtas } from "./hub-post-blocks.ts";
+import { blocks, earlyCtaAt, isListicle, placeCtas } from "./hub-post-blocks.ts";
 import { blogRef, handoffMayStart, handoffPartner, scanRef } from "./scan/handoff.ts";
 
 /** The blog's inline free scan and its categories (Danny, 1 Nov 2026). */
@@ -34,6 +34,33 @@ test("a later [[cta]] becomes the end box, never a third; one before the second 
   const early = placeCtas(blocks(`Intro.\n\n[[cta]]\n\n${body(4)}`).blocks);
   assert.deepEqual(ctas(early.blocks), [1], "the writer's early token stands where it is");
   assert.equal(ctas(early.blocks).length + (early.end ? 1 : 0), 2);
+});
+
+test("a listicle's early box goes just before its first ranked entry, not the second section", () => {
+  const md = `Intro.\n\n## How we ranked them\n\nCriteria.\n\nWe do not quote their prices.\n\n## 1. alwayscited - best for being named\n\nWhy.\n\n## 2. Another\n\nWhy.\n\n## What to ask\n\nAsk.\n\nMore.`;
+  const { blocks: bs } = placeCtas(blocks(md).blocks, "Best AI SEO agencies");
+  assert.deepEqual(ctas(bs).map((i) => after(bs, i)), ["1. alwayscited - best for being named"]);
+  const h3 = placeCtas(blocks(`Intro.\n\n## Why\n\nW.\n\n## At a glance\n\nG.\n\n## The list\n\nText.\n\n### 1. First\n\nA.\n\n### 2. Second\n\nB.\n\n## After\n\nC.\n\nD.`).blocks, "Peec AI alternatives").blocks;
+  assert.deepEqual(ctas(h3).map((i) => after(h3, i)), ["1. First"], "a ranked entry set as ### counts too");
+  assert.equal(earlyCtaAt([{ at: 3, level: 2, text: "**1.** Bold" }], 10), 3);
+  assert.ok(isListicle("Best AI visibility trackers in 2026") && isListicle("Otterly.AI alternatives") && !isListicle("GEO vs SEO"));
+});
+
+test("a guide's numbered steps deep in the post do not pull the box down; a list that starts sooner is not split", () => {
+  const guide = blocks(`Intro.\n\n## The short version\n\nS.\n\n## Side by side\n\nX.\n\n## What changes\n\nC.\n\n### 1. Third party pages\n\nT.\n\n### 2. Answers\n\nA.\n\n## Bottom line\n\nB.\n\nEnd.`).blocks;
+  const g = placeCtas(guide, "GEO vs SEO: what changes").blocks;
+  assert.deepEqual(ctas(g).map((i) => after(g, i)), ["Side by side"]);
+  const check = placeCtas(blocks(`Intro.\n\n## 1. Let the engines in\n\nA.\n\n## 2. Get indexed\n\nB.\n\n## 3. More\n\nC.\n\nEnd.`).blocks, "AI search optimization: a checklist").blocks;
+  assert.deepEqual(ctas(check).map((i) => after(check, i)), ["1. Let the engines in"]);
+  assert.equal(earlyCtaAt([{ at: 9, level: 2, text: "1. Last" }], 10), -1, "never in the tail");
+});
+
+test("a hand-written post gets the same early box and the end one, and the shell holds no other domain field", () => {
+  const shell = read("src/components/PostShell.tsx");
+  assert.match(shell, /withEarlyCta\(p\.children, p\.post\.slug, p\.post\.title\)/);
+  assert.match(shell, /const early = earlyCtaAt\(heads, items\.length, isListicle\(title\)\)/);
+  assert.equal((shell.match(/<BlogScanCta /g) ?? []).length, 2, "early and end");
+  assert.ok(!shell.includes('name="domain"') && !shell.includes(">Run it yourself<"), "the aside's own scan field is gone");
 });
 
 test("a post's ref is blog-<slug>, cut to the ref's length, and always a valid ref", () => {

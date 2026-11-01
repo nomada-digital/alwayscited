@@ -45,17 +45,33 @@ export function blocks(content: string): { blocks: Block[]; sections: { id: stri
   return { blocks: out, sections: out.flatMap((b) => (b.k === "h2" ? [{ id: b.id, label: b.text.replace(/\*\*/g, "") }] : [])) };
 }
 
+/** A ranked list ("Best AI SEO agencies", "Peec AI alternatives", "Top 10 ..."), from its title. */
+export const isListicle = (title: string) => /\bbest\b|\balternatives\b|\btop \d+\b/i.test(title);
+
 /**
- * Where the free scan box goes (Danny, 1 Nov 2026, components/BlogScanCta.tsx): early, once the reader has the intro
- * and the first section - just before the second ## heading - and once more at the end. Never more than two.
- * A [[cta]] the writer put before the second heading is the early one, where it stands; one later in the post is the
- * end one (the box renders at the end, not mid-post); any other [[cta]] is dropped. A post with one section gets the
- * end box only, as does one whose second heading is its tail.
+ * Where the early free scan box goes (Danny, 1 Nov 2026), for a hub post and a hand-written one alike. On a listicle
+ * (isListicle), just before its first ranked entry (the first heading that starts "1."). On any other post, just
+ * before the second ## heading, once the reader has the intro and the first section - or before a numbered list that
+ * starts sooner, so the box never splits one (a numbered guide's "1." deep in the post is a step, not an entry).
+ * -1 when there is no such heading, or it is the tail of the post (the last two items): the end box is the only one.
  */
-export function placeCtas(bs: readonly Block[]): { blocks: Block[]; end: boolean } {
-  const second = bs.flatMap((b, i) => (b.k === "h2" ? [i] : []))[1] ?? -1;
+export function earlyCtaAt(heads: readonly { at: number; level: number; text: string }[], total: number, listicle = false): number {
+  const ranked = heads.find((h) => /^1[.)]\s/.test(h.text.replace(/\*\*/g, "").trim()))?.at ?? -1;
+  const second = heads.filter((h) => h.level === 2)[1]?.at ?? -1;
+  const at = listicle && ranked >= 0 ? ranked : ranked >= 0 && (second < 0 || ranked < second) ? ranked : second;
+  return at > 0 && at < total - 2 ? at : -1;
+}
+
+/**
+ * The free scan boxes in a hub post (components/BlogScanCta.tsx): the early one (earlyCtaAt) and one at the end, never
+ * more than two. A [[cta]] the writer put before the early spot is the early one, where it stands; a later one is the
+ * end box (it renders at the end, not mid-post); any other [[cta]] is dropped.
+ */
+export function placeCtas(bs: readonly Block[], title = ""): { blocks: Block[]; end: boolean } {
+  const heads = bs.flatMap((b, i) => (b.k === "h2" || b.k === "h3" ? [{ at: i, level: b.k === "h2" ? 2 : 3, text: b.text }] : []));
+  const spot = earlyCtaAt(heads, bs.length, isListicle(title));
   const token = bs.findIndex((b) => b.k === "cta");
-  const early = token >= 0 && (second < 0 || token < second) ? token : second > 0 && second < bs.length - 2 ? second : -1;
+  const early = token >= 0 && (spot < 0 || token < spot) ? token : spot;
   const out: Block[] = [];
   bs.forEach((b, i) => {
     if (i === early) out.push({ k: "cta" });

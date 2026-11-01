@@ -91,7 +91,7 @@ function Cta({ post }: { post: HubPost }) {
 
 export default function HubPostBody({ post }: { post: HubPost }) {
   const { blocks: parsed } = blocks(post.content);
-  const { blocks: bs, end } = placeCtas(parsed);
+  const { blocks: bs, end } = placeCtas(parsed, post.title);
   const placed = new Set(bs.map((b) => b.k));
   const hero = hubImage(post.image);
   return (

@@ -1,16 +1,18 @@
 import Link from "next/link";
+import { Children, isValidElement, type ReactNode } from "react";
 
-import { SCAN_LIMITS, WAITLIST_LIMITS } from "@/config/contact";
 import { formatPostDate, type Post } from "@/config/posts";
 import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import BlogScanCta from "@/components/BlogScanCta";
+import { earlyCtaAt, isListicle } from "@/lib/hub-post-blocks";
 import { blogRef } from "@/lib/scan/handoff";
 
 /**
  * A post, from BlogPost.dc.html: the article on eight columns, the aside on
- * four. The aside carries the scan field, because the piece is the argument
- * and the field is what to do about it, and a contents list built from the
- * post's own headings.
+ * four, with a contents list built from the post's own headings. The free scan
+ * is in the body (BlogScanCta, 1 Nov 2026): early and at the end. The aside's
+ * own "Run it yourself" field went then - under 860px the aside drops below the
+ * article, which stacked it under the end box, two domain fields in a row.
  *
  * The board's callout - two big figures above the body - is not built. None
  * of the three pieces on the site carries a measured figure of its own, and a
@@ -69,17 +71,24 @@ export const Method = ({ children }: { children: React.ReactNode }) => (
   </p>
 );
 
-const fieldStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  fontFamily: "inherit",
-  fontSize: "14px",
-  color: T.ink,
-  background: T.surface,
-  border: "1px solid " + T.line,
-  borderRadius: "10px",
-  padding: "11px 13px",
-};
+/** Text of a hand-written heading's children, for earlyCtaAt ("1. " stays even when the rest is a component). */
+const textOf = (n: ReactNode): string =>
+  typeof n === "string" || typeof n === "number" ? String(n)
+  : Array.isArray(n) ? n.map(textOf).join("")
+  : isValidElement<{ children?: ReactNode }>(n) ? textOf(n.props.children) : "";
+
+/**
+ * A hand-written body with its early free scan box placed by the hub posts' rule (earlyCtaAt): before a listicle's
+ * first ranked entry, else before the second section (or a numbered list that starts sooner). The shell adds the end one.
+ */
+function withEarlyCta(children: ReactNode, slug: string, title: string): ReactNode[] {
+  const items = Children.toArray(children);
+  const heads = items.flatMap((c, at) =>
+    isValidElement<{ children?: ReactNode }>(c) && c.type === H2 ? [{ at, level: 2, text: textOf(c.props.children) }] : []);
+  const early = earlyCtaAt(heads, items.length, isListicle(title));
+  if (early < 0) return items;
+  return [...items.slice(0, early), <BlogScanCta key="scan-early" scanRef={blogRef(slug)} slug={slug} />, ...items.slice(early)];
+}
 
 /** The post's own headings as links - the aside's card, and the top of a narrow page. */
 function Contents({
@@ -197,52 +206,13 @@ export default function PostShell(p: {
         ) : null}
 
         <div style={{ marginTop: "26px", maxWidth: "68ch" }}>
-          {p.children}
-          {/* the free scan, inline, at the end of every post (1 Nov 2026): a hand-written post's own place for it */}
+          {p.post.slug && !p.bodyCta ? withEarlyCta(p.children, p.post.slug, p.post.title) : p.children}
+          {/* the free scan's second box, at the end (a hub post's body places both itself) */}
           {p.post.slug && !p.bodyCta ? <BlogScanCta scanRef={blogRef(p.post.slug)} slug={p.post.slug} /> : null}
         </div>
       </article>
 
       <aside style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
-        <div className="ac-row" style={{ ...CARD, padding: "22px" }}>
-          <div style={MICRO}>Run it yourself</div>
-          <p style={{ margin: "8px 0 14px", fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-            Your own buying questions, on your own domain. Free, no call.
-          </p>
-          {/* A plain GET to /scan, the no-JS path the app already supports.
-              Not a second checker: that component owns a fixed DOM id, so two
-              of them on one page break the label. */}
-          <form action="/scan" method="get">
-            {/* this post's ref, so the hub counts the scans each post starts (1 Nov 2026, lib/scan/handoff.ts) */}
-            {p.post.slug ? <input type="hidden" name="ref" value={blogRef(p.post.slug)} maxLength={SCAN_LIMITS.ref} /> : null}
-            {p.post.slug ? <input type="hidden" name="market" value="US" maxLength={SCAN_LIMITS.ref} /> : null}
-            <label
-              htmlFor="post-domain"
-              style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}
-            >
-              Domain
-            </label>
-            <input id="post-domain" name="domain" type="text" maxLength={WAITLIST_LIMITS.domain} placeholder="yourdomain.com" style={fieldStyle} />
-            <button
-              type="submit"
-              className="btn-primary"
-              style={{
-                width: "100%",
-                marginTop: "8px",
-                fontFamily: "inherit",
-                fontSize: "14px",
-                fontWeight: 600,
-                border: 0,
-                borderRadius: "10px",
-                padding: "11px 20px",
-                cursor: "pointer",
-              }}
-            >
-              Check
-            </button>
-          </form>
-        </div>
-
         {p.sections.length ? (
           <div className="ac-row post-toc-side" style={{ ...CARD, padding: "22px" }}>
             <div style={MICRO}>On this page</div>
