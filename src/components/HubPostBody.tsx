@@ -116,7 +116,7 @@ export default function HubPostBody({ post }: { post: HubPost }) {
       })}
       {/* A post whose body never placed its FAQs still shows them, last. */}
       {!placed.has("faqs") ? <Faqs post={post} /> : null}
-      {/* A post that placed no [[cta]] asks once more at the end (placeCtas). */}
+      {/* The second free scan box, at the end (placeCtas: early before the second section, then here). */}
       {end ? <Cta post={post} /> : null}
     </>
   );

@@ -46,15 +46,20 @@ export function blocks(content: string): { blocks: Block[]; sections: { id: stri
 }
 
 /**
- * Where the free scan box goes (1 Nov 2026, components/BlogScanCta.tsx). A post that places [[cta]] gets it there and
- * nowhere else. A post with none gets one where the 3rd section starts (the 2nd with only two), unless that is the
- * tail of the post, and one at the end - so every post asks once in the middle and once when the reader is done.
+ * Where the free scan box goes (Danny, 1 Nov 2026, components/BlogScanCta.tsx): early, once the reader has the intro
+ * and the first section - just before the second ## heading - and once more at the end. Never more than two.
+ * A [[cta]] the writer put before the second heading is the early one, where it stands; one later in the post is the
+ * end one (the box renders at the end, not mid-post); any other [[cta]] is dropped. A post with one section gets the
+ * end box only, as does one whose second heading is its tail.
  */
 export function placeCtas(bs: readonly Block[]): { blocks: Block[]; end: boolean } {
-  if (bs.some((b) => b.k === "cta")) return { blocks: [...bs], end: false };
-  const h2 = bs.flatMap((b, i) => (b.k === "h2" ? [i] : []));
-  const at = h2.length >= 3 ? h2[2]! : h2.length === 2 ? h2[1]! : -1;
-  const out = [...bs];
-  if (at > 0 && at < bs.length - 2) out.splice(at, 0, { k: "cta" });
+  const second = bs.flatMap((b, i) => (b.k === "h2" ? [i] : []))[1] ?? -1;
+  const token = bs.findIndex((b) => b.k === "cta");
+  const early = token >= 0 && (second < 0 || token < second) ? token : second > 0 && second < bs.length - 2 ? second : -1;
+  const out: Block[] = [];
+  bs.forEach((b, i) => {
+    if (i === early) out.push({ k: "cta" });
+    if (b.k !== "cta") out.push(b);
+  });
   return { blocks: out, end: true };
 }

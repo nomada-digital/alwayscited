@@ -14,22 +14,26 @@ const read = (f: string) => fs.readFileSync(path.join(ROOT, f), "utf8");
 const body = (n: number, cta = false) =>
   Array.from({ length: n }, (_, i) => `## Section ${i + 1}\n\nText ${i + 1}.\n\nMore ${i + 1}.`).join("\n\n") + (cta ? "\n\n[[cta]]" : "");
 
-test("a post that places [[cta]] gets the box there and nowhere else", () => {
-  const { blocks: bs, end } = placeCtas(blocks(body(5, true)).blocks);
-  assert.equal(bs.filter((b) => b.k === "cta").length, 1);
-  assert.equal(end, false);
+const ctas = (bs: readonly { k: string }[]) => bs.flatMap((b, i) => (b.k === "cta" ? [i] : []));
+const after = (bs: readonly { k: string }[], i: number) => (bs[i + 1] as { text?: string }).text;
+
+test("the early box sits just before the second section, and one more at the end (Danny, 1 Nov 2026)", () => {
+  const { blocks: bs, end } = placeCtas(blocks(`Intro.\n\n${body(5)}`).blocks);
+  assert.equal(end, true);
+  assert.deepEqual(ctas(bs).map((i) => after(bs, i)), ["Section 2"]);
+  // one section: only the end box
+  assert.equal(ctas(placeCtas(blocks(body(1)).blocks).blocks).length, 0);
 });
 
-test("a post with none gets one where the third section starts, and one at the end", () => {
-  const parsed = blocks(body(5)).blocks;
-  const { blocks: bs, end } = placeCtas(parsed);
-  const at = bs.findIndex((b) => b.k === "cta");
-  assert.equal(end, true);
-  assert.equal(bs[at + 1]!.k, "h2");
-  assert.equal((bs[at + 1] as { text: string }).text, "Section 3");
-  // two sections: before the second; one section: only the end box
-  assert.equal((placeCtas(blocks(body(2)).blocks).blocks.find((_, i, a) => a[i - 1]?.k === "cta") as { text: string }).text, "Section 2");
-  assert.equal(placeCtas(blocks(body(1)).blocks).blocks.filter((b) => b.k === "cta").length, 0);
+test("a later [[cta]] becomes the end box, never a third; one before the second section is the early one", () => {
+  const later = placeCtas(blocks(body(5, true)).blocks);
+  assert.deepEqual(ctas(later.blocks).map((i) => after(later.blocks, i)), ["Section 2"], "the token is not rendered mid-post");
+  assert.equal(later.end, true);
+  const mid = placeCtas(blocks(`${body(2)}\n\n[[cta]]\n\n${body(2)}\n\n[[cta]]`).blocks);
+  assert.equal(ctas(mid.blocks).length + (mid.end ? 1 : 0), 2, "never more than two");
+  const early = placeCtas(blocks(`Intro.\n\n[[cta]]\n\n${body(4)}`).blocks);
+  assert.deepEqual(ctas(early.blocks), [1], "the writer's early token stands where it is");
+  assert.equal(ctas(early.blocks).length + (early.end ? 1 : 0), 2);
 });
 
 test("a post's ref is blog-<slug>, cut to the ref's length, and always a valid ref", () => {
