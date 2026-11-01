@@ -1,8 +1,10 @@
 import Link from "next/link";
 
-import { WAITLIST_LIMITS } from "@/config/contact";
+import { SCAN_LIMITS, WAITLIST_LIMITS } from "@/config/contact";
 import { formatPostDate, type Post } from "@/config/posts";
 import { CARD, MICRO, SHELL, T } from "@/config/tokens";
+import BlogScanCta from "@/components/BlogScanCta";
+import { blogRef } from "@/lib/scan/handoff";
 
 /**
  * A post, from BlogPost.dc.html: the article on eight columns, the aside on
@@ -113,7 +115,9 @@ function Contents({
 
 export default function PostShell(p: {
   // A registered post, or one from the hub (lib/hub-posts.ts), whose kind can be one this registry does not list yet.
-  post: Pick<Post, "title" | "date" | "readMinutes"> & { kind: string };
+  post: Pick<Post, "title" | "date" | "readMinutes"> & { kind: string; slug?: string };
+  /** The body places its own scan boxes (a hub post, HubPostBody); otherwise the shell adds one after the body. */
+  bodyCta?: boolean;
   standfirst: string;
   sections: { id: string; label: string }[];
   children: React.ReactNode;
@@ -192,7 +196,11 @@ export default function PostShell(p: {
           </details>
         ) : null}
 
-        <div style={{ marginTop: "26px", maxWidth: "68ch" }}>{p.children}</div>
+        <div style={{ marginTop: "26px", maxWidth: "68ch" }}>
+          {p.children}
+          {/* the free scan, inline, at the end of every post (1 Nov 2026): a hand-written post's own place for it */}
+          {p.post.slug && !p.bodyCta ? <BlogScanCta scanRef={blogRef(p.post.slug)} slug={p.post.slug} /> : null}
+        </div>
       </article>
 
       <aside style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
@@ -205,6 +213,9 @@ export default function PostShell(p: {
               Not a second checker: that component owns a fixed DOM id, so two
               of them on one page break the label. */}
           <form action="/scan" method="get">
+            {/* this post's ref, so the hub counts the scans each post starts (1 Nov 2026, lib/scan/handoff.ts) */}
+            {p.post.slug ? <input type="hidden" name="ref" value={blogRef(p.post.slug)} maxLength={SCAN_LIMITS.ref} /> : null}
+            {p.post.slug ? <input type="hidden" name="market" value="US" maxLength={SCAN_LIMITS.ref} /> : null}
             <label
               htmlFor="post-domain"
               style={{ display: "block", fontSize: "13px", fontWeight: 600, marginBottom: "6px" }}

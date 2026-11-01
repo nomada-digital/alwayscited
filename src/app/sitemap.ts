@@ -1,8 +1,9 @@
 import type { MetadataRoute } from "next";
 
 import { SITE_URL as BASE_URL } from "@/config/schema";
-import { postBySlug } from "@/config/posts";
-import { publishedHubPosts } from "@/lib/hub-posts";
+import { postBySlug, POSTS } from "@/config/posts";
+import { categoryOf } from "@/lib/blog-categories";
+import { blogCategories, listed, publishedHubPosts } from "@/lib/hub-posts";
 
 /**
  * The sitemap.
@@ -124,5 +125,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const hub: MetadataRoute.Sitemap = (await publishedHubPosts())
     .filter((p) => !postBySlug(p.slug))
     .map((p) => ({ url: BASE_URL + "/blog/" + p.slug, lastModified: new Date(p.updated ?? p.date), changeFrequency: "monthly", priority: 0.6 }));
-  return [...typed, ...hub];
+  // 1 Nov 2026: each blog category page with a post, dated by its newest (an empty one is noindex, so left out)
+  const cats = await blogCategories();
+  const all = [...POSTS.map((p) => ({ kind: p.kind as string, date: p.date })),
+    ...(await publishedHubPosts()).filter((p) => !postBySlug(p.slug)).map((p) => ({ kind: listed(p).kind, date: p.updated ?? p.date }))];
+  const categories: MetadataRoute.Sitemap = cats.flatMap((c) => {
+    const last = all.filter((p) => categoryOf(p.kind, cats)?.slug === c.slug).map((p) => p.date).sort().pop();
+    return last ? [{ url: BASE_URL + "/blog/category/" + c.slug, lastModified: new Date(last), changeFrequency: "weekly" as const, priority: 0.5 }] : [];
+  });
+  return [...typed, ...hub, ...categories];
 }

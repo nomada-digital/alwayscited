@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import type { Post, PostKind } from "../config/posts.ts";
+import { DEFAULT_CATEGORIES, parseCategories, withDefaults, type BlogCategory } from "./blog-categories.ts";
 
 /**
  * Blog posts published from the Nomada agency hub's CMS (16 Oct 2026).
@@ -69,6 +70,16 @@ export async function publishedHubPosts(): Promise<HubPost[]> {
     return parse(body.posts);
   } catch {
     return [];
+  }
+}
+
+/** The blog's categories from the same feed (1 Nov 2026, lib/blog-categories.ts), the defaults when it has none. */
+export async function blogCategories(): Promise<BlogCategory[]> {
+  try {
+    const res = await fetch(HUB_BLOG_FEED, { next: { revalidate: HUB_BLOG_REVALIDATE } });
+    return withDefaults(res.ok ? parseCategories(await res.json()) : []);
+  } catch {
+    return DEFAULT_CATEGORIES;
   }
 }
 

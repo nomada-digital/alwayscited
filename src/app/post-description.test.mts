@@ -121,7 +121,8 @@ function postSlugs(): string[] {
     // 16 Oct 2026: `[slug]` is the route for posts published from the agency
     // hub (lib/hub-posts.ts), not a post. Its posts have no directory of their
     // own; they are read off the prerender instead, by hubPrerenders below.
-    .filter((e) => e.isDirectory() && !e.name.startsWith("["))
+    // 1 Nov 2026: `category` is the category pages' route (blog/category/[slug]), not a post.
+    .filter((e) => e.isDirectory() && !e.name.startsWith("[") && e.name !== "category")
     .map((e) => e.name)
     .sort();
 }

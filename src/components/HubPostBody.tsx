@@ -2,8 +2,10 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { BODY, H2, OL, P, Quote, UL } from "@/components/PostShell";
-import { CARD, MICRO, T } from "@/config/tokens";
-import { blocks } from "@/lib/hub-post-blocks";
+import { T } from "@/config/tokens";
+import BlogScanCta from "@/components/BlogScanCta";
+import { blocks, placeCtas } from "@/lib/hub-post-blocks";
+import { blogRef } from "@/lib/scan/handoff";
 import { hubImage, type HubPost } from "@/lib/hub-posts";
 
 export { blocks };
@@ -82,22 +84,14 @@ function Figure({ post }: { post: HubPost }) {
   );
 }
 
+/** [[cta]]: the free scan, inline, with this post's ref (1 Nov 2026; was a link to the homepage's scan box). */
 function Cta({ post }: { post: HubPost }) {
-  return (
-    <div style={{ ...CARD, margin: "26px 0 0", padding: "22px 24px" }}>
-      <div style={MICRO}>Free scan</div>
-      <p style={{ margin: "8px 0 0", fontSize: "17px", fontWeight: 600, color: T.ink }}>
-        {post.ctaHeading ?? "See which AI answers name you, and which name someone else."}
-      </p>
-      <Link href="/#scan" style={{ display: "inline-block", marginTop: "10px", fontSize: "14px", fontWeight: 600, color: T.accent }}>
-        Run the free scan
-      </Link>
-    </div>
-  );
+  return <BlogScanCta scanRef={blogRef(post.slug)} slug={post.slug} heading={post.ctaHeading ?? undefined} />;
 }
 
 export default function HubPostBody({ post }: { post: HubPost }) {
-  const { blocks: bs } = blocks(post.content);
+  const { blocks: parsed } = blocks(post.content);
+  const { blocks: bs, end } = placeCtas(parsed);
   const placed = new Set(bs.map((b) => b.k));
   const hero = hubImage(post.image);
   return (
@@ -122,6 +116,8 @@ export default function HubPostBody({ post }: { post: HubPost }) {
       })}
       {/* A post whose body never placed its FAQs still shows them, last. */}
       {!placed.has("faqs") ? <Faqs post={post} /> : null}
+      {/* A post that placed no [[cta]] asks once more at the end (placeCtas). */}
+      {end ? <Cta post={post} /> : null}
     </>
   );
 }

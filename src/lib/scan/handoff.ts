@@ -48,10 +48,33 @@ export function partnerMayUse(ref: string | null | undefined, market: string): b
  */
 export const HANDOFF_PARTNERS: ReadonlyMap<string, readonly string[]> = new Map([
   ["nomada", ["nomadadigital.co.uk", "www.nomadadigital.co.uk"]],
+  // 1 Nov 2026: the blog's inline scan box (components/BlogScanCta.tsx) on our own posts and category pages
+  ["blog", ["alwayscited.com", "www.alwayscited.com"]],
 ]);
 
+/**
+ * The partner a ref belongs to: the partner's own code, or it followed by "-" and a detail (1 Nov 2026) - a blog
+ * post's box sends ref=blog-<slug> and nomadadigital.co.uk's posts send ref=nomada-blog-<slug>, so each post's scans
+ * can be counted while the hand-off still checks the partner's own Referer.
+ */
+export function handoffPartner(ref: string | null | undefined): string | null {
+  if (!ref) return null;
+  for (const k of HANDOFF_PARTNERS.keys()) if (ref === k || ref.startsWith(`${k}-`)) return k;
+  return null;
+}
+
+/** A blog page's ref: "blog-" and the post's slug, cut to the ref's length (the full slug rides in utm_content). */
+export function blogRef(slug: string, prefix = "blog"): string {
+  const full = `${prefix}-${slug}`.toLowerCase().replace(/[^a-z0-9_-]+/g, "-");
+  if (full.length <= SCAN_LIMITS.ref) return full.replace(/-+$/, "");
+  // cut at the last whole word that fits, so a ref reads as the slug's start, not a fragment
+  const cut = full.slice(0, SCAN_LIMITS.ref);
+  return (full[SCAN_LIMITS.ref] === "-" ? cut : cut.slice(0, Math.max(cut.lastIndexOf("-"), prefix.length))).replace(/-+$/, "");
+}
+
 export function handoffMayStart(ref: string | null, referer: string | null | undefined): boolean {
-  const hosts = ref ? HANDOFF_PARTNERS.get(ref) : undefined;
+  const partner = handoffPartner(ref);
+  const hosts = partner ? HANDOFF_PARTNERS.get(partner) : undefined;
   if (!hosts || !referer) return false;
   try {
     return hosts.includes(new URL(referer).hostname.toLowerCase());

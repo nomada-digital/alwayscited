@@ -66,7 +66,7 @@ export default function HubPostPage({ post }: { post: HubPost }) {
       {hubPostSchema(post).map((n, i) => (
         <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(n) }} />
       ))}
-      <PostShell post={listed(post)} standfirst={post.standfirst ?? post.excerpt} sections={all}>
+      <PostShell post={{ ...listed(post), slug: post.slug }} bodyCta standfirst={post.standfirst ?? post.excerpt} sections={all}>
         <HubPostBody post={post} />
       </PostShell>
     </>

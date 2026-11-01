@@ -5,7 +5,8 @@ import Link from "next/link";
 import { formatPostDate, postBySlug, POSTS } from "@/config/posts";
 import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 import { ORG_REF, ld } from "@/config/schema";
-import { listed, publishedHubPosts } from "@/lib/hub-posts";
+import { categoryOf } from "@/lib/blog-categories";
+import { blogCategories, listed, publishedHubPosts } from "@/lib/hub-posts";
 
 /**
  * The writing index, from BlogIndex.dc.html.
@@ -71,6 +72,8 @@ export default async function BlogIndexPage({
   const hub = (await publishedHubPosts()).filter((p) => !postBySlug(p.slug)).map(listed);
   const posts = [...POSTS, ...hub].sort((a, b) => b.date.localeCompare(a.date));
   const kinds = Array.from(new Set(posts.map((p) => p.kind)));
+  // 1 Nov 2026: each kind is a category with its own page (/blog/category/<slug>); ?kind= still filters here
+  const cats = await blogCategories();
   const active = kinds.find((k) => k === kind) ?? null;
   const shown = active ? posts.filter((p) => p.kind === active) : posts;
   const lead = shown[0];
@@ -119,7 +122,7 @@ export default async function BlogIndexPage({
             All
           </Link>
           {kinds.map((k) => (
-            <Link className="ac-row blog-pill" key={k} href={"/blog?kind=" + encodeURIComponent(k)} style={pill(active === k)}>
+            <Link className="ac-row blog-pill" key={k} href={categoryOf(k, cats) ? `/blog/category/${categoryOf(k, cats)!.slug}` : "/blog?kind=" + encodeURIComponent(k)} style={pill(active === k)}>
               {k}
             </Link>
           ))}

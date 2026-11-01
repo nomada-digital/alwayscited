@@ -44,3 +44,17 @@ export function blocks(content: string): { blocks: Block[]; sections: { id: stri
   }
   return { blocks: out, sections: out.flatMap((b) => (b.k === "h2" ? [{ id: b.id, label: b.text.replace(/\*\*/g, "") }] : [])) };
 }
+
+/**
+ * Where the free scan box goes (1 Nov 2026, components/BlogScanCta.tsx). A post that places [[cta]] gets it there and
+ * nowhere else. A post with none gets one where the 3rd section starts (the 2nd with only two), unless that is the
+ * tail of the post, and one at the end - so every post asks once in the middle and once when the reader is done.
+ */
+export function placeCtas(bs: readonly Block[]): { blocks: Block[]; end: boolean } {
+  if (bs.some((b) => b.k === "cta")) return { blocks: [...bs], end: false };
+  const h2 = bs.flatMap((b, i) => (b.k === "h2" ? [i] : []));
+  const at = h2.length >= 3 ? h2[2]! : h2.length === 2 ? h2[1]! : -1;
+  const out = [...bs];
+  if (at > 0 && at < bs.length - 2) out.splice(at, 0, { k: "cta" });
+  return { blocks: out, end: true };
+}
