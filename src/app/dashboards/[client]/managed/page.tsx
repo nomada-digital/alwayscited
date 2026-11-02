@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import TierName from "@/components/TierName";
 import { Change, Pos, Rate, Spark, TargetPage, fullDay, pct } from "@/components/dash/Figures";
 import { PageHead } from "@/components/dash/Shell";
+import WorkCompleted from "@/components/dash/WorkCompleted";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { pageData } from "@/lib/dash/page-data";
 import { deliverables, delivered, tierInfo } from "@/lib/dash/plan";
+import { readWork } from "@/lib/dash/work";
 import type { ClusterView, Workspace } from "@/lib/dash/types";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +24,11 @@ export const metadata: Metadata = { title: "Your plan's clusters", robots: { ind
  */
 export default async function Managed({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
-  const { ws, base } = await pageData(slug);
+  const { ws, base, raw, demo, viewAs } = await pageData(slug);
   // A tracking plan has no clusters we work on: its plan page says what does.
   if (ws.client.tier === "tracked") redirect(`${base}/${slug}/plan`);
+  // sg-35: the hub's record of work done, for the customer and the hub's view-as; never on a demo link (work.ts).
+  const work = demo && !viewAs ? [] : await readWork(raw.client.id);
   const managed = ws.clusters.filter((c) => c.managed);
   const trackedOnly = ws.clusters.filter((c) => !c.managed);
   const sample = managed.some((c) => c.placements.some((p) => p.sample));
@@ -45,6 +49,7 @@ export default async function Managed({ params }: { params: Promise<{ client: st
       ) : (
         managed.map((c, i) => <ManagedCluster key={c.id} ws={ws} c={c} n={i + 1} href={`${base}/${slug}/clusters/${c.id}`} />)
       )}
+      <WorkCompleted items={work} base={base} slug={slug} />
       <div className="dash-card">
         <h2>Changing a cluster we work on</h2>
         <p className="intro" style={{ maxWidth: 720 }}>

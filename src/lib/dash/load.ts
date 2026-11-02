@@ -40,8 +40,8 @@ async function paged<T>(make: () => { range(from: number, to: number): PromiseLi
   return out;
 }
 
-/** A table the 17 Oct migration adds, read as empty until it is applied. */
-function absent(e: { code?: string; message: string } | null): boolean {
+/** A table the 17 Oct migration adds, read as empty until it is applied. Also work.ts's (work_items, 2 Nov 2026). */
+export function absent(e: { code?: string; message: string } | null): boolean {
   if (!e) return false;
   return e.code === "42P01" || e.code === "PGRST205" || /relation .* does not exist|Could not find the table/i.test(e.message) || missingColumn(e);
 }

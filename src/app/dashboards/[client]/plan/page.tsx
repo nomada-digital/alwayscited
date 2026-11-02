@@ -5,10 +5,12 @@ import { Meter, TargetPage } from "@/components/dash/Figures";
 import Nudges from "@/components/dash/Nudges";
 import { Delivery } from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
+import WorkCompleted from "@/components/dash/WorkCompleted";
 import { PACK_CLUSTERS, PACK_KEYWORDS, PACK_PROMPTS, trackingPackPrice } from "@/config/pricing";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { readInvoices } from "@/lib/dash/invoices";
 import { pageData } from "@/lib/dash/page-data";
+import { readWork } from "@/lib/dash/work";
 import { RETENTION_DAYS } from "@/lib/tracking/retention";
 import { TIER_ORDER, packLine, planCopy, tierInfo } from "@/lib/dash/plan";
 
@@ -41,6 +43,8 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
   const { ws, demo, base, nudge, raw, viewAs } = await pageData(slug);
   // the invoice history (22 Oct 2026): the owner's, read live from Stripe; never in a demo or a team member's view-as
   const inv = ws.role === "owner" && !demo && !viewAs ? await readInvoices(raw.client.id) : null;
+  // sg-35: Work completed sits on Managed for a paid plan; a tracking plan has no Managed page, so it sits here.
+  const work = ws.client.tier === "tracked" && (!demo || viewAs) ? await readWork(raw.client.id) : [];
   const invDay = (s: number | null) => (s ? new Date(s * 1000).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : "-");
   const billingWhy = typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null;
   const trialWhy = sp.trial === "cancelled" ? TRIAL_DONE.cancelled : sp.trial === "refused" ? TRIAL_DONE.refused : null;
@@ -80,6 +84,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
           </div>
         </div>
       </div>
+      <WorkCompleted items={work} base={base} slug={slug} />
       <div className="dash-card" id="billing">
         <div className="dash-card-head">
           <div>
