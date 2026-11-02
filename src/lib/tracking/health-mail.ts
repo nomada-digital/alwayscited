@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { mailFrom } from "@/config/mail-from";
 import { headerSafe } from "@/lib/email-header";
+import { connectionsLineFor } from "@/lib/dash/connect-io";
 import { diyHealthLineFor } from "@/lib/diy/core/health";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -31,7 +32,8 @@ export async function sendRunHealth(input: { subject: string; text: string }): P
       to: process.env.CONTACT_EMAIL_DESTINATION ?? CONTACT_EMAIL,
       subject: headerSafe(input.subject),
       // 13 Oct 2026, DIY P1: one line on last night's DIY reads, caps and carried jobs (spec 10 section 5.6).
-      text: `${input.text}\n\n${await diyHealthLineFor(supabaseAdmin)}`,
+      // 2 Nov 2026 (sg-37): customers whose data connection is still not visible a day after they first checked.
+      text: [input.text, await diyHealthLineFor(supabaseAdmin), await connectionsLineFor(supabaseAdmin)].filter(Boolean).join("\n\n"),
     });
     if (error) {
       console.error("[track] run-health summary rejected", error);

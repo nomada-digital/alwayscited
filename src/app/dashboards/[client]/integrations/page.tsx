@@ -12,11 +12,11 @@ export default async function Integrations({ params }: { params: Promise<{ clien
   const { ws, demo } = await pageData(slug);
   return (
     <>
-      <PageHead micro="Integrations" title="Connect your data" intro="Read-only connections. Search Console and Bing fill your keyword groups with real clicks and impressions; Analytics shows the visits AI sends you." />
+      <PageHead micro="Integrations" title="Connect your data" intro="Add our address to each tool, then press Check connection. Search Console and Bing fill your keyword groups with real clicks and impressions; Analytics shows the visits AI sends you. About two minutes each." />
       <div className="dash-grid k3">
-        {(["gsc", "bing", "ga4"] as const).map((p) => <IntegrationCard key={p} slug={slug} provider={p} conn={ws.connections[p] ?? null} canWrite={ws.canWrite} demo={demo} />)}
+        {(["gsc", "ga4", "bing"] as const).map((p) => <IntegrationCard key={p} slug={slug} domain={ws.client.domain} provider={p} conn={ws.connections[p] ?? null} canWrite={ws.canWrite} demo={demo} />)}
       </div>
-      <p className="faint" style={{ fontSize: 12.5, marginTop: 16 }}>We only ever ask for read access, and you can remove it from your Google or Microsoft account at any time.</p>
+      <p className="faint" style={{ fontSize: 12.5, marginTop: 16 }}>We only ever ask for view access, and you can remove our address from your Google or Microsoft account at any time.</p>
     </>
   );
 }

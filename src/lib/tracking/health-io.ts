@@ -1,6 +1,7 @@
 import "server-only";
 
 import { SITE_URL } from "@/config/schema";
+import { connectionsLineFor } from "@/lib/dash/connect-io";
 import { diyAttention } from "@/lib/diy/core/health";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { trackingDay } from "@/lib/tracking/decide";
@@ -18,7 +19,13 @@ import { type HealthIo, type ReportOutcome, reportRunHealth } from "@/lib/tracki
  * night's attention line, so a clean tracking day still mails a DIY problem.
  */
 export function runHealthIo(): HealthIo {
-  return { send: sendRunHealth, adminUrl: `${SITE_URL}/admin/tracking`, diyAttention: (now) => diyAttention(supabaseAdmin, now) };
+  // 2 Nov 2026 (sg-37): a customer whose data connection is still not visible a day after their first check
+  // (lib/dash/connect.ts staleLine) sends the summary on a clean day too, as a DIY problem does.
+  return {
+    send: sendRunHealth,
+    adminUrl: `${SITE_URL}/admin/tracking`,
+    diyAttention: async (now) => [await diyAttention(supabaseAdmin, now), await connectionsLineFor(supabaseAdmin, now)].filter(Boolean).join("\n\n") || null,
+  };
 }
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err)).slice(0, 300);

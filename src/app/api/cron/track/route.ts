@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/constant-time";
+import { pullConnectionsSafely } from "@/lib/dash/connect-io";
 import { sweepLifecycleMailSafely } from "@/lib/email/lifecycle-cron";
 import { runHealthAfterDispatch } from "@/lib/tracking/health-io";
 import { dispatchTrackingRuns } from "@/lib/tracking/runner";
@@ -36,6 +37,10 @@ export const maxDuration = 60;
  * it was never sent, and today's at once when nothing was dispatched, with
  * the reason. A day with runs in flight is reported by the last run to
  * close. Never fatal to the answer either.
+ *
+ * Last, the data connections' daily pull (2 Nov 2026, sg-37): Windsor's
+ * last 28 days for each connected property into search_console_queries and
+ * ga4_daily. Never fatal either.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -65,5 +70,7 @@ export async function GET(req: Request) {
   }
   const health = await runHealthAfterDispatch(note);
   const mail = await sweepLifecycleMailSafely();
-  return NextResponse.json({ ...answer.body, health, mail }, { status: answer.status });
+  // 2 Nov 2026 (sg-37): the daily pull for every connected Search Console, GA4 and Bing property (lib/dash/connect-io.ts).
+  const connections = await pullConnectionsSafely();
+  return NextResponse.json({ ...answer.body, health, mail, connections }, { status: answer.status });
 }

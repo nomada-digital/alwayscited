@@ -297,11 +297,18 @@ test("the upsert sites are the ones we think they are", () => {
       "diy_jobs:client_domain_id,due_on,kind",
       "diy_jobs:client_domain_id,due_on,kind",
       "diy_vendor_status:kind,read_on",
+      // 2 Nov 2026, sg-37: the data connections' daily pull, one row per client, day, source and medium on ga4_daily's
+      // unique in 20261102000000_ga4_daily.sql (lib/dash/connect-io.ts).
+      "ga4_daily:client_domain_id,day,medium,source",
       // 13 Oct 2026, DIY P6 (spec 10 sections 5.8 and 6.6): the footprint job
       // stores one pull per client per day on keyword_footprints' unique
       // (client_domain_id, pulled_on), so the worker's stale reclaim running
       // it twice writes one row (keywords/footprint.job.ts).
       // 17 Oct 2026: an integration request on the dashboards host, one row per client and provider (20261017000000).
+      "integration_connections:client_domain_id,provider",
+      // 2 Nov 2026, sg-37: Check connection replaces the request with a check, so it writes the same row twice
+      // over: pending with the first try's time, or connected with the property (api/dash/[client]/integrations).
+      "integration_connections:client_domain_id,provider",
       "integration_connections:client_domain_id,provider",
       "keyword_footprints:client_domain_id,pulled_on",
       // 17 Oct 2026: keyword research's shared 30-day cache (lib/dash/research.ts), one row per market, kind, seed and day.
@@ -329,6 +336,9 @@ test("the upsert sites are the ones we think they are", () => {
       // 29 Oct 2026: the link team's sheets (links/sheet-store.ts storeSheet), one row per client, kind and live URL on
       // sheet_links' unique (client_domain_id, kind, url_key), and one sync status per client and kind on sheet_syncs'
       // primary key, both in 20261029000000_agency_edits_and_link_sheets.sql. A re-sync updates; it never duplicates.
+      // 2 Nov 2026, sg-37: the data connections' pull, 28 days of Search Console or Bing queries per row on
+      // search_console_queries' unique (20261017000000), first at Check connection, then every morning (lib/dash/connect-io.ts).
+      "search_console_queries:client_domain_id,page,period_end,provider,query",
       "sheet_links:client_domain_id,kind,url_key",
       "sheet_syncs:client_domain_id,kind",
       // 29 Sep 2026, the daily tracking runner (T1), each on its own unique

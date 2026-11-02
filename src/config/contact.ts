@@ -117,6 +117,12 @@ export const WAITLIST_LIMITS = { domain: 253, topic: 200, email: 254, website: 2
  */
 export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200, website: 200 };
 
+/**
+ * Connect your data (2 Nov 2026, sg-37): `gaProperty` is the GA4 property ID a customer pastes, digits only,
+ * read by lib/dash/connect.ts gaPropertyId (6 to 12 digits, with "properties/" allowed in front).
+ */
+export const CONNECT_LIMITS = { gaProperty: 24 };
+
 // `website`: asked only when the order has no scan (R158, 1 Oct 2026); a hostname's own bound.
 // gaClientId (15 Oct 2026): the GA client id, "<digits>.<digits>", passed to
 // Stripe's metadata so the webhook's server-side purchase joins the visit.

@@ -220,8 +220,8 @@ export function healthMail(h: RunHealth, p: { today: string; adminUrl: string; n
   if (!looking.length) {
     // 13 Oct 2026, DIY P1: every tracking run complete, sent for the DIY line the send appends.
     return {
-      subject: `alwaystracked run health ${h.day}: every client complete; DIY night to look at`,
-      text: [`The daily check for ${h.day} (London) read all ${total} client${total === 1 ? "" : "s"} complete. The DIY night below needs a look.`, ...(p.note ? ["", p.note] : [])].join("\n"),
+      subject: `alwaystracked run health ${h.day}: every client complete; DIY night or data connections to look at`,
+      text: [`The daily check for ${h.day} (London) read all ${total} client${total === 1 ? "" : "s"} complete. The DIY night or the data connections below need a look.`, ...(p.note ? ["", p.note] : [])].join("\n"),
     };
   }
   const tally = RUN_STATES.filter((s) => h.counts[s] > 0)

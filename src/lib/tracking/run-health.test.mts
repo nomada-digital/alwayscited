@@ -217,7 +217,7 @@ test("13 Oct 2026, DIY P1: a clean tracking day still mails when the DIY night n
   const line = "DIY reads overnight (9 Oct, UTC): DataForSEO $0.40 of $10.00, model $0.00 of $5.00; paused at cap: no; jobs carried to tonight: 4";
   assert.equal(await reportRunHealth(loud.db, io(line), { day: DAY, now: AFTER_RUNS }), "sent");
   assert.equal(box.sent.length, 1);
-  assert.match(box.sent[0]!.subject, /every client complete; DIY night to look at/);
+  assert.match(box.sent[0]!.subject, /every client complete; DIY night or data connections to look at/);
   assert.deepEqual(loud.tables.dashboard_events!.map((e) => e.event), [RUN_HEALTH_EVENT], "the day's one claim");
   assert.equal(await reportRunHealth(loud.db, io(line), { day: DAY, now: AFTER_RUNS + MIN }), "taken");
   const before = asked.length;
