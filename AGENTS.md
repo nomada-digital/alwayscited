@@ -44,6 +44,13 @@ costs nothing; a decision waiting on a round trip costs an hour. Ship.
 - **`git add src supabase`, never `-A`.** A push containing
   `.github/workflows/` is rejected outright - the PAT has no `workflow` scope.
 - **Batch.** Four or five changes, one push. Not one push per change.
+- **Work done for one customer: say whose it is.** Commits on the production
+  branch become Work completed lines on that customer's dashboard (sg-36, the
+  hub's ac_github_work.py and ac-work.ts, 2 Nov 2026). A commit is matched from
+  a `Customer: <slug or domain>` line in its message, or the customer named in
+  its subject line; a mention in the body never counts. The customer sees the
+  subject tidied to one plain-English line, so write it for them; anything
+  that reads as code, a path, an id or an internal note shows a generic line.
 - **Additive migrations are yours to apply.** Danny authorised this on
   19 September 2026, awake and in chat, after the risk was put to him in plain
   terms: there is no restore in this setup. What he authorised is additive
