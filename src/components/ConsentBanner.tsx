@@ -16,7 +16,15 @@ import { denyConsent, grantConsent, initConsent, onDashboard, readConsent, track
  * /app layout's marker and nothing is initialised. It renders nothing on the
  * server: the banner appears after mount and only to a visitor who has not
  * chosen yet, fixed to the bottom of the window and gone the moment they
- * answer, so it covers nothing for good and moves no layout.
+ * answer.
+ *
+ * On a phone (3 Nov 2026, Danny: the card covered "Continue to payment" on the
+ * offer page) it is a slim bar across the bottom edge with one short line, and
+ * while it shows the page gets bottom padding equal to its height, so the last
+ * thing on any page can always be scrolled clear of it, and a primary button the
+ * bar would cut on arrival is scrolled just above it. Decline and Accept are
+ * the same size, side by side, on every screen. What a choice does is
+ * unchanged.
  *
  * The decision itself is in lib/analytics.ts, which owns the data layer, the
  * stored choice and the GA cookies. This file draws the question, loads
@@ -122,11 +130,42 @@ export default function ConsentBanner() {
     if (denyConsent()) window.location.reload();
   }, []);
 
-  if (!open || isDashboardPath(pathname) || (typeof window !== "undefined" && onDashboard())) return null;
+  const shown = open && !isDashboardPath(pathname) && !(typeof window !== "undefined" && onDashboard());
+  const bar = useRef<HTMLElement>(null);
+  // room for the banner at the foot of the page while it shows: body padding of its height, put back as it was after
+  useEffect(() => {
+    const el = bar.current;
+    if (!shown || !el) return;
+    const body = document.body, was = body.style.paddingBottom;
+    const fit = () => { body.style.paddingBottom = `${Math.ceil(el.getBoundingClientRect().height) + 16}px`; };
+    fit();
+    // a primary button cut by the bar's top edge as the page opens (one sitting on the fold, like the offer page's
+    // "Continue to payment") is scrolled just clear of it; one wholly below the fold is left for the reader to reach
+    if (window.scrollY === 0) {
+      const top = el.getBoundingClientRect().top;
+      const cut = Array.from(document.querySelectorAll<HTMLElement>("main .btn-primary, main button[type=submit]")).find((b) => {
+        const r = b.getBoundingClientRect();
+        return b.offsetParent !== null && r.top < top && r.bottom > top;
+      });
+      if (cut) window.scrollBy({ top: cut.getBoundingClientRect().bottom - top + 12, behavior: "instant" as ScrollBehavior });
+    }
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(fit);
+    ro?.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("resize", fit);
+      body.style.paddingBottom = was;
+    };
+  }, [shown]);
+
+  if (!shown) return null;
 
   return (
     <section
+      ref={bar}
       aria-label="Cookie choice"
+      className="consent-bar"
       style={{
         position: "fixed",
         left: "16px",
@@ -146,15 +185,30 @@ export default function ConsentBanner() {
         gap: "12px 18px",
       }}
     >
+      {/* phones: a slim bar on the bottom edge, one line of text, the two buttons the same width (globals have no rule
+          for these classes; the inline styles above stay the desktop card) */}
+      <style>{`.consent-bar .consent-short{display:none}
+      @media (max-width: 640px){
+        .consent-bar .consent-short{display:inline}
+        .consent-bar{left:0!important;right:0!important;bottom:0!important;max-width:none!important;border-radius:0!important;
+          border-width:1px 0 0!important;padding:8px 16px calc(8px + env(safe-area-inset-bottom))!important;gap:10px!important;flex-wrap:nowrap!important;
+          box-shadow:0 -4px 16px rgba(0,0,0,.06)}
+        .consent-bar .consent-long{display:none}
+        .consent-bar p{flex:1 1 0!important;min-width:0;font-size:12.5px!important;line-height:1.4!important}
+        .consent-bar .consent-acts{flex:0 0 auto!important;gap:8px!important}
+        .consent-bar .consent-acts button{width:84px;padding:8px 0!important;min-height:40px;font-size:13.5px!important}
+      }`}</style>
       <p style={{ margin: 0, flex: "1 1 320px", fontSize: "13.5px", lineHeight: 1.6, color: T.soft }}>
-        <span style={{ fontWeight: 600, color: T.ink }}>Can we use Google Analytics?</span> It shows us which pages and
+        <span style={{ fontWeight: 600, color: T.ink }}>Can we use Google Analytics?</span>
+        <span className="consent-short"> Cookies only if you accept.</span>
+        <span className="consent-long"> It shows us which pages and
         features get used. It sets cookies only if you accept, and never sees what you type into a form or the domains
-        you scan.{" "}
+        you scan.</span>{" "}
         <a href="/legal#cookies" style={{ fontWeight: 600, textDecoration: "none", color: T.accent }}>
           Cookie details
         </a>
       </p>
-      <div style={{ display: "flex", gap: "10px", flex: "0 0 auto" }}>
+      <div className="consent-acts" style={{ display: "flex", gap: "10px", flex: "0 0 auto" }}>
         <button
           type="button"
           onClick={onDecline}
