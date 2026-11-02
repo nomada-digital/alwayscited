@@ -19,6 +19,7 @@ const OFFER: ContractOffer = {
   website: "example.com",
   keyword: "example keyword",
   keyword_locked: false,
+  scope_note: null,
   email: null,
   monthly_amount: 99500,
   charges: 6,

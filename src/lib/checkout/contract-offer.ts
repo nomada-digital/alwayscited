@@ -32,6 +32,8 @@ export type ContractOffer = {
   keyword: string | null;
   /** 2 Nov 2026 (Volunteero): the plan is this one cluster on `keyword`, set at signup and not changed self-serve. */
   keyword_locked: boolean;
+  /** 2 Nov 2026: one line under the cluster on the offer page, how the plan's scope unfolds; null shows nothing. */
+  scope_note: string | null;
   email: string | null;
   monthly_amount: number;
   /** Null: monthly until cancelled, with no end date set (2 Nov 2026). */
@@ -41,7 +43,7 @@ export type ContractOffer = {
   used_at: string | null;
 };
 
-export const OFFER_COLUMNS = "id, client_name, agreement_date, tier, market, website, keyword, keyword_locked, email, monthly_amount, charges, first_charge_on, expires_at, used_at";
+export const OFFER_COLUMNS = "id, client_name, agreement_date, tier, market, website, keyword, keyword_locked, scope_note, email, monthly_amount, charges, first_charge_on, expires_at, used_at";
 
 /** The token in the link: 32 random bytes as hex, as a login token. Only its sha256 is stored. */
 export function isOfferToken(t: string): boolean {

@@ -73,6 +73,7 @@ export default async function ContractOfferPage({ params, searchParams }: Props)
           <div style={{ marginTop: "6px", fontSize: "17px", fontWeight: 600, color: T.ink }}>
             {offer.keyword!.trim()} <span style={{ fontWeight: 400, color: T.soft }}>· {offer.market.toUpperCase()}</span>
           </div>
+          {offer.scope_note?.trim() ? <p style={{ ...P, fontSize: "14px", marginTop: "6px", color: T.ink }}>{offer.scope_note.trim()}</p> : null}
           <p style={{ ...P, fontSize: "13px", marginTop: "6px" }}>Agreed with us and fixed for this plan. We set it up for you; there is nothing to choose.</p>
         </div>
       ) : null}
