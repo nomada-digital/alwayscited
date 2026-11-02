@@ -94,6 +94,8 @@ export type CompletedOrder = {
   monthlyAmount: number | null;
   /** A contract offer's agreed number of payments (contract-offer.ts, 31 Oct 2026); absent or null on any other order. */
   contractCharges?: number | null;
+  /** A contract offer that fixes its keyword (contract-offer.ts, 2 Nov 2026): cluster 1 is made on `keyword` as it is. */
+  keywordLocked?: boolean;
 };
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
@@ -128,6 +130,7 @@ export function completedOrder(session: Record<string, unknown>): CompletedOrder
     promotionId: promotionOf(session),
     monthlyAmount: /^\d{1,9}$/.test(str(m.monthly_amount)) ? Number(str(m.monthly_amount)) : null,
     contractCharges: str(m.kind) === "contract_offer" && /^\d{1,2}$/.test(str(m.charges)) ? Number(str(m.charges)) : null,
+    keywordLocked: str(m.kind) === "contract_offer" && str(m.keyword_locked) === "1" && str(m.keyword).trim().length >= 2,
     amountDiscount: discountOf(session),
   };
 }
@@ -457,6 +460,7 @@ export function orderEmailText(o: CompletedOrder, outcome: string, siteOrigin: s
     `Keyword target: ${o.keyword || "-"}`,
     `First payment: ${amount}`,
     ...(o.contractCharges ? [`Contract offer: billed under a signed agreement, ${o.contractCharges} monthly payment(s), then the subscription ends`] : []),
+    ...(o.keywordLocked ? [`Contract offer: keyword fixed at "${o.keyword.trim()}", one cluster (cluster_limit 1)`] : []),
     ...(promotion ? [promotion] : []),
     ...(trial ? [`Trial started - first charge ${trial.firstCharge}, ${trial.amount}`] : []),
     // Which path the signup took (R158, 1 Oct 2026): from the scan, or with no scan from the website.

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import TierName from "@/components/TierName";
 import { CHECKOUT_LIMITS, CONTACT_EMAIL } from "@/config/contact";
 import { MICRO, SHELL, T } from "@/config/tokens";
-import { offerState, offerTerms } from "@/lib/checkout/contract-offer";
+import { offerCluster, offerState, offerTerms } from "@/lib/checkout/contract-offer";
 import { readContractOffer } from "@/lib/checkout/contract-offer-read";
 import { dashOrigin } from "@/lib/dash/host";
 
@@ -56,6 +56,7 @@ export default async function ContractOfferPage({ params, searchParams }: Props)
   }
 
   const t = offerTerms(offer);
+  const cluster = offerCluster(offer);
   return (
     <section style={{ ...SHELL, maxWidth: "640px", paddingTop: "48px", paddingBottom: "96px" }}>
       <div style={MICRO}>Prepared for {offer.client_name}</div>
@@ -66,6 +67,15 @@ export default async function ContractOfferPage({ params, searchParams }: Props)
       <p style={{ ...P, marginTop: "6px", color: T.ink }}>
         {t.payments}.{t.first ? ` ${t.first}` : ""}
       </p>
+      {cluster ? (
+        <div style={{ marginTop: "18px", padding: "14px 16px", borderRadius: "12px", border: `1px solid ${T.line}`, background: T.surface }}>
+          <div style={MICRO}>Your keyword cluster</div>
+          <div style={{ marginTop: "6px", fontSize: "17px", fontWeight: 600, color: T.ink }}>
+            {offer.keyword!.trim()} <span style={{ fontWeight: 400, color: T.soft }}>· {offer.market.toUpperCase()}</span>
+          </div>
+          <p style={{ ...P, fontSize: "13px", marginTop: "6px" }}>Agreed with us and fixed for this plan. We set it up for you; there is nothing to choose.</p>
+        </div>
+      ) : null}
       <p style={P}>{t.agreement}</p>
 
       <form method="post" action={`/api/checkout/offer/${token}`} style={{ marginTop: "28px", maxWidth: "420px" }}>

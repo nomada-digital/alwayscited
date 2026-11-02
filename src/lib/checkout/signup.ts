@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { lockedPlan } from "@/lib/checkout/contract-offer";
 import { siteUrl } from "@/lib/scan/verify-email";
 import { dashOrigin } from "@/lib/dash/host";
 import { sendOrderEmail } from "@/lib/checkout/order-mail";
@@ -113,13 +114,15 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     domain,
     // Without a ® or ™ (cleanBrandName, 22 Oct 2026): a scan stored before the read stripped them still carries one.
     brand_name: scan?.brand_name ? cleanBrandName(scan.brand_name) || null : null,
-    topic: scan?.topic ?? null,
+    // A locked contract offer (2 Nov 2026) names the client by its cluster, and the plan is that one cluster.
+    topic: o.keywordLocked ? o.keyword.trim() : (scan?.topic ?? null),
     market,
     slug: slugFor(domain),
     status: "active",
     tier,
     started_on: startedOn,
     source_scan_id: prefill?.id ?? null,
+    ...(o.keywordLocked ? { cluster_limit: 1 } : {}),
   };
   let clientId: string;
   // The slug and cluster_limit come back for the welcome's links and the plan's room.
@@ -153,8 +156,10 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
     }
   }
 
-  const chosen = prefill?.cluster_keyword_status === "chosen" && typeof prefill.cluster_keyword === "string" && prefill.cluster_keyword.trim();
-  const clusterName = chosen ? (prefill!.cluster_keyword as string).trim() : NEEDS_A_KEYWORD;
+  // A locked contract offer's keyword is cluster 1's as it is (2 Nov 2026): the starter's checks once swapped MOR's.
+  const locked = o.keywordLocked ? o.keyword.trim() : "";
+  const chosen = locked || (prefill?.cluster_keyword_status === "chosen" && typeof prefill.cluster_keyword === "string" && prefill.cluster_keyword.trim());
+  const clusterName = chosen || NEEDS_A_KEYWORD;
 
   // A Stripe retry of a signup that failed part way picks up where it stopped (signupResume).
   const { data: prior, error: pErr } = await db
@@ -182,11 +187,11 @@ async function clientFromOrder(db: SupabaseClient, o: CompletedOrder, trialEndsA
   }
   if (chosen && resume.keyword) {
     const kw = await insertKeyword(db, clientId, clusterId, {
-      keyword: (prefill!.cluster_keyword as string).trim(),
+      keyword: chosen,
       added_on: startedOn,
       added_by: "nomada",
-      search_volume: prefill!.cluster_keyword_volume ?? null,
-      intent: prefill!.cluster_keyword_intent ?? null,
+      search_volume: locked ? null : (prefill!.cluster_keyword_volume ?? null),
+      intent: locked ? null : (prefill!.cluster_keyword_intent ?? null),
     });
     if (!kw.ok) return { ok: false, outcome: `cluster made, keyword refused: ${kw.message}`, clientId };
   }
@@ -409,7 +414,7 @@ export async function onSubscriptionUpdated(db: SupabaseClient, sub: Record<stri
   }
   const { error } = await db
     .from("client_domains")
-    .update({ cluster_limit: clusterLimitFor(packsOn(sub) + bought), ...(trialEndsAt === undefined ? {} : { trial_ends_at: trialEndsAt }) })
+    .update({ cluster_limit: lockedPlan(sub) ? 1 : clusterLimitFor(packsOn(sub) + bought), ...(trialEndsAt === undefined ? {} : { trial_ends_at: trialEndsAt }) })
     .eq("id", client.id);
   if (error) {
     console.error(`[stripe] cluster_limit${trialEndsAt === undefined ? "" : " and trial_ends_at"} not set: ${error.message}`);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addMonthsUtc, cancelAtFor, CONTRACT_OFFER_KIND, contractOfferForm, contractOfferId, firstChargeOf, isOfferToken, offerState, offerTerms, type ContractOffer } from "./contract-offer.ts";
+import { addMonthsUtc, cancelAtFor, CONTRACT_OFFER_KIND, contractOfferForm, contractOfferId, firstChargeOf, isOfferToken, offerCluster, offerState, lockedPlan, offerTerms, onContractOfferCompleted, type ContractOffer } from "./contract-offer.ts";
 import { completedOrder, handleWebhook, orderEmailText, signStripePayload, type WebhookDeps } from "./webhook.ts";
 
 /** Contract offers (31 Oct 2026): the Session form, the end date, and the webhook's order - end date first, then signup. */
@@ -18,6 +18,7 @@ const OFFER: ContractOffer = {
   market: "uk",
   website: "example.com",
   keyword: "example keyword",
+  keyword_locked: false,
   email: null,
   monthly_amount: 99500,
   charges: 6,
@@ -145,4 +146,54 @@ test("any other completed checkout never asks for an end date", async () => {
   const { d, calls } = deps();
   await post(completed("evt_plain", { tier: "cited", website: "example.com" }), d);
   assert.deepEqual(calls, ["signup example.com"]);
+});
+
+/** 2 Nov 2026 (Volunteero): a locked keyword, monthly until cancelled. */
+const LOCKED: ContractOffer = { ...OFFER, keyword: "volunteer management software", keyword_locked: true, monthly_amount: 200000, charges: null };
+
+test("a locked offer names its one cluster on the page and on Stripe's form, and runs monthly until cancelled", () => {
+  assert.equal(offerCluster(LOCKED), "One keyword cluster: volunteer management software (UK)");
+  assert.equal(offerCluster(OFFER), null, "an open keyword is not shown as fixed");
+  const t = offerTerms(LOCKED);
+  assert.equal(t.price, "£2,000 + VAT a month");
+  assert.equal(t.payments, "Billed monthly until you cancel");
+  const f = contractOfferForm(LOCKED, { email: "a@example.com", planName: "alwayscited", origin: "https://alwayscited.com", backUrl: "https://alwayscited.com/x", anchor: null });
+  assert.equal(f.get("line_items[0][price_data][unit_amount]"), "200000");
+  assert.equal(f.get("line_items[0][price_data][currency]"), "gbp");
+  assert.equal(f.get("line_items[0][price_data][tax_behavior]"), "exclusive");
+  assert.match(f.get("line_items[0][price_data][product_data][description]")!, /volunteer management software \(UK\)/);
+  assert.equal(f.get("metadata[keyword_locked]"), "1");
+  assert.equal(f.get("subscription_data[metadata][keyword_locked]"), "1");
+  assert.equal(f.get("subscription_data[metadata][charges]"), "");
+  assert.equal(f.get("subscription_data[metadata][keyword]"), "volunteer management software");
+});
+
+test("a locked offer's order fixes cluster 1's keyword; its subscription keeps a one-cluster plan", () => {
+  const meta = { kind: CONTRACT_OFFER_KIND, offer_id: ID, tier: "cited", market: "uk", quantity: "1", website: "volunteero.org", keyword: "volunteer management software", keyword_locked: "1", charges: "" };
+  const o = completedOrder({ id: "cs_l", customer_email: "a@example.com", metadata: meta });
+  assert.equal(o.keywordLocked, true);
+  assert.equal(o.contractCharges, null);
+  assert.match(orderEmailText(o, "made", "https://alwayscited.com").text, /keyword fixed at "volunteer management software", one cluster/);
+  assert.equal(completedOrder({ id: "cs_x", metadata: { ...meta, kind: "" } }).keywordLocked, false, "only a contract offer locks");
+  assert.equal(completedOrder({ id: "cs_y", metadata: { ...meta, keyword: "" } }).keywordLocked, false, "no keyword, nothing to lock");
+  assert.equal(lockedPlan({ metadata: meta }), true);
+  assert.equal(lockedPlan({ metadata: { ...meta, keyword_locked: "" } }), false);
+});
+
+test("a monthly-until-cancelled offer sets no end date and is marked used", async () => {
+  const updates: Record<string, unknown>[] = [];
+  const db = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { id: ID, charges: null, used_at: null, stripe_subscription_id: null }, error: null }) }) }),
+      update: (u: Record<string, unknown>) => ({ eq: async () => (updates.push(u), { error: null }) }),
+    }),
+  };
+  let asked = 0;
+  const stripe = { read: async () => (asked++, { ok: false, reason: "x" }) as never, setCancelAt: async () => (asked++, { ok: false, reason: "x" }) as never };
+  const ok = await onContractOfferCompleted(db as never, { id: "cs_l", subscription: "sub_l", metadata: { kind: CONTRACT_OFFER_KIND, offer_id: ID } }, stripe);
+  assert.equal(ok, true);
+  assert.equal(asked, 0, "Stripe is not asked to end it");
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0]!.stripe_subscription_id, "sub_l");
+  assert.ok(!("cancel_at" in updates[0]!));
 });

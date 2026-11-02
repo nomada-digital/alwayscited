@@ -12,6 +12,12 @@ import { askForNames, type SubscriptionRead } from "./stripe.ts";
  * The Session and its subscription carry metadata[kind]=contract_offer. Unlike a pack or the hub's offer, a completed
  * one does run the signup path (webhook.ts handleWebhook): first onContractOfferCompleted sets the subscription's
  * cancel_at after the agreed number of payments and marks the row used, then signup makes the client as for any order.
+ *
+ * 2 Nov 2026 (Volunteero, migration 20261102120000): an offer may be monthly until cancelled (charges null), and may
+ * lock its keyword (keyword_locked). A locked offer's cluster 1 is made on that keyword at signup, without the
+ * starter's volume and intent checks that replaced MOR's (31 Oct), and the client's cluster_limit is 1, so the plan
+ * is that one cluster. Cited and mentioned clusters are managed (dash/ops.ts), so it is not renamed, removed or
+ * swapped self-serve; the legacy rekey route refuses a managed cluster too (tracking/rekey.ts).
  */
 
 export const CONTRACT_OFFER_KIND = "contract_offer";
@@ -24,15 +30,18 @@ export type ContractOffer = {
   market: "uk" | "us";
   website: string;
   keyword: string | null;
+  /** 2 Nov 2026 (Volunteero): the plan is this one cluster on `keyword`, set at signup and not changed self-serve. */
+  keyword_locked: boolean;
   email: string | null;
   monthly_amount: number;
-  charges: number;
+  /** Null: monthly until cancelled, with no end date set (2 Nov 2026). */
+  charges: number | null;
   first_charge_on: string | null;
   expires_at: string;
   used_at: string | null;
 };
 
-export const OFFER_COLUMNS = "id, client_name, agreement_date, tier, market, website, keyword, email, monthly_amount, charges, first_charge_on, expires_at, used_at";
+export const OFFER_COLUMNS = "id, client_name, agreement_date, tier, market, website, keyword, keyword_locked, email, monthly_amount, charges, first_charge_on, expires_at, used_at";
 
 /** The token in the link: 32 random bytes as hex, as a login token. Only its sha256 is stored. */
 export function isOfferToken(t: string): boolean {
@@ -86,12 +95,18 @@ export function offerMoney(o: Pick<ContractOffer, "monthly_amount" | "market">):
   return o.market === "uk" ? `£${text} + VAT` : `$${text}`;
 }
 
+/** The one cluster a locked offer is for, as the page and Stripe's form name it; null when the offer leaves it open. */
+export function offerCluster(o: Pick<ContractOffer, "keyword" | "keyword_locked" | "market">): string | null {
+  const k = o.keyword?.trim();
+  return o.keyword_locked && k ? `One keyword cluster: ${k} (${o.market.toUpperCase()})` : null;
+}
+
 /** What the offer page and Stripe's form both say, so the two cannot drift. */
 export function offerTerms(o: Pick<ContractOffer, "monthly_amount" | "market" | "charges" | "agreement_date" | "first_charge_on">): { price: string; payments: string; agreement: string; first: string | null } {
-  const n = o.charges <= 12 ? WORDS[o.charges] : String(o.charges);
+  const n = o.charges === null ? null : o.charges <= 12 ? WORDS[o.charges] : String(o.charges);
   return {
     price: `${offerMoney(o)} a month`,
-    payments: o.charges === 1 ? "One payment" : `${n![0]!.toUpperCase()}${n!.slice(1)} monthly payments, then the plan ends`,
+    payments: n === null ? "Billed monthly until you cancel" : o.charges === 1 ? "One payment" : `${n[0]!.toUpperCase()}${n.slice(1)} monthly payments, then the plan ends`,
     agreement: `Billed under the agreement signed on ${longDate(o.agreement_date)}. Its terms apply in place of alwayscited.com's standard terms.`,
     first: o.first_charge_on ? `First payment on ${longDate(o.first_charge_on)}.` : null,
   };
@@ -100,6 +115,7 @@ export function offerTerms(o: Pick<ContractOffer, "monthly_amount" | "market" | 
 /** The Checkout Session form. Everything priced comes from the offer row, nothing from the request but the email. */
 export function contractOfferForm(o: ContractOffer, p: { email: string; planName: string; origin: string; backUrl: string; anchor: number | null }): URLSearchParams {
   const t = offerTerms(o);
+  const cluster = offerCluster(o);
   const f = new URLSearchParams();
   f.set("mode", "subscription");
   f.set("customer_email", p.email);
@@ -110,7 +126,7 @@ export function contractOfferForm(o: ContractOffer, p: { email: string; planName
   f.set("line_items[0][price_data][unit_amount]", String(o.monthly_amount));
   f.set("line_items[0][price_data][recurring][interval]", "month");
   f.set("line_items[0][price_data][product_data][name]", p.planName);
-  f.set("line_items[0][price_data][product_data][description]", `${t.payments}. ${o.website}.`);
+  f.set("line_items[0][price_data][product_data][description]", `${t.payments}. ${o.website}.${cluster ? ` ${cluster}.` : ""}`);
   // VAT as /api/checkout charges it (session.ts, R129).
   f.set("line_items[0][price_data][tax_behavior]", "exclusive");
   f.set("automatic_tax[enabled]", "true");
@@ -130,9 +146,10 @@ export function contractOfferForm(o: ContractOffer, p: { email: string; planName
     quantity: "1",
     market: o.market,
     keyword: o.keyword ?? "",
+    keyword_locked: o.keyword_locked ? "1" : "",
     website: o.website,
     monthly_amount: String(o.monthly_amount),
-    charges: String(o.charges),
+    charges: o.charges === null ? "" : String(o.charges),
   };
   for (const [k, v] of Object.entries(m)) {
     f.set(`metadata[${k}]`, v);
@@ -142,6 +159,12 @@ export function contractOfferForm(o: ContractOffer, p: { email: string; planName
 }
 
 const str = (v: unknown) => (typeof v === "string" ? v : "");
+
+/** A subscription from an offer that fixes its keyword: its plan is one cluster, packs or not (signup.ts onSubscriptionUpdated). */
+export function lockedPlan(sub: Record<string, unknown>): boolean {
+  const m = (sub.metadata ?? {}) as Record<string, unknown>;
+  return str(m.kind) === CONTRACT_OFFER_KIND && str(m.keyword_locked) === "1";
+}
 
 /** The offer row a completed Session names, when it is a contract offer; else null. */
 export function contractOfferId(session: Record<string, unknown>): string | null {
@@ -186,6 +209,19 @@ export async function onContractOfferCompleted(db: SupabaseClient, session: Reco
   if (offer.stripe_subscription_id && offer.stripe_subscription_id !== subId) {
     // A second Session paid from the same link before the first completed: both run, and Danny is told in the logs.
     console.error(`[stripe] contract offer ${id} was already taken by ${offer.stripe_subscription_id}; ${subId} is a second subscription - cancel one in Stripe`);
+  }
+  if (offer.charges === null) {
+    // Monthly until cancelled: nothing to set on Stripe, the row is only marked used.
+    const { error: oErr } = await db
+      .from("contract_offers")
+      .update({ used_at: offer.used_at ?? new Date().toISOString(), stripe_session_id: sid || null, stripe_subscription_id: offer.stripe_subscription_id ?? subId })
+      .eq("id", id);
+    if (oErr) {
+      console.error(`[stripe] contract offer ${sid}: offer ${id} not marked used: ${oErr.message}`);
+      return false;
+    }
+    console.log(`[stripe] contract offer ${id} taken: ${subId}, monthly until cancelled`);
+    return true;
   }
   const sub = await stripe.read(subId);
   if (!sub.ok || !sub.billingCycleAnchor) {

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { keywordForm } from "../scan/dataforseo-request.ts";
 import { insertKeyword, readingsFor } from "./limits.ts";
 import { refuseRole, stopDay } from "./stop.ts";
+import { MANAGED_TIERS } from "../dash/types.ts";
 
 /**
  * R179 (Danny, 2 Oct 2026, danny.md line 211): "Change keyword" on a pending
@@ -16,6 +17,9 @@ export const KEYWORD_FIXED = "Its first reading is in, so its keyword is fixed. 
 
 /** What a read cluster's keyword card says beside its stop. */
 export const KEYWORD_FIXED_NOTE = "Its keyword is fixed now it has readings, so its history stays true to what was checked. For a different keyword, stop this cluster and add a new one.";
+
+/** As dash/ops.ts MANAGED_SWAP, for this route's words. */
+export const MANAGED_KEYWORD = "We work on this cluster each month, so its keyword changes on request. Ask us from the plan tab.";
 
 export type RekeyCluster = { started_on: string; stopped_on: string | null } | null;
 
@@ -51,12 +55,14 @@ export type Rekey = { clientId: string; clusterId: string; keyword: string; volu
 
 /** The live write: the cluster's keyword row updated in place (or added, for a cluster that has none), and its name with it. */
 export async function changeKeyword(db: SupabaseClient, p: Rekey): Promise<{ ok: true } | { ok: false; message: string }> {
-  const { data: c, error } = await db.from("tracked_clusters").select("id, keyword_id, started_on, stopped_on").eq("id", p.clusterId).eq("client_domain_id", p.clientId).maybeSingle();
+  const { data: c, error } = await db.from("tracked_clusters").select("id, keyword_id, tier, started_on, stopped_on").eq("id", p.clusterId).eq("client_domain_id", p.clientId).maybeSingle();
   if (error) return { ok: false, message: `Could not read the cluster: ${error.message}` };
   const keyword = keywordForm(p.keyword);
   const { data: live, error: kErr } = await db.from("tracked_keywords").select("id, keyword").eq("client_domain_id", p.clientId).is("stopped_on", null);
   if (kErr) return { ok: false, message: `Could not read the tracked keywords: ${kErr.message}` };
   const own = (c?.keyword_id as string | null | undefined) ?? null;
+  // 2 Nov 2026: a managed cluster's keyword changes on request only (dash/ops.ts MANAGED_SWAP), before its start day too.
+  if (own && (MANAGED_TIERS as readonly string[]).includes(String(c?.tier))) return { ok: false, message: MANAGED_KEYWORD };
   const taken = (live ?? []).some((k) => k.id !== own && keywordForm(k.keyword as string) === keyword);
   const readings = own ? await readingsFor(db, "keyword", own) : 0;
   if (typeof readings === "string") return { ok: false, message: readings };
