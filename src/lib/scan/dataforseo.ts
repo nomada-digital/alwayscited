@@ -58,7 +58,7 @@ import {
 import { type MapsHit, parseMapsResult, rankOfCid } from "@/lib/local/grid";
 
 import { type Market } from "./domain";
-import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead } from "./engines";
+import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead, serpFault } from "./engines";
 
 /**
  * The HTTP half. Everything that can be decided without a credential or a
@@ -222,10 +222,11 @@ export async function readKeywordRank(
   domain: string,
   market: Market,
   budgetMs?: number,
-): Promise<{ rank: number | null | undefined; cost: number }> {
+): Promise<{ rank: number | null | undefined; cost: number; fault: ReturnType<typeof serpFault> }> {
   const { path, body, timeoutMs } = keywordRankRequest(keyword, market);
   const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
-  return { rank: rankOfRead(parseOrganic(task.result?.[0]), domain, task.partial === true), cost: taskCost(task) };
+  const organic = parseOrganic(task.result?.[0]);
+  return { rank: rankOfRead(organic, domain, task.partial === true), cost: taskCost(task), fault: serpFault(organic) };
 }
 
 /**
@@ -238,7 +239,7 @@ export async function readKeywordPosition(
   domain: string,
   market: Market,
   budgetMs?: number,
-): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[] }> {
+): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault> }> {
   const { path, body, timeoutMs } = keywordRankRequest(keyword, market);
   const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
   const organic = parseOrganic(task.result?.[0]);
@@ -248,7 +249,7 @@ export async function readKeywordPosition(
   // URL of each organic result to SERP_DEPTH - so who else ranks for the cluster keyword is
   // kept day by day rather than thrown away. No new request and no new cost.
   const top = organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
-  return { rank, url, cost: taskCost(task), top };
+  return { rank, url, cost: taskCost(task), top, fault: serpFault(organic) };
 }
 
 /**

@@ -455,7 +455,13 @@ export function readsFailedIn(error: string | null | undefined): boolean {
  * failed read with a reason, never a silent null; null stays "not in the top
  * SERP_DEPTH", which is a real finding. `rankOf` returns undefined for empty.
  */
-export function keywordOutcome(rank: number | null | undefined): { failed: false; rank: number | null } | { failed: true; reason: string } {
+export function keywordOutcome(
+  rank: number | null | undefined,
+  fault: "wrapped" | "thin" | null = null,
+): { failed: false; rank: number | null } | { failed: true; reason: string } {
+  // 3 Nov 2026: a page of google.com/goto links is the wrong page (engines.ts serpFault), not an empty one.
+  if (rank === undefined && fault === "wrapped") return { failed: true, reason: "degraded SERP: Google's links came back wrapped, so the page is not ranked on" };
+  if (rank === undefined && fault === "thin") return { failed: true, reason: "thin SERP: too few organic results to call a miss" };
   if (rank === undefined) return { failed: true, reason: "empty SERP: no organic results came back" };
   return { failed: false, rank };
 }

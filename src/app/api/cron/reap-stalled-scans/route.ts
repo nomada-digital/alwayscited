@@ -4,6 +4,7 @@ import { constantTimeEqual } from "@/lib/constant-time";
 import { dispatchDiyWork } from "@/lib/diy/core/dispatch";
 import { freeRead } from "@/lib/diy/core/doors";
 import { JOB_HANDLERS } from "@/lib/diy/wiring";
+import { retryUncheckedClusterRanks } from "@/lib/scan/cluster-rank";
 import { reapStalledFreePass, reapStalledGatedPass, STALL_AFTER_MS } from "@/lib/scan/stall";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { reapStalledTrackingRuns } from "@/lib/tracking/runner";
@@ -50,6 +51,12 @@ export const maxDuration = 60;
  * while claimable due jobs remain - pass 1's have finished by now (270 s
  * budget), so no more than two run at once. Its own try, like the sweeps
  * above; its errors are logged and answered under `diy`.
+ *
+ * **And the scans' unchecked Google positions (3 Nov 2026).** A scan whose
+ * cluster keyword read measured nothing - DataForSEO served degraded pages
+ * from 30 Oct - is stored unchecked rather than "not in top 20", and read
+ * again here once a day for RETRY_DAYS, RETRIES_PER_PASS at most
+ * (lib/scan/cluster-rank.ts). Its own try, reported under `cluster_ranks`.
  *
  * Vercel Cron calls this with Authorization: Bearer <CRON_SECRET>.
  */
@@ -115,6 +122,17 @@ export async function GET(req: Request) {
     diy = { error };
   }
 
+  // Unchecked cluster keyword positions (3 Nov 2026). Its own try, for the reason above.
+  let clusterRanks: Record<string, unknown>;
+  try {
+    clusterRanks = await retryUncheckedClusterRanks();
+    if ((clusterRanks.errors as string[]).length) console.warn(`[scan] cluster rank retry: ${(clusterRanks.errors as string[]).join("; ")}`);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.warn(`[scan] cluster rank retry failed: ${error}`);
+    clusterRanks = { error };
+  }
+
   // Logged as well as returned. The response goes to Vercel's cron log, which
   // nobody reads on a quiet day; a scan being closed by this job means a
   // function was killed, and that is worth finding in the log next to whatever
@@ -134,6 +152,7 @@ export async function GET(req: Request) {
       gated_passes_closed: gated.length,
       tracking_runs_closed: tracking.length,
       diy,
+      cluster_ranks: clusterRanks,
       // The ids, because the whole point of this job is that something was
       // wrong with these scans and the next question is always which ones.
       scans: free.length || gated.length ? { free, gated } : undefined,

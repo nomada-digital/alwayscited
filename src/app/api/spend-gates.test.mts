@@ -414,7 +414,9 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
   "cron/reap-stalled-scans": {
     why:
       "DIY night pass 2 at 03:45 UTC, behind CRON_SECRET: the same dispatch, posting its two workers only while " +
-      "claimable due jobs remain. Every paid read is reserved and capped by the DIY ledger before it goes out.",
+      "claimable due jobs remain. Every paid read is reserved and capped by the DIY ledger before it goes out. " +
+      "Since 3 Nov 2026 it also reads again the scans whose Google position could not be checked: one SERP read " +
+      "each, RETRIES_PER_PASS (30) a pass, scans from the last RETRY_DAYS only - held by its own test in cluster-rank.test.mts.",
     evidence: /if \(out\.pending === 0\) return out;/,
     where: "src/lib/diy/core/dispatch.ts",
   },

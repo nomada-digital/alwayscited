@@ -168,6 +168,12 @@ export type ClusterKeywordView = {
   volume: number | null;
   intent: string | null;
   rank: number | null;
+  /**
+   * 3 Nov 2026: true when the position could not be checked - the read threw,
+   * came back empty or was a degraded page - so null `rank` is not a finding.
+   * Absent on every scan before, and on a database without the column.
+   */
+  unchecked?: boolean;
 };
 
 export type RunScanResponse = {

@@ -12,6 +12,7 @@ import {
   QUESTION_COUNT,
 } from "./anthropic";
 import { answersNaming } from "./answers-naming";
+import { readClusterRank, storeClusterRank } from "./cluster-rank";
 import { brandKey, displayNamesFor, namesSubject, subjectKeys } from "./brand-name";
 import { scoreScanDifficulty } from "./difficulty";
 import { readEngine, readKeywordRank, readKeywordVolumes } from "./dataforseo";
@@ -1043,8 +1044,11 @@ async function deriveKeywords(input: {
  * `scan_questions.target_keyword` is left empty on these scans; it stays for
  * scans from before C1.
  *
- * Never fatal, for deriveKeywords' reason, and warned on every exit. Null is
- * what a failed read stores too: "not in top 20" (Danny, 27 Sep).
+ * Never fatal, for deriveKeywords' reason, and warned on every exit. Null was
+ * what a failed read stored too, "not in top 20" (Danny, 27 Sep); from 3 Nov
+ * 2026 a read that measured nothing - thrown, empty or a degraded page - is
+ * stored unchecked instead, and the daily pass in cluster-rank.ts reads it
+ * again.
  */
 async function rankClusterKeyword(input: {
   scanId: string;
@@ -1056,17 +1060,12 @@ async function rankClusterKeyword(input: {
 }): Promise<void> {
   const { scanId, domain, keyword, market, spend, remainingMs } = input;
   if (!keyword?.trim()) return;
-  let rank: number | null = null;
-  try {
-    spend.dfsCalls += 1;
-    const read = await readKeywordRank(keyword, domain, market, remainingMs());
-    spend.dfsCost += read.cost;
-    rank = read.rank ?? null;
-  } catch (err) {
-    console.warn(`[scan] cluster keyword rank read failed for ${scanId} (${keyword}): ${err instanceof Error ? err.message : String(err)}`);
-  }
-  const { error } = await supabaseAdmin().from("scans").update({ cluster_keyword_rank: rank }).eq("id", scanId);
-  if (error) console.warn(`[scan] could not store the cluster keyword rank for ${scanId}: ${error.message}`);
+  spend.dfsCalls += 1;
+  const read = await readClusterRank(keyword, domain, market, remainingMs());
+  spend.dfsCost += read.cost;
+  if (read.unchecked) console.warn(`[scan] cluster keyword position not checked for ${scanId} (${keyword}): ${read.why}`);
+  const error = await storeClusterRank(scanId, read);
+  if (error) console.warn(`[scan] could not store the cluster keyword rank for ${scanId}: ${error}`);
 }
 
 export async function runScan(scanId: string): Promise<void> {

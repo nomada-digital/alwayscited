@@ -67,7 +67,27 @@ test("R137: on a partial read, not found is not measured; found is still a rank"
   const organic = parseOrganic({ items: [{ type: "organic", rank_group: 4, domain: "ledgerline.com", url: "https://ledgerline.com/" }, { type: "organic", rank_group: 6, domain: "tallyroo.com", url: "https://tallyroo.com/" }] });
   assert.equal(rankOfRead(organic, "tallyroo.com", true), 6);
   assert.equal(rankOfRead(organic, "ownerledger.co", true), undefined, "may sit on the page that did not come back");
-  assert.equal(rankOfRead(organic, "ownerledger.co", false), null, "a whole read keeps not-in-top-20");
+  // 3 Nov 2026: a whole read is ten organic results or more (engines.ts SERP_MIN_ORGANIC); this
+  // two-result page is thin, so not found on it is not measured either. A full page keeps the miss.
+  assert.equal(rankOfRead(organic, "ownerledger.co", false), undefined, "a thin page cannot call a miss");
+  const full = parseOrganic({ items: Array.from({ length: 12 }, (_, i) => ({ type: "organic", rank_group: i + 1, domain: `site${i}.example`, url: `https://site${i}.example/` })) });
+  assert.equal(rankOfRead(full, "ownerledger.co", false), null, "a whole read keeps not-in-top-20");
+});
+
+test("3 Nov 2026: a page of google.com/goto links is not ranked on, found or not", () => {
+  const items = Array.from({ length: 19 }, (_, i) =>
+    i % 3 === 0
+      ? { type: "organic", rank_group: i + 1, domain: `site${i}.example`, url: `https://site${i}.example/` }
+      : { type: "organic", rank_group: i + 1, domain: "google.com", url: `https://google.com/goto?url=CAES${i}` },
+  );
+  const organic = parseOrganic({ items });
+  assert.equal(rankOfRead(organic, "site3.example", false), undefined, "a rank on the wrong page is not a rank");
+  assert.equal(rankOfRead(organic, "absent.example", false), undefined, "nor is a miss");
+  assert.deepEqual(keywordOutcome(undefined, "wrapped"), { failed: true, reason: "degraded SERP: Google's links came back wrapped, so the page is not ranked on" });
+  // One google.com result is a real result (a Google product page), not a degraded read.
+  const one = parseOrganic({ items: items.map((it, i) => (i === 1 ? it : { ...it, domain: `site${i}.example`, url: `https://site${i}.example/` })) });
+  assert.equal(rankOfRead(one, "site4.example", false), 5);
+  assert.equal(rankOfRead(one, "absent.example", false), null);
 });
 
 test("a task DataForSEO failed keeps its status, its billed cost and a short reason", () => {

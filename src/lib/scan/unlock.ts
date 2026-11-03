@@ -18,6 +18,7 @@ import { spentSince } from "@/lib/scan/spend";
 import { sendReportReadyEmail } from "@/lib/scan/verify-email";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { selectAll } from "@/lib/supabase/page";
+import { missingColumn } from "@/lib/tracking/limits";
 import { clusterGoogleTrio, type StoredClusterKeyword } from "@/lib/scan/target-keyword";
 import type { ClusterKeywordView } from "@/lib/scan/contract";
 
@@ -241,6 +242,21 @@ export async function opportunityShape(
 }
 
 /** Everything the gate was holding back, assembled once. */
+const CLUSTER_COLUMNS = "cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_rank, cluster_keyword_status";
+
+/**
+ * The scan's cluster keyword row. `cluster_keyword_rank_unchecked` (3 Nov 2026,
+ * migration 20261103000000) is asked for and, on a database the migration has
+ * not reached, asked again without: a missing column must not turn every
+ * report into "could not read the cluster keyword".
+ */
+async function readClusterRow(db: ReturnType<typeof supabaseAdmin>, scanId: string) {
+  const { data, error } = await db.from("scans").select(`${CLUSTER_COLUMNS}, cluster_keyword_rank_unchecked`).eq("id", scanId).maybeSingle();
+  if (!error || !missingColumn(error)) return { data: data as Record<string, unknown> | null, error };
+  const { data: before, error: beforeErr } = await db.from("scans").select(CLUSTER_COLUMNS).eq("id", scanId).maybeSingle();
+  return { data: before as Record<string, unknown> | null, error: beforeErr };
+}
+
 export async function buildUnlockPayload(scanId: string): Promise<UnlockPayload> {
   const db = supabaseAdmin();
 
@@ -303,11 +319,7 @@ export async function buildUnlockPayload(scanId: string): Promise<UnlockPayload>
         .order("id", { ascending: true })
         .range(from, to),
     ),
-    db
-      .from("scans")
-      .select("cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_rank, cluster_keyword_status")
-      .eq("id", scanId)
-      .maybeSingle(),
+    readClusterRow(db, scanId),
   ]);
 
   /**
@@ -480,6 +492,7 @@ export async function buildUnlockPayload(scanId: string): Promise<UnlockPayload>
             volume: (clusterRow.cluster_keyword_volume ?? null) as number | null,
             intent: (clusterRow.cluster_keyword_intent ?? null) as string | null,
             rank: (clusterRow.cluster_keyword_rank ?? null) as number | null,
+            ...(clusterRow.cluster_keyword_rank_unchecked === true ? { unchecked: true } : {}),
           }
         : null,
     opportunities,

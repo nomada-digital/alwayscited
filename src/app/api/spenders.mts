@@ -131,6 +131,11 @@ export const PAID: Record<string, { module: string; what: string }> = {
     module: "src/lib/diy/core/doors.ts",
     what: "one capped DataForSEO read on the DIY ledger",
   },
+  /** 3 Nov 2026: unchecked scan positions read again, from the 03:45 cron. */
+  retryUncheckedClusterRanks: {
+    module: "src/lib/scan/cluster-rank.ts",
+    what: "one SERP read per scan whose cluster keyword position could not be checked, RETRIES_PER_PASS a day at most",
+  },
 };
 
 /**

@@ -506,6 +506,14 @@ test("S1: chosen shows the keyword's rank, a missing rank is the depth read's wo
   assert.match(clusterRank({ cluster_keyword: { ...c, rank: null } }), /^Not in top \d+$/);
 });
 
+test("3 Nov 2026: a position that could not be checked is never read as not in the top 20", () => {
+  const c = { status: "chosen" as const, keyword: "keyword research tools", volume: 9900, intent: "commercial", rank: null, unchecked: true };
+  assert.equal(clusterRank({ cluster_keyword: c }), "Couldn't check");
+  assert.doesNotMatch(drawerKeywordLine({ cluster_keyword: c }), /top/);
+  // A rank found is a rank, whatever the flag says.
+  assert.equal(clusterRank({ cluster_keyword: { ...c, rank: 4 } }), "#4");
+});
+
 test("S1: none_qualified and read_failed draw the dashed node and Not picked, whatever keyword text is left on the row", () => {
   for (const status of ["none_qualified", "read_failed"] as const) {
     const c = { status, keyword: "leftover", volume: 5, intent: "commercial", rank: 3 };

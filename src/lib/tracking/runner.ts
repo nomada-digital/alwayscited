@@ -406,7 +406,7 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
           const read = await readKeywordPosition(k.keyword as string, domain, market, remainingMs());
           spend.dfs += read.cost;
           cost += read.cost;
-          const out = keywordOutcome(read.rank);
+          const out = keywordOutcome(read.rank, read.fault);
           if (out.failed) {
             reason = out.reason;
             break;

@@ -347,7 +347,9 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
     // 22 Oct 2026: starter.ts reads the candidates' volume once for a signup left with a cluster with no keyword.
     // 29 Oct 2026: agency/edit.ts measures the one keyword staff change a cluster to, once per change, in the agency view.
     readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/app/api/scan/[token]/questions/route.ts", "src/lib/agency/edit.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
-    readKeywordRank: ["src/lib/scan/pipeline.ts"],
+    // 3 Nov 2026: cluster-rank.ts holds the scan's cluster keyword read (the pipeline calls it once a scan) and its
+    // daily retry for positions that could not be checked, RETRIES_PER_PASS a pass, from cron/reap-stalled-scans.
+    readKeywordRank: ["src/lib/scan/cluster-rank.ts", "src/lib/scan/pipeline.ts"],
   });
 });
 

@@ -228,14 +228,55 @@ export function rankOf(organic: OrganicHit[] | undefined, subject: string): numb
 }
 
 /**
+ * Fewer organic results than this on a depth-20 read is a page that did not
+ * fully come back. Clean reads in tracking_serp averaged 18.8 a keyword from
+ * 20 to 29 Oct 2026, and one in about 120 came in under ten.
+ */
+export const SERP_MIN_ORGANIC = 10;
+
+/** An organic result whose link is Google's own redirect (`/goto` or `/url` on a google host) rather than the site's. */
+function wrappedLink(url: string | null): boolean {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return /(^|\.)google\.[a-z.]+$/.test(u.hostname) && (u.pathname === "/goto" || u.pathname === "/url");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What is wrong with a SERP read, or null when it can be ranked on.
+ *
+ * "wrapped" (3 Nov 2026): from 30 Oct DataForSEO served a different,
+ * localised Google page for most keywords, with a dozen of the twenty links
+ * wrapped as google.com/goto and the site only in the breadcrumb. Every
+ * tracking_serp read from 30 Oct carried three or more; none before did. The
+ * count of results did not drop, so only the links give it away. A wrapped
+ * page is the wrong page: nothing on it is a rank or a miss.
+ *
+ * "thin": fewer than SERP_MIN_ORGANIC organic results, read like a partial -
+ * found is a rank, not found is not measured.
+ */
+export function serpFault(organic: OrganicHit[] | undefined): "wrapped" | "thin" | null {
+  if (!organic?.length) return null;
+  if (organic.filter((o) => wrappedLink(o.url)).length >= 2) return "wrapped";
+  return organic.length < SERP_MIN_ORGANIC ? "thin" : null;
+}
+
+/**
  * `rankOf` for a read that may be partial (R137, 30 Sep 2026). A 40106 means
  * some SERP pages did not come back, so "not found" no longer means "not in
  * the top SERP_DEPTH": the subject may sit on the missing page. Found is
  * still a rank; not found on a partial read is not measured (undefined).
+ * A thin page reads the same way, and a wrapped one is not measured at all
+ * (`serpFault`, 3 Nov 2026).
  */
 export function rankOfRead(organic: OrganicHit[] | undefined, subject: string, partial: boolean): number | null | undefined {
+  const fault = serpFault(organic);
+  if (fault === "wrapped") return undefined;
   const rank = rankOf(organic, subject);
-  return partial && rank === null ? undefined : rank;
+  return (partial || fault === "thin") && rank === null ? undefined : rank;
 }
 
 export function parseGoogleAio(result: Record<string, unknown> | undefined | null): EngineRead {

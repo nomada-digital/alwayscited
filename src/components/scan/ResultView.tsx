@@ -1206,7 +1206,9 @@ export default function ResultView(p: {
                     ? "Organic, for the keyword above."
                     : rankText === "Checking"
                       ? "Reading Google for the keyword above."
-                      : "Checked: not in the first " + SERP_DEPTH + " results."
+                      : r.cluster_keyword?.unchecked
+                        ? "Google's results came back unreadable. We check again daily."
+                        : "Checked: not in the first " + SERP_DEPTH + " results."
               }
             />
           ) : f.bestRank !== null ? (
