@@ -1,17 +1,16 @@
 import { SCAN_LIMITS } from "@/config/contact";
 import {
-  clusterKeywordCandidates,
   describeAnthropicError,
-  generateQuestions,
   siteFacts,
+  generateQuestions,
   type GeneratedQuestion,
   QUESTION_COUNT,
   TOPIC_VARIANT_COUNT,
 } from "@/lib/scan/anthropic";
-import { readKeywordIntents, readKeywordVolumes } from "@/lib/scan/dataforseo";
+import { chooseClusterKeyword, type ClusterKeyword } from "@/lib/scan/cluster-keyword";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { partnerMayUse } from "@/lib/scan/handoff";
-import { clusterKeywordFits, KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME } from "@/lib/scan/target-keyword";
+import { clusterKeywordFits } from "@/lib/scan/target-keyword";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -248,7 +247,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   });
 }
 
-type ClusterKeyword = { keyword: string | null; volume: number | null; intent: string | null; status: "chosen" | "none_qualified" | "read_failed"; market: Market };
 
 /**
  * The scan's cluster keyword - BRIEF-3 C1 (Danny, 29 Sep 2026). Chosen once,
@@ -281,51 +279,24 @@ async function clusterKeywordFor(
       market: scan.cluster_keyword_market as Market,
     };
   }
-  const modelBilled = { calls: 0 };
-  let dfsCost = 0;
-  let dfsCalls = 0;
-  let out: ClusterKeyword;
-  try {
-    const candidates = await clusterKeywordCandidates(
-      { topic, market, positioning: (scan.positioning as string | null) ?? null, ...siteFacts(scan.site_facts) },
-      modelBilled,
-    );
-    if (!candidates.length) {
-      out = { keyword: null, volume: null, intent: null, status: "none_qualified", market };
-    } else {
-      const [v, i] = await Promise.all([readKeywordVolumes(candidates, market, 20_000), readKeywordIntents(candidates, 20_000)]);
-      dfsCalls = 2;
-      dfsCost = v.cost + i.cost;
-      // 3 Nov 2026: a thin market (KEYWORD_FALLBACK) reads its buyers' markets too, one volume read each, in order,
-      // only while the home pick is under THIN_KEYWORD_VOLUME. Intent carries no market, so it is read once.
-      const reads = [{ market, pick: pickClusterKeyword(candidates, v.volumes, i.intents) }];
-      for (const fallback of KEYWORD_FALLBACK[market] ?? []) {
-        if (pickAcrossMarkets(reads) !== reads[0] || ("volume" in reads[0].pick && reads[0].pick.volume >= THIN_KEYWORD_VOLUME)) break;
-        const fv = await readKeywordVolumes(candidates, fallback, 20_000);
-        dfsCalls += 1;
-        dfsCost += fv.cost;
-        reads.push({ market: fallback, pick: pickClusterKeyword(candidates, fv.volumes, i.intents) });
-      }
-      const chosen = pickAcrossMarkets(reads);
-      out = "none" in chosen.pick
-        ? { keyword: null, volume: null, intent: null, status: "none_qualified", market }
-        : { ...chosen.pick, status: "chosen", market: chosen.market };
-    }
-  } catch (err) {
-    console.warn(`[scan] cluster keyword check failed for ${String(scan.id)}: ${err instanceof Error ? err.message : String(err)}`);
-    out = { keyword: null, volume: null, intent: null, status: "read_failed", market };
-  }
+  const { out, dfsCalls, dfsCost, modelCalls } = await chooseClusterKeyword({
+    scanId: String(scan.id),
+    topic,
+    market,
+    positioning: (scan.positioning as string | null) ?? null,
+    siteFacts: scan.site_facts,
+  });
   const { error: wErr } = await db
     .from("scans")
     .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status, cluster_keyword_market: out.market, cluster_keyword_topic: topic })
     .eq("id", scan.id as string);
   if (wErr) console.warn(`[scan] cluster keyword not stored for ${String(scan.id)}: ${wErr.message}`);
-  if (dfsCalls || dfsCost || modelBilled.calls) {
+  if (dfsCalls || dfsCost || modelCalls) {
     const { error: bErr } = await db.rpc("note_scan_spend", {
       p_scan: scan.id as string,
       p_dfs_calls: dfsCalls,
       p_dfs_cost: dfsCost,
-      p_anthropic_calls: modelBilled.calls,
+      p_anthropic_calls: modelCalls,
     });
     if (bErr) console.warn(`[scan] cluster keyword spend not billed for ${String(scan.id)}: ${bErr.message}`);
   }

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 /**
@@ -22,4 +23,25 @@ test("the retry pass is capped in reads and in age, and the query uses both", ()
 test("an unmeasured read is stored unchecked, never as a plain null rank", () => {
   assert.match(src, /if \(read\.rank === undefined\) return \{ rank: null, unchecked: true/);
   assert.match(src, /return \{ rank: null, unchecked: true, cost:/);
+});
+
+/** Every .ts/.tsx under src, relative to the repo root. */
+function sources(dir: string, out: string[] = []): string[] {
+  for (const e of readdirSync(dir)) {
+    const p = join(dir, e);
+    if (statSync(p).isDirectory()) sources(p, out);
+    else if (/\.tsx?$/.test(e)) out.push(p);
+  }
+  return out;
+}
+
+test("Add keyword spends only from the admin action, and the action checks Basic auth first", () => {
+  const root = new URL("../../..", import.meta.url).pathname;
+  const callers = sources(join(root, "src"))
+    .filter((f) => /(?<![\w.])addClusterKeyword\(/.test(readFileSync(f, "utf8").replace(/export async function addClusterKeyword\(/, "")))
+    .map((f) => f.slice(root.length));
+  assert.deepEqual(callers, ["src/app/admin/scans/actions.ts"]);
+  const action = readFileSync(join(root, "src/app/admin/scans/actions.ts"), "utf8");
+  assert.ok(action.indexOf("await refuseUnlessAdmin()") > 0 && action.indexOf("await refuseUnlessAdmin()") < action.indexOf("addClusterKeyword(token)"));
+  assert.match(action, /if \(refused\) return refused;/);
 });

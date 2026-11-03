@@ -1,10 +1,14 @@
 import type { Metadata } from "next";
 
 import { T } from "@/config/tokens";
+import { ActionForm } from "@/app/admin/tracking/ActionForm";
+import { ADMIN_LIMITS } from "@/lib/tracking/decide";
 import { scanReadiness } from "@/lib/scan/readiness";
 import { SETTINGS_FALLBACK } from "@/lib/scan/settings";
 import { anthropicCallsSince } from "@/lib/scan/spend";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
+
+import { addKeyword } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,6 +57,8 @@ type ScanRow = {
   public_token: string;
   domain: string;
   topic: string | null;
+  cluster_keyword: string | null;
+  cluster_keyword_status: string | null;
   market: string | null;
   status: string;
   step: string | null;
@@ -230,7 +236,7 @@ export default async function AdminScansPage() {
     db
       .from("scans")
       .select(
-        "id, public_token, domain, topic, market, status, step, error, engines, engines_answered, gated_status, dfs_calls, dfs_cost, anthropic_calls, unlocked_at, created_at, completed_at, step_ms",
+        "id, public_token, domain, topic, cluster_keyword, cluster_keyword_status, market, status, step, error, engines, engines_answered, gated_status, dfs_calls, dfs_cost, anthropic_calls, unlocked_at, created_at, completed_at, step_ms",
       )
       .order("created_at", { ascending: false })
       .limit(50),
@@ -353,6 +359,24 @@ export default async function AdminScansPage() {
       </p>
 
       <Readiness />
+      {/* Luke, 3 Nov 2026: an older scan, or one whose keyword was not picked, gains a keyword and its
+          Google position on the same link. lib/scan/cluster-keyword.ts addClusterKeyword. */}
+      <section style={{ marginTop: "1.5rem", padding: "1rem 1.25rem", border: `1px solid ${C.border}`, borderRadius: 16 }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy, margin: 0 }}>Add a keyword to a scan</h2>
+        <p style={{ color: C.muted, margin: "0.375rem 0 0.25rem", fontSize: "0.8125rem" }}>
+          Picks the Google keyword and reads the position, on the same link, so a shared report shows them. The AI
+          answers are kept. A scan that already has a keyword only has its position read again. About $0.10.
+        </p>
+        <ActionForm action={addKeyword} submit="Add keyword">
+          <input
+            name="scan"
+            maxLength={ADMIN_LIMITS.scan}
+            placeholder="alwayscited.com/scan/..."
+            aria-label="Scan link"
+            style={{ padding: "6px 10px", border: `1px solid ${C.border}`, borderRadius: 6, minWidth: 340, fontSize: "13px" }}
+          />
+        </ActionForm>
+      </section>
 
       {failedReads.length > 0 && (
         <p
@@ -461,8 +485,20 @@ export default async function AdminScansPage() {
             {scans.map((r) => (
               <tr key={r.public_token}>
                 <td style={td}>{when(r.created_at)}</td>
-                <td style={{ ...td, color: C.navy, fontWeight: 600 }}>{r.domain}</td>
-                <td style={td}>{r.topic ?? "-"}</td>
+                <td style={{ ...td, color: C.navy, fontWeight: 600 }}>
+                  <a href={"/scan/" + r.public_token} style={{ color: C.navy }}>{r.domain}</a>
+                </td>
+                <td style={td}>
+                  {r.topic ?? "-"}
+                  <span style={{ display: "block", color: C.muted, fontSize: "0.75rem" }}>
+                    {r.cluster_keyword_status === "chosen" ? "keyword: " + r.cluster_keyword : r.cluster_keyword_status ? "no keyword picked" : "before keywords"}
+                  </span>
+                  {r.status === "complete" && r.cluster_keyword_status !== "chosen" ? (
+                    <ActionForm action={addKeyword} submit="Add keyword">
+                      <input type="hidden" name="scan" value={r.public_token} maxLength={ADMIN_LIMITS.scan} />
+                    </ActionForm>
+                  ) : null}
+                </td>
                 <td style={td}>{r.market ?? "-"}</td>
                 <td style={td}>
                   {/* Both lengths RAW - not filtered to the union and not

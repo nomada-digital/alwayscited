@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 
 import { type TierKey } from "@/components/TierName";
 import { enginesFor } from "@/config/pricing";
-import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
+import { refuseUnlessAdmin } from "@/app/admin/admin-auth";
 import { isPlausibleEmail } from "@/lib/email-address";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ADMIN_LIMITS, dayAfter, liveOn, slugFor, trackingDay, upsellSetting } from "@/lib/tracking/decide";
@@ -38,18 +37,6 @@ import { clearScope } from "@/lib/tracking/scope";
 export type AdminResult = { ok: boolean; message: string };
 
 const TIERS = ["tracked", "mentioned", "cited", "everywhere"];
-
-/** The proxy's check, repeated inside the action. Null when the caller is the admin. */
-async function refuseUnlessAdmin(): Promise<AdminResult | null> {
-  const user = process.env.ADMIN_USER;
-  const password = process.env.ADMIN_PASSWORD;
-  if (!user || !password) return { ok: false, message: "Admin access is not configured." };
-  const creds = decodeBasicAuth((await headers()).get("authorization") ?? "");
-  if (!creds) return { ok: false, message: "Not authorised." };
-  const userOk = constantTimeEqual(creds.user, user);
-  const passwordOk = constantTimeEqual(creds.password, password);
-  return userOk && passwordOk ? null : { ok: false, message: "Not authorised." };
-}
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
 

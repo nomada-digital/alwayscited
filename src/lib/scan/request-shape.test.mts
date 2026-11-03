@@ -346,7 +346,9 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
     // 18 Oct 2026 (brief 2c): setup's keyword step reads the plural's volume, after check-keyword.ts's capped check passes.
     // 22 Oct 2026: starter.ts reads the candidates' volume once for a signup left with a cluster with no keyword.
     // 29 Oct 2026: agency/edit.ts measures the one keyword staff change a cluster to, once per change, in the agency view.
-    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/app/api/scan/[token]/questions/route.ts", "src/lib/agency/edit.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
+    // 3 Nov 2026: the questions route's cluster keyword check moved to cluster-keyword.ts (chooseClusterKeyword), which
+    // /admin/scans' Add keyword calls too; a thin market (JM) reads up to two more markets' volume there.
+    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/lib/agency/edit.ts", "src/lib/scan/cluster-keyword.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
     // 3 Nov 2026: cluster-rank.ts holds the scan's cluster keyword read (the pipeline calls it once a scan) and its
     // daily retry for positions that could not be checked, RETRIES_PER_PASS a pass, from cron/reap-stalled-scans.
     readKeywordRank: ["src/lib/scan/cluster-rank.ts", "src/lib/scan/pipeline.ts"],
@@ -358,7 +360,9 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
  * module, sent from one door, called from one route - `/api/scan/[token]/questions`,
  * which picks the cluster keyword before the prompts are written - and, since
  * 30 Sep 2026 (T6 part 3b), check-keyword.ts, which checks one keyword a
- * member typed in Add a cluster. An exact list, so the sweep is its own floor.
+ * member typed in Add a cluster. Since 3 Nov 2026 the questions route's read
+ * is cluster-keyword.ts's, shared with /admin/scans' Add keyword. An exact
+ * list, so the sweep is its own floor.
  */
 test("the keyword intent endpoint is built in one module, sent from one door, called from the questions route", () => {
   const files: string[] = [];
@@ -369,7 +373,7 @@ test("the keyword intent endpoint is built in one module, sent from one door, ca
     for (const name of Object.keys(senders)) if (new RegExp("(?<![\\w.])(?<!function\\s+)" + name + "\\(").test(src)) senders[name].push(file);
   }
   assert.deepEqual(files, ["src/lib/scan/dataforseo-request.ts"]);
-  assert.deepEqual(senders, { keywordIntentRequest: ["src/lib/scan/dataforseo.ts"], readKeywordIntents: ["src/app/api/scan/[token]/questions/route.ts", "src/lib/agency/edit.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"] });
+  assert.deepEqual(senders, { keywordIntentRequest: ["src/lib/scan/dataforseo.ts"], readKeywordIntents: ["src/lib/agency/edit.ts", "src/lib/scan/cluster-keyword.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"] });
 });
 
 test("keyword intent request (C1): one task, keywords in the echoed form, a language and no location", () => {

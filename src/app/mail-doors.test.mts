@@ -383,6 +383,10 @@ const ACTIONS: Record<string, string[]> = {
   // judged by placements.ts. Send nothing, spend nothing, delete nothing,
   // never touch the link-check columns, same admin check first.
   "src/app/admin/tracking/actions.ts": ["addTracked", "createClientFromScan", "editTracked", "groupCluster", "logPlacement", "runNow", "setMember", "setUpsell", "stopTracked", "updatePlacement"],
+  // 3 Nov 2026 (Luke): /admin/scans' Add keyword. Sends no mail. Spends about $0.10 a press (one model call,
+  // up to three volume reads, an intent read, one SERP read) through addClusterKeyword, which spenders.mts
+  // lists and cluster-rank.test.mts holds to this caller. The same admin check first (admin-auth.ts).
+  "src/app/admin/scans/actions.ts": ["addKeyword"],
 };
 
 // --------------------------------------------------------------- the tests

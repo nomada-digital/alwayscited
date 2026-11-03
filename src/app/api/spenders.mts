@@ -131,6 +131,14 @@ export const PAID: Record<string, { module: string; what: string }> = {
     module: "src/lib/diy/core/doors.ts",
     what: "one capped DataForSEO read on the DIY ledger",
   },
+  /**
+   * 3 Nov 2026: /admin/scans' "Add keyword" - a server action behind the admin's Basic auth, not a route under
+   * src/app/api, so the route walk cannot see it; cluster-rank.test.mts holds it to that one caller instead.
+   */
+  addClusterKeyword: {
+    module: "src/lib/scan/cluster-keyword.ts",
+    what: "a cluster keyword and its Google position for one finished scan, on the same link - about $0.10",
+  },
   /** 3 Nov 2026: unchecked scan positions read again, from the 03:45 cron. */
   retryUncheckedClusterRanks: {
     module: "src/lib/scan/cluster-rank.ts",
