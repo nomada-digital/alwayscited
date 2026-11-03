@@ -567,8 +567,12 @@ export default function ConfirmScreen(p: {
                 value={leadEmail}
                 placeholder="you@company.com"
                 onChange={(e) => setLeadEmail(e.target.value)}
+                aria-describedby="gate-email-note"
                 style={fieldStyle}
               />
+              <p id="gate-email-note" style={{ margin: "6px 0 0", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
+                We&apos;ll email your report and may follow up about it. Unsubscribe any time.
+              </p>
               <label htmlFor="gate-name" style={fieldLabel}>
                 First name <span style={{ fontWeight: 400, color: T.soft }}>(optional)</span>
               </label>
@@ -583,7 +587,7 @@ export default function ConfirmScreen(p: {
               />
               <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", margin: "12px 0 0", fontSize: "13px", lineHeight: 1.45, color: T.ink, cursor: "pointer" }}>
                 <input id="gate-marketing" type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} style={{ marginTop: "2px", accentColor: T.accent }} />
-                <span>Send me occasional tips on getting named by AI engines. Unsubscribe any time.</span>
+                <span>Send me occasional AI visibility tips and news</span>
               </label>
             </fieldset>
           ) : null}
@@ -614,7 +618,7 @@ export default function ConfirmScreen(p: {
           </button>
           <p style={{ margin: "10px 0 0", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
             {p.gate
-              ? <>Free. We email you the report, and nothing else unless you tick the box. <a href="/privacy" style={{ color: T.soft }}>Privacy</a></>
+              ? <>Free. We email you the report. <a href="/legal#why" style={{ color: T.soft }}>Privacy</a></>
               : "Free. The result is free in full."}
           </p>
           {error ? (

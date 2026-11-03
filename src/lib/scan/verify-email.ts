@@ -2,6 +2,8 @@ import "server-only";
 
 import { Resend } from "resend";
 
+import { unsubscribeLinks } from "./unsubscribe";
+
 import { mailFrom } from "@/config/mail-from";
 import { SITE_URL } from "@/config/schema";
 import { T } from "@/config/tokens";
@@ -136,14 +138,17 @@ export async function sendReportReadyEmail(input: {
 
   const link = `${siteUrl()}/scan/${input.publicToken}`;
   const subject = headerSafe(reportSubject(input.brand, input.counts));
+  // 3 Nov 2026: a way out of follow-ups on every report email - a footer link, and one-click for mail clients (RFC 8058).
+  const unsub = unsubscribeLinks(siteUrl(), input.publicToken);
 
   try {
     const { data, error } = await new Resend(key).emails.send({
       from: mailFrom(),
       to: input.email,
       subject,
-      html: reportHtml(E, FONT, input.brand, link, input.counts, input.requestedFor, input.cluster),
-      text: reportText(input.brand, link, input.counts, input.requestedFor, input.cluster),
+      html: reportHtml(E, FONT, input.brand, link, input.counts, input.requestedFor, input.cluster, unsub.page),
+      text: reportText(input.brand, link, input.counts, input.requestedFor, input.cluster, unsub.page),
+      headers: { "List-Unsubscribe": `<${unsub.oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
     });
     if (error) {
       console.error("[scan] report email rejected", error);

@@ -89,6 +89,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/checkout/offer/[token]": "a client's own offer under a signed agreement - their name and price - reachable only by holding the token",
   "/scan": "the GET form target, noindex and deliberately headerless - see HEADERLESS_ON_PURPOSE",
   "/scan/[token]": "somebody's own scan result, reachable only by holding the token",
+  "/scan/[token]/unsubscribe": "the unsubscribe page for a scan's report email (3 Nov 2026), reachable only by holding the token",
   "/coverage-check/[token]": "somebody's own campaign reading, reachable only by holding the token",
   // 16 Oct 2026: a hub blog post before it is live (lib/hub-posts.ts), reached from the agency hub's preview link.
   "/blog-preview/[slug]/[key]": "an unpublished blog post, reachable only by holding the preview key the agency hub issues",

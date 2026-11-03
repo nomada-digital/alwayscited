@@ -203,6 +203,15 @@ function allCalls(): Call[] {
  */
 const NO_CALLER: { route: string; method: string; why: string; earns: () => boolean }[] = [
   {
+    route: "/api/unsubscribe/[token]",
+    method: "POST",
+    // 3 Nov 2026: unsubscribe from report emails and follow-ups (lib/scan/unsubscribe.ts).
+    why: "A plain form post from /scan/[token]/unsubscribe, and a mail client's one-click unsubscribe (RFC 8058) off the List-Unsubscribe header every report email carries; the probe reads fetch calls, not form actions or mail headers.",
+    earns: () =>
+      readFileSync(join(ROOT, "src/app/scan/[token]/unsubscribe/page.tsx"), "utf8").includes("action={`/api/unsubscribe/${token}`}") &&
+      readFileSync(join(ROOT, "src/lib/scan/verify-email.ts"), "utf8").includes('"List-Unsubscribe-Post": "List-Unsubscribe=One-Click"'),
+  },
+  {
     route: "/api/checkout/offer/[token]",
     method: "POST",
     // 31 Oct 2026: a contract offer's page posts the buyer's email here as a plain HTML form (contract-offer.ts).

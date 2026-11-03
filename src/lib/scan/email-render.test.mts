@@ -485,3 +485,16 @@ test("escapeHtml covers the five", () => {
   // Ampersand first, or the entities it writes get re-escaped.
   assert.equal(escapeHtml("&lt;"), "&amp;lt;");
 });
+
+test("3 Nov 2026: a report email with an unsubscribe link carries it in both parts, and stays well formed", () => {
+  const unsub = "https://alwayscited.com/scan/" + "a".repeat(32) + "/unsubscribe";
+  const html = reportHtml(E, FONT, "Vibe Retail", LINK, COUNTS, undefined, null, unsub);
+  assertWellFormed(html, "report with unsubscribe");
+  assert.ok(html.includes(`href="${unsub}"`) && />Unsubscribe</.test(html));
+  assert.ok(reportText("Vibe Retail", LINK, COUNTS, undefined, null, unsub).endsWith(unsub));
+  // The send always passes one: verify-email.ts builds it from the token, with the one-click headers beside it.
+  const send = readFileSync(join(new URL(".", import.meta.url).pathname, "verify-email.ts"), "utf8");
+  assert.match(send, /reportHtml\([^)]*unsub\.page\)/);
+  assert.match(send, /reportText\([^)]*unsub\.page\)/);
+  assert.match(send, /"List-Unsubscribe": `<\$\{unsub\.oneClick\}>`/);
+});

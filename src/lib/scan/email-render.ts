@@ -306,15 +306,23 @@ export function reportText(
   counts: ReportCounts,
   requestedFor?: string,
   cluster?: ReportCluster | null,
+  unsubscribe?: string,
 ): string {
   return (
     (requestedFor ? `${requestedReason(requestedFor)}\n\n` : "") +
     `${reportHeadline(brand, counts, cluster)}\n\n` +
     (cluster ? `${reportAfter(cluster)}\n\n` : "") +
     `Open your report: ${link}\n\n` +
-    "The link works on any device and does not expire."
+    "The link works on any device and does not expire." +
+    (unsubscribe ? `\n\n${UNSUBSCRIBE_LINE} ${unsubscribe}` : "")
   );
 }
+
+/**
+ * Every report email carries a way out of follow-ups (Danny, 3 Nov 2026): the link to /unsubscribe/<token>
+ * (lib/scan/unsubscribe.ts), and the List-Unsubscribe headers verify-email.ts sets on the send.
+ */
+export const UNSUBSCRIBE_LINE = "We may follow up about this report. To stop follow-ups and tips, unsubscribe:";
 
 export function reportHtml(
   p: Palette,
@@ -324,6 +332,7 @@ export function reportHtml(
   counts: ReportCounts,
   requestedFor?: string,
   cluster?: ReportCluster | null,
+  unsubscribe?: string,
 ): string {
   const b = escapeHtml(brand);
   return shell(p, font, {
@@ -360,6 +369,11 @@ export function reportHtml(
       " " +
       escapeHtml(reportAfter(cluster)),
     cta: { href: link, label: "Open your report" },
-    footnote: "The link works on any device and does not expire. " + linkFallback(p, link),
+    footnote:
+      "The link works on any device and does not expire. " +
+      linkFallback(p, link) +
+      (unsubscribe
+        ? `<br><br>We may follow up about this report. <a href="${escapeHtml(unsubscribe)}" style="color:${p.quiet};text-decoration:underline;">Unsubscribe</a> from follow-ups and tips.`
+        : ""),
   });
 }

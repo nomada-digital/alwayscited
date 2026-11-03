@@ -297,6 +297,9 @@ test("the upsert sites are the ones we think they are", () => {
       "diy_jobs:client_domain_id,due_on,kind",
       "diy_jobs:client_domain_id,due_on,kind",
       "diy_vendor_status:kind,read_on",
+      // 3 Nov 2026: an unsubscribe, once per address on email_suppressions' primary key
+      // (20261104010000_email_suppressions.sql, lib/scan/unsubscribe.ts suppress).
+      "email_suppressions:email",
       // 2 Nov 2026, sg-37: the data connections' daily pull, one row per client, day, source and medium on ga4_daily's
       // unique in 20261102000000_ga4_daily.sql (lib/dash/connect-io.ts).
       "ga4_daily:client_domain_id,day,medium,source",

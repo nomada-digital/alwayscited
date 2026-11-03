@@ -103,8 +103,11 @@ const SECTIONS: Section[] = [
     body: (
       <>
         The email address exists so we can send you the link to your report, and so a scan can be reclaimed if nobody
-        opens it. It creates no account, and the team may follow up about your report. We send you tips only if you
-        ticked the box, and you can unsubscribe at any time; our basis for those is your consent. What you give for a
+        opens it. It creates no account. We may also follow up by email about the report you asked for: our basis is
+        legitimate interests, one business writing to another about something it requested. If you gave a personal
+        address rather than a work one, we follow up only if you ticked the box. We send tips and news only if you
+        ticked it; our basis for those is your consent. Every report email and follow-up carries an unsubscribe link,
+        and unsubscribing stops both; your report link keeps working. What you give for a
         walkthrough or a demo is passed to Danny at nomada digital, who uses it to send you the video or arrange the
         call. For everything else, our lawful basis is legitimate interest in responding to a request you made.
       </>
