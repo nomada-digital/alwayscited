@@ -213,6 +213,8 @@ export const SCAN_LIMITS = {
   utm: 200,
   /** The optional first name on the report gate (3 Nov 2026); scans.lead_name's own check. */
   name: 80,
+  /** The brand name as edited on the confirm step (3 Nov 2026); the confirm route cuts it here. */
+  brand: 80,
 };
 
 /**

@@ -7,7 +7,7 @@ import {
   QUESTION_COUNT,
   TOPIC_VARIANT_COUNT,
 } from "@/lib/scan/anthropic";
-import { chooseClusterKeyword, type ClusterKeyword } from "@/lib/scan/cluster-keyword";
+import { chooseClusterKeyword, type ClusterKeyword, topicFallback } from "@/lib/scan/cluster-keyword";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits } from "@/lib/scan/target-keyword";
@@ -271,21 +271,32 @@ async function clusterKeywordFor(
   // Reused only for the topic and market it was read for (18 Oct 2026): scans.market and .topic are written by /confirm,
   // not here, so comparing against them let a keyword read in one market come back after the market was switched twice.
   if (clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)) {
-    return {
+    const stored: ClusterKeyword = {
       keyword: (scan.cluster_keyword as string | null) ?? null,
       volume: (scan.cluster_keyword_volume as number | null) ?? null,
       intent: (scan.cluster_keyword_intent as string | null) ?? null,
       status: scan.cluster_keyword_status as ClusterKeyword["status"],
       market: scan.cluster_keyword_market as Market,
     };
+    // A stored "none" from before 3 Nov 2026 takes the topic too, and is written back so the run checks its position.
+    const fell = topicFallback(stored, topic);
+    if (fell === stored) return stored;
+    const { error: fErr } = await db
+      .from("scans")
+      .update({ cluster_keyword: fell.keyword, cluster_keyword_volume: null, cluster_keyword_intent: null, cluster_keyword_status: fell.status })
+      .eq("id", scan.id as string);
+    if (fErr) console.warn(`[scan] topic keyword not stored for ${String(scan.id)}: ${fErr.message}`);
+    return fell;
   }
-  const { out, dfsCalls, dfsCost, modelCalls } = await chooseClusterKeyword({
+  const chose = await chooseClusterKeyword({
     scanId: String(scan.id),
     topic,
     market,
     positioning: (scan.positioning as string | null) ?? null,
     siteFacts: scan.site_facts,
   });
+  const { dfsCalls, dfsCost, modelCalls } = chose;
+  const out = topicFallback(chose.out, topic);
   const { error: wErr } = await db
     .from("scans")
     .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status, cluster_keyword_market: out.market, cluster_keyword_topic: topic })

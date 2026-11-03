@@ -465,3 +465,24 @@ export function namesExactly(prose: string, brand: string): boolean {
   const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
   return new RegExp(`(^|[^A-Za-z0-9])${escaped}($|[^A-Za-z0-9])`).test(prose);
 }
+
+/**
+ * The brand as the site spells it, when the read split a name the domain runs together (3 Nov 2026: alwayscited.com
+ * was read as two words; the brand is one). Only a name whose words, joined, are the domain stem is
+ * touched. Of the joined and the split spellings, the one the site's own text uses more often wins, in the site's
+ * own casing; a site that writes itself as two words ("Rota Ready" on rotaready.com) keeps them. With neither found
+ * the read stands.
+ */
+export function siteSpelling(brand: string, domain: string | null | undefined, siteText: string): string {
+  const words = brand.trim().split(/[\s-]+/).filter(Boolean);
+  const stem = domainStem(domain);
+  if (words.length < 2 || !stem || words.join("").toLowerCase() !== stem) return brand;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const joined = [...siteText.matchAll(new RegExp(`(?<![a-z0-9])${esc(stem)}(?![a-z0-9])`, "gi"))].map((m) => m[0]);
+  const split = [...siteText.matchAll(new RegExp(`(?<![a-z0-9])${words.map(esc).join("[\\s-]+")}(?![a-z0-9])`, "gi"))];
+  if (!joined.length || joined.length < split.length) return brand;
+  // The commonest casing the site writes the joined form in: "alwayscited", "RotaReady".
+  const tally = new Map<string, number>();
+  for (const j of joined) tally.set(j, (tally.get(j) ?? 0) + 1);
+  return [...tally].sort((a, b) => b[1] - a[1])[0][0];
+}

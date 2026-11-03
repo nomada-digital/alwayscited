@@ -649,8 +649,9 @@ test("the table reader finds the tables and keys this test thinks it does", () =
   assert.ok(scan, "SCAN_LIMITS was not parsed");
   // `ref` joined on 18 Oct 2026: the partner hand-off code (lib/scan/handoff.ts), scans.ref's own check.
   // `utm` on 19 Oct 2026: each utm_* a hand-off carries, cut by cleanUtm before the start route stores it.
-  // `name` on 3 Nov 2026: the report gate's optional first name, scans.lead_name's own check.
-  assert.deepEqual([...scan.keys].sort(), ["email", "name", "question", "ref", "topic", "topicVariant", "utm"]);
+  // `name` on 3 Nov 2026: the report gate's optional first name, scans.lead_name's own check. `brand` the same
+  // day: the brand name as edited on the confirm step, cut by the confirm route.
+  assert.deepEqual([...scan.keys].sort(), ["brand", "email", "name", "question", "ref", "topic", "topicVariant", "utm"]);
   // And that the nested table is read as three bounds rather than as one, which
   // is the case a `[^}]*` slice gets wrong.
   const coverage = TABLES.find((t) => t.table === "COVERAGE_LIMITS");

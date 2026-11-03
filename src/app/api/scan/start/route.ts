@@ -1,6 +1,7 @@
 import { after } from "next/server";
 
 import { SCAN_LIMITS } from "@/config/contact";
+import { siteSpelling } from "@/lib/scan/brand-name";
 import { describeAnthropicError, QUESTION_COUNT, readBrand, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
 import { checkCeilings } from "@/lib/scan/ceilings";
 import { type ReadFailure, readSite, UnreachableDomain } from "@/lib/scan/crawl";
@@ -294,6 +295,8 @@ export async function POST(req: Request) {
   try {
     const siteText = await readSite(domain);
     read = await readBrand(siteText, billed);
+    // 3 Nov 2026: our own brand came back as two words - a name the domain runs together keeps the site's own spelling.
+    read = { ...read, brand_name: siteSpelling(read.brand_name, domain, siteText) };
   } catch (err) {
     if (err instanceof UnreachableDomain) {
       // Logged with its reason. Every one of these used to print nothing at

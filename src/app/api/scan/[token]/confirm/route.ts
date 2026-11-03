@@ -2,6 +2,7 @@ import { after } from "next/server";
 
 import { SCAN_LIMITS } from "@/config/contact";
 import { QUESTION_COUNT, QUESTION_KINDS, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
+import { cleanBrandName } from "@/lib/scan/brand-name";
 import { isScanMarket } from "@/lib/scan/domain";
 import { partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits } from "@/lib/scan/target-keyword";
@@ -65,7 +66,7 @@ export const maxDuration = 300;
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
 
-  let body: { topic?: string; market?: string; topic_variants?: string[]; questions?: unknown; email?: unknown; name?: unknown; marketing?: unknown };
+  let body: { topic?: string; market?: string; topic_variants?: string[]; questions?: unknown; email?: unknown; name?: unknown; marketing?: unknown; brand?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -170,6 +171,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     return Response.json({ error: "email_required", message: "Tell us where to send the report." }, { status: 400 });
   }
   const internal = team || ownDomain || Boolean(lead?.internal);
+  const editedBrand = typeof body.brand === "string" ? cleanBrandName(body.brand.slice(0, SCAN_LIMITS.brand)) || null : null;
 
   /**
    * The variants the agency confirmed are the trusted set from here, capped so
@@ -234,6 +236,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
        */
       queued_at: new Date().toISOString(),
       ...(variants ? { topic_variants: variants } : {}),
+      // The brand as the visitor put it right on the confirm step (3 Nov 2026); the answers are read for this name.
+      ...(editedBrand ? { brand_name: editedBrand } : {}),
       // The report gate's answers (migration 20261104000000). report_email is what report-mail.ts sends to on completion.
       internal,
       ...(lead

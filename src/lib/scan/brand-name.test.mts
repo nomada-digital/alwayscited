@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { brandKey, cleanBrandName, displayNamesFor, domainStem, namesBrand, namesSubject, pickDisplayName, subjectKeys } from "./brand-name.ts";
+import { brandKey, cleanBrandName, displayNamesFor, domainStem, namesBrand, namesSubject, pickDisplayName, siteSpelling, subjectKeys } from "./brand-name.ts";
 
 /**
  * `namesBrand` decides `scan_answers.brand_named`, which is the number this
@@ -241,4 +241,14 @@ test("a trade mark on the stored name does not stop it matching (goodtrip, 22 Oc
   assert.equal(cleanBrandName("goodtrip®"), "goodtrip");
   assert.equal(cleanBrandName("Acme™ Tools ©"), "Acme Tools");
   assert.equal(cleanBrandName("Plain"), "Plain");
+});
+
+test("3 Nov 2026: a name the domain runs together keeps the site's own spelling", () => {
+  const ours = "alwayscited places brands inside the answers. Try alwayscited free. About alwayscited.";
+  assert.equal(siteSpelling("always cited", "alwayscited.com", ours), "alwayscited");
+  assert.equal(siteSpelling("Rota Ready", "rotaready.com", "Rota Ready schedules staff. Rota Ready for restaurants. rotaready.com"), "Rota Ready", "a site that writes two words keeps them");
+  assert.equal(siteSpelling("Rota Ready", "rotaready.com", "RotaReady schedules staff. Try RotaReady."), "RotaReady", "the site's own casing");
+  assert.equal(siteSpelling("Acme Labs", "acme.co.uk", "Acme Labs builds"), "Acme Labs", "words that are not the stem are untouched");
+  assert.equal(siteSpelling("Goodtrip", "goodtrip.co.uk", "goodtrip"), "Goodtrip", "one word is untouched");
+  assert.equal(siteSpelling("always cited", "alwayscited.com", "nothing here"), "always cited", "with no evidence the read stands");
 });

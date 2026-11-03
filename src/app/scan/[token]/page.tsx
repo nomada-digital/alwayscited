@@ -5,6 +5,7 @@ import { cookies } from "next/headers";
 
 import ScanFlow from "@/components/scan/ScanFlow";
 import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
+import { maskEmail } from "@/lib/scan/mask-email";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { PARTNER_MARKETS } from "@/lib/scan/handoff";
 import { readMailOutcome } from "@/lib/scan/mail-outcome";
@@ -47,7 +48,7 @@ export default async function ScanTokenPage({
   const { data: scan, error: scanErr } = await db
     .from("scans")
     .select(
-      "id, brand_name, domain, positioning, topic, topic_variants, market, ref, status, engines, gated_engines, gated_status, unlocked_at, started_at, queued_at",
+      "id, brand_name, domain, positioning, topic, topic_variants, market, ref, status, engines, gated_engines, gated_status, unlocked_at, started_at, queued_at, report_email",
     )
     .eq("public_token", token)
     .maybeSingle();
@@ -219,6 +220,8 @@ export default async function ScanTokenPage({
     <ScanFlow
       token={token}
       team={isTeamCookie((await cookies()).get(TEAM_COOKIE)?.value)}
+      // Masked: a scan link is shared, and this is enough for its owner to recognise (3 Nov 2026).
+      mailedTo={typeof scan.report_email === "string" && scan.report_email ? maskEmail(scan.report_email) : null}
       walkthrough={walkthrough}
       mail={mail}
       domain={scan.domain as string}

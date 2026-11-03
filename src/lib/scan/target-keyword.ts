@@ -197,3 +197,16 @@ export function pickAcrossMarkets(
   if (vol(home.pick) >= THIN_KEYWORD_VOLUME) return home;
   return rest.find((r) => vol(r.pick) > vol(home.pick)) ?? home;
 }
+
+/**
+ * The confirmed topic as the keyword, when the check found none or could not read (Danny, 3 Nov 2026: alwayscited.com
+ * confirmed "ai seo agency", the volume read timed out, and the report said "Keyword: Not picked for this scan" -
+ * "should it not default to the keyword selected on the previous screen?"). Saved as chosen with no volume and no
+ * intent, which is what the result reads as "volume not read"; its Google position is read like any other and
+ * stored unchecked when the read measures nothing. "Not picked" is left for a scan with no topic at all.
+ */
+export function topicFallback<K extends { keyword: string | null; volume: number | null; intent: string | null; status: string; market: Market }>(out: K, topic: string): K {
+  const keyword = keywordForm(topic);
+  if ((out.status === "chosen" && out.keyword) || keyword.length < 2) return out;
+  return { ...out, keyword, volume: null, intent: null, status: "chosen" };
+}

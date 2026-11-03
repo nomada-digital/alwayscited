@@ -189,6 +189,8 @@ export default function ConfirmScreen(p: {
     questions: { question: string; kind: string }[];
     /** The report gate's answers (3 Nov 2026). Absent when the gate is skipped. */
     lead?: { email: string; name: string; marketing: boolean };
+    /** The brand name, only when the visitor edited it (3 Nov 2026). */
+    brand?: string;
   }) => Promise<string | null>;
   running: boolean;
   /**
@@ -199,6 +201,8 @@ export default function ConfirmScreen(p: {
 }) {
   const [topic, setTopic] = useState(p.initialTopic);
   const [market, setMarket] = useState<Market>(p.initialMarket);
+  const [brand, setBrand] = useState(p.brand ?? "");
+  const [editingBrand, setEditingBrand] = useState(false);
   const [leadEmail, setLeadEmail] = useState("");
   const [leadName, setLeadName] = useState("");
   const [marketing, setMarketing] = useState(false);
@@ -336,6 +340,7 @@ export default function ConfirmScreen(p: {
   const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || kept.length > 0);
   const emailRef = useRef<HTMLInputElement>(null);
   const lead = p.gate ? { email: leadEmail.trim(), name: leadName.trim(), marketing } : undefined;
+  const brandEdit = brand.trim() && brand.trim() !== (p.brand ?? "").trim() ? brand.trim() : undefined;
 
   async function run() {
     if (!kept.length) return;
@@ -349,6 +354,7 @@ export default function ConfirmScreen(p: {
       market,
       questions: kept.map((q) => ({ question: q.question.trim(), kind: q.kind })),
       lead,
+      brand: brandEdit,
     });
     if (message) setError(message);
   }
@@ -368,7 +374,7 @@ export default function ConfirmScreen(p: {
       emailRef.current?.focus();
       return;
     }
-    const message = await p.onRun({ topic: topic.trim(), market, questions: [], lead });
+    const message = await p.onRun({ topic: topic.trim(), market, questions: [], lead, brand: brandEdit });
     if (message) setError(message);
   }
 
@@ -443,6 +449,33 @@ export default function ConfirmScreen(p: {
               From the site: {p.positioning}
             </p>
           ) : null}
+          {/* The detected brand, where it matters and can be put right (Danny, 3 Nov 2026): the answers are read for
+              this name, so a wrong one reads as "not named" everywhere. */}
+          <div data-figure="confirm-brand" style={{ margin: "12px 0 0", fontSize: "13.5px", lineHeight: 1.6, color: T.ink }}>
+            {editingBrand ? (
+              <span style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                <label htmlFor="confirm-brand-name">We&apos;ll look for</label>
+                <input
+                  id="confirm-brand-name"
+                  type="text"
+                  maxLength={SCAN_LIMITS.brand}
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  style={{ ...fieldStyle, width: "auto", flex: "1 1 160px", padding: "6px 10px", fontSize: "13.5px" }}
+                />
+                <button type="button" onClick={() => setEditingBrand(false)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: 0, cursor: "pointer" }}>
+                  Done
+                </button>
+              </span>
+            ) : (
+              <>
+                We&apos;ll look for <strong style={{ fontWeight: 600 }}>&ldquo;{brand.trim() || p.domain}&rdquo;</strong> in AI answers.{" "}
+                <button type="button" onClick={() => setEditingBrand(true)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: 0, cursor: "pointer" }}>
+                  Edit
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
         <div style={{ ...CARD, padding: "22px", alignSelf: "start" }}>
@@ -656,7 +689,9 @@ export default function ConfirmScreen(p: {
               The Google keyword
             </h2>
             <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
-              {keyword.status === "chosen"
+              {keyword.status === "chosen" && keyword.volume == null
+                ? "The category you confirmed, as the keyword: we couldn't read its Google search volume just now. Each prompt below is one angle on it."
+                : keyword.status === "chosen"
                 ? "The term a buyer types into Google when choosing a supplier, with searches behind it. Each prompt below is one angle on it."
                 : keyword.status === "read_failed"
                   ? "We couldn't check Google search volume just now. The prompts below are written on the category, and we pick the keyword with you when you start tracking."

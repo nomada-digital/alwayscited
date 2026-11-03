@@ -13,7 +13,7 @@ import type {
   ScanQuestion,
 } from "@/lib/scan";
 import { type FullInput, type FullPayload, asFull } from "@/lib/scan/full-payload";
-import { OFFER_AFTER_MS, OFFER_COPY, OFFER_STEP, offerReady } from "@/lib/scan/email-offer";
+import { OFFER_AFTER_MS, OFFER_COPY, OFFER_STEP, offerReady, queuedTo } from "@/lib/scan/email-offer";
 import type { MarketReason } from "@/lib/scan/market-pick";
 import { type EngineResult, parseEngineResults } from "@/lib/scan/engine-results";
 import { ENGINE_SPECS, isEngine, knownEngines } from "@/lib/scan/engines";
@@ -353,6 +353,8 @@ export default function ScanFlow(p: {
   mail?: MailOutcome | null;
   /** A browser marked as team from /admin/scans (lib/team-cookie.ts): the report gate is skipped (3 Nov 2026). */
   team?: boolean;
+  /** The scan's report address, masked, when one is already on the row: the card says where it goes (3 Nov 2026). */
+  mailedTo?: string | null;
   /**
    * The gated pass as the server found it on the row.
    *
@@ -412,7 +414,9 @@ export default function ScanFlow(p: {
   const [mailTo, setMailTo] = useState("");
   // R151: seeded from ?mail= when the form posted without script.
   const [mailErr, setMailErr] = useState(p.mail && !MAIL_OUTCOMES[p.mail].ok ? MAIL_OUTCOMES[p.mail].message : "");
-  const [mailNote, setMailNote] = useState(p.mail && MAIL_OUTCOMES[p.mail].ok ? MAIL_OUTCOMES[p.mail].message : "");
+  const [mailNote, setMailNote] = useState(
+    p.mail && MAIL_OUTCOMES[p.mail].ok ? MAIL_OUTCOMES[p.mail].message : p.mailedTo ? queuedTo(p.mailedTo) : "",
+  );
   const [mailBusy, setMailBusy] = useState(false);
 
   /** The answers are stored and the result is on its way: say so while it loads. */
@@ -760,6 +764,7 @@ export default function ScanFlow(p: {
     market: Market;
     questions: { question: string; kind: string }[];
     lead?: { email: string; name: string; marketing: boolean };
+    brand?: string;
   }): Promise<string | null> {
     setBusy(true);
     setError("");
@@ -775,6 +780,7 @@ export default function ScanFlow(p: {
           topic_variants: p.variants,
           questions: input.questions,
           ...(input.lead ? { email: input.lead.email, name: input.lead.name, marketing: input.lead.marketing } : {}),
+          ...(input.brand ? { brand: input.brand } : {}),
         }),
       });
       const data = await res.json();
@@ -808,7 +814,7 @@ export default function ScanFlow(p: {
       mailAt.current = null;
       // The report gate took the address already (3 Nov 2026): say where it goes instead of offering to take one.
       if (input.lead) {
-        setMailNote("We will email the report to " + input.lead.email + " when it is ready. You can close this tab.");
+        setMailNote(queuedTo(input.lead.email));
         track("free_scan_email", { lead_type: "scan_gate" });
       }
       setPhase("running");
@@ -923,7 +929,8 @@ export default function ScanFlow(p: {
     <div>
       <div style={{ borderBottom: "1px solid " + T.line }}>
         <div style={{ ...SHELL, padding: "14px 24px", display: "flex", alignItems: "center", gap: "16px" }}>
-          <span style={MICRO}>{p.brand ?? p.domain}</span>
+          {/* The detected brand sat on the left here (Danny, 3 Nov 2026: "is that necessary? also it's not on brand").
+              It repeated "Scanning <domain>" on the running screen; it is shown, and editable, on the confirm step. */}
           <div style={{ flexGrow: 1 }} />
           <span style={MICRO}>{stepLabel}</span>
         </div>

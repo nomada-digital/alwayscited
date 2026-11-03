@@ -7,7 +7,9 @@ import { clusterKeywordCandidates, siteFacts } from "./anthropic";
 import { readClusterRank, storeClusterRank } from "./cluster-rank";
 import { readKeywordIntents, readKeywordVolumes } from "./dataforseo";
 import { isScanMarket, type Market } from "./domain";
-import { KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME } from "./target-keyword";
+import { KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword";
+
+export { topicFallback };
 
 export type ClusterKeyword = {
   keyword: string | null;
@@ -123,6 +125,7 @@ export async function addClusterKeyword(token: string): Promise<{ ok: boolean; m
     dfsCalls += c.dfsCalls;
     dfsCost += c.dfsCost;
     modelCalls += c.modelCalls;
+    c.out = topicFallback(c.out, topic);
     if (c.out.status !== "chosen" || !c.out.keyword) {
       // Nothing to show on the report, so only the spend is written; the scan keeps what it had.
       await billOnly();

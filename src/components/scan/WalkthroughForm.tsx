@@ -395,7 +395,7 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         {busy ? "Sending" : kind === "video" ? "Send me the walkthrough" : "Request a demo"}
       </button>
       <p style={{ fontSize: "12px", color: T.soft, marginTop: "10px", lineHeight: 1.5 }}>
-        We use these to send you the walkthrough or arrange the call, and nothing else. <a href="/legal">What we collect</a>.
+        We use these to send you the walkthrough or arrange the call, and may follow up about it. Unsubscribe any time. <a href="/legal">What we collect</a>.
       </p>
     </form>
   );

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Intent } from "./dataforseo-request.ts";
-import { clusterGoogleTrio, clusterKeywordFits, KEYWORD_FALLBACK, normaliseCandidate, pickAcrossMarkets, pickClusterKeyword, pickKeyword, stripFiller, THIN_KEYWORD_VOLUME } from "./target-keyword.ts";
+import { clusterGoogleTrio, clusterKeywordFits, KEYWORD_FALLBACK, normaliseCandidate, pickAcrossMarkets, pickClusterKeyword, pickKeyword, stripFiller, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword.ts";
 
 const CAT = "business cash flow finance";
 const NOUN = "providers";
@@ -140,4 +140,13 @@ test("3 Nov 2026: a thin market's keyword comes from its buyers' markets, labell
   const read = { status: "chosen", topic: "couples resorts", market: "US" };
   assert.ok(clusterKeywordFits(read, "couples resorts", "JM"));
   assert.ok(!clusterKeywordFits(read, "couples resorts", "UK"));
+});
+
+test("3 Nov 2026: a keyword check that found none or failed takes the confirmed topic, never 'Not picked'", () => {
+  const none = { keyword: null, volume: null, intent: null, status: "read_failed" as const, market: "US" as const };
+  assert.deepEqual(topicFallback(none, "AI SEO  agency"), { keyword: "ai seo agency", volume: null, intent: null, status: "chosen", market: "US" });
+  assert.equal(topicFallback({ ...none, status: "none_qualified" as const }, "couples resorts").keyword, "couples resorts");
+  const chosen = { keyword: "b2b seo agencies", volume: 880, intent: "commercial", status: "chosen" as const, market: "UK" as const };
+  assert.equal(topicFallback(chosen, "seo agency"), chosen, "a real pick is kept");
+  assert.equal(topicFallback(none, " "), none, "no topic: nothing to fall back to");
 });

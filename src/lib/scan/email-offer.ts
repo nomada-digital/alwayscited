@@ -97,14 +97,20 @@ export const OFFER_COPY = {
   submit: "Email me",
   sending: "Saving",
   /** Shown once the address is recorded. Says the tab is safe to close, because that is the point. */
-  queued: "We will email it to you the moment it is ready. You can close this tab.",
+  queued: "We'll email your report the moment it's ready. You can close this tab.",
   /**
    * The third point at which this site collects an address, so it says so and
    * points at the page that explains it. /legal was updated in the same commit
    * - the privacy line is not a follow-up, it ships with the collection.
    */
-  privacy: "We use it to send you this result and nothing else.",
+  // 3 Nov 2026: the gate's own wording. "Nothing else" stopped being true when follow-ups about the report began.
+  privacy: "We'll email your report and may follow up about it. Unsubscribe any time.",
 } as const;
+
+/** `queued`, naming the address the report gate took, or the masked one on a reload (3 Nov 2026). */
+export function queuedTo(email: string): string {
+  return `We'll email your report to ${email} the moment it's ready. You can close this tab.`;
+}
 
 /**
  * The list of things this copy may not promise is in `email-offer.test.mts`

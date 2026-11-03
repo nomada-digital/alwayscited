@@ -336,7 +336,9 @@ function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
         </span>
       ) : null}
       <span style={{ fontSize: "13px", lineHeight: 1.5, color: T.soft, paddingTop: "10px", borderTop: "1px solid " + T.line }}>
-        This is the term placements link on, so it has to be one buyers search.
+        {c.volume == null && !c.intent
+          ? "The category you confirmed. Its Google search volume couldn't be read when this scan ran."
+          : "This is the term placements link on, so it has to be one buyers search."}
       </span>
     </div>
   );

@@ -57,8 +57,4 @@ export async function suppress(token: string, source: "unsubscribe_link" | "one_
   return "done";
 }
 
-/** "jo@example.com" -> "j•@example.com": enough to recognise, not enough to harvest from a forwarded link. */
-export function maskEmail(email: string): string {
-  const at = email.lastIndexOf("@");
-  return at < 1 ? email : email[0] + "•".repeat(Math.min(6, at - 1)) + email.slice(at);
-}
+export { maskEmail } from "./mask-email";
