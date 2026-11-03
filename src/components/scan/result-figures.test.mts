@@ -496,7 +496,7 @@ test("googleLine: a single-digit volume is never printed as a measurement (R43)"
 test("S1: a scan from before C1 has no cluster section, and never reads as one that looked and found nothing", () => {
   assert.equal(clusterState({}), null);
   assert.equal(clusterState({ cluster_keyword: null }), null);
-  assert.equal(clusterRank({ cluster_keyword: null }), "-");
+  assert.equal(clusterRank({ cluster_keyword: null }), "Not picked");
 });
 
 test("S1: chosen shows the keyword's rank, a missing rank is the depth read's words, never a zero", () => {
@@ -506,11 +506,11 @@ test("S1: chosen shows the keyword's rank, a missing rank is the depth read's wo
   assert.match(clusterRank({ cluster_keyword: { ...c, rank: null } }), /^Not in top \d+$/);
 });
 
-test("S1: none_qualified and read_failed draw the dashed node and a dash, whatever keyword text is left on the row", () => {
+test("S1: none_qualified and read_failed draw the dashed node and Not picked, whatever keyword text is left on the row", () => {
   for (const status of ["none_qualified", "read_failed"] as const) {
     const c = { status, keyword: "leftover", volume: 5, intent: "commercial", rank: 3 };
     assert.equal(clusterState({ cluster_keyword: c }), "none");
-    assert.equal(clusterRank({ cluster_keyword: c }), "-");
+    assert.equal(clusterRank({ cluster_keyword: c }), "Not picked");
   }
   assert.equal(clusterState({ cluster_keyword: { status: "chosen", keyword: " ", volume: null, intent: null, rank: null } }), "none");
 });

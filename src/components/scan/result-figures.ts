@@ -443,11 +443,13 @@ export function clusterState(r: Pick<RunScanResponse, "cluster_keyword">): "chos
 
 /**
  * The cluster keyword's Google figure: "#9", "Not in top 20" for a chosen
- * keyword the domain does not rank for in the depth read, "-" when there is
- * no keyword (the board's `kw.rank`).
+ * keyword the domain does not rank for in the depth read, "Not picked" when
+ * there is no keyword (the board's `kw.rank`). It was "-" until 3 Nov 2026:
+ * Luke read the dash and "Not in top 20" side by side across two scans and
+ * could not tell them apart. One is a finding, the other is no reading.
  */
 export function clusterRank(r: Pick<RunScanResponse, "cluster_keyword">): string {
-  if (clusterState(r) !== "chosen") return "-";
+  if (clusterState(r) !== "chosen") return "Not picked";
   const rank = r.cluster_keyword?.rank;
   return typeof rank === "number" ? "#" + rank : "Not in top " + SERP_DEPTH;
 }

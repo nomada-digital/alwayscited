@@ -12,6 +12,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CARD, MICRO, T } from "@/config/tokens";
 import type { EngineAnswer, RunScanResponse, SourceEntry } from "@/lib/scan";
 import { ENGINE_SPECS, isEngine } from "@/lib/scan/engines";
+import { SERP_DEPTH } from "@/lib/scan/dataforseo-request";
 import {
   PLAN_ORDER,
   SOV_ROWS,
@@ -111,14 +112,18 @@ function Head(p: { title: React.ReactNode; children: React.ReactNode; aside?: Re
  * visually hidden, because "of 5" means "of the questions an engine answered"
  * and a screen reader has no other way to learn that.
  */
-function Metric(p: { label: string; value: React.ReactNode; note: string }) {
+function Metric(p: { label: string; value: React.ReactNode; note: string; shown?: boolean }) {
   return (
     <div className="res-metric" style={{ background: T.surface, border: "1px solid " + T.line, borderRadius: "16px", padding: "16px", minWidth: 0 }}>
       <div className="res-metric-l" style={{ fontSize: "12.5px", color: T.soft }}>{p.label}</div>
       <div style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "-0.03em", lineHeight: 1.15, marginTop: "4px", color: T.ink }}>
         {p.value}
       </div>
-      <span className="sr-only">{p.note}</span>
+      {p.shown ? (
+        <div style={{ marginTop: "6px", fontSize: "12px", lineHeight: 1.4, color: T.soft }}>{p.note}</div>
+      ) : (
+        <span className="sr-only">{p.note}</span>
+      )}
     </div>
   );
 }
@@ -281,6 +286,11 @@ function ClusterLinks(p: { links: { named: boolean }[] }) {
       <circle cx="89" cy={mid} r="4" fill={T.accent} />
     </svg>
   );
+}
+
+/** The scan's market as the page prints it: "UK", "US", "Jamaica". */
+function marketLabel(m: string): string {
+  return m === "JM" ? "Jamaica" : m;
 }
 
 function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
@@ -1115,6 +1125,23 @@ export default function ResultView(p: {
       <div className="res-top">
         <div>
           <div style={MICRO}>{p.domain + " · read " + fmtDate(r.read_at)}</div>
+          {/* Luke, 3 Nov 2026: a shared link has to say what was searched
+              without the reader scrolling to the cluster card. */}
+          <div
+            data-figure="scan-keyword"
+            style={{ marginTop: "12px", display: "inline-flex", flexWrap: "wrap", gap: "4px 18px", background: T.surface, border: "1px solid " + T.line, borderRadius: "12px", padding: "9px 14px", fontSize: "14px", lineHeight: 1.4, color: T.ink }}
+          >
+            {cluster ? (
+              <span>
+                <span style={{ color: T.soft }}>Keyword </span>
+                <strong style={{ fontWeight: 600 }}>{cluster === "chosen" ? r.cluster_keyword?.keyword : "Not picked for this scan"}</strong>
+              </span>
+            ) : null}
+            <span>
+              <span style={{ color: T.soft }}>Market </span>
+              <strong style={{ fontWeight: 600 }}>{marketLabel(r.market)}</strong>
+            </span>
+          </div>
           <h1 className="res-h1" style={{ margin: "10px 0 0", fontSize: "50px", fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1.04, color: T.ink }}>
             {f.headline}
           </h1>
@@ -1161,16 +1188,25 @@ export default function ResultView(p: {
             note={cluster ? "Of the prompts an engine answered at all." : "Of the questions an engine answered at all."}
           />
           {/* ScanCluster.dc.html: a scan with a cluster keyword (C1) shows the
-              keyword's own Google figure here, or "-" when none qualified;
-              a scan from before C1 keeps its best position on any question. */}
+              keyword's own Google figure here, or "Not picked" when none
+              qualified; a scan from before C1 keeps its best position on any
+              question. The note is shown on this tile only: "Not in top 20"
+              and "Not picked" need their one line to be told apart. */}
           {cluster ? (
             <Metric
-              label="Google, for the keyword"
+              label="Google position"
               value={rankText}
+              shown
               note={
-                cluster === "chosen"
-                  ? "Your organic position for " + (r.cluster_keyword?.keyword ?? "") + "."
-                  : "No Google keyword was picked for this scan, so there is no position to show."
+                cluster !== "chosen"
+                  ? r.cluster_keyword?.status === "read_failed"
+                    ? "Search volume could not be read, so nothing to check."
+                    : "No keyword had the searches to pick, so nothing to check."
+                  : typeof r.cluster_keyword?.rank === "number"
+                    ? "Organic, for the keyword above."
+                    : rankText === "Checking"
+                      ? "Reading Google for the keyword above."
+                      : "Checked: not in the first " + SERP_DEPTH + " results."
               }
             />
           ) : f.bestRank !== null ? (
