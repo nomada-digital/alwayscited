@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SCAN_LIMITS } from "@/config/contact";
+import { isPlausibleEmail } from "@/lib/email-address";
 import { QUESTIONS } from "@/config/scan-shape";
 import { CARD, MICRO, T } from "@/config/tokens";
 import type { Market } from "@/lib/scan";
@@ -186,11 +187,21 @@ export default function ConfirmScreen(p: {
     topic: string;
     market: Market;
     questions: { question: string; kind: string }[];
+    /** The report gate's answers (3 Nov 2026). Absent when the gate is skipped. */
+    lead?: { email: string; name: string; marketing: boolean };
   }) => Promise<string | null>;
   running: boolean;
+  /**
+   * "Where should we send your report?" before anything runs (Danny, 3 Nov 2026). False for a team browser and for a
+   * scan of our own domain, which the confirm route lets through without an address too.
+   */
+  gate: boolean;
 }) {
   const [topic, setTopic] = useState(p.initialTopic);
   const [market, setMarket] = useState<Market>(p.initialMarket);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadName, setLeadName] = useState("");
+  const [marketing, setMarketing] = useState(false);
 
   const [questions, setQuestions] = useState<PreviewQuestion[]>([]);
   const [keyword, setKeyword] = useState<ClusterKeyword | null>(null);
@@ -318,7 +329,10 @@ export default function ConfirmScreen(p: {
   const kept = questions.filter((q) => q.question.trim().length >= 4);
   const atMax = kept.length >= MAX_QUESTIONS;
   const needsWriting = stale || !writtenFor;
-  const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || kept.length > 0);
+  // Nothing runs until there is an address to send the report to; writing the prompts needs none.
+  const hasEmail = isPlausibleEmail(leadEmail.trim());
+  const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || (kept.length > 0 && (!p.gate || hasEmail)));
+  const lead = p.gate ? { email: leadEmail.trim(), name: leadName.trim(), marketing } : undefined;
 
   async function run() {
     if (!kept.length) return;
@@ -326,6 +340,7 @@ export default function ConfirmScreen(p: {
       topic: topic.trim(),
       market,
       questions: kept.map((q) => ({ question: q.question.trim(), kind: q.kind })),
+      lead,
     });
     if (message) setError(message);
   }
@@ -340,7 +355,7 @@ export default function ConfirmScreen(p: {
    * exactly as it did before this screen existed.
    */
   async function runBlind() {
-    const message = await p.onRun({ topic: topic.trim(), market, questions: [] });
+    const message = await p.onRun({ topic: topic.trim(), market, questions: [], lead });
     if (message) setError(message);
   }
 
@@ -517,6 +532,46 @@ export default function ConfirmScreen(p: {
               </p>
             ) : null}
           </fieldset>
+          {p.gate && !needsWriting ? (
+            <fieldset data-figure="report-gate" style={{ border: 0, padding: "16px 0 0", margin: "16px 0 0", borderTop: "1px solid " + T.line }}>
+              <legend style={{ fontSize: "15px", fontWeight: 700, color: T.ink, padding: 0, float: "left", width: "100%" }}>
+                Where should we send your report?
+              </legend>
+              <p style={{ clear: "both", margin: 0, paddingTop: "4px", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
+                The check takes about two minutes. We email you the link when it is ready, so you can close the tab.
+              </p>
+              <label htmlFor="gate-email" style={fieldLabel}>
+                Work email
+              </label>
+              <input
+                id="gate-email"
+                type="email"
+                autoComplete="email"
+                required
+                maxLength={SCAN_LIMITS.email}
+                value={leadEmail}
+                placeholder="you@company.com"
+                onChange={(e) => setLeadEmail(e.target.value)}
+                style={fieldStyle}
+              />
+              <label htmlFor="gate-name" style={fieldLabel}>
+                First name <span style={{ fontWeight: 400, color: T.soft }}>(optional)</span>
+              </label>
+              <input
+                id="gate-name"
+                type="text"
+                autoComplete="given-name"
+                maxLength={SCAN_LIMITS.name}
+                value={leadName}
+                onChange={(e) => setLeadName(e.target.value)}
+                style={fieldStyle}
+              />
+              <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", margin: "12px 0 0", fontSize: "13px", lineHeight: 1.45, color: T.ink, cursor: "pointer" }}>
+                <input id="gate-marketing" type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} style={{ marginTop: "2px", accentColor: T.accent }} />
+                <span>Send me occasional tips on getting named by AI engines. Unsubscribe any time.</span>
+              </label>
+            </fieldset>
+          ) : null}
           <button
             type="button"
             className="btn-primary"
@@ -542,8 +597,10 @@ export default function ConfirmScreen(p: {
             {busy ? <span className="btn-spin" aria-hidden="true" /> : null}
             {primaryLabel}
           </button>
-          <p style={{ margin: "10px 0 0", fontSize: "12.5px", color: T.soft }}>
-            No email needed. The result is free in full.
+          <p style={{ margin: "10px 0 0", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
+            {p.gate
+              ? <>Free. We email you the report, and nothing else unless you tick the box. <a href="/privacy" style={{ color: T.soft }}>Privacy</a></>
+              : "Free. The result is free in full."}
           </p>
           {error ? (
             <p role="alert" style={{ margin: "10px 0 0", fontSize: "12.5px", color: T.badFg }}>

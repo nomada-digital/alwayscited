@@ -31,6 +31,7 @@ import ScanProgress from "./ScanProgress";
 import { MAIL_OUTCOMES, type MailOutcome } from "@/lib/scan/mail-outcome";
 import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
 import { isWorkEmail } from "@/lib/work-email";
+import { isInternalDomain } from "@/lib/scan/lead-email";
 
 import ResultView from "./ResultView";
 import RerunPanel from "./RerunPanel";
@@ -350,6 +351,8 @@ export default function ScanFlow(p: {
   walkthrough?: WalkthroughOutcome | null;
   /** R151: the report-email offer's outcome, after it posted without script. */
   mail?: MailOutcome | null;
+  /** A browser marked as team from /admin/scans (lib/team-cookie.ts): the report gate is skipped (3 Nov 2026). */
+  team?: boolean;
   /**
    * The gated pass as the server found it on the row.
    *
@@ -756,6 +759,7 @@ export default function ScanFlow(p: {
     topic: string;
     market: Market;
     questions: { question: string; kind: string }[];
+    lead?: { email: string; name: string; marketing: boolean };
   }): Promise<string | null> {
     setBusy(true);
     setError("");
@@ -770,6 +774,7 @@ export default function ScanFlow(p: {
           market: input.market,
           topic_variants: p.variants,
           questions: input.questions,
+          ...(input.lead ? { email: input.lead.email, name: input.lead.name, marketing: input.lead.marketing } : {}),
         }),
       });
       const data = await res.json();
@@ -801,6 +806,11 @@ export default function ScanFlow(p: {
       // so a re-run that finishes mails them exactly as the first would have.
       setOffer(false);
       mailAt.current = null;
+      // The report gate took the address already (3 Nov 2026): say where it goes instead of offering to take one.
+      if (input.lead) {
+        setMailNote("We will email the report to " + input.lead.email + " when it is ready. You can close this tab.");
+        track("free_scan_email", { lead_type: "scan_gate" });
+      }
       setPhase("running");
       // No topic: a category in the visitor's own words can identify them (15 Oct 2026).
       track("scan_confirmed", { market: input.market, questions: input.questions.length });
@@ -937,6 +947,7 @@ export default function ScanFlow(p: {
             variants={p.variants}
             onRun={onRun}
             running={busy}
+            gate={!p.team && !isInternalDomain(p.domain)}
           />
         ) : null}
 

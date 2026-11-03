@@ -8,7 +8,11 @@ import { SETTINGS_FALLBACK } from "@/lib/scan/settings";
 import { anthropicCallsSince } from "@/lib/scan/spend";
 import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
 
-import { addKeyword } from "./actions";
+import { cookies } from "next/headers";
+
+import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
+
+import { addKeyword, markTeamBrowser } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -208,6 +212,7 @@ function Readiness() {
 }
 
 export default async function AdminScansPage() {
+  const team = isTeamCookie((await cookies()).get(TEAM_COOKIE)?.value);
   if (!supabaseConfigured()) {
     return (
       <div style={{ maxWidth: 900, margin: "0 auto", padding: "3rem 1.5rem" }}>
@@ -359,6 +364,19 @@ export default async function AdminScansPage() {
       </p>
 
       <Readiness />
+      {/* Danny, 3 Nov 2026: the team skips the report gate. lib/team-cookie.ts. */}
+      <section style={{ marginTop: "1.5rem", padding: "1rem 1.25rem", border: `1px solid ${C.border}`, borderRadius: 16 }}>
+        <h2 style={{ fontSize: "1rem", fontWeight: 700, color: C.navy, margin: 0 }}>Team browser</h2>
+        <p style={{ color: C.muted, margin: "0.375rem 0 0.25rem", fontSize: "0.8125rem" }}>
+          {team
+            ? "This browser is marked as team: new scans skip the email step and are marked internal, out of the hub's lead counts."
+            : "New scans ask for an email before they run. Mark this browser as team to skip it; its scans are marked internal, out of the hub's lead counts. An @nomadadigital.co.uk or @alwayscited.com address, or a scan of either domain, is internal too."}
+        </p>
+        <ActionForm action={markTeamBrowser} submit={team ? "Unmark this browser" : "Mark this browser as team"}>
+          {team ? <input type="hidden" name="off" value="1" maxLength={ADMIN_LIMITS.id} /> : null}
+        </ActionForm>
+      </section>
+
       {/* Luke, 3 Nov 2026: an older scan, or one whose keyword was not picked, gains a keyword and its
           Google position on the same link. lib/scan/cluster-keyword.ts addClusterKeyword. */}
       <section style={{ marginTop: "1.5rem", padding: "1rem 1.25rem", border: `1px solid ${C.border}`, borderRadius: 16 }}>

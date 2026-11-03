@@ -211,6 +211,8 @@ export const SCAN_LIMITS = {
   ref: 32,
   /** Each utm_* a partner hand-off carries (19 Oct 2026, lib/scan/handoff.ts cleanUtm); cut, never refused. */
   utm: 200,
+  /** The optional first name on the report gate (3 Nov 2026); scans.lead_name's own check. */
+  name: 80,
 };
 
 /**

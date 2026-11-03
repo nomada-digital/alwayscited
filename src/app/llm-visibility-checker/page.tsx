@@ -34,7 +34,7 @@ const URL = "https://alwayscited.com/llm-visibility-checker";
 
 export const metadata: Metadata = {
   title: { absolute: "LLM visibility checker - free, four AI engines | alwayscited" },
-  description: `See whether ${listOf(FREE_ENGINE_LABELS.filter((l) => l !== ENGINE_SPECS.google_aio.label))} and ${ENGINE_SPECS.google_aio.label} name your brand, free and with no email.`,
+  description: `See whether ${listOf(FREE_ENGINE_LABELS.filter((l) => l !== ENGINE_SPECS.google_aio.label))} and ${ENGINE_SPECS.google_aio.label} name your brand, free. We email you the report.`,
   alternates: { canonical: URL },
   openGraph: { url: URL, images: OG_IMAGE },
 };
@@ -58,7 +58,7 @@ const CHECKS: { t: string; b: string }[] = [
 ];
 
 const STEPS = [
-  { t: "Enter your domain", b: "The field above. No card and no email." },
+  { t: "Enter your domain", b: "The field above. No card. We email you the report." },
   { t: "Confirm the cluster and prompts", b: "We read your site and propose the category, the keyword and the prompts. Change them if they are wrong." },
   { t: "Read the answers", b: "About two minutes later, every answer from every engine, with the pages behind it." },
 ];
@@ -66,7 +66,7 @@ const STEPS = [
 const FAQS: { q: string; a: string }[] = [
   {
     q: "Is the LLM visibility checker free?",
-    a: "Yes. The whole result is free and there is no email to give. You only pay if you want the check run for you every day, or want us to get you named.",
+    a: "Yes. The whole result is free. We ask for an email so we can send you the report, and that is all we send, unless you tick the box for occasional tips. You only pay if you want the check run for you every day, or want us to get you named.",
   },
   {
     q: "Which LLMs does it check?",
@@ -118,11 +118,11 @@ export default function LlmVisibilityChecker() {
             LLM visibility checker
           </h1>
           <p style={{ margin: "20px auto 0", fontSize: "18px", lineHeight: 1.55, color: D.muted, maxWidth: "52ch" }}>
-            Free, no email, about two minutes. See whether the AI engines name your brand when your buyers ask.
+            Free, about two minutes, and we email you the report. See whether the AI engines name your brand when your buyers ask.
           </p>
           <HeroScanArea
             ready={scanReady()}
-            questionsLine={`${word(QUESTIONS)} buyer prompts, ${word(FREE_ENGINE_COUNT).toLowerCase()} engines, around two minutes. No card, no email.`}
+            questionsLine={`${word(QUESTIONS)} buyer prompts, ${word(FREE_ENGINE_COUNT).toLowerCase()} engines, around two minutes. Free. We email you the report.`}
           />
         </div>
       </section>
@@ -215,7 +215,7 @@ export default function LlmVisibilityChecker() {
             explainer pages use, so the answer has its action under it. */}
         <DarkClosing id="checker-close" marginTop="0" title="See whether the answers name you.">
           {word(QUESTIONS)} buyer prompts, {word(FREE_ENGINE_COUNT).toLowerCase()} engines, every answer and its
-          sources. No card, no email.
+          sources. Free, and we email you the report.
         </DarkClosing>
       </div>
     </>

@@ -386,7 +386,9 @@ const ACTIONS: Record<string, string[]> = {
   // 3 Nov 2026 (Luke): /admin/scans' Add keyword. Sends no mail. Spends about $0.10 a press (one model call,
   // up to three volume reads, an intent read, one SERP read) through addClusterKeyword, which spenders.mts
   // lists and cluster-rank.test.mts holds to this caller. The same admin check first (admin-auth.ts).
-  "src/app/admin/scans/actions.ts": ["addKeyword"],
+  // markTeamBrowser, 3 Nov 2026: sets or clears the signed team cookie (lib/team-cookie.ts) on the admin's own
+  // browser. Sends nothing, spends nothing, writes no row; the same admin check first.
+  "src/app/admin/scans/actions.ts": ["addKeyword", "markTeamBrowser"],
 };
 
 // --------------------------------------------------------------- the tests

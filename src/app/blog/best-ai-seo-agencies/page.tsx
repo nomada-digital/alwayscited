@@ -186,7 +186,7 @@ export default function Post() {
           <li>
             <B>It starts with the measurement.</B> The free scan writes {QUESTIONS} buyer prompts for your
             category, puts each to {listOf(FREE_ENGINE_LABELS)}, and shows all {FREE_ANSWERS} answers, with the
-            pages each engine cited. No email needed to see it.
+            pages each engine cited. It is free, and we email you the report.
           </li>
           <li>
             <B>It places where the engines already read.</B> The placement tiers put your brand into the

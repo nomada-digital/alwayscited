@@ -116,7 +116,10 @@ const HANDLERS = walk(APP)
 // server behind HUB_OFFER_SECRET, to prefill that client's Checkout - so the work-email rule has nothing to judge.
 // 31 Oct 2026: api/checkout/offer/[token] is a checkout, as api/checkout is - the client on a signed agreement chooses
 // the address they will sign in with, and only someone holding their private link reaches it.
-const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts", "api/checkout/offer/[token]/route.ts"];
+// 3 Nov 2026: api/scan/[token]/confirm takes the report gate's address (Danny's call that day: "Accept free-mail
+// domains but flag them"). A free-mail address is accepted and stored with scans.email_free_domain for the hub; a
+// disposable inbox and a domain with no mail server are refused (lib/scan/lead-email.ts, lead-email-mx.ts).
+const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts", "api/checkout/offer/[token]/route.ts", "api/scan/[token]/confirm/route.ts"];
 
 const KNOWN = [
   "contact/actions.ts",

@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
+import { cookies } from "next/headers";
+
 import ScanFlow from "@/components/scan/ScanFlow";
+import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { PARTNER_MARKETS } from "@/lib/scan/handoff";
 import { readMailOutcome } from "@/lib/scan/mail-outcome";
@@ -215,6 +218,7 @@ export default async function ScanTokenPage({
   return (
     <ScanFlow
       token={token}
+      team={isTeamCookie((await cookies()).get(TEAM_COOKIE)?.value)}
       walkthrough={walkthrough}
       mail={mail}
       domain={scan.domain as string}

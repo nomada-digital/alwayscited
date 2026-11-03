@@ -8,7 +8,19 @@ import { clusterKeywordFits } from "@/lib/scan/target-keyword";
 import { runScan } from "@/lib/scan/pipeline";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { isFreePassDead, reapStalledFreePass } from "@/lib/scan/stall";
+import { checkLeadEmail, cleanLeadName, isInternalDomain } from "@/lib/scan/lead-email";
+import { domainTakesMail } from "@/lib/scan/lead-email-mx";
+import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+
+/** One cookie's value off a Cookie header. */
+function cookieValue(header: string | null, name: string): string | null {
+  for (const part of (header ?? "").split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return decodeURIComponent(v.join("="));
+  }
+  return null;
+}
 
 /** What the confirm screen sends back: the set, minus whatever was dropped. */
 type ConfirmedQuestion = { question?: unknown; kind?: unknown };
@@ -53,7 +65,7 @@ export const maxDuration = 300;
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
 
-  let body: { topic?: string; market?: string; topic_variants?: string[]; questions?: unknown };
+  let body: { topic?: string; market?: string; topic_variants?: string[]; questions?: unknown; email?: unknown; name?: unknown; marketing?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -75,7 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   // it is the wrong one when the database simply did not answer.
   const { data: scan, error: readErr } = await db
     .from("scans")
-    .select("id, status, market, ref, started_at, queued_at, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
+    .select("id, domain, status, market, ref, started_at, queued_at, cluster_keyword_status, cluster_keyword_market, cluster_keyword_topic")
     .eq("public_token", token)
     .maybeSingle();
 
@@ -137,6 +149,27 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
   // JM only on a scan whose partner offers it (handoff.ts partnerMayUse, 29 Oct 2026).
   const market = isScanMarket(body.market) && partnerMayUse(scan.ref as string | null, body.market) ? body.market : scan.market;
+
+  /**
+   * The report gate (Danny, 3 Nov 2026): nothing runs until we have an address to send the report to. Checked here,
+   * not only on the screen, because this route is what starts a paid run. A team browser (TEAM_COOKIE, set from
+   * /admin/scans) and a scan of our own domain skip it; an address on an internal domain passes it without the MX
+   * lookup. Each of the three marks the scan internal, which keeps it out of the hub's lead counts.
+   */
+  const team = isTeamCookie(cookieValue(req.headers.get("cookie"), TEAM_COOKIE));
+  const ownDomain = isInternalDomain(String(scan.domain ?? ""));
+  let lead: { email: string; free: boolean; internal: boolean } | null = null;
+  if (body.email !== undefined && body.email !== null && body.email !== "") {
+    const c = checkLeadEmail(body.email);
+    if (!c.ok) return Response.json({ error: "bad_email", message: c.message }, { status: 400 });
+    if (!c.internal && !team && !(await domainTakesMail(c.domain))) {
+      return Response.json({ error: "bad_email", message: `We can't find a mail server for ${c.domain}. Check the address.` }, { status: 400 });
+    }
+    lead = c;
+  } else if (!team && !ownDomain) {
+    return Response.json({ error: "email_required", message: "Tell us where to send the report." }, { status: 400 });
+  }
+  const internal = team || ownDomain || Boolean(lead?.internal);
 
   /**
    * The variants the agency confirmed are the trusted set from here, capped so
@@ -201,6 +234,17 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
        */
       queued_at: new Date().toISOString(),
       ...(variants ? { topic_variants: variants } : {}),
+      // The report gate's answers (migration 20261104000000). report_email is what report-mail.ts sends to on completion.
+      internal,
+      ...(lead
+        ? {
+            report_email: lead.email,
+            report_email_at: new Date().toISOString(),
+            email_free_domain: lead.free,
+            lead_name: cleanLeadName(body.name),
+            marketing_opt_in: body.marketing === true,
+          }
+        : {}),
       // A cluster keyword read for another market or topic than the one confirmed is dropped (18 Oct 2026): the scan would
       // check its rank in this market, and signup would copy it and its volume onto a client tracked here.
       ...(scan.cluster_keyword_status && !clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)

@@ -431,7 +431,9 @@ test("only the consent module touches document.cookie", () => {
  * /legal's sentence changed with it to name the one exception, and that
  * sentence is asserted here, so the reader and the promise cannot drift apart.
  */
-const COOKIE_JAR_READERS = ["src/lib/tracking/member.ts"];
+// 3 Nov 2026: the team cookie (lib/team-cookie.ts) - set by /admin/scans' markTeamBrowser behind the admin's Basic
+// auth, read by that page and by /scan/[token] to skip the report gate. Never set for a visitor; /legal names it.
+const COOKIE_JAR_READERS = ["src/app/admin/scans/actions.ts", "src/app/admin/scans/page.tsx", "src/app/scan/[token]/page.tsx", "src/lib/tracking/member.ts"];
 
 test("only the dashboard session reads the request cookie jar, and /legal says so", () => {
   const hits = FILES.filter(({ source }) =>
@@ -447,6 +449,7 @@ test("only the dashboard session reads the request cookie jar, and /legal says s
     /sets no cookies of its own, with one exception: when a client signs in to their <TierName tier="tracked" \/>\{" "\} dashboard, we set one login cookie/,
     "the dashboard reads a login cookie and /legal no longer names it as the one exception",
   );
+  assert.match(LEGAL.replace(/\s+/g, " "), /Our own team&apos;s browsers also carry one cookie, set from our admin page/, "the team cookie is read and /legal no longer says so");
 });
 
 test("no response this site serves carries a Set-Cookie header", () => {

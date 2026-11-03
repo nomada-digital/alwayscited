@@ -155,6 +155,12 @@ const EXEMPT: Record<string, Exemption> = {
     ].join(" "),
     holds: [{ file: "app/contact/actions.ts", needs: "website.slice(0, LIMITS.website)" }],
   },
+  // 3 Nov 2026: the report gate's marketing box. A checkbox, which carries no typed text; the confirm route reads
+  // only whether it is exactly true.
+  "gate-marketing": {
+    why: "the report gate's marketing opt-in, a checkbox with nothing to type into. The confirm route stores only body.marketing === true, so anything else posted is false.",
+    holds: [{ file: "app/api/scan/[token]/confirm/route.ts", needs: "marketing_opt_in: body.marketing === true" }],
+  },
   // The picks a tier's CTA carries to /contact (R69 follow-up, 28 Sep 2026).
   // type=hidden: nobody can type in them, and maxLength does not apply to a
   // hidden input. A hand-made post is what reaches the server, which clamps
@@ -643,7 +649,8 @@ test("the table reader finds the tables and keys this test thinks it does", () =
   assert.ok(scan, "SCAN_LIMITS was not parsed");
   // `ref` joined on 18 Oct 2026: the partner hand-off code (lib/scan/handoff.ts), scans.ref's own check.
   // `utm` on 19 Oct 2026: each utm_* a hand-off carries, cut by cleanUtm before the start route stores it.
-  assert.deepEqual([...scan.keys].sort(), ["email", "question", "ref", "topic", "topicVariant", "utm"]);
+  // `name` on 3 Nov 2026: the report gate's optional first name, scans.lead_name's own check.
+  assert.deepEqual([...scan.keys].sort(), ["email", "name", "question", "ref", "topic", "topicVariant", "utm"]);
   // And that the nested table is read as three bounds rather than as one, which
   // is the case a `[^}]*` slice gets wrong.
   const coverage = TABLES.find((t) => t.table === "COVERAGE_LIMITS");

@@ -31,8 +31,9 @@ export const metadata: Metadata = {
  *    Danny approved GA4 with a consent banner in chat; it was "the only
  *    third-party script is Turnstile" and "no analytics of any kind" before)
  *  - apart from GA's own cookies, set only after that yes, the site sets one
- *    cookie, the dashboard's login: document.cookie is touched by
- *    lib/analytics.ts alone, and cookies() by the dashboard session alone
+ *    cookie for visitors, the dashboard's login: document.cookie is touched by
+ *    lib/analytics.ts alone, and cookies() by the dashboard session and, since
+ *    3 Nov 2026, the team cookie (lib/team-cookie.ts), set only from /admin
  *  - GA never loads on the dashboard, nothing is sent before consent, and
  *    neither a scanned domain nor anything typed into a form is sent to it
  *
@@ -84,10 +85,10 @@ const SECTIONS: Section[] = [
     title: "What we collect",
     body: (
       <>
-        When you run a scan we store the domain you entered. If you ask us to email the result to you while the scan is
-        still running, we store the email address you gave, and nothing else about you. If you ask for a walkthrough or
+        When you run a scan we store the domain you entered and the email address we send the report to, with your
+        first name if you give it and whether you ticked the box for occasional tips. If you ask for a walkthrough or
         a demo, we store the name, work email, business category and market you gave, and nothing else about you. For a
-        scan we do not ask for a name, a company, a phone number or a card. If you buy a plan, you pay through Stripe: Stripe takes your
+        scan we do not ask for a company, a phone number or a card. If you buy a plan, you pay through Stripe: Stripe takes your
         card and billing details, and we keep your email address and the Stripe references for your order, never the card
         number. The contact form collects what you type into it. We also
         store a salted one-way hash of your IP address, to stop one visitor running the scan hundreds of times - the
@@ -101,11 +102,11 @@ const SECTIONS: Section[] = [
     title: "Why we collect it",
     body: (
       <>
-        The email address exists so we can send you the link back to your report, and so a scan can be reclaimed if
-        nobody opens it. An address given to have the result emailed is used for that one message and creates no
-        account. What you give for a walkthrough or a demo is passed to Danny at nomada digital, who uses it to send
-        you the video or arrange the call. Our lawful basis is legitimate interest in responding to a request you made. We do not add you to a
-        mailing list, because there is not one.
+        The email address exists so we can send you the link to your report, and so a scan can be reclaimed if nobody
+        opens it. It creates no account, and the team may follow up about your report. We send you tips only if you
+        ticked the box, and you can unsubscribe at any time; our basis for those is your consent. What you give for a
+        walkthrough or a demo is passed to Danny at nomada digital, who uses it to send you the video or arrange the
+        call. For everything else, our lawful basis is legitimate interest in responding to a request you made.
       </>
     ),
   },
@@ -158,8 +159,9 @@ const SECTIONS: Section[] = [
         , here or at the foot of every page; declining after accepting deletes those cookies. Apart from those, this site
         sets no cookies of its own, with one exception: when a client signs in to their <TierName tier="tracked" />{" "}
         dashboard, we set one login cookie so they stay signed in. It holds a random key and nothing else, lasts 30
-        days, is cleared when they log out, and is never set on any other visit. The dashboard's feature counts, described
-        above, are our own and go to no third party.
+        days, is cleared when they log out, and is never set on any other visit. Our own team&apos;s browsers also carry
+        one cookie, set from our admin page, that skips the email step on their own test scans; no visitor is ever given
+        it. The dashboard&apos;s feature counts, described above, are our own and go to no third party.
       </>
     ),
   },
