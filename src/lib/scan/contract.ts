@@ -174,6 +174,12 @@ export type ClusterKeywordView = {
    * Absent on every scan before, and on a database without the column.
    */
   unchecked?: boolean;
+  /**
+   * Where the keyword was read and its position checked (3 Nov 2026): the
+   * scan's market, or a fallback a thin market's buyers search from
+   * (target-keyword.ts KEYWORD_FALLBACK). Absent on older payloads.
+   */
+  market?: Market;
 };
 
 export type RunScanResponse = {

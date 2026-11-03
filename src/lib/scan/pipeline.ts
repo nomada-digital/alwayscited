@@ -16,7 +16,7 @@ import { readClusterRank, storeClusterRank } from "./cluster-rank";
 import { brandKey, displayNamesFor, namesSubject, subjectKeys } from "./brand-name";
 import { scoreScanDifficulty } from "./difficulty";
 import { readEngine, readKeywordRank, readKeywordVolumes } from "./dataforseo";
-import { type Market } from "./domain";
+import { isScanMarket, type Market } from "./domain";
 // What one engine found, and the order the reads are issued in so that engines
 // finish at different times rather than in lockstep. Both live outside this
 // file because this one imports `server-only` and so can never be executed by
@@ -87,6 +87,7 @@ export type ScanRow = {
   /** BRIEF-3 C1, picked on the confirm screen. Null status: a scan from before C1. */
   cluster_keyword?: string | null;
   cluster_keyword_status?: string | null;
+  cluster_keyword_market?: string | null;
 };
 
 async function mapWithConcurrency<T, R>(
@@ -1089,7 +1090,7 @@ export async function runScan(scanId: string): Promise<void> {
   try {
     const { data: scan, error } = await db
       .from("scans")
-      .select("id, domain, brand_name, positioning, topic, topic_variants, market, engines, gated_engines, site_facts, cluster_keyword, cluster_keyword_status")
+      .select("id, domain, brand_name, positioning, topic, topic_variants, market, engines, gated_engines, site_facts, cluster_keyword, cluster_keyword_status, cluster_keyword_market")
       .eq("id", scanId)
       .single<ScanRow>();
     if (error || !scan) throw new Error(`scan ${scanId} not found`);
@@ -1216,7 +1217,15 @@ export async function runScan(scanId: string): Promise<void> {
     const category = scan.topic;
     const keywords = timed(timings, "keywords", () =>
       scan.cluster_keyword_status
-        ? rankClusterKeyword({ scanId, domain: scan.domain, keyword: scan.cluster_keyword ?? null, market, spend, remainingMs })
+        ? rankClusterKeyword({
+            scanId,
+            domain: scan.domain,
+            keyword: scan.cluster_keyword ?? null,
+            // 3 Nov 2026: checked where the keyword was read - a thin market's fallback (KEYWORD_FALLBACK) when it came from one.
+            market: isScanMarket(scan.cluster_keyword_market) ? scan.cluster_keyword_market : market,
+            spend,
+            remainingMs,
+          })
         : deriveKeywords({ scanId, domain: scan.domain, category, market, questions: ordered, spend, remainingMs }),
     );
 

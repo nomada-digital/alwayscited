@@ -28,6 +28,7 @@ import { SERP_DEPTH } from "../../lib/scan/dataforseo-request.ts";
 import { ENGINE_SPECS, isEngine } from "../../lib/scan/engines.ts";
 import type {
   EngineAnswer,
+  EngineBreakdown,
   LeaderboardEntry,
   RunScanResponse,
   ScanQuestion,
@@ -225,8 +226,28 @@ export function leaderboardCaption(rowCount: number, partial: boolean): string {
  * line 113); scan-prompts-copy.test.mts holds it. A scan with a chosen
  * cluster keyword says what the prompts are about, as ScanCluster.dc.html does.
  */
-export function standfirst(questions: number, engines: number, cluster = false): string {
-  return count(questions, "buyer prompt") + (cluster ? " about one Google keyword" : "") + ", each put to " + count(engines, "engine") + ". Everything below is free.";
+export function standfirst(questions: number, engines: number, cluster = false, gap = ""): string {
+  return count(questions, "buyer prompt") + (cluster ? " about one Google keyword" : "") + ", each put to " + count(engines, "engine") + "." + (gap ? " " + gap : "") + " Everything below is free.";
+}
+
+/**
+ * Why the answers fall short of prompts times engines (3 Nov 2026, couples.com:
+ * "4 buyer prompts, each put to 4 engines" over tiles reading "of 15"). Empty
+ * when every engine answered every prompt it was asked. Google's gap is said
+ * as what it is - no AI Overview on that search - not as a refusal.
+ */
+export function answerGap(engines: Pick<EngineBreakdown, "engine" | "label" | "asked" | "answered">[]): string {
+  const gaps = engines
+    .filter((e) => e.asked > e.answered)
+    .map((e) =>
+      e.engine === "google_aio"
+        ? "Google showed no AI Overview for " + count(e.asked - e.answered, "prompt")
+        : e.label + " gave no answer to " + count(e.asked - e.answered, "prompt"),
+    );
+  if (!gaps.length) return "";
+  const total = engines.reduce((a, e) => a + e.answered, 0);
+  const list = gaps.length === 1 ? gaps[0] : gaps.slice(0, -1).join(", ") + " and " + gaps[gaps.length - 1];
+  return count(total, "answer") + " came back: " + list + ".";
 }
 
 export function headline(answers: number, missing: number): string {
@@ -388,7 +409,7 @@ export function resultFigures(
     missing,
     pct: answers > 0 ? Math.round((named / answers) * 100) : null,
     headline: headline(answers, missing),
-    standfirst: standfirst(qs.length, r.engines.length, clusterState(r) === "chosen"),
+    standfirst: standfirst(qs.length, r.engines.length, clusterState(r) === "chosen", answerGap(r.engines)),
     answeredQuestions,
     blank: tallies.filter((t) => t.answered > 0 && t.named === 0).length,
     bestRank: ranks.length ? Math.min(...ranks) : null,

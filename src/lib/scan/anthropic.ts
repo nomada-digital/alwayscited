@@ -12,7 +12,7 @@ import { type Market, marketPlace, marketShort } from "./domain";
 import { batchBlocks, runBatches } from "./prose-batches";
 import { countingFetch, withRetry } from "./retry-policy";
 import { sourceKindRequest, sourceKindSystem } from "./source-kind-prompt";
-import { normaliseCandidate } from "./target-keyword";
+import { KEYWORD_FALLBACK, normaliseCandidate } from "./target-keyword";
 
 const MODEL = "claude-opus-5";
 
@@ -570,6 +570,11 @@ export async function clusterKeywordCandidates(
       "Every keyword keeps a supplier noun - providers, companies, lenders, software, agencies.",
       "The bare category alone is never a keyword. Never a brand name. Lower case, no punctuation.",
       "Most likely first. Also give the one plural supplier noun a buyer uses for this category.",
+      // 3 Nov 2026: a thin market's keyword is also read in its buyers' markets (target-keyword.ts KEYWORD_FALLBACK),
+      // where a visitor from abroad types the place: "all inclusive resorts jamaica", not "all inclusive resorts".
+      ...(KEYWORD_FALLBACK[input.market]
+        ? [`Many buyers search from abroad. Where they would type the place name (${marketName}), keep it in some candidates.`]
+        : []),
     ].join("\n"),
     messages: [
       {

@@ -153,7 +153,7 @@ function EngineMarks(p: { answers: EngineAnswer[]; size?: number }) {
         return (
           <span
             key={a.engine}
-            title={engineLabel(a.engine) + ": " + state}
+            title={engineLabel(a.engine) + ": " + (state === "no answer" && a.engine === "google_aio" ? "no AI Overview" : state)}
             style={{
               width: size + "px",
               height: size + "px",
@@ -311,8 +311,8 @@ function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
         <span style={{ fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.25, color: T.ink }}>Not picked yet</span>
         <span style={{ fontSize: "14px", lineHeight: 1.55, color: T.ink }}>
           {c?.status === "read_failed"
-            ? "We couldn't check Google search volume when this scan ran. The prompts are written on the category, and nomada digital picks the keyword when you start tracking."
-            : "We couldn't find a commercial Google term with search volume for this. The prompts are written on the category, and nomada digital picks the keyword when you start tracking."}
+            ? "We couldn't check Google search volume when this scan ran. The prompts are written on the category, and we pick the keyword with you when you start tracking."
+            : "We couldn't find a commercial Google term with search volume for this. The prompts are written on the category, and we pick the keyword with you when you start tracking."}
         </span>
         <span style={{ fontSize: "13px", color: T.soft }}>We never guess one.</span>
       </div>
@@ -325,7 +325,7 @@ function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
       <span style={{ fontSize: "19px", fontWeight: 700, letterSpacing: "-0.02em", lineHeight: 1.25, color: T.ink }}>{c.keyword}</span>
       <span style={{ display: "flex", alignItems: "baseline", gap: "10px", flexWrap: "wrap" }}>
         <span style={{ fontSize: "44px", fontWeight: 700, letterSpacing: "-0.04em", lineHeight: 1.1, color: T.ink }}>{p.rank}</span>
-        <span style={{ fontSize: "13px", color: T.soft }}>{"on Google, in " + (p.r.market === "JM" ? "Jamaica" : "the " + p.r.market)}</span>
+        <span style={{ fontSize: "13px", color: T.soft }}>{"on Google, in " + ((c.market ?? p.r.market) === "JM" ? "Jamaica" : "the " + (c.market ?? p.r.market))}</span>
       </span>
       {c.intent || c.volume != null ? (
         <span style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
@@ -344,7 +344,7 @@ function KeywordNode(p: { r: RunScanResponse; chosen: boolean; rank: string }) {
 
 /**
  * The scan as the visitor's first cluster: one Google keyword joined to the
- * five prompts written on it, each row opening the same answer drawer the
+ * prompts written on it (five by default, as many as the visitor kept), each row opening the same answer drawer the
  * question table did. Only drawn on a scan from C1 on (`clusterState` not
  * null); an older scan keeps `QuestionTable`.
  */
@@ -355,7 +355,7 @@ function ClusterSection(p: { r: RunScanResponse; chosen: boolean; rank: string; 
   return (
     <section style={{ marginTop: "38px" }}>
       <Head title="Your first cluster">
-        One keyword buyers search, and the five prompts they ask AI about it. Open a prompt to read what each engine said.
+        {"One keyword buyers search, and the " + word(qs.length) + (qs.length === 1 ? " prompt" : " prompts") + " they ask AI about it. Open a prompt to read what each engine said."}
       </Head>
       <div className="clu-card" style={{ ...CARD, borderRadius: "18px", padding: "24px 24px 0" }}>
         <div className="clu-head" style={{ display: "grid", gridTemplateColumns: cols, gap: "14px", padding: "0 14px 10px", marginRight: "392px", fontSize: "12px", fontWeight: 600, color: T.soft }}>
@@ -1014,7 +1014,7 @@ function TrackedSection(p: { token: string; r: RunScanResponse; cluster: ReturnT
           <div style={{ display: "flex", flexDirection: "column", gap: "4px", padding: "14px 16px", borderRadius: "12px", background: "#fcfbff", border: "1px solid " + T.washLine }}>
             <span style={{ fontSize: "12px", color: T.soft }}>Your first cluster, set up from this scan</span>
             <span style={{ fontSize: "15px", fontWeight: 700, overflowWrap: "anywhere" }}>{p.cluster === "chosen" ? p.r.cluster_keyword?.keyword : "Needs a keyword"}</span>
-            <span style={{ fontSize: "13px", color: T.soft }}>{"and its 5 prompts. Add " + (TRACKED_CLUSTERS - 1) + " more whenever you like."}</span>
+            <span style={{ fontSize: "13px", color: T.soft }}>{"and its " + count((p.r.questions ?? []).length, "prompt") + ". Add " + (TRACKED_CLUSTERS - 1) + " more whenever you like."}</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
             <span style={{ fontSize: "30px", fontWeight: 700, letterSpacing: "-0.03em" }}>{offer.price}</span>
@@ -1135,6 +1135,10 @@ export default function ResultView(p: {
               <span>
                 <span style={{ color: T.soft }}>Keyword </span>
                 <strong style={{ fontWeight: 600 }}>{cluster === "chosen" ? r.cluster_keyword?.keyword : "Not picked for this scan"}</strong>
+                {/* 3 Nov 2026: a thin market's keyword read where its buyers search (KEYWORD_FALLBACK). */}
+                {cluster === "chosen" && r.cluster_keyword?.market && r.cluster_keyword.market !== r.market ? (
+                  <span style={{ color: T.soft }}>{" · searched in " + marketLabel(r.cluster_keyword.market)}</span>
+                ) : null}
               </span>
             ) : null}
             <span>

@@ -12,6 +12,7 @@
  */
 
 import { type Intent, keywordForm } from "./dataforseo-request.ts";
+import type { Market } from "./domain.ts";
 
 /** Words that say "choose" without saying what. Taken out, never kept. */
 const FILLER = new Set([
@@ -24,6 +25,11 @@ export const SUPPLIER_NOUNS = [
   "providers", "provider", "companies", "company", "lenders", "lender", "software", "tools", "tool",
   "platforms", "platform", "agency", "agencies", "firms", "firm", "consultants", "consultancy",
   "services", "suppliers", "supplier", "vendors", "vendor", "apps", "app", "brands", "partners",
+  // 3 Nov 2026: consumer and place-based suppliers. couples.com's every candidate ("couples resorts",
+  // "adults only all inclusive resorts") was refused for want of one of the words above, so a category
+  // with 9,900 US searches a month read "no keyword had the searches to pick".
+  "resorts", "hotels", "clinics", "schools", "retailers", "stores", "manufacturers", "contractors",
+  "installers", "dealers", "brokers", "insurers", "operators",
 ];
 
 /** Years and list sizes - "2026", "top 10". */
@@ -39,7 +45,17 @@ export function stripFiller(candidate: string): string {
     .join(" ");
 }
 
-const hasSupplier = (k: string) => k.split(" ").some((w) => SUPPLIER_NOUNS.includes(w));
+/**
+ * The category's own supplier noun, as the model names it, counts as one when
+ * it is a single plural word (3 Nov 2026): "resorts" for a resort, "kennels"
+ * for a kennel. Not "finance", and not a word ending "ss" ("business").
+ */
+const ownNoun = (supplierNoun: string): string | null => {
+  const n = stripFiller(supplierNoun);
+  return /^[a-z]{3,}[^s]s$/.test(n) ? n : null;
+};
+
+const hasSupplier = (k: string, own: string | null = null) => k.split(" ").some((w) => SUPPLIER_NOUNS.includes(w) || w === own);
 
 /**
  * The candidate as it would be looked up, or null when it may not stand.
@@ -49,9 +65,10 @@ const hasSupplier = (k: string) => k.split(" ").some((w) => SUPPLIER_NOUNS.inclu
 export function normaliseCandidate(candidate: string, category: string, supplierNoun: string): string | null {
   let k = stripFiller(candidate);
   if (!k) return null;
-  if (!hasSupplier(k)) {
+  const own = ownNoun(supplierNoun);
+  if (!hasSupplier(k, own)) {
     const noun = stripFiller(supplierNoun);
-    if (!noun || !hasSupplier(noun)) return null;
+    if (!noun || !hasSupplier(noun, own)) return null;
     k = k + " " + noun;
   }
   if (k === stripFiller(category)) return null;
@@ -87,7 +104,7 @@ export function pickKeyword(
  * nor does 0) and a primary intent of commercial or transactional. Highest
  * volume among the qualifying wins; ties go to the model's order. There is no
  * shortest fallback - that is `pickKeyword`'s guess, and here a failed check
- * says so and Nomada picks.
+ * says so and we pick one with the client.
  *
  * `none` says why: no candidate at all, none with volume, or volume but never
  * the intent. Pure; not yet called - C1's route change wires it.
@@ -149,5 +166,34 @@ export function clusterGoogleTrio(
  * again rather than guessed.
  */
 export function clusterKeywordFits(stored: { status: unknown; topic: unknown; market: unknown }, topic: string, market: string): boolean {
-  return Boolean(stored.status) && typeof stored.market === "string" && stored.market === market && stored.topic === topic;
+  if (!stored.status || typeof stored.market !== "string" || stored.topic !== topic) return false;
+  // A keyword read in one of the market's fallbacks (KEYWORD_FALLBACK) was read for this market.
+  return stored.market === market || (KEYWORD_FALLBACK[market as Market] ?? []).includes(stored.market as Market);
+}
+
+/**
+ * Where a scan market's own Google volumes are too thin to pick a keyword on,
+ * the markets its buyers search from, in order (Danny, 3 Nov 2026). Jamaica's
+ * best term for couples.com read 390 a month there and 9,900 in the US; the
+ * resort's buyers are in the US and the UK. Only JM: a UK or US business is
+ * judged on its own market's searches.
+ */
+export const KEYWORD_FALLBACK: Partial<Record<Market, readonly Market[]>> = { JM: ["US", "UK"] };
+
+/** A keyword under this many searches a month in a market with fallbacks sends the pick to them. */
+export const THIN_KEYWORD_VOLUME = 1000;
+
+/**
+ * The cluster keyword across a market and its fallbacks: the home market's
+ * pick when it reaches THIN_KEYWORD_VOLUME, else the first fallback whose pick
+ * beats it, else the home pick (or its `none`). `market` says where the
+ * keyword was read, which is where its Google position is checked too.
+ */
+export function pickAcrossMarkets(
+  reads: { market: Market; pick: ClusterKeywordPick }[],
+): { market: Market; pick: ClusterKeywordPick } {
+  const [home, ...rest] = reads;
+  const vol = (p: ClusterKeywordPick) => ("none" in p ? 0 : p.volume);
+  if (vol(home.pick) >= THIN_KEYWORD_VOLUME) return home;
+  return rest.find((r) => vol(r.pick) > vol(home.pick)) ?? home;
 }

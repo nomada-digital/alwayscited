@@ -47,6 +47,8 @@ export type ClusterKeyword = {
   volume: number | null;
   intent: string | null;
   status: "chosen" | "none_qualified" | "read_failed";
+  /** Where the keyword was read: the scan's market, or one of its fallbacks (3 Nov 2026). Absent from an older route. */
+  market?: Market;
 };
 
 /** DataForSEO's four intent labels, sentence case. */
@@ -579,10 +581,10 @@ export default function ConfirmScreen(p: {
             </h2>
             <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
               {keyword.status === "chosen"
-                ? "The term a buyer types into Google when choosing a supplier, with searches behind it. The prompts below are five angles on it."
+                ? "The term a buyer types into Google when choosing a supplier, with searches behind it. Each prompt below is one angle on it."
                 : keyword.status === "read_failed"
-                  ? "We couldn't check Google search volume just now. The prompts below are written on the category, and nomada digital picks the keyword when you start tracking."
-                  : "We couldn't find a commercial Google term with search volume for this. The prompts below are written on the category, and nomada digital picks the keyword when you start tracking."}
+                  ? "We couldn't check Google search volume just now. The prompts below are written on the category, and we pick the keyword with you when you start tracking."
+                  : "We couldn't find a commercial Google term with search volume for this. The prompts below are written on the category, and we pick the keyword with you when you start tracking."}
             </p>
           </div>
           {keyword.status === "chosen" && keyword.keyword ? (
@@ -604,7 +606,7 @@ export default function ConfirmScreen(p: {
               {keyword.volume != null ? (
                 <div style={{ fontSize: "13.5px", color: T.soft }}>
                   <span style={{ fontWeight: 600, color: T.ink }}>{keyword.volume.toLocaleString("en-GB")}</span>{" "}
-                  searches a month in {inMarket(writtenFor?.market ?? market)}
+                  searches a month in {inMarket(keyword.market ?? writtenFor?.market ?? market)}
                 </div>
               ) : null}
               {keyword.intent ? <div style={MICRO}>{KEYWORD_INTENT[keyword.intent] ?? keyword.intent} intent</div> : null}
@@ -616,7 +618,7 @@ export default function ConfirmScreen(p: {
       <section>
         <div className="board-head confirm-head" style={{ marginBottom: "14px" }}>
           <h2 style={{ margin: 0, fontSize: "19px", fontWeight: 700, letterSpacing: "-0.022em", color: T.ink }}>
-            Your five prompts
+            {"Your " + (kept.length || questions.length) + ((kept.length || questions.length) === 1 ? " prompt" : " prompts")}
           </h2>
           <p style={{ margin: 0, fontSize: "14px", lineHeight: 1.6, color: T.soft }}>
             Written as a buyer would type them into an AI engine, not as keywords, and aimed at the end of the

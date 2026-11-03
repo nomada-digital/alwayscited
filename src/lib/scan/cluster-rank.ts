@@ -70,7 +70,7 @@ export async function retryUncheckedClusterRanks(now = Date.now()): Promise<{ re
   const since = new Date(now - RETRY_DAYS * 86_400_000).toISOString();
   const { data, error } = await db
     .from("scans")
-    .select("id, domain, market, cluster_keyword, dfs_calls, dfs_cost")
+    .select("id, domain, market, cluster_keyword, cluster_keyword_market, dfs_calls, dfs_cost")
     .eq("cluster_keyword_rank_unchecked", true)
     .eq("cluster_keyword_status", "chosen")
     .eq("status", "complete")
@@ -85,7 +85,8 @@ export async function retryUncheckedClusterRanks(now = Date.now()): Promise<{ re
   }
   for (const s of data ?? []) {
     const keyword = typeof s.cluster_keyword === "string" ? s.cluster_keyword.trim() : "";
-    const market = String(s.market).toUpperCase();
+    // Checked where the keyword was read (cluster_keyword_market, 3 Nov 2026), the scan's market before that was kept.
+    const market = String(s.cluster_keyword_market ?? s.market).toUpperCase();
     if (!keyword || !(market in MARKETS)) continue;
     const read = await readClusterRank(keyword, s.domain as string, market as Market, 30_000);
     out.read += 1;

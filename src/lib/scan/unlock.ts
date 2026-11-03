@@ -21,6 +21,7 @@ import { selectAll } from "@/lib/supabase/page";
 import { missingColumn } from "@/lib/tracking/limits";
 import { clusterGoogleTrio, type StoredClusterKeyword } from "@/lib/scan/target-keyword";
 import type { ClusterKeywordView } from "@/lib/scan/contract";
+import type { Market } from "@/lib/scan/domain";
 
 /**
  * What unlocking a scan actually does, in one place.
@@ -242,7 +243,7 @@ export async function opportunityShape(
 }
 
 /** Everything the gate was holding back, assembled once. */
-const CLUSTER_COLUMNS = "cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_rank, cluster_keyword_status";
+const CLUSTER_COLUMNS = "cluster_keyword, cluster_keyword_volume, cluster_keyword_intent, cluster_keyword_rank, cluster_keyword_status, cluster_keyword_market";
 
 /**
  * The scan's cluster keyword row. `cluster_keyword_rank_unchecked` (3 Nov 2026,
@@ -493,6 +494,7 @@ export async function buildUnlockPayload(scanId: string): Promise<UnlockPayload>
             intent: (clusterRow.cluster_keyword_intent ?? null) as string | null,
             rank: (clusterRow.cluster_keyword_rank ?? null) as number | null,
             ...(clusterRow.cluster_keyword_rank_unchecked === true ? { unchecked: true } : {}),
+            ...(typeof clusterRow.cluster_keyword_market === "string" ? { market: clusterRow.cluster_keyword_market as Market } : {}),
           }
         : null,
     opportunities,

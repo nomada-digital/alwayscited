@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Intent } from "./dataforseo-request.ts";
-import { clusterGoogleTrio, clusterKeywordFits, normaliseCandidate, pickClusterKeyword, pickKeyword, stripFiller } from "./target-keyword.ts";
+import { clusterGoogleTrio, clusterKeywordFits, KEYWORD_FALLBACK, normaliseCandidate, pickAcrossMarkets, pickClusterKeyword, pickKeyword, stripFiller, THIN_KEYWORD_VOLUME } from "./target-keyword.ts";
 
 const CAT = "business cash flow finance";
 const NOUN = "providers";
@@ -114,4 +114,30 @@ test("a stored cluster keyword is reused only for the topic and market it was re
   assert.ok(!clusterKeywordFits({ status: "chosen", topic: "b2b seo agency", market: null }, "b2b seo agency", "UK"), "stored before the market was recorded: never guessed");
   assert.ok(!clusterKeywordFits({ status: null, topic: "b2b seo agency", market: "UK" }, "b2b seo agency", "UK"), "never checked");
   assert.ok(clusterKeywordFits({ status: "none_qualified", topic: "b2b seo agency", market: "US" }, "b2b seo agency", "US"), "a 'none qualified' answer is a reading too, reused in its own market");
+});
+
+test("3 Nov 2026: the category's own plural noun stands as the supplier, so a resort's keywords are not all refused", () => {
+  const cat = "all-inclusive couples resorts";
+  assert.equal(normaliseCandidate("couples resorts", cat, "resorts"), "couples resorts");
+  assert.equal(normaliseCandidate("all inclusive resorts jamaica", cat, "resorts"), "all inclusive resorts jamaica");
+  assert.equal(normaliseCandidate("dog kennels", "dog boarding", "kennels"), "dog kennels");
+  // Not a plural, or a word that only ends in s: no supplier.
+  assert.equal(normaliseCandidate("small business", "accounting", "business"), null);
+  assert.equal(normaliseCandidate("invoice", "invoicing", "finance"), null);
+});
+
+test("3 Nov 2026: a thin market's keyword comes from its buyers' markets, labelled with where it was read", () => {
+  const pick = (keyword: string, volume: number) => ({ keyword, volume, intent: "commercial" as const });
+  const none = { none: "no_volume" as const };
+  // Jamaica's best under the floor, the US's above it: the US keyword.
+  assert.deepEqual(pickAcrossMarkets([{ market: "JM", pick: pick("couples resorts", 590) }, { market: "US", pick: pick("adults only all inclusive resorts", 33100) }]).market, "US");
+  // Nothing at home: the first fallback that has one.
+  assert.equal(pickAcrossMarkets([{ market: "JM", pick: none }, { market: "US", pick: none }, { market: "UK", pick: pick("couples resorts", 320) }]).market, "UK");
+  // Home at the floor or over stays home, whatever the fallbacks say.
+  assert.equal(pickAcrossMarkets([{ market: "JM", pick: pick("jamaican food suppliers", THIN_KEYWORD_VOLUME) }, { market: "US", pick: pick("x", 50000) }]).market, "JM");
+  assert.deepEqual(KEYWORD_FALLBACK.UK, undefined, "a UK business is judged on UK searches");
+  // A JM scan's keyword read in the US is reused for that scan; a US keyword is not reused for a UK switch.
+  const read = { status: "chosen", topic: "couples resorts", market: "US" };
+  assert.ok(clusterKeywordFits(read, "couples resorts", "JM"));
+  assert.ok(!clusterKeywordFits(read, "couples resorts", "UK"));
 });

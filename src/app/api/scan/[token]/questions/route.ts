@@ -11,7 +11,7 @@ import {
 import { readKeywordIntents, readKeywordVolumes } from "@/lib/scan/dataforseo";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { partnerMayUse } from "@/lib/scan/handoff";
-import { clusterKeywordFits, pickClusterKeyword } from "@/lib/scan/target-keyword";
+import { clusterKeywordFits, KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME } from "@/lib/scan/target-keyword";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -248,7 +248,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   });
 }
 
-type ClusterKeyword = { keyword: string | null; volume: number | null; intent: string | null; status: "chosen" | "none_qualified" | "read_failed" };
+type ClusterKeyword = { keyword: string | null; volume: number | null; intent: string | null; status: "chosen" | "none_qualified" | "read_failed"; market: Market };
 
 /**
  * The scan's cluster keyword - BRIEF-3 C1 (Danny, 29 Sep 2026). Chosen once,
@@ -278,6 +278,7 @@ async function clusterKeywordFor(
       volume: (scan.cluster_keyword_volume as number | null) ?? null,
       intent: (scan.cluster_keyword_intent as string | null) ?? null,
       status: scan.cluster_keyword_status as ClusterKeyword["status"],
+      market: scan.cluster_keyword_market as Market,
     };
   }
   const modelBilled = { calls: 0 };
@@ -290,21 +291,33 @@ async function clusterKeywordFor(
       modelBilled,
     );
     if (!candidates.length) {
-      out = { keyword: null, volume: null, intent: null, status: "none_qualified" };
+      out = { keyword: null, volume: null, intent: null, status: "none_qualified", market };
     } else {
       const [v, i] = await Promise.all([readKeywordVolumes(candidates, market, 20_000), readKeywordIntents(candidates, 20_000)]);
       dfsCalls = 2;
       dfsCost = v.cost + i.cost;
-      const pick = pickClusterKeyword(candidates, v.volumes, i.intents);
-      out = "none" in pick ? { keyword: null, volume: null, intent: null, status: "none_qualified" } : { ...pick, status: "chosen" };
+      // 3 Nov 2026: a thin market (KEYWORD_FALLBACK) reads its buyers' markets too, one volume read each, in order,
+      // only while the home pick is under THIN_KEYWORD_VOLUME. Intent carries no market, so it is read once.
+      const reads = [{ market, pick: pickClusterKeyword(candidates, v.volumes, i.intents) }];
+      for (const fallback of KEYWORD_FALLBACK[market] ?? []) {
+        if (pickAcrossMarkets(reads) !== reads[0] || ("volume" in reads[0].pick && reads[0].pick.volume >= THIN_KEYWORD_VOLUME)) break;
+        const fv = await readKeywordVolumes(candidates, fallback, 20_000);
+        dfsCalls += 1;
+        dfsCost += fv.cost;
+        reads.push({ market: fallback, pick: pickClusterKeyword(candidates, fv.volumes, i.intents) });
+      }
+      const chosen = pickAcrossMarkets(reads);
+      out = "none" in chosen.pick
+        ? { keyword: null, volume: null, intent: null, status: "none_qualified", market }
+        : { ...chosen.pick, status: "chosen", market: chosen.market };
     }
   } catch (err) {
     console.warn(`[scan] cluster keyword check failed for ${String(scan.id)}: ${err instanceof Error ? err.message : String(err)}`);
-    out = { keyword: null, volume: null, intent: null, status: "read_failed" };
+    out = { keyword: null, volume: null, intent: null, status: "read_failed", market };
   }
   const { error: wErr } = await db
     .from("scans")
-    .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status, cluster_keyword_market: market, cluster_keyword_topic: topic })
+    .update({ cluster_keyword: out.keyword, cluster_keyword_volume: out.volume, cluster_keyword_intent: out.intent, cluster_keyword_status: out.status, cluster_keyword_market: out.market, cluster_keyword_topic: topic })
     .eq("id", scan.id as string);
   if (wErr) console.warn(`[scan] cluster keyword not stored for ${String(scan.id)}: ${wErr.message}`);
   if (dfsCalls || dfsCost || modelBilled.calls) {
