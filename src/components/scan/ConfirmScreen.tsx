@@ -331,11 +331,19 @@ export default function ConfirmScreen(p: {
   const needsWriting = stale || !writtenFor;
   // Nothing runs until there is an address to send the report to; writing the prompts needs none.
   const hasEmail = isPlausibleEmail(leadEmail.trim());
-  const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || (kept.length > 0 && (!p.gate || hasEmail)));
+  // The button stays live without one: a disabled button that looks enabled answered a click with nothing. run() says
+  // what is missing and puts the cursor there instead.
+  const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || kept.length > 0);
+  const emailRef = useRef<HTMLInputElement>(null);
   const lead = p.gate ? { email: leadEmail.trim(), name: leadName.trim(), marketing } : undefined;
 
   async function run() {
     if (!kept.length) return;
+    if (p.gate && !hasEmail) {
+      setError(leadEmail.trim() ? "That email address does not look right." : "Tell us where to send the report.");
+      emailRef.current?.focus();
+      return;
+    }
     const message = await p.onRun({
       topic: topic.trim(),
       market,
@@ -355,6 +363,11 @@ export default function ConfirmScreen(p: {
    * exactly as it did before this screen existed.
    */
   async function runBlind() {
+    if (p.gate && !hasEmail) {
+      setError(leadEmail.trim() ? "That email address does not look right." : "Tell us where to send the report.");
+      emailRef.current?.focus();
+      return;
+    }
     const message = await p.onRun({ topic: topic.trim(), market, questions: [], lead });
     if (message) setError(message);
   }
@@ -532,7 +545,8 @@ export default function ConfirmScreen(p: {
               </p>
             ) : null}
           </fieldset>
-          {p.gate && !needsWriting ? (
+          {/* Also beside "Run it anyway", which runs with no preview and so needs the address all the same. */}
+          {p.gate && (!needsWriting || (error && !writtenFor && topic.trim().length >= 2)) ? (
             <fieldset data-figure="report-gate" style={{ border: 0, padding: "16px 0 0", margin: "16px 0 0", borderTop: "1px solid " + T.line }}>
               <legend style={{ fontSize: "15px", fontWeight: 700, color: T.ink, padding: 0, float: "left", width: "100%" }}>
                 Where should we send your report?
@@ -544,6 +558,7 @@ export default function ConfirmScreen(p: {
                 Work email
               </label>
               <input
+                ref={emailRef}
                 id="gate-email"
                 type="email"
                 autoComplete="email"
