@@ -30,7 +30,7 @@ import ConfirmScreen from "./ConfirmScreen";
 import ScanProgress from "./ScanProgress";
 import { MAIL_OUTCOMES, type MailOutcome } from "@/lib/scan/mail-outcome";
 import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
-import { checkLeadEmail, isInternalDomain } from "@/lib/scan/lead-email";
+import { checkLeadEmail, gateApplies } from "@/lib/scan/lead-email";
 
 import ResultView from "./ResultView";
 import RerunPanel from "./RerunPanel";
@@ -352,6 +352,8 @@ export default function ScanFlow(p: {
   mail?: MailOutcome | null;
   /** A browser marked as team from /admin/scans (lib/team-cookie.ts): the report gate is skipped (3 Nov 2026). */
   team?: boolean;
+  /** An outside partner's scan (handoff.ts EXTERNAL_PARTNERS): no report gate, the card's pre-gate wording (4 Nov 2026). */
+  partner?: string | null;
   /** The scan's report address, masked, when one is already on the row: the card says where it goes (3 Nov 2026). */
   mailedTo?: string | null;
   /**
@@ -963,7 +965,7 @@ export default function ScanFlow(p: {
             variants={p.variants}
             onRun={onRun}
             running={busy}
-            gate={!p.team && !isInternalDomain(p.domain)}
+            gate={gateApplies({ team: Boolean(p.team), domain: p.domain, ref: p.partner ?? null })}
           />
         ) : null}
 
@@ -1053,7 +1055,7 @@ export default function ScanFlow(p: {
                 {/* Not on the board. The address is collected here, so the
                     line saying what it is for ships with it. */}
                 <p style={{ fontSize: "12px", color: T.soft, margin: "10px 0 0", lineHeight: 1.5 }}>
-                  {OFFER_COPY.privacy} <a href="/legal">What we collect</a>.
+                  {p.partner ? OFFER_COPY.privacyPartner : OFFER_COPY.privacy} <a href="/legal">What we collect</a>.
                 </p>
               </form>
             )}

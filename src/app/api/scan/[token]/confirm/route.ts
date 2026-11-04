@@ -4,12 +4,12 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { QUESTION_COUNT, QUESTION_KINDS, TOPIC_VARIANT_COUNT } from "@/lib/scan/anthropic";
 import { cleanBrandName } from "@/lib/scan/brand-name";
 import { isScanMarket } from "@/lib/scan/domain";
-import { partnerMayUse } from "@/lib/scan/handoff";
+import { externalPartner, partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits } from "@/lib/scan/target-keyword";
 import { runScan } from "@/lib/scan/pipeline";
 import { normaliseTopicVariants } from "@/lib/scan/topic-variants";
 import { isFreePassDead, reapStalledFreePass } from "@/lib/scan/stall";
-import { checkLeadEmail, cleanLeadName, isInternalDomain } from "@/lib/scan/lead-email";
+import { checkLeadEmail, cleanLeadName, gateApplies, isInternalDomain } from "@/lib/scan/lead-email";
 import { domainTakesMail } from "@/lib/scan/lead-email-mx";
 import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -159,6 +159,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
    */
   const team = isTeamCookie(cookieValue(req.headers.get("cookie"), TEAM_COOKIE));
   const ownDomain = isInternalDomain(String(scan.domain ?? ""));
+  // 4 Nov 2026: an outside partner's scan is theirs, and runs as it did before the gate (handoff.ts EXTERNAL_PARTNERS).
+  const partner = externalPartner(scan.ref as string | null);
+  const gated = gateApplies({ team, domain: String(scan.domain ?? ""), ref: scan.ref as string | null });
   let lead: { email: string; free: boolean; internal: boolean } | null = null;
   if (body.email !== undefined && body.email !== null && body.email !== "") {
     const c = checkLeadEmail(body.email);
@@ -167,7 +170,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       return Response.json({ error: "bad_email", message: `We can't find a mail server for ${c.domain}. Check the address.` }, { status: 400 });
     }
     lead = c;
-  } else if (!team && !ownDomain) {
+  } else if (gated) {
     return Response.json({ error: "email_required", message: "Tell us where to send the report." }, { status: 400 });
   }
   const internal = team || ownDomain || Boolean(lead?.internal);
@@ -265,6 +268,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
   if (!queued?.length) {
     return Response.json({ status: "queued", questions: 0 });
+  }
+
+  // The partner it belongs to, for the hub (migration 20261104020000). Its own write, after the run is claimed, so a
+  // database the migration has not reached yet still runs the scan; it only goes unmarked.
+  if (partner) {
+    const { error: pErr } = await db.from("scans").update({ partner }).eq("id", scan.id);
+    if (pErr) console.warn(`[scan] ${scan.id} is a ${partner} scan but could not be marked partner: ${pErr.message}`);
   }
 
   /**

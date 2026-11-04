@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { checkLeadEmail, cleanLeadName, isInternalDomain } from "./lead-email.ts";
+import { readFileSync } from "node:fs";
+
+import { checkLeadEmail, cleanLeadName, gateApplies, isInternalDomain } from "./lead-email.ts";
+import { EXTERNAL_PARTNERS } from "./handoff.ts";
 import { isTeamCookie, teamCookieValue, TEAM_COOKIE_DAYS } from "../team-cookie.ts";
 
 test("3 Nov 2026: the report gate takes a work address, flags free mail and refuses a disposable inbox", () => {
@@ -44,4 +47,21 @@ test("the team cookie verifies only when signed with this salt and inside its li
     if (before === undefined) delete process.env.IP_HASH_SALT;
     else process.env.IP_HASH_SALT = before;
   }
+});
+
+test("4 Nov 2026: an outside partner's scan confirms with no email; any other ref is still gated", () => {
+  const scan = (ref: string | null, extra: Partial<{ team: boolean; domain: string }> = {}) => ({ team: false, domain: "prospect.example", ref, ...extra });
+  assert.equal(gateApplies(scan("thelab")), false, "The LAB's page: no gate");
+  for (const ref of [null, "x", "thelab-x", "THELAB", "nomada", "nomada-blog-post", "blog-some-post"]) {
+    assert.equal(gateApplies(scan(ref)), true, `ref ${ref} is not an outside partner, so the gate stands`);
+  }
+  assert.equal(gateApplies(scan(null, { team: true })), false, "a team browser");
+  assert.equal(gateApplies(scan(null, { domain: "nomadadigital.co.uk" })), false, "our own domain");
+  assert.deepEqual([...EXTERNAL_PARTNERS], ["thelab"]);
+  // The route enforces with the same rule the screen shows, and the confirm route refuses only when it applies.
+  const read = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
+  const route = read("../../app/api/scan/[token]/confirm/route.ts");
+  assert.match(route, /const gated = gateApplies\(\{ team, domain: String\(scan\.domain \?\? ""\), ref: scan\.ref as string \| null \}\);/);
+  assert.match(route, /\} else if \(gated\) \{\s*return Response\.json\(\{ error: "email_required"/);
+  assert.match(read("../../components/scan/ScanFlow.tsx"), /gate=\{gateApplies\(\{ team: Boolean\(p\.team\), domain: p\.domain, ref: p\.partner \?\? null \}\)\}/);
 });

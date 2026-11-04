@@ -13,6 +13,7 @@
 
 import { isPlausibleEmail } from "../email-address.ts";
 import { SCAN_LIMITS } from "../../config/contact.ts";
+import { externalPartner } from "./handoff.ts";
 
 /** The team's own domains: an address on one, or a scan of one, is internal (Danny, 3 Nov 2026). */
 export const INTERNAL_DOMAINS: readonly string[] = ["nomadadigital.co.uk", "alwayscited.com"];
@@ -67,4 +68,13 @@ export function checkLeadEmail(raw: unknown): LeadCheck {
 export function cleanLeadName(raw: unknown): string | null {
   const name = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim().slice(0, SCAN_LIMITS.name) : "";
   return name || null;
+}
+
+/**
+ * Whether the report gate stands in front of this scan's run (3-4 Nov 2026). The one rule the confirm route and the
+ * confirm screen both read, so the screen cannot hide a gate the route enforces or show one it waives. Skipped for a
+ * team browser, a scan of our own domain, and a scan from an outside partner's page (handoff.ts EXTERNAL_PARTNERS).
+ */
+export function gateApplies(s: { team: boolean; domain: string; ref: string | null | undefined }): boolean {
+  return !s.team && !isInternalDomain(s.domain) && !externalPartner(s.ref);
 }

@@ -104,7 +104,8 @@ const SECTIONS: Section[] = [
       <>
         The email address exists so we can send you the link to your report, and so a scan can be reclaimed if nobody
         opens it. It creates no account. We may also follow up by email about the report you asked for: our basis is
-        legitimate interests, one business writing to another about something it requested. If you gave a personal
+        legitimate interests, one business writing to another about something it requested. A check run from a partner
+        agency&apos;s own page is theirs: we send you the report and do not follow up. If you gave a personal
         address rather than a work one, we follow up only if you ticked the box. We send tips and news only if you
         ticked it; our basis for those is your consent. Every report email and follow-up carries an unsubscribe link,
         and unsubscribing stops both; your report link keeps working. What you give for a

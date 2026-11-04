@@ -6,6 +6,7 @@ import { cookies } from "next/headers";
 import ScanFlow from "@/components/scan/ScanFlow";
 import { isTeamCookie, TEAM_COOKIE } from "@/lib/team-cookie";
 import { maskEmail } from "@/lib/scan/mask-email";
+import { externalPartner } from "@/lib/scan/handoff";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { PARTNER_MARKETS } from "@/lib/scan/handoff";
 import { readMailOutcome } from "@/lib/scan/mail-outcome";
@@ -220,6 +221,8 @@ export default async function ScanTokenPage({
     <ScanFlow
       token={token}
       team={isTeamCookie((await cookies()).get(TEAM_COOKIE)?.value)}
+      // An outside partner's scan skips the report gate, as the route does (4 Nov 2026).
+      partner={externalPartner(scan.ref as string | null)}
       // Masked: a scan link is shared, and this is enough for its owner to recognise (3 Nov 2026).
       mailedTo={typeof scan.report_email === "string" && scan.report_email ? maskEmail(scan.report_email) : null}
       walkthrough={walkthrough}

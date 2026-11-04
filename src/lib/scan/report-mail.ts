@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import type { ReportCluster } from "./email-render";
 import { type CountableAnswer, reportCounts } from "./report-counts";
+import { externalPartner } from "./handoff";
 import { sendReportReadyEmail } from "./verify-email";
 
 /**
@@ -42,7 +43,7 @@ import { sendReportReadyEmail } from "./verify-email";
  */
 
 /** The columns a send needs, all of them already on the row. */
-const SEND_COLUMNS = "id, domain, brand_name, public_token, report_email, cluster_keyword, cluster_keyword_status";
+const SEND_COLUMNS = "id, domain, brand_name, public_token, report_email, cluster_keyword, cluster_keyword_status, ref";
 
 /**
  * Take the send, or find there is nothing to take.
@@ -59,6 +60,7 @@ type SendRow = {
   report_email: string | null;
   cluster_keyword: string | null;
   cluster_keyword_status: string | null;
+  ref: string | null;
 };
 
 async function claim(scanId: string): Promise<(SendRow & { report_email: string }) | null> {
@@ -143,6 +145,9 @@ export async function sendRequestedReport(scanId: string): Promise<void> {
       // can only recognise what was typed into the form.
       requestedFor: row.domain,
       cluster: reportCluster(row),
+      // An outside partner's prospect (handoff.ts EXTERNAL_PARTNERS): we do not follow up, so the message says nothing
+      // about follow-ups and carries no unsubscribe from them (4 Nov 2026).
+      partner: externalPartner(row.ref) !== null,
     });
 
     /**

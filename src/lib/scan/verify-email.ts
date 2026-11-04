@@ -129,6 +129,8 @@ export async function sendReportReadyEmail(input: {
   requestedFor?: string;
   /** The scan's cluster keyword from C1 on; null before it. See `ReportCluster`. */
   cluster?: ReportCluster | null;
+  /** An outside partner's scan: no follow-up line and no unsubscribe from follow-ups, which it will not get. */
+  partner?: boolean;
 }): Promise<string | null> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
@@ -146,9 +148,9 @@ export async function sendReportReadyEmail(input: {
       from: mailFrom(),
       to: input.email,
       subject,
-      html: reportHtml(E, FONT, input.brand, link, input.counts, input.requestedFor, input.cluster, unsub.page),
-      text: reportText(input.brand, link, input.counts, input.requestedFor, input.cluster, unsub.page),
-      headers: { "List-Unsubscribe": `<${unsub.oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" },
+      html: reportHtml(E, FONT, input.brand, link, input.counts, input.requestedFor, input.cluster, input.partner ? undefined : unsub.page),
+      text: reportText(input.brand, link, input.counts, input.requestedFor, input.cluster, input.partner ? undefined : unsub.page),
+      ...(input.partner ? {} : { headers: { "List-Unsubscribe": `<${unsub.oneClick}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" } }),
     });
     if (error) {
       console.error("[scan] report email rejected", error);

@@ -106,6 +106,11 @@ export const OFFER_COPY = {
    */
   // 3 Nov 2026: the gate's own wording. "Nothing else" stopped being true when follow-ups about the report began.
   privacy: "We'll email your report and may follow up about it. Unsubscribe any time.",
+  /**
+   * On an outside partner's scan (4 Nov 2026), the line it carried before the gate: the visitor is the partner's
+   * prospect, we do not follow up, so "nothing else" is true there.
+   */
+  privacyPartner: "We use it to send you this result and nothing else.",
 } as const;
 
 /** `queued`, naming the address the report gate took, or the masked one on a reload (3 Nov 2026). */

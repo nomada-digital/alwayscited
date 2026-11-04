@@ -31,6 +31,20 @@ export function handoffMarket(raw: unknown): "UK" | "US" | "JM" | null {
  */
 export const PARTNER_MARKETS: ReadonlyMap<string, readonly ("JM")[]> = new Map([["thelab", ["JM"] as const]]);
 
+/**
+ * Outside partners: agencies whose clients run the check from their own page, so the scan is the partner's prospect,
+ * never Nomada's lead (Danny, 4 Nov 2026: "make sure the email gate doesn't affect the partner links"). A scan whose
+ * ref is exactly one of these skips the report gate, as the partner's flow did before 3 Nov, and is stored with
+ * scans.partner so the hub leaves it out of new business. Not HANDOFF_PARTNERS: `nomada` and `blog` are our own
+ * entry points, and their scans are ours. A new partner (Cliff's planned link) is one entry here and its page.
+ */
+export const EXTERNAL_PARTNERS: ReadonlySet<string> = new Set(["thelab"]);
+
+/** The partner a ref names, or null. Exact match only: an arbitrary ?ref= never skips the gate. */
+export function externalPartner(ref: string | null | undefined): string | null {
+  return ref && EXTERNAL_PARTNERS.has(ref) ? ref : null;
+}
+
 /** Whether a scan with this ref may be run in this market: UK and US always, JM only for a partner that offers it. */
 export function partnerMayUse(ref: string | null | undefined, market: string): boolean {
   if (market === "UK" || market === "US") return true;
