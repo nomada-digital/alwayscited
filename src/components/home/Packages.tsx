@@ -199,7 +199,7 @@ export default function Packages({ full = false }: { full?: boolean }) {
           {full ? null : (
             // id="packages-compare" marks the end of the homepage band for price-surfaces.test.mts.
             <p id="packages-compare" style={{ margin: "32px 0 0", fontSize: "15px" }}>
-              <a href={PACKAGES_HREF} style={{ fontWeight: 600, textDecoration: "none", color: T.surface }}>
+              <a href={PACKAGES_HREF} style={{ fontWeight: 600, textDecoration: "none", color: T.surface, display: "inline-block", padding: "2px 0", minHeight: "24px" }}>
                 Compare all packages <span aria-hidden="true">→</span>
               </a>
             </p>
@@ -346,7 +346,7 @@ export default function Packages({ full = false }: { full?: boolean }) {
           <span>
             <TierName tier="cited" /> is built and run by the senior team at{" "}
             <a href="https://nomadadigital.co.uk" style={{ fontWeight: 600, textDecoration: "none", color: T.ink }}>
-              nomada digital
+              Nomada Digital
             </a>
             .
           </span>

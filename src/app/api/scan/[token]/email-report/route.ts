@@ -7,8 +7,8 @@ import { MAIL_OUTCOMES, type MailOutcome } from "@/lib/scan/mail-outcome";
 import { sendRequestedReport } from "@/lib/scan/report-mail";
 import { reportMailWaitMessage, reportMailWaitMs } from "@/lib/scan/report-mail-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { isWorkEmail } from "@/lib/work-email";
-import { workEmailBlockedExtra } from "@/lib/work-email-server";
+import { checkLeadEmail } from "@/lib/scan/lead-email";
+import { domainTakesMail } from "@/lib/scan/lead-email-mx";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -135,11 +135,14 @@ async function answer(req: Request, token: string, body: { email?: string }): Pr
       { status: 400 },
     );
   }
-  if (!isWorkEmail(email, await workEmailBlockedExtra())) {
-    return Response.json(
-      { error: "personal_email", message: MAIL_OUTCOMES.personal.message },
-      { status: 400 },
-    );
+  // 4 Nov 2026 (UX audit, Danny): a personal address is accepted and flagged, as the report gate does; a disposable
+  // inbox or a domain with no mail server is refused (lib/scan/lead-email.ts).
+  const lead = checkLeadEmail(email);
+  if (!lead.ok) {
+    return Response.json({ error: "bad_email", message: MAIL_OUTCOMES.disposable.message }, { status: 400 });
+  }
+  if (!lead.internal && !(await domainTakesMail(lead.domain))) {
+    return Response.json({ error: "bad_email", message: MAIL_OUTCOMES.nomail.message }, { status: 400 });
   }
 
   const db = supabaseAdmin();
@@ -241,7 +244,7 @@ async function answer(req: Request, token: string, body: { email?: string }): Pr
 
   const { error: writeErr } = await db
     .from("scans")
-    .update({ report_email: email, report_email_at: new Date().toISOString(), report_email_ip_hash: ipHash })
+    .update({ report_email: email, report_email_at: new Date().toISOString(), report_email_ip_hash: ipHash, email_free_domain: lead.free })
     .eq("id", scan.id)
     // Not over a message that has already gone. The read above is a tick old
     // and the pipeline can complete between the two, so the filter is the thing

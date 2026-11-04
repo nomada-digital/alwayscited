@@ -108,7 +108,7 @@ const SECTIONS: Section[] = [
         address rather than a work one, we follow up only if you ticked the box. We send tips and news only if you
         ticked it; our basis for those is your consent. Every report email and follow-up carries an unsubscribe link,
         and unsubscribing stops both; your report link keeps working. What you give for a
-        walkthrough or a demo is passed to Danny at nomada digital, who uses it to send you the video or arrange the
+        walkthrough or a demo is passed to Danny at Nomada Digital, who uses it to send you the video or arrange the
         call. For everything else, our lawful basis is legitimate interest in responding to a request you made.
       </>
     ),

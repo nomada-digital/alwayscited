@@ -180,6 +180,31 @@ function EngineMarks(p: { answers: EngineAnswer[]; size?: number }) {
   );
 }
 
+/**
+ * What the engine marks mean (UX audit, 4 Nov 2026: "the engine icons on the report have no legend"). Drawn with the
+ * same three treatments EngineMarks uses, and said in words, so it does not rest on colour.
+ */
+function MarksLegend() {
+  const mark = (border: string, faded: boolean): React.CSSProperties => ({
+    width: "14px",
+    height: "14px",
+    borderRadius: "4px",
+    border,
+    background: T.surface,
+    opacity: faded ? 0.42 : 1,
+    display: "inline-block",
+    verticalAlign: "-2px",
+    marginRight: "6px",
+  });
+  return (
+    <p data-figure="marks-legend" style={{ display: "flex", flexWrap: "wrap", gap: "4px 16px", margin: "0 0 12px", fontSize: "12.5px", color: T.soft }}>
+      <span><span aria-hidden="true" style={mark("1.5px solid " + T.accent, false)} />Engine named you</span>
+      <span><span aria-hidden="true" style={mark("1px solid " + T.line, true)} />Answered, did not name you</span>
+      <span><span aria-hidden="true" style={mark("1px dashed " + T.line, true)} />No answer</span>
+    </p>
+  );
+}
+
 function QuestionTable(p: { r: RunScanResponse; onOpen: (idx: number) => void }) {
   const qs = p.r.questions ?? [];
   if (!qs.length) return null;
@@ -191,6 +216,7 @@ function QuestionTable(p: { r: RunScanResponse; onOpen: (idx: number) => void })
       </Head>
       {/* ScanResult.dc.html: no header row; question, engine marks, Google
           position, the pill, and a chevron that says the row opens. */}
+      <MarksLegend />
       <div style={{ ...CARD, borderRadius: "18px", overflow: "hidden" }}>
         {qs.map((q, i) => {
           const label = questionPill(q);
@@ -359,6 +385,7 @@ function ClusterSection(p: { r: RunScanResponse; chosen: boolean; rank: string; 
       <Head title="Your first cluster">
         {"One keyword buyers search, and the " + word(qs.length) + (qs.length === 1 ? " prompt" : " prompts") + " they ask AI about it. Open a prompt to read what each engine said."}
       </Head>
+      <MarksLegend />
       <div className="clu-card" style={{ ...CARD, borderRadius: "18px", padding: "24px 24px 0" }}>
         <div className="clu-head" style={{ display: "grid", gridTemplateColumns: cols, gap: "14px", padding: "0 14px 10px", marginRight: "392px", fontSize: "12px", fontWeight: 600, color: T.soft }}>
           <span>Angle</span>
@@ -402,7 +429,7 @@ function ClusterSection(p: { r: RunScanResponse; chosen: boolean; rank: string; 
             <TierName tier="tracked" />
             {" checks this cluster every morning, and " + word(TRACKED_CLUSTERS - 1) + " more like it: " + TRACKED_PROMPTS + " prompts and " + TRACKED_KEYWORDS + " keywords, on the same " + word(p.r.engines.length) + " engines and Google."}
           </span>
-          <a href="#tracked" style={{ flexShrink: 0, fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none" }}>
+          <a href="#tracked" style={{ flexShrink: 0, fontSize: "14px", fontWeight: 600, color: T.accent, textDecoration: "none", padding: "2px 0", minHeight: "24px", display: "inline-block" }}>
             See what it tracks
           </a>
         </div>

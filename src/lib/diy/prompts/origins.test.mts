@@ -40,7 +40,7 @@ test("the chip's words, in nomada mode and in agency mode, where Nomada is never
   const o = (kind: PromptOrigin["kind"], domain: string | null = null) => ({ kind, domain });
   assert.equal(originLabel(o("setup"), "nomada"), "Setup");
   assert.equal(originLabel(o("client"), "nomada"), "You");
-  assert.equal(originLabel(o("nomada"), "nomada"), "nomada digital");
+  assert.equal(originLabel(o("nomada"), "nomada"), "Nomada Digital");
   assert.equal(originLabel(o("nomada"), "off"), "Your account contact", "off is also what a failed mode read answers, so Nomada is named only when the mode says nomada");
   assert.equal(originLabel(o("nomada"), "agency"), "Your account contact");
   assert.equal(originLabel(o("placement", "thesmallbizstack.com"), "nomada"), "Placement · thesmallbizstack.com");

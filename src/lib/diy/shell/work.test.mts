@@ -100,7 +100,7 @@ test("the work log lists prompts added after the first day with their origin; se
   ]);
   assert.deepEqual(promptsAdded({ questions, origins, mode: "nomada", startedOn: "2026-09-01" }), [
     { day: "2026-09-20", text: "invoicing for freelancers", origin: "You" },
-    { day: "2026-09-21", text: "best payroll tools", origin: "nomada digital" },
+    { day: "2026-09-21", text: "best payroll tools", origin: "Nomada Digital" },
   ]);
   const agency = promptsAdded({ questions, origins, mode: "agency", startedOn: "2026-09-01" });
   assert.ok(agency.every((p) => !/nomada/i.test(p.origin)), "agency mode never names Nomada");

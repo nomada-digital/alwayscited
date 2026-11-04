@@ -189,7 +189,7 @@ test("origin chips' words, and agency mode never names nomada", () => {
   assert.deepEqual(
     (["setup", "client", "nomada", "placement", "opportunity", "momentum", null] as const).map((o) => originLabel(o, "nomada")),
     // Review of P4 (13 Oct 2026): no recorded origin is no chip, never "Setup".
-    ["Setup", "You", "nomada digital", "Placement", "Opportunity", "Momentum", null],
+    ["Setup", "You", "Nomada Digital", "Placement", "Opportunity", "Momentum", null],
   );
   assert.equal(originLabel("nomada", "agency"), "Your account contact");
 });

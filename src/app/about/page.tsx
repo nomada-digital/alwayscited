@@ -19,13 +19,13 @@ import { CARD, MICRO, SHELL, T } from "@/config/tokens";
 export const metadata: Metadata = {
   title: "About us | AI citation placements for agencies",
   description:
-    "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at nomada digital, a B2B search agency in York.",
+    "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at Nomada Digital, a B2B search agency in York.",
   alternates: { canonical: "https://alwayscited.com/about" },
   openGraph: {
     images: OG_IMAGE,
     title: "About " + BRAND,
     description:
-      "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at nomada digital, York.",
+      "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at Nomada Digital, York.",
     url: "https://alwayscited.com/about",
   },
 };
@@ -35,7 +35,7 @@ const aboutSchema = {
   "@type": "AboutPage",
   name: "About " + BRAND,
   description:
-    "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at nomada digital, a B2B search agency in York.",
+    "An agency built the tool it wanted, then sold it to other agencies. Run by the senior team at Nomada Digital, a B2B search agency in York.",
   url: "https://alwayscited.com/about",
   isPartOf: SITE_REF,
   publisher: ORG_REF,
@@ -120,7 +120,7 @@ export default function AboutPage() {
                 href="https://nomadadigital.co.uk"
                 style={{ fontWeight: 600, textDecoration: "none", color: T.ink }}
               >
-                nomada digital
+                Nomada Digital
               </a>
               , a B2B search agency in York. We built the scan because we needed it for our own clients, and the
               placement side because measuring a gap we could not close was not worth charging for.

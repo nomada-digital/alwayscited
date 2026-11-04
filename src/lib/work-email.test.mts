@@ -119,7 +119,9 @@ const HANDLERS = walk(APP)
 // 3 Nov 2026: api/scan/[token]/confirm takes the report gate's address (Danny's call that day: "Accept free-mail
 // domains but flag them"). A free-mail address is accepted and stored with scans.email_free_domain for the hub; a
 // disposable inbox and a domain with no mail server are refused (lib/scan/lead-email.ts, lead-email-mx.ts).
-const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts", "api/checkout/offer/[token]/route.ts", "api/scan/[token]/confirm/route.ts"];
+// 4 Nov 2026 (UX audit, Danny): api/scan/[token]/email-report, the running screen's "email me" card, follows the gate -
+// a personal address accepted and flagged, a disposable inbox or a domain with no mail server refused.
+const EXEMPT = ["api/checkout/route.ts", "api/hub/offer/route.ts", "api/checkout/offer/[token]/route.ts", "api/scan/[token]/confirm/route.ts", "api/scan/[token]/email-report/route.ts"];
 
 const KNOWN = [
   "contact/actions.ts",
@@ -159,7 +161,11 @@ test("checkout keeps taking any plausible address, and does not promise a work e
 
 test("the forms with script run the same check before they post", () => {
   const SRC = new URL("../", import.meta.url).pathname;
-  for (const f of ["components/scan/RequestScanForm.tsx", "components/scan/WalkthroughForm.tsx", "components/scan/ScanFlow.tsx"]) {
+  for (const f of ["components/scan/RequestScanForm.tsx", "components/scan/WalkthroughForm.tsx"]) {
     assert.match(code(readFileSync(join(SRC, f), "utf8")), /isWorkEmail\(/, f);
+  }
+  // 4 Nov 2026: the scan's own two address fields run the gate's rules before they post instead.
+  for (const f of ["components/scan/ScanFlow.tsx", "components/scan/ConfirmScreen.tsx"]) {
+    assert.match(code(readFileSync(join(SRC, f), "utf8")), /checkLeadEmail\(/, f);
   }
 });

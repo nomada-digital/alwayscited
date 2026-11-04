@@ -30,8 +30,7 @@ import ConfirmScreen from "./ConfirmScreen";
 import ScanProgress from "./ScanProgress";
 import { MAIL_OUTCOMES, type MailOutcome } from "@/lib/scan/mail-outcome";
 import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
-import { isWorkEmail } from "@/lib/work-email";
-import { isInternalDomain } from "@/lib/scan/lead-email";
+import { checkLeadEmail, isInternalDomain } from "@/lib/scan/lead-email";
 
 import ResultView from "./ResultView";
 import RerunPanel from "./RerunPanel";
@@ -378,6 +377,13 @@ export default function ScanFlow(p: {
   const [fullError, setFullError] = useState("");
 
   const [progress, setProgress] = useState(0);
+  // When the pipeline entered the current step: ScanProgress paces the bar from here (UX audit, 4 Nov 2026).
+  const [stepAt, setStepAt] = useState(() => Date.now());
+  const [stepSeen, setStepSeen] = useState(0);
+  if (stepSeen !== progress) {
+    setStepSeen(progress);
+    setStepAt(Date.now());
+  }
   const [slow, setSlow] = useState(false);
   /**
    * The engines that have already finished, with what each one found.
@@ -842,8 +848,11 @@ export default function ScanFlow(p: {
    */
   async function onMailRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (mailTo.trim() && !isWorkEmail(mailTo)) {
-      setMailErr(MAIL_OUTCOMES.personal.message);
+    // The gate's rules, checked before the post (UX audit, 4 Nov 2026): a personal address is fine, a disposable one
+    // is said here rather than after the round trip. The route checks again, and the mail server too.
+    const check = checkLeadEmail(mailTo);
+    if (mailTo.trim() && !check.ok) {
+      setMailErr(check.message);
       return;
     }
     setMailErr("");
@@ -980,6 +989,7 @@ export default function ScanFlow(p: {
               questions={runCount}
               landed={landed}
               step={progress}
+              stepAt={stepAt}
               slow={slow}
               drawing={drawing}
               headingRef={headingRef}

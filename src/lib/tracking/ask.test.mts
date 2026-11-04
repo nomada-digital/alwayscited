@@ -17,8 +17,8 @@ function countDb(count: number | null, error: { message: string } | null = null)
 test("off asks nobody; agency asks its contact, or us when it has none; nomada asks us", () => {
   assert.equal(askRecipient("off", "a@agency.example"), null);
   assert.deepEqual(askRecipient("agency", "a@agency.example"), { to: "a@agency.example", who: "your account contact" });
-  assert.deepEqual(askRecipient("agency", null), { to: null, who: "nomada digital" });
-  assert.deepEqual(askRecipient("nomada", "a@agency.example"), { to: null, who: "nomada digital" });
+  assert.deepEqual(askRecipient("agency", null), { to: null, who: "Nomada Digital" });
+  assert.deepEqual(askRecipient("nomada", "a@agency.example"), { to: null, who: "Nomada Digital" });
   assert.equal(upsellMode("agency"), "agency");
   assert.equal(upsellMode("anything"), "nomada");
 });
@@ -53,10 +53,10 @@ test("the mail names the client, the member and the keyword, and no tier in agen
 });
 
 test("the toast, as the board's: who it went to and who will be answered", () => {
-  assert.equal(askToast("nomada digital", "m@example.com"), "Sent to nomada digital. We'll reply to m@example.com.");
+  assert.equal(askToast("Nomada Digital", "m@example.com"), "Sent to Nomada Digital. We'll reply to m@example.com.");
   assert.equal(askToast("your account contact", "m@example.com"), "Sent to your account contact. They'll reply to m@example.com.");
   // CTAs.dc.html, after "Ask about these".
-  assert.equal(askToast("nomada digital", "maya@tallyroo.com", "5 prompts"), "Sent to nomada digital with the 5 prompts attached. We'll reply to maya@tallyroo.com.");
+  assert.equal(askToast("Nomada Digital", "maya@tallyroo.com", "5 prompts"), "Sent to Nomada Digital with the 5 prompts attached. We'll reply to maya@tallyroo.com.");
 });
 
 test("R151 (3 Oct 2026): the day's cap says tomorrow, a failed send says later, and only those two codes are read", () => {

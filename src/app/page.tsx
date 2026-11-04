@@ -47,7 +47,7 @@ export default function HomePage() {
           Off 28 Sep with the stale cut, back with the re-cut (R118, 29 Sep). */}
       <div style={SHELL}>
         <p style={{ margin: 0, fontSize: "14px" }}>
-          <Link href="/how-it-works#video" style={{ fontWeight: 600, textDecoration: "none", color: T.accent }}>
+          <Link href="/how-it-works#video" style={{ fontWeight: 600, textDecoration: "none", color: T.accent, display: "inline-block", padding: "3px 0", minHeight: "24px" }}>
             Watch the 60-second version
           </Link>
         </p>

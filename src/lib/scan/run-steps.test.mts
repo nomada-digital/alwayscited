@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import { code, sourceFiles } from "../source-read.mts";
 
-import { ANSWERS_STEP, DONE_PCT, DRAWING_CAPTION, RUN_STEPS, STEP, STEP_INDEX, answersStored, stepCaption, stepPct } from "./run-steps.ts";
+import { ANSWERS_STEP, DONE_PCT, DRAWING_CAPTION, RUN_STEPS, STEP, STEP_INDEX, answersStored, pacedPct, stepCaption, stepPct } from "./run-steps.ts";
 
 /**
  * The step vocabulary, under test for the first time.
@@ -267,4 +267,15 @@ test("the waiting screen is not pinned by the pointer, and the handover is a tra
   assert.match(flow, /startTransition\(\(\) => \{[\s\S]*?setPhase\("result"\)/, "the early result swaps in as a transition");
   const seq = code(readFileSync(join(process.cwd(), "src/components/ProcessSequence.tsx"), "utf8"));
   assert.match(seq, /onMouseEnter=\{p\.pinOnHover === false \? undefined : hold\}/, "hover still pins on the homepage");
+});
+
+test("4 Nov 2026: the bar moves with time inside a step, never freezes, never reaches the next step early", () => {
+  const reading = 1;
+  const at = (ms: number) => pacedPct(reading, ms);
+  assert.equal(Math.round(at(0)), RUN_STEPS[0].pct, "it starts where the previous step ended");
+  assert.ok(at(30_000) > at(10_000) && at(60_000) > at(30_000) && at(300_000) > at(120_000), "always moving");
+  assert.ok(at(85_000) > 45, "most of the way by the step's expected time");
+  assert.ok(at(3_600_000) < RUN_STEPS[reading].pct, "never at the next figure before the pipeline is");
+  for (let i = 0; i < RUN_STEPS.length - 1; i++) assert.ok(pacedPct(i, 1e9) <= pacedPct(i + 1, 0) + 1e-9, `step ${i} never passes step ${i + 1}'s start`);
+  assert.equal(pacedPct(RUN_STEPS.length, 0), 100);
 });

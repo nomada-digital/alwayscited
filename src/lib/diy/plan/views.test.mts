@@ -94,9 +94,9 @@ test("the board: four columns in order, Suggested without the hidden ones, Dropp
   assert.deepEqual(filterItems(all, { kind: "opportunities", cluster: null, status: null }).map((i) => i.id), ["s1"]);
 });
 
-test("the Placements group's owner: nomada digital, or Your account contact in agency mode - never Nomada's name there", () => {
+test("the Placements group's owner: Nomada Digital, or Your account contact in agency mode - never Nomada's name there", () => {
   assert.equal(ownerLabel("nomada"), NOMADA_OWNER);
-  assert.equal(NOMADA_OWNER, "nomada digital");
+  assert.equal(NOMADA_OWNER, "Nomada Digital");
   assert.equal(ownerLabel("agency"), AGENCY_OWNER);
   assert.equal(AGENCY_OWNER, "Your account contact");
   assert.doesNotMatch(ownerLabel("agency"), /nomada/i);

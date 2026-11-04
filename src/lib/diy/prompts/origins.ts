@@ -14,7 +14,7 @@ import { missingColumn } from "../../tracking/limits.ts";
  * The columns are `tracked_questions.origin_kind`, `origin_ref` and
  * `allowance` (migration 20261013010000). A row with no `origin_kind` is a
  * legacy row, and its origin is read from `source`, whose check is unchanged:
- * `scan` is Setup, `client` is You, `nomada` is nomada digital.
+ * `scan` is Setup, `client` is You, `nomada` is Nomada Digital.
  *
  * Tolerant of the columns not being there yet (a deploy landing before its
  * migration): the read falls back to `id, source`, so every prompt still gets
@@ -99,7 +99,7 @@ export function originLabel(o: Pick<PromptOrigin, "kind" | "domain">, mode: Upse
     case "client":
       return "You";
     case "nomada":
-      return mode === "nomada" ? "nomada digital" : "Your account contact";
+      return mode === "nomada" ? "Nomada Digital" : "Your account contact";
     case "placement":
       return o.domain ? `Placement · ${o.domain}` : "Placement";
     case "opportunity":

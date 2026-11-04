@@ -55,7 +55,7 @@ export function originLabel(o: PromptOrigin | null, mode: "nomada" | "agency" | 
     case "client":
       return "You";
     case "nomada":
-      return mode === "agency" ? "Your account contact" : "nomada digital";
+      return mode === "agency" ? "Your account contact" : "Nomada Digital";
     case "placement":
       return "Placement";
     case "opportunity":

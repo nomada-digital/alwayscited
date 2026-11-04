@@ -25,7 +25,7 @@ import { SETUP_CONFIRMED_EVENT } from "../../tracking/setup-landing.ts";
  *
  * A failed read throws. A client whose setup or mode could not be read is
  * not a client with no setup: the dispatcher would then queue nothing paid,
- * and a page would say "nomada digital" in agency mode.
+ * and a page would say "Nomada Digital" in agency mode.
  */
 
 export type ClientStatus = "active" | "paused" | "ended";

@@ -1,4 +1,3 @@
-import { WORK_EMAIL_REFUSAL } from "../work-email.ts";
 
 /**
  * R151 (3 Oct 2026): the waiting screen's "email me the report" form posted
@@ -12,7 +11,9 @@ export const MAIL_OUTCOMES = {
   already: { ok: true, message: "That is already on its way to you." },
   long: { ok: false, message: "That email address is longer than an address can be." },
   bad: { ok: false, message: "That email does not look right." },
-  personal: { ok: false, message: WORK_EMAIL_REFUSAL },
+  // 4 Nov 2026: a personal address is accepted and flagged, as at the report gate (Danny); these two are refused.
+  disposable: { ok: false, message: "That looks like a disposable inbox. Use an address we can reach." },
+  nomail: { ok: false, message: "We can't find a mail server for that address. Check it and try again." },
   unfinished: { ok: false, message: "That check did not finish, so there is no report to send yet." },
   soon: { ok: false, message: "We could not send that just now. Please try again later." },
   failed: { ok: false, message: "We could not send that just now. Please try again." },

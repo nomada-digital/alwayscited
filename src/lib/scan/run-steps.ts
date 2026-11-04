@@ -197,3 +197,28 @@ export function stepPct(n: number): number {
   if (i >= RUN_STEPS.length) return DONE_PCT;
   return RUN_STEPS[i].pct;
 }
+
+/**
+ * Roughly how long each step takes, in ms (a scan is about two minutes end to end; scans.step_ms has the measured
+ * figures). Only used to pace the bar between the pipeline's own steps - never shown as a time.
+ */
+export const STEP_EXPECTED_MS: Record<RunStep, number> = { questions: 8_000, reading: 85_000, sources: 15_000, brands: 8_000, ranking: 6_000 };
+
+/**
+ * The bar, moving with time inside a step (UX audit, 4 Nov 2026: it sat at 55% for most of the wait, because it
+ * only moved when the pipeline wrote a new step and "reading" is most of the two minutes). During step `n` it eases
+ * from where the previous step ended towards this step's own figure, reaching about 86% of the way at the step's
+ * expected time and creeping on after, so it is never frozen - and never reaches the next figure before the
+ * pipeline does, so it never jumps backwards or shows done early. Past the last step, done.
+ */
+export function pacedPct(n: number, stepElapsedMs: number): number {
+  const i = Math.trunc(n);
+  if (Number.isNaN(i) || i < 0) return pacedPct(0, stepElapsedMs);
+  if (i >= RUN_STEPS.length) return DONE_PCT;
+  const start = i === 0 ? 3 : RUN_STEPS[i - 1].pct;
+  const end = RUN_STEPS[i].pct;
+  const tau = STEP_EXPECTED_MS[RUN_STEPS[i].key] / 2;
+  const t = Math.max(0, stepElapsedMs);
+  return start + (end - start) * (1 - Math.exp(-t / tau)) * 0.98;
+}
+

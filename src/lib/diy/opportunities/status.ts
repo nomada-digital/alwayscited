@@ -177,7 +177,7 @@ export function decideOpp(post: OppPost, opp: Pick<Opportunity, "status" | "purs
 
 /**
  * The toast's fixed words for a route answer. Nothing is echoed from the URL.
- * `who` is the ask's recipient as the page may name it: "nomada digital",
+ * `who` is the ask's recipient as the page may name it: "Nomada Digital",
  * or "your account contact" - always the latter in agency mode. `resets` is
  * the day this client's allowance month turns ("1 Nov"), and `allowanceLine`
  * the used-up line for its link checks, which Log a site and Verify now share.
@@ -198,7 +198,7 @@ export function oppToast(done: string | null, why: string | null, p: { cap: numb
     logged: "Logged. Its facts are below once it has been read.",
     already: "This page is already in your opportunities. Here it is.",
     verified: "Checked just now. The result is under Verification.",
-    asked: `Sent to ${p.who ?? "nomada digital"}. ${p.who && p.who !== "nomada digital" ? "They'll" : "We'll"} reply to ${p.member ?? "you"}.`,
+    asked: `Sent to ${p.who ?? "Nomada Digital"}. ${p.who && p.who !== "Nomada Digital" ? "They'll" : "We'll"} reply to ${p.member ?? "you"}.`,
     asked_agency: `Sent to your account contact. They'll reply to ${p.member ?? "you"}.`,
     prompt_added: "Prompt added. It is first asked tomorrow; Undo takes it back until then.",
     prompt_duplicate: "A prompt you track already measures this page. Nothing was added.",

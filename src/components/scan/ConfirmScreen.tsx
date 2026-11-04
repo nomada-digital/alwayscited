@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { SCAN_LIMITS } from "@/config/contact";
 import { isPlausibleEmail } from "@/lib/email-address";
+import { checkLeadEmail } from "@/lib/scan/lead-email";
 import { QUESTIONS } from "@/config/scan-shape";
 import { CARD, MICRO, T } from "@/config/tokens";
 import type { Market } from "@/lib/scan";
@@ -334,7 +335,12 @@ export default function ConfirmScreen(p: {
   const atMax = kept.length >= MAX_QUESTIONS;
   const needsWriting = stale || !writtenFor;
   // Nothing runs until there is an address to send the report to; writing the prompts needs none.
-  const hasEmail = isPlausibleEmail(leadEmail.trim());
+  // The gate's own rules, the ones the confirm route applies (lib/scan/lead-email.ts): said as the visitor leaves the
+  // field, and again on Run, so a disposable inbox is never first refused after the post (UX audit, 4 Nov 2026).
+  const emailCheck = checkLeadEmail(leadEmail);
+  const hasEmail = emailCheck.ok && isPlausibleEmail(emailCheck.email);
+  const [emailTouched, setEmailTouched] = useState(false);
+  const emailNote = emailTouched && leadEmail.trim() && !emailCheck.ok ? emailCheck.message : "";
   // The button stays live without one: a disabled button that looks enabled answered a click with nothing. run() says
   // what is missing and puts the cursor there instead.
   const canAct = topic.trim().length >= 2 && !writing && !p.running && (needsWriting || kept.length > 0);
@@ -345,7 +351,8 @@ export default function ConfirmScreen(p: {
   async function run() {
     if (!kept.length) return;
     if (p.gate && !hasEmail) {
-      setError(leadEmail.trim() ? "That email address does not look right." : "Tell us where to send the report.");
+      setEmailTouched(true);
+      setError(!emailCheck.ok ? emailCheck.message : "Tell us where to send the report.");
       emailRef.current?.focus();
       return;
     }
@@ -370,7 +377,8 @@ export default function ConfirmScreen(p: {
    */
   async function runBlind() {
     if (p.gate && !hasEmail) {
-      setError(leadEmail.trim() ? "That email address does not look right." : "Tell us where to send the report.");
+      setEmailTouched(true);
+      setError(!emailCheck.ok ? emailCheck.message : "Tell us where to send the report.");
       emailRef.current?.focus();
       return;
     }
@@ -463,14 +471,14 @@ export default function ConfirmScreen(p: {
                   onChange={(e) => setBrand(e.target.value)}
                   style={{ ...fieldStyle, width: "auto", flex: "1 1 160px", padding: "6px 10px", fontSize: "13.5px" }}
                 />
-                <button type="button" onClick={() => setEditingBrand(false)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: 0, cursor: "pointer" }}>
+                <button type="button" onClick={() => setEditingBrand(false)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: "4px 2px", minHeight: "24px", minWidth: "24px", cursor: "pointer" }}>
                   Done
                 </button>
               </span>
             ) : (
               <>
                 We&apos;ll look for <strong style={{ fontWeight: 600 }}>&ldquo;{brand.trim() || p.domain}&rdquo;</strong> in AI answers.{" "}
-                <button type="button" onClick={() => setEditingBrand(true)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: 0, cursor: "pointer" }}>
+                <button type="button" onClick={() => setEditingBrand(true)} style={{ fontFamily: "inherit", fontSize: "13px", fontWeight: 600, color: T.accent, background: "none", border: 0, padding: "4px 2px", minHeight: "24px", minWidth: "24px", cursor: "pointer" }}>
                   Edit
                 </button>
               </>
@@ -600,9 +608,16 @@ export default function ConfirmScreen(p: {
                 value={leadEmail}
                 placeholder="you@company.com"
                 onChange={(e) => setLeadEmail(e.target.value)}
-                aria-describedby="gate-email-note"
+                onBlur={() => setEmailTouched(true)}
+                aria-invalid={emailNote ? true : undefined}
+                aria-describedby={emailNote ? "gate-email-error gate-email-note" : "gate-email-note"}
                 style={fieldStyle}
               />
+              {emailNote ? (
+                <p id="gate-email-error" role="alert" style={{ margin: "6px 0 0", fontSize: "12.5px", lineHeight: 1.5, color: T.badFg }}>
+                  {emailNote}
+                </p>
+              ) : null}
               <p id="gate-email-note" style={{ margin: "6px 0 0", fontSize: "12.5px", lineHeight: 1.5, color: T.soft }}>
                 We&apos;ll email your report and may follow up about it. Unsubscribe any time.
               </p>
@@ -619,7 +634,7 @@ export default function ConfirmScreen(p: {
                 style={fieldStyle}
               />
               <label style={{ display: "flex", gap: "8px", alignItems: "flex-start", margin: "12px 0 0", fontSize: "13px", lineHeight: 1.45, color: T.ink, cursor: "pointer" }}>
-                <input id="gate-marketing" type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} style={{ marginTop: "2px", accentColor: T.accent }} />
+                <input id="gate-marketing" type="checkbox" checked={marketing} onChange={(e) => setMarketing(e.target.checked)} style={{ width: "24px", height: "24px", margin: "-3px 0 0", flexShrink: 0, accentColor: T.accent }} />
                 <span>Send me occasional AI visibility tips and news</span>
               </label>
             </fieldset>
@@ -666,7 +681,9 @@ export default function ConfirmScreen(p: {
               disabled={p.running}
               style={{
                 marginTop: "8px",
-                padding: 0,
+                // 24px tall at least: a tap target (UX audit, 4 Nov 2026).
+                padding: "4px 0",
+                minHeight: "24px",
                 fontFamily: "inherit",
                 fontSize: "12.5px",
                 fontWeight: 600,
@@ -838,7 +855,9 @@ export default function ConfirmScreen(p: {
                 background: "none",
                 border: 0,
                 cursor: atMax ? "default" : "pointer",
-                padding: 0,
+                // 24px tall at least: a tap target (UX audit, 4 Nov 2026).
+                padding: "4px 0",
+                minHeight: "24px",
               }}
             >
               Add a prompt
@@ -850,6 +869,22 @@ export default function ConfirmScreen(p: {
           <p style={{ margin: "10px 0 0", fontSize: "13px", color: T.warnFg }}>
             These were written for a different category. Rewrite them before you run.
           </p>
+        ) : null}
+        {/* On a phone the card with the run button sits above the prompts it acts on (UX audit, 4 Nov 2026), so the
+            same action is offered again under them. Same handler: without an address it says so and puts the
+            cursor in the email field above. */}
+        {!needsWriting && kept.length ? (
+          <div className="phone-only" style={{ marginTop: "16px" }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => void run()}
+              disabled={!canAct}
+              style={{ width: "100%", fontFamily: "inherit", fontSize: "15px", fontWeight: 600, border: 0, borderRadius: "10px", padding: "13px 20px", cursor: canAct ? "pointer" : "default" }}
+            >
+              {primaryLabel}
+            </button>
+          </div>
         ) : null}
       </section>
     </div>

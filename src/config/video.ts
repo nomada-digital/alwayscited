@@ -45,6 +45,6 @@ export const LAUNCH_VIDEO_SUMMARY: string[] = [
   `${TIER_PLAIN.tracked}: 10 clusters checked daily, each Google keyword joined to its five prompts. Reporting only.`,
   `${TIER_PLAIN.mentioned}: placements in the pages the engines already cite, links included - three a month, sold per cluster, tracked on the ${FREE_ENGINE_COUNT} engines the free scan reads plus Claude.`,
   `The ${TIER_PLAIN.cited} plan: link insertions and on-site work so the brand is cited as the source and the Google listing moves, sold per cluster.`,
-  `${TIER_PLAIN.everywhere}: earned media, then the answers - brand PR by nomada digital's own team. Book a call.`,
+  `${TIER_PLAIN.everywhere}: earned media, then the answers - brand PR by Nomada Digital's own team. Book a call.`,
   "It closes on the free scan: pick a domain and find out.",
 ];

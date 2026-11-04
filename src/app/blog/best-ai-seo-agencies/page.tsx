@@ -180,7 +180,7 @@ export default function Post() {
           <Link href="/" style={{ color: T.accent, fontWeight: 600 }}>
             AI SEO agency
           </Link>{" "}
-          service, built and run by the senior team at nomada digital, a search agency in York, in the UK.
+          service, built and run by the senior team at Nomada Digital, a search agency in York, in the UK.
         </P>
         <UL>
           <li>

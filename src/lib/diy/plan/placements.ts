@@ -5,13 +5,13 @@ import { type Day, formatDay } from "../../tracking/figures.ts";
  * The read-only Placements group at the foot of the Actions list on placed
  * tiers (13 Oct 2026, DIY P3; spec 10 sections 2.2 and 4.6). Pure.
  *
- * The owner is "nomada digital", or "Your account contact" in agency mode:
+ * The owner is "Nomada Digital", or "Your account contact" in agency mode:
  * the white-label fence (section 1.2) - in agency mode the app never names
  * Nomada. `off` mode is Nomada's own account with no upgrade prompts, so it
  * names Nomada as nomada mode does.
  */
 
-export const NOMADA_OWNER = "nomada digital";
+export const NOMADA_OWNER = "Nomada Digital";
 export const AGENCY_OWNER = "Your account contact";
 
 export function ownerLabel(mode: UpsellMode): string {

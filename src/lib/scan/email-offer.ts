@@ -92,7 +92,8 @@ export const OFFER_COPY = {
   // "Rather not wait?" - Danny, 2 Oct 2026, over the board's wording.
   heading: "Rather not wait?",
   body: "We will email the result the moment it is ready. You can close this tab and the scan keeps running.",
-  label: "Email address",
+  // "Work email", as at the report gate (UX audit, 4 Nov 2026); a personal address is still accepted.
+  label: "Work email",
   placeholder: "you@company.com",
   submit: "Email me",
   sending: "Saving",

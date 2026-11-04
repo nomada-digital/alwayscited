@@ -5,7 +5,9 @@ import { T } from "@/config/tokens";
 import { OFFER_COPY } from "@/lib/scan/email-offer";
 import { type EngineResult, engineVerdict, landingAnnouncement } from "@/lib/scan/engine-results";
 import { ENGINE_SPECS, knownEngines } from "@/lib/scan/engines";
-import { DRAWING_CAPTION, stepCaption, stepPct } from "@/lib/scan/run-steps";
+import { useEffect, useState } from "react";
+
+import { DRAWING_CAPTION, pacedPct, stepCaption } from "@/lib/scan/run-steps";
 
 /**
  * What the scan is actually doing, while it does it.
@@ -29,12 +31,20 @@ export default function ScanProgress(p: {
   questions?: number | null;
   landed?: EngineResult[];
   step: number;
+  /** When the pipeline entered `step` (ms since epoch): the bar paces itself from here (4 Nov 2026). */
+  stepAt?: number;
   slow?: boolean;
   /** The answers are stored and the result is being fetched to draw. */
   drawing?: boolean;
   headingRef?: React.Ref<HTMLHeadingElement>;
 }) {
-  const pct = stepPct(p.step);
+  // Re-rendered twice a second so the bar moves between the pipeline's steps rather than sitting still.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, []);
+  const pct = pacedPct(p.step, now - (p.stepAt ?? now));
   /**
    * Through `knownEngines`, which dedupes as well as filtering.
    *

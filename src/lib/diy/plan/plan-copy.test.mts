@@ -65,7 +65,7 @@ test("no score, no index, no causal ranking word in the rule-written lines", () 
 
 test("the brand never takes a capital, and Nomada is named only as the owner label agency mode replaces", () => {
   assert.deepEqual(hits(/AlwaysCited|Alwayscited|always cited/), []);
-  const nomada = hits(/["'`][^"'`]*nomada digital/i);
+  const nomada = hits(/["'`][^"'`]*Nomada Digital/i);
   assert.deepEqual(
     nomada.map((h) => h.split(": ")[0]),
     ["src/lib/diy/plan/placements.ts"],

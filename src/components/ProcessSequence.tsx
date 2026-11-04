@@ -541,7 +541,7 @@ function BeatEverywhere() {
             padding: "10px 0",
             borderBottom: n === COVERAGE.length - 1 ? undefined : hair,
             flexWrap: "wrap",
-            opacity: c.readBy ? 1 : 0.6,
+            // Not dimmed (UX audit, 4 Nov 2026): at 0.6 its grey text measured 2.4:1. "Read by no engine" says it.
           })}
         >
           <span style={{ minWidth: 0, flex: "1 1 180px" }}>

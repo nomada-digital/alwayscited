@@ -33,7 +33,7 @@ export const upsellMode = (v: unknown): UpsellMode => (v === "agency" || v === "
 export function askRecipient(mode: UpsellMode, agencyContact: string | null): { to: string | null; who: string } | null {
   if (mode === "off") return null;
   if (mode === "agency" && agencyContact) return { to: agencyContact, who: "your account contact" };
-  return { to: null, who: "nomada digital" };
+  return { to: null, who: "Nomada Digital" };
 }
 
 /** The "Ask us to pick one" keyword, trimmed and single-spaced, as the check route bounds it. */
@@ -173,7 +173,7 @@ export function upgradeAskMail(p: { brand: string; domain: string; member: strin
 
 /** The toast, as the board's: who it went to, what went with it, and who will be answered. */
 export const askToast = (who: string, member: string, attached?: string) =>
-  `Sent to ${who}${attached ? ` with the ${attached} attached` : ""}. ${who === "nomada digital" ? "We'll" : "They'll"} reply to ${member}.`;
+  `Sent to ${who}${attached ? ` with the ${attached} attached` : ""}. ${who === "Nomada Digital" ? "We'll" : "They'll"} reply to ${member}.`;
 
 /**
  * R151 (3 Oct 2026): a refused ask's line, by the route's `ask` code. The day's
