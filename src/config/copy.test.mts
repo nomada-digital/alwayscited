@@ -467,7 +467,27 @@ export function typedPrices(source: string, file: string): Hit[] {
 
 const FILES = textFiles(SRC);
 
-const MISCASED_HITS: Hit[] = FILES.flatMap((file) => {
+/**
+ * The brand sweep reads wider than the dash and price sweeps (Danny, 4 Nov 2026: alwayscited, alwaystracked and
+ * alwaysmentioned are lowercase and one word everywhere - site copy, emails, metadata, alt text). On top of FILES:
+ * every other text file under src (JSON fixtures the dashboards render, Markdown, HTML), the text files under public
+ * (the BIMI logo, the IndexNow key, anything served as it is), and next.config.ts, which writes response headers.
+ * Kept apart from FILES because crawled fixture text legitimately carries the dashes those sweeps forbid; the brand
+ * has no such excuse anywhere.
+ */
+function brandFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const child = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...brandFiles(child));
+    else if (/\.(json|md|txt|html|svg|xml|webmanifest)$/.test(entry.name) && !entry.name.includes(".test.")) out.push(child);
+  }
+  return out;
+}
+const PUBLIC = join(ROOT, "public");
+const BRAND_FILES = [...new Set([...FILES, ...brandFiles(SRC), ...brandFiles(PUBLIC), join(ROOT, "next.config.ts")])];
+
+const MISCASED_HITS: Hit[] = BRAND_FILES.flatMap((file) => {
   const source = readFileSync(file, "utf8");
   return miscasings(source).map((m) => ({ file: posix(file), line: lineAt(source, m.index), text: m.text }));
 });
@@ -635,6 +655,9 @@ test("each rule can still see what it is looking for", () => {
 });
 
 test("the brand and the tier names are never capitalised or split", () => {
+  // The floor: the walk reaches public/ and the JSON under src, so a walk that stops matching cannot read as clean.
+  assert.ok(BRAND_FILES.some((f) => posix(f).startsWith("public/")), "the brand sweep no longer reads public/");
+  assert.ok(BRAND_FILES.filter((f) => f.endsWith(".json")).length >= 20, "the brand sweep no longer reads the JSON under src");
   assert.deepEqual(
     say(MISCASED_HITS),
     [],
