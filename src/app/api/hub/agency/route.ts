@@ -1,6 +1,7 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { storeSheet } from "@/lib/links/sheet-store";
+import { budgetCap, budgetOverride, budgetWeight, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -18,7 +19,7 @@ export const maxDuration = 120;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["read", "set_brand", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "budget_override", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -47,6 +48,22 @@ export async function POST(req: Request) {
     switch (action) {
       case "read":
         return readAgency(db, client);
+      // The placement shortlist and its budget (5 Nov 2026, lib/csm/agency.ts). Agency only: prices, DRs and spend go
+      // to the hub's agency view in this answer and nowhere else.
+      case "shortlist_read":
+        return shortlistRead(db, client);
+      case "shortlist_run":
+        return shortlistRun(db, client, by, id("cluster_id"));
+      case "shortlist_decide":
+        return shortlistDecide(db, client, by, { id: id("id"), decision: b.decision, note: str("note") });
+      case "spend_record":
+        return spendRecord(db, client, by, { itemId: id("item_id"), amount: b.amount_usd, description: str("description"), month: str("month") });
+      case "budget_override":
+        return budgetOverride(db, client, by, { month: str("month"), amount: b.allocation_usd ?? null, reason: str("reason") });
+      case "budget_weight":
+        return budgetWeight(db, client, by, { weight: b.weight, excluded: b.excluded });
+      case "budget_cap":
+        return budgetCap(db, client, by, b.cap_usd);
       case "set_sheets":
         return setSheets(db, client, by, { insertions: b.insertions, placements: b.placements });
       case "set_brand":

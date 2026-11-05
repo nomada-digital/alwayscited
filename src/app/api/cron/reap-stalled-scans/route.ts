@@ -4,6 +4,7 @@ import { constantTimeEqual } from "@/lib/constant-time";
 import { dispatchDiyWork } from "@/lib/diy/core/dispatch";
 import { freeRead } from "@/lib/diy/core/doors";
 import { JOB_HANDLERS } from "@/lib/diy/wiring";
+import { autoShortlists } from "@/lib/csm/auto";
 import { retryUncheckedClusterRanks } from "@/lib/scan/cluster-rank";
 import { reapStalledFreePass, reapStalledGatedPass, STALL_AFTER_MS } from "@/lib/scan/stall";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -133,6 +134,17 @@ export async function GET(req: Request) {
     clusterRanks = { error };
   }
 
+  // The placement shortlist's automatic runs (5 Nov 2026, lib/csm/auto.ts): onboarded and changed clusters, and
+  // month end on the 1st. Inside the month's Fatgrid unit cap. Its own try, for the reason above.
+  let shortlists: Record<string, unknown>;
+  try {
+    shortlists = await autoShortlists(db);
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.warn(`[csm] automatic shortlists failed: ${error}`);
+    shortlists = { error };
+  }
+
   // Logged as well as returned. The response goes to Vercel's cron log, which
   // nobody reads on a quiet day; a scan being closed by this job means a
   // function was killed, and that is worth finding in the log next to whatever
@@ -153,6 +165,7 @@ export async function GET(req: Request) {
       tracking_runs_closed: tracking.length,
       diy,
       cluster_ranks: clusterRanks,
+      shortlists,
       // The ids, because the whole point of this job is that something was
       // wrong with these scans and the next question is always which ones.
       scans: free.length || gated.length ? { free, gated } : undefined,

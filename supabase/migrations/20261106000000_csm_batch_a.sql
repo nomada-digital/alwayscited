@@ -74,41 +74,65 @@ create table if not exists public.shortlist_items (
 );
 create index if not exists shortlist_items_client_idx on public.shortlist_items (client_domain_id, state, queue_month);
 
--- AGENCY-ONLY. The monthly placement budget threshold. Null until the rule from plan price is set (Danny); the
--- override table holds front-loaded months (Volunteero: ~4K a month of placements in months 1-3 on a 2K plan).
-create table if not exists public.placement_budgets (
-  client_domain_id  uuid primary key references public.client_domains(id) on delete cascade,
-  monthly_threshold numeric check (monthly_threshold is null or monthly_threshold >= 0),
-  currency          text not null default 'GBP' check (currency in ('GBP', 'USD')),
-  note              text check (note is null or char_length(note) <= 300),
-  updated_by        text check (updated_by is null or char_length(updated_by) <= 254),
-  updated_at        timestamptz not null default now()
+-- AGENCY-ONLY. The global monthly cap on what all clients' placements may cost together, in USD (Danny, 5 Nov 2026).
+-- One row. The amount is set in the database, never written in this repository: the repository is public and the
+-- cap is our cost. Null until it is set, and nothing is allocated while it is null.
+create table if not exists public.placement_budget_settings (
+  id             boolean primary key default true check (id),
+  global_cap_usd numeric check (global_cap_usd is null or global_cap_usd >= 0),
+  updated_by     text check (updated_by is null or char_length(updated_by) <= 254),
+  updated_at     timestamptz not null default now()
 );
 
--- AGENCY-ONLY.
+-- AGENCY-ONLY. Each client's share of the cap is weighted by its plan price (orders.monthly_amount). A row here
+-- replaces that weight, or leaves the client out of the split altogether; no row is the plan price.
+create table if not exists public.placement_budgets (
+  client_domain_id uuid primary key references public.client_domains(id) on delete cascade,
+  weight_override  numeric check (weight_override is null or weight_override >= 0),
+  excluded         boolean not null default false,
+  note             text check (note is null or char_length(note) <= 300),
+  updated_by       text check (updated_by is null or char_length(updated_by) <= 254),
+  updated_at       timestamptz not null default now()
+);
+
+-- AGENCY-ONLY. A client's allocation fixed for one month, to front-load placements. The others share what is left
+-- of the cap by weight; an override that would take the month's overrides past the cap is refused (lib/csm, not a
+-- constraint: the cap lives in another row).
 create table if not exists public.placement_budget_overrides (
   client_domain_id uuid not null references public.client_domains(id) on delete cascade,
   month            date not null check (extract(day from month) = 1),
-  threshold        numeric not null check (threshold >= 0),
+  allocation_usd   numeric not null check (allocation_usd >= 0),
   reason           text not null check (char_length(reason) between 3 and 300),
   updated_by       text not null check (char_length(updated_by) <= 254),
   updated_at       timestamptz not null default now(),
   primary key (client_domain_id, month)
 );
 
--- AGENCY-ONLY. What was actually spent on placements, recorded by Kev when he marks an item bought.
+-- AGENCY-ONLY. What was actually spent on placements, in USD, recorded by Kev when he marks an item bought.
 create table if not exists public.placement_spend (
   id                uuid primary key default gen_random_uuid(),
   client_domain_id  uuid not null references public.client_domains(id) on delete cascade,
   month             date not null check (extract(day from month) = 1),
   shortlist_item_id uuid references public.shortlist_items(id) on delete set null,
-  amount            numeric not null check (amount >= 0),
-  currency          text not null check (currency in ('GBP', 'USD')),
+  amount_usd        numeric not null check (amount_usd >= 0),
   description       text not null check (char_length(description) between 2 and 300),
   recorded_by       text not null check (char_length(recorded_by) <= 254),
   created_at        timestamptz not null default now()
 );
 create index if not exists placement_spend_client_month_idx on public.placement_spend (client_domain_id, month);
+
+-- AGENCY-ONLY. Every Fatgrid unit spent, whoever spent it: the shortlist, and the free scan's difficulty score,
+-- which already reads Fatgrid. On the Pro plan units are the bill, so the monthly cap (FATGRID_MONTHLY_UNIT_CAP)
+-- is checked against this before any read, and the agency view shows it.
+create table if not exists public.fatgrid_usage (
+  id               uuid primary key default gen_random_uuid(),
+  used_at          timestamptz not null default now(),
+  source           text not null check (source in ('shortlist', 'scan_difficulty', 'manual')),
+  client_domain_id uuid references public.client_domains(id) on delete set null,
+  run_id           uuid references public.shortlist_runs(id) on delete set null,
+  units            integer not null check (units >= 0)
+);
+create index if not exists fatgrid_usage_at_idx on public.fatgrid_usage (used_at);
 
 -- ---------------------------------------------------------------- phase 2: WLDM link insertions
 
@@ -181,13 +205,15 @@ create index if not exists client_messages_client_idx on public.client_messages 
 alter table public.fatgrid_listings enable row level security;
 alter table public.shortlist_runs enable row level security;
 alter table public.shortlist_items enable row level security;
+alter table public.placement_budget_settings enable row level security;
 alter table public.placement_budgets enable row level security;
 alter table public.placement_budget_overrides enable row level security;
 alter table public.placement_spend enable row level security;
 alter table public.sheet_column_maps enable row level security;
 alter table public.csm_tasks enable row level security;
 alter table public.client_messages enable row level security;
+alter table public.fatgrid_usage enable row level security;
 
-revoke all on table public.fatgrid_listings, public.shortlist_runs, public.shortlist_items, public.placement_budgets,
-  public.placement_budget_overrides, public.placement_spend, public.sheet_column_maps, public.csm_tasks,
-  public.client_messages from anon, authenticated;
+revoke all on table public.fatgrid_listings, public.shortlist_runs, public.shortlist_items,
+  public.placement_budget_settings, public.placement_budgets, public.placement_budget_overrides, public.placement_spend,
+  public.fatgrid_usage, public.sheet_column_maps, public.csm_tasks, public.client_messages from anon, authenticated;

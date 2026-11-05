@@ -22,3 +22,7 @@ test("too few known DRs, or no clean reading, leaves the default floor and says 
   assert.equal(drFloor([], "x.example", new Map()).source, "default");
   assert.deepEqual(topThree(clean("d", ["www.google.co.uk", "a.example", "A.example", "b.example", "c.example"]), "x.example"), ["a.example", "b.example", "c.example"]);
 });
+
+test("a social or user-generated platform is not a host the floor is measured against (Common, 29 Oct: uk.linkedin.com was second)", () => {
+  assert.deepEqual(topThree(clean("d", ["craftcms.com", "uk.linkedin.com", "onedarnleyroad.com", "www.reddit.com", "en.wikipedia.org", "agency.example"]), "common.agency"), ["craftcms.com", "onedarnleyroad.com", "agency.example"]);
+});

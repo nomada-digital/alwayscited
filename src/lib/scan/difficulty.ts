@@ -2,6 +2,7 @@ import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { selectAll } from "@/lib/supabase/page";
+import { recordUnits, unitsLeft } from "@/lib/csm/usage";
 
 import { normalizeDomain } from "./domain";
 import { type Listing, scoreDifficulty } from "./placement-difficulty";
@@ -74,8 +75,16 @@ export async function scoreScanDifficulty(scanId: string): Promise<number> {
   const placeable = rows.filter((r) => r.on_topic !== false);
   if (!placeable.length) return 0;
 
-  const listings = await readListings(placeable.map((r) => r.domain));
+  // Units are the bill on the Pro plan (5 Nov 2026): the scan stays within the month's Fatgrid cap, shared with the
+  // agency shortlist, and records what it spends. Past the cap a scan's placements read "Not scored", as with no key.
+  const left = await unitsLeft(db);
+  if (left < 1) {
+    console.warn(`[scan] placement difficulty skipped for ${scanId}: the month's Fatgrid units are used`);
+    return 0;
+  }
+  const listings = await readListings(placeable.slice(0, left).map((r) => r.domain));
   if (!listings) return 0;
+  await recordUnits(db, { source: "scan_difficulty", units: listings.size });
 
   const scored = placeable.slice(0, MAX_DOMAINS).map((r) => {
     const d = scoreDifficulty({ listing: listings.get(r.domain) ?? null, kind: r.kind });

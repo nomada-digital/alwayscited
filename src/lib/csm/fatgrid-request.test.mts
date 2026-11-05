@@ -31,6 +31,6 @@ test("a response item keeps only what the shortlist uses; prices and DRs are num
 });
 
 test("a cap from the environment is a positive integer or the default, never no cap", () => {
-  for (const raw of [undefined, "", "0", "-5", "abc", "2.5"]) assert.equal(capFrom(raw, FATGRID_DEFAULTS.unitCapPerRun), 50, String(raw));
+  for (const raw of [undefined, "", "0", "-5", "abc", "2.5"]) assert.equal(capFrom(raw, FATGRID_DEFAULTS.unitCapPerRun), FATGRID_DEFAULTS.unitCapPerRun, String(raw));
   assert.equal(capFrom("400", 50), 400);
 });

@@ -36,10 +36,10 @@ const batchA = readFileSync(join(MIGRATIONS, "20261106000000_csm_batch_a.sql"), 
 /** Every table the batch marks AGENCY-ONLY: the comment line, then its create table. */
 const AGENCY_TABLES = [...batchA.matchAll(/-- AGENCY-ONLY[^\n]*\n(?:--[^\n]*\n)*create table if not exists public\.([a-z_]+)/g)].map((m) => m[1]!);
 /** The ones that hold Fatgrid data or our costs: never named outside src/lib/csm. */
-const SECRET_TABLES = ["fatgrid_listings", "shortlist_runs", "shortlist_items", "placement_budgets", "placement_budget_overrides", "placement_spend"];
+const SECRET_TABLES = ["fatgrid_listings", "fatgrid_usage", "shortlist_runs", "shortlist_items", "placement_budget_settings", "placement_budgets", "placement_budget_overrides", "placement_spend"];
 
 test("the agency-only tables are locked: row level security on, no policy, no grant to the browser roles", () => {
-  assert.ok(AGENCY_TABLES.length >= 9, `found ${AGENCY_TABLES.length} AGENCY-ONLY tables`);
+  assert.ok(AGENCY_TABLES.length >= 11, `found ${AGENCY_TABLES.length} AGENCY-ONLY tables`);
   for (const t of SECRET_TABLES) assert.ok(AGENCY_TABLES.includes(t), `${t} is not marked AGENCY-ONLY`);
   const revoked = batchA.slice(batchA.indexOf("revoke all on table"));
   for (const t of AGENCY_TABLES) {

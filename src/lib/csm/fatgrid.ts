@@ -9,8 +9,8 @@ import { FATGRID_BASE, type InventoryFilters, type Listing, UnitBudget, inventor
  *
  * Keyed on FATGRID_API_KEY from the environment and nowhere else, the variable the scan's difficulty score already
  * uses. Every read spends from a UnitBudget and stops at its cap; the budget a run starts with is
- * `runBudget()`, FATGRID_UNIT_CAP (default FATGRID_DEFAULTS.unitCapPerRun). The daily cap is the caller's to check
- * against what earlier runs that day recorded. No key, an error or a refusal end the same way: the read returns what
+ * `runBudget()`, FATGRID_UNIT_CAP (default FATGRID_DEFAULTS.unitCapPerRun), cut further to what the month has left
+ * under FATGRID_MONTHLY_UNIT_CAP by the caller, which reads fatgrid_usage. No key, an error or a refusal end the same way: the read returns what
  * it has so far and says why it stopped. Never throws.
  */
 export type ReadOutcome = { listings: Listing[]; units: number; stopped: "done" | "capped" | "no_key" | "failed"; detail?: string };
@@ -19,8 +19,8 @@ export function runBudget(): UnitBudget {
   return new UnitBudget(capFrom(process.env.FATGRID_UNIT_CAP, FATGRID_DEFAULTS.unitCapPerRun));
 }
 
-export function dailyUnitCap(): number {
-  return capFrom(process.env.FATGRID_DAILY_UNIT_CAP, FATGRID_DEFAULTS.dailyUnitCap);
+export function monthlyUnitCap(): number {
+  return capFrom(process.env.FATGRID_MONTHLY_UNIT_CAP, FATGRID_DEFAULTS.monthlyUnitCap);
 }
 
 /** `domains_list`, page by page, until the inventory or the budget runs out. */

@@ -95,7 +95,9 @@ function declaredUnique(): Map<string, Set<string>> {
         // A table-level `primary key (a, b)` is a unique key too (9 Oct 2026, AG-1:
         // dashboard_member_clients is keyed on the pair). Before this it was read as a
         // column named "primary", which no upsert names.
-        const constraint = /^(?:constraint\s+[a-z_0-9]+\s+)?(?:unique|primary\s+key)\s*\(([^)]*)\)/i.exec(item);
+        // `unique nulls not distinct (...)` (Postgres 15) is a unique key whose nulls also collide (6 Nov 2026:
+        // shortlist_items, whose cluster may be null).
+        const constraint = /^(?:constraint\s+[a-z_0-9]+\s+)?(?:unique(?:\s+nulls\s+not\s+distinct)?|primary\s+key)\s*\(([^)]*)\)/i.exec(item);
         if (constraint) {
           add(table, constraint[1].split(","));
           continue;
@@ -302,6 +304,9 @@ test("the upsert sites are the ones we think they are", () => {
       "email_suppressions:email",
       // 2 Nov 2026, sg-37: the data connections' daily pull, one row per client, day, source and medium on ga4_daily's
       // unique in 20261102000000_ga4_daily.sql (lib/dash/connect-io.ts).
+      // 6 Nov 2026, the CSM build (20261106000000, lib/csm): Fatgrid's listings cached by domain, the shortlist's items
+      // on their four-column key, the per-client budget row, a month's override and the one settings row.
+      "fatgrid_listings:domain",
       "ga4_daily:client_domain_id,day,medium,source",
       // 13 Oct 2026, DIY P6 (spec 10 sections 5.8 and 6.6): the footprint job
       // stores one pull per client per day on keyword_footprints' unique
@@ -330,6 +335,9 @@ test("the upsert sites are the ones we think they are", () => {
       // (opportunities/record.ts writePageRead), on page_reads' unique (client_domain_id, url_key)
       // in 20261014070000_opportunities.sql.
       "page_reads:client_domain_id,url_key",
+      "placement_budget_overrides:client_domain_id,month",
+      "placement_budget_settings:id",
+      "placement_budgets:client_domain_id",
         "scan_answers:engine,question_id",
       "scan_brands:brand,engine,scan_id",
       "scan_sources:domain,scan_id",
@@ -344,6 +352,7 @@ test("the upsert sites are the ones we think they are", () => {
       "search_console_queries:client_domain_id,page,period_end,provider,query",
       "sheet_links:client_domain_id,kind,url_key",
       "sheet_syncs:client_domain_id,kind",
+      "shortlist_items:client_domain_id,cluster_id,domain,kind",
       // 29 Sep 2026, the daily tracking runner (T1), each on its own unique
       // constraint in 20260929000000_tracking_dashboard.sql: one run per client
       // per day, one answer per run, question and engine, one SERP per keyword.

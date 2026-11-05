@@ -403,6 +403,20 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     evidence: /await runOnDemand\(\{ db, client: diy, member: email!, action: "link_check" \}/,
     where: "src/app/api/app/[client]/links/route.ts",
   },
+  /**
+   * 6 Nov 2026, the CSM build. The agency view's door (hub-auth.ts: the hub's server secret or project key, and a
+   * staff @nomadadigital.co.uk actor), not a visitor's scan, so checkCeilings is the wrong guard. Its paid action is
+   * shortlist_run, Fatgrid reads bounded by the per-run and monthly unit caps. (Its change_keyword already read the
+   * site and drafted with the model; the census named it a spender only once the shortlist joined PAID.)
+   */
+  "hub/agency": {
+    why:
+      "Staff only, server to server: hubAuthorised and a @nomadadigital.co.uk actor before any action. shortlist_run " +
+      "reads Fatgrid within FATGRID_UNIT_CAP a run, cut to what FATGRID_MONTHLY_UNIT_CAP has left in fatgrid_usage; " +
+      "a month with no units left reads nothing.",
+    evidence: /if \(left < budget\.cap\) budget\.spend\(budget\.cap - left\);/,
+    where: "src/lib/csm/shortlist.ts",
+  },
   "cron/purge-responses": {
     why:
       "DIY night pass 1 at 03:30 UTC, behind CRON_SECRET. Makes the two free vendor reads (cost 0) once a UTC day, " +
@@ -416,7 +430,9 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
       "DIY night pass 2 at 03:45 UTC, behind CRON_SECRET: the same dispatch, posting its two workers only while " +
       "claimable due jobs remain. Every paid read is reserved and capped by the DIY ledger before it goes out. " +
       "Since 3 Nov 2026 it also reads again the scans whose Google position could not be checked: one SERP read " +
-      "each, RETRIES_PER_PASS (30) a pass, scans from the last RETRY_DAYS only - held by its own test in cluster-rank.test.mts.",
+      "each, RETRIES_PER_PASS (30) a pass, scans from the last RETRY_DAYS only - held by its own test in cluster-rank.test.mts. " +
+      "Since 6 Nov 2026 it builds placement shortlists (lib/csm/auto.ts): MAX_RUNS_A_NIGHT runs, each cut to " +
+      "FATGRID_UNIT_CAP and to what FATGRID_MONTHLY_UNIT_CAP has left in fatgrid_usage, stopping when nothing is left.",
     evidence: /if \(out\.pending === 0\) return out;/,
     where: "src/lib/diy/core/dispatch.ts",
   },
@@ -730,8 +746,12 @@ test("the kill switch is read in one place, so its reach is exactly the guarded 
      * keyword check (per-client daily cap) and once-only internal mail as
      * `app/[client]/check` and `app/[client]/setup`. They start no scan, so
      * `scans_enabled` has nothing to refuse and the decision is not moved.
+     *
+     * Twenty-one on 6 Nov 2026 (the CSM build): `hub/agency`, the agency view's staff-only door, whose shortlist_run
+     * reads Fatgrid within the per-run and monthly unit caps. It starts no scan; the unit caps are its bound, so
+     * `scans_enabled` has nothing to refuse and the decision is not moved.
      */
-    20,
+    21,
     "the number of spending doors the kill switch does not reach has changed - see docs/blocked.md",
   );
 });
