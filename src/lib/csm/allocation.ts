@@ -73,12 +73,14 @@ export function monthBudget(p: { cap: number | null; clients: readonly ClientWei
   const clients = p.clients.map((c) => {
     const o = p.overrides.get(c.clientId) ?? null;
     const share = shareOf(c);
-    const allocation = cents(o ? o.amount : sharedWeight > 0 ? (pool * weightOf(c)) / sharedWeight : 0);
+    // Shares round down to the cent so they never add up past the pool (6 Nov 2026: rounding showed $750.01 of $750).
+    const allocation = o ? cents(o.amount) : sharedWeight > 0 ? Math.floor((pool * weightOf(c) * 100) / sharedWeight) / 100 : 0;
     const spent = spentOf(c.clientId);
     return { clientId: c.clientId, allocation, share, overridden: o !== null, approvedBy: o?.approvedBy ?? null, overShareBy: o ? cents(Math.max(0, o.amount - share)) : 0, spent, remaining: cents(allocation - spent), breach: spent > allocation };
   });
   const allocated = cents(clients.reduce((a, c) => a + c.allocation, 0));
-  const overCapBy = p.cap === null ? 0 : cents(Math.max(0, allocated - p.cap));
+  // Only an approved override can take the month past the cap; the shared pool never does.
+  const overCapBy = p.cap === null ? 0 : cents(Math.max(0, fixedTotal - p.cap));
   const approvals = [...new Set(clients.filter((c) => c.overridden && c.overShareBy > 0).map((c) => c.approvedBy!))];
   for (const c of clients) if (c.overridden && c.overShareBy > 0) warnings.push(`${c.clientId}: over its share by $${c.overShareBy}, approved by ${c.approvedBy}.`);
   if (overCapBy > 0) warnings.push(`Allocations are over the $${p.cap} cap by $${overCapBy}, approved by ${approvals.join(", ")}.`);

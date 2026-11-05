@@ -45,6 +45,13 @@ test("an override covers its run of months; two may not overlap", () => {
   assert.equal(checkRange({ startMonth: "2027-03-01", endMonth: "2027-01-01" }, []).ok, false);
 });
 
+test("shares that do not divide evenly never add up past the cap, and are not shown as over it", () => {
+  const b = monthBudget({ cap: 750, clients: [client("a", 100), client("b", 100), client("c", 100)], overrides: new Map(), spent: new Map() });
+  assert.ok(b.allocated <= 750, String(b.allocated));
+  assert.equal(b.overCapBy, 0);
+  assert.equal(b.warnings.some((w) => /over the/.test(w)), false);
+});
+
 test("spend against the cap in total, and a warning before an item that would breach", () => {
   const b = monthBudget({ cap: CAP, clients: [client("a", 100), client("b", 100)], overrides: new Map(), spent: new Map([["a", 400], ["b", 450]]) });
   assert.equal(b.spent, 850);
