@@ -62,7 +62,7 @@ export function monthBudget(p: { cap: number | null; clients: readonly ClientWei
   const warnings: string[] = [];
   const spentOf = (id: string) => cents(p.spent.get(id) ?? 0);
   const allWeight = p.clients.reduce((a, c) => a + weightOf(c), 0);
-  const shareOf = (c: ClientWeight) => (p.cap !== null && allWeight > 0 ? cents((p.cap * weightOf(c)) / allWeight) : 0);
+  const shareOf = (c: ClientWeight) => (p.cap !== null && allWeight > 0 ? Math.floor((p.cap * weightOf(c) * 100) / allWeight) / 100 : 0);
   const known = new Set(p.clients.map((c) => c.clientId));
   const fixed = [...p.overrides].filter(([id]) => known.has(id));
   const fixedTotal = fixed.reduce((a, [, o]) => a + o.amount, 0);
