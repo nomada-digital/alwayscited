@@ -95,17 +95,32 @@ create table if not exists public.placement_budgets (
   updated_at       timestamptz not null default now()
 );
 
--- AGENCY-ONLY. A client's allocation fixed for one month, to front-load placements. The others share what is left
--- of the cap by weight; an override that would take the month's overrides past the cap is refused (lib/csm, not a
--- constraint: the cap lives in another row).
+-- AGENCY-ONLY. A client's own placement budget, set deliberately for a run of months (Danny, 5 Nov 2026: front-loading
+-- is context added client by client, not a rule - e.g. a 12-month commitment whose first three months get more).
+-- start_month and end_month are optional: no start is "from now", no end is "until cleared". It may exceed the
+-- client's share and the cap: that is shown as "over cap by $X, approved by <name>", never refused. The others share
+-- what is left of the cap by weight. Ranges for one client do not overlap (lib/csm, at save).
 create table if not exists public.placement_budget_overrides (
+  id               uuid primary key default gen_random_uuid(),
   client_domain_id uuid not null references public.client_domains(id) on delete cascade,
-  month            date not null check (extract(day from month) = 1),
-  allocation_usd   numeric not null check (allocation_usd >= 0),
+  start_month      date check (start_month is null or extract(day from start_month) = 1),
+  end_month        date check (end_month is null or extract(day from end_month) = 1),
+  monthly_usd      numeric not null check (monthly_usd >= 0),
   reason           text not null check (char_length(reason) between 3 and 300),
-  updated_by       text not null check (char_length(updated_by) <= 254),
+  approved_by      text not null check (char_length(approved_by) <= 254),
+  created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
-  primary key (client_domain_id, month)
+  check (start_month is null or end_month is null or end_month >= start_month)
+);
+create index if not exists placement_budget_overrides_client_idx on public.placement_budget_overrides (client_domain_id, start_month);
+
+-- AGENCY-ONLY. The commercial context Kev or Danny keeps on a client: what was agreed, in their words ("12-month
+-- commitment at 2k/mo; front-load ~4k/mo placements months 1-3"). Who wrote it and when ride with it.
+create table if not exists public.client_commercial_context (
+  client_domain_id uuid primary key references public.client_domains(id) on delete cascade,
+  notes            text not null default '' check (char_length(notes) <= 4000),
+  updated_by       text not null check (char_length(updated_by) <= 254),
+  updated_at       timestamptz not null default now()
 );
 
 -- AGENCY-ONLY. What was actually spent on placements, in USD, recorded by Kev when he marks an item bought.
@@ -208,6 +223,7 @@ alter table public.shortlist_items enable row level security;
 alter table public.placement_budget_settings enable row level security;
 alter table public.placement_budgets enable row level security;
 alter table public.placement_budget_overrides enable row level security;
+alter table public.client_commercial_context enable row level security;
 alter table public.placement_spend enable row level security;
 alter table public.sheet_column_maps enable row level security;
 alter table public.csm_tasks enable row level security;
@@ -215,5 +231,6 @@ alter table public.client_messages enable row level security;
 alter table public.fatgrid_usage enable row level security;
 
 revoke all on table public.fatgrid_listings, public.shortlist_runs, public.shortlist_items,
-  public.placement_budget_settings, public.placement_budgets, public.placement_budget_overrides, public.placement_spend,
+  public.placement_budget_settings, public.placement_budgets, public.placement_budget_overrides,
+  public.client_commercial_context, public.placement_spend,
   public.fatgrid_usage, public.sheet_column_maps, public.csm_tasks, public.client_messages from anon, authenticated;

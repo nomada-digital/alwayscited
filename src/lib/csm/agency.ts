@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { audit } from "@/lib/agency/edit";
 
-import { type ClientWeight, type MonthBudget, checkOverride, monthBudget, wouldBreach } from "./allocation";
+import { type ClientWeight, type MonthBudget, type Override, type OverrideRange, checkRange, monthBudget, overrideFor, wouldBreach } from "./allocation";
 import { monthlyUnitCap, runBudget } from "./fatgrid";
 import { buildShortlist } from "./shortlist";
 import { unitsThisMonth } from "./usage";
@@ -43,7 +43,8 @@ export async function readMonthBudget(db: SupabaseClient, month = monthOf()): Pr
     db.from("client_domains").select("id, tier").eq("status", "active").is("archived_at", null).in("tier", PLACEMENT_TIERS),
     db.from("orders").select("client_domain_id, monthly_amount, currency, created_at").not("client_domain_id", "is", null).order("created_at", { ascending: false }),
     db.from("placement_budgets").select("client_domain_id, weight_override, excluded"),
-    db.from("placement_budget_overrides").select("client_domain_id, allocation_usd").eq("month", month),
+    // Every range, filtered here: a client has a handful at most, and "covers this month" is two open-ended bounds.
+    db.from("placement_budget_overrides").select("id, client_domain_id, start_month, end_month, monthly_usd, approved_by"),
     db.from("placement_spend").select("client_domain_id, amount_usd").eq("month", month),
   ]);
   const err = settingsErr ?? clientsErr ?? ordersErr ?? weightsErr ?? overridesErr ?? spendErr;
@@ -61,8 +62,23 @@ export async function readMonthBudget(db: SupabaseClient, month = monthOf()): Pr
   const spent = new Map<string, number>();
   for (const s of spendRows ?? []) spent.set(s.client_domain_id as string, (spent.get(s.client_domain_id as string) ?? 0) + Number(s.amount_usd));
   const cap = settingsRow?.global_cap_usd === null || settingsRow?.global_cap_usd === undefined ? null : Number(settingsRow.global_cap_usd);
-  return monthBudget({ cap, clients: list, overrides: new Map((overrideRows ?? []).map((o) => [o.client_domain_id as string, Number(o.allocation_usd)])), spent });
+  const ranges = new Map<string, OverrideRange[]>();
+  for (const o of overrideRows ?? []) ranges.set(o.client_domain_id as string, [...(ranges.get(o.client_domain_id as string) ?? []), rangeOf(o)]);
+  const overrides = new Map<string, Override>();
+  for (const [id, rs] of ranges) {
+    const r = overrideFor(month, rs);
+    if (r) overrides.set(id, { amount: r.monthlyUsd, approvedBy: r.approvedBy });
+  }
+  return monthBudget({ cap, clients: list, overrides, spent });
 }
+
+const rangeOf = (o: Record<string, unknown>): OverrideRange => ({
+  id: o.id as string,
+  startMonth: (o.start_month as string | null) ?? null,
+  endMonth: (o.end_month as string | null) ?? null,
+  monthlyUsd: Number(o.monthly_usd),
+  approvedBy: o.approved_by as string,
+});
 
 export async function shortlistRead(db: SupabaseClient, client: Client): Promise<Done> {
   const [{ data: itemRows, error: itemsErr }, { data: runRows, error: runsErr }, budget, units] = await Promise.all([
@@ -127,25 +143,73 @@ export async function spendRecord(db: SupabaseClient, client: Client, by: string
   return { ok: true, message: `Recorded.${b.warnings.length ? ` ${b.warnings.join(" ")}` : ""}`, data: { warnings: b.warnings } };
 }
 
-export async function budgetOverride(db: SupabaseClient, client: Client, by: string, p: { month: string; amount: unknown; reason: string }): Promise<Done> {
-  if (!isMonth(p.month)) return { ok: false, message: "A month, as its first day (YYYY-MM-01)." };
-  if (p.amount === null || p.amount === "") {
-    const { error } = await db.from("placement_budget_overrides").delete().eq("client_domain_id", client.id).eq("month", p.month);
-    if (error) return { ok: false, message: `Not cleared: ${error.message}` };
-    await audit(db, client.id, by, "budget_override_cleared", p.month, null, null);
-    return { ok: true, message: "Override cleared: this client's share is by plan price again." };
-  }
-  const amount = money(p.amount);
-  if (amount === null || p.reason.trim().length < 3) return { ok: false, message: "An allocation in USD and a reason." };
-  const { data: cap, error: cErr } = await db.from("placement_budget_settings").select("global_cap_usd").eq("id", true).maybeSingle();
-  const { data: rows, error: oErr } = await db.from("placement_budget_overrides").select("client_domain_id, allocation_usd").eq("month", p.month);
-  if (cErr ?? oErr) return { ok: false, message: `Could not read the budget: ${(cErr ?? oErr)!.message}` };
-  const fit = checkOverride({ cap: cap?.global_cap_usd === null || cap?.global_cap_usd === undefined ? null : Number(cap.global_cap_usd), clientId: client.id, amount, overrides: new Map((rows ?? []).map((r) => [r.client_domain_id as string, Number(r.allocation_usd)])) });
-  if (!fit.ok) return fit;
-  const { error } = await db.from("placement_budget_overrides").upsert({ client_domain_id: client.id, month: p.month, allocation_usd: amount, reason: p.reason.trim().slice(0, 300), updated_by: by, updated_at: new Date().toISOString() }, { onConflict: "client_domain_id,month" });
+/**
+ * The client's commercial context (Danny, 5 Nov 2026): notes on the deal, and its placement budget overrides - each a
+ * monthly amount over an optional start and end month. An override may deliberately exceed the client's share and the
+ * global cap; it is never refused, only shown, "over cap by $X, approved by <name>". A month has one override at most.
+ */
+export async function contextRead(db: SupabaseClient, client: Client): Promise<Done> {
+  const [{ data: note, error: nErr }, { data: rows, error: oErr }, budget] = await Promise.all([
+    db.from("client_commercial_context").select("notes, updated_by, updated_at").eq("client_domain_id", client.id).maybeSingle(),
+    db.from("placement_budget_overrides").select("id, start_month, end_month, monthly_usd, reason, approved_by, created_at, updated_at").eq("client_domain_id", client.id).order("start_month", { ascending: true, nullsFirst: true }),
+    readMonthBudget(db),
+  ]);
+  if (nErr ?? oErr) return { ok: false, message: `Could not read the commercial context: ${(nErr ?? oErr)!.message}` };
+  const mine = budget.clients.find((c) => c.clientId === client.id) ?? null;
+  return {
+    ok: true,
+    message: "ok",
+    data: {
+      notes: note?.notes ?? "",
+      notesUpdatedBy: note?.updated_by ?? null,
+      notesUpdatedAt: note?.updated_at ?? null,
+      overrides: rows ?? [],
+      month: { month: monthOf(), mine, cap: budget.cap, allocated: budget.allocated, overCapBy: budget.overCapBy, approvals: budget.approvals, warnings: budget.warnings },
+    },
+  };
+}
+
+export async function contextSave(db: SupabaseClient, client: Client, by: string, notes: string): Promise<Done> {
+  const text = notes.trim();
+  if (text.length > 4000) return { ok: false, message: "Notes are 4,000 characters at most." };
+  const { data: before, error: bErr } = await db.from("client_commercial_context").select("notes").eq("client_domain_id", client.id).maybeSingle();
+  if (bErr) return { ok: false, message: `Could not read the notes: ${bErr.message}` };
+  const { error } = await db.from("client_commercial_context").upsert({ client_domain_id: client.id, notes: text, updated_by: by, updated_at: new Date().toISOString() }, { onConflict: "client_domain_id" });
   if (error) return { ok: false, message: `Not saved: ${error.message}` };
-  await audit(db, client.id, by, "budget_override", p.month, null, amount);
-  return { ok: true, message: "Override saved. The other clients share what is left of the cap." };
+  await audit(db, client.id, by, "commercial_context", null, before?.notes ?? null, text);
+  return { ok: true, message: "Saved." };
+}
+
+export async function overrideSet(db: SupabaseClient, client: Client, by: string, p: { id: string; start: string; end: string; amount: unknown; reason: string }): Promise<Done> {
+  const startMonth = p.start || null;
+  const endMonth = p.end || null;
+  if ((startMonth && !isMonth(startMonth)) || (endMonth && !isMonth(endMonth))) return { ok: false, message: "Months as their first day (YYYY-MM-01), or empty for open-ended." };
+  const amount = money(p.amount);
+  const reason = p.reason.trim();
+  if (amount === null || reason.length < 3) return { ok: false, message: "A monthly amount in USD and a reason." };
+  const { data: rows, error: oErr } = await db.from("placement_budget_overrides").select("id, client_domain_id, start_month, end_month, monthly_usd, approved_by").eq("client_domain_id", client.id);
+  if (oErr) return { ok: false, message: `Could not read the overrides: ${oErr.message}` };
+  const fit = checkRange({ id: p.id || undefined, startMonth, endMonth }, (rows ?? []).map(rangeOf));
+  if (!fit.ok) return fit;
+  const row = { client_domain_id: client.id, start_month: startMonth, end_month: endMonth, monthly_usd: amount, reason: reason.slice(0, 300), approved_by: by, updated_at: new Date().toISOString() };
+  const before = p.id ? (rows ?? []).find((r) => r.id === p.id) ?? null : null;
+  if (p.id && !before) return { ok: false, message: "That override is not this client's." };
+  const { error } = p.id ? await db.from("placement_budget_overrides").update(row).eq("id", p.id).eq("client_domain_id", client.id) : await db.from("placement_budget_overrides").insert(row);
+  if (error) return { ok: false, message: `Not saved: ${error.message}` };
+  await audit(db, client.id, by, "budget_override", p.id || null, before, row);
+  const b = await readMonthBudget(db);
+  const mine = b.clients.find((c) => c.clientId === client.id);
+  const over = mine && mine.overridden && mine.overShareBy > 0 ? ` This month it is $${mine.overShareBy} over the client's share${b.overCapBy > 0 ? `; the month is over cap by $${b.overCapBy}, approved by ${b.approvals.join(", ")}` : ""}.` : "";
+  return { ok: true, message: `Override saved.${over}`, data: { warnings: b.warnings } };
+}
+
+export async function overrideClear(db: SupabaseClient, client: Client, by: string, id: string): Promise<Done> {
+  if (!id) return { ok: false, message: "Which override?" };
+  const { data: before, error } = await db.from("placement_budget_overrides").delete().eq("id", id).eq("client_domain_id", client.id).select("start_month, end_month, monthly_usd, reason, approved_by").maybeSingle();
+  if (error) return { ok: false, message: `Not cleared: ${error.message}` };
+  if (!before) return { ok: false, message: "That override is not this client's." };
+  await audit(db, client.id, by, "budget_override_cleared", id, before, null);
+  return { ok: true, message: "Override cleared: this client's share is by plan price again for those months." };
 }
 
 export async function budgetWeight(db: SupabaseClient, client: Client, by: string, p: { weight: unknown; excluded: unknown }): Promise<Done> {

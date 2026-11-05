@@ -1,7 +1,7 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { storeSheet } from "@/lib/links/sheet-store";
-import { budgetCap, budgetOverride, budgetWeight, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
+import { budgetCap, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -19,7 +19,7 @@ export const maxDuration = 120;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "budget_override", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -58,8 +58,14 @@ export async function POST(req: Request) {
         return shortlistDecide(db, client, by, { id: id("id"), decision: b.decision, note: str("note") });
       case "spend_record":
         return spendRecord(db, client, by, { itemId: id("item_id"), amount: b.amount_usd, description: str("description"), month: str("month") });
-      case "budget_override":
-        return budgetOverride(db, client, by, { month: str("month"), amount: b.allocation_usd ?? null, reason: str("reason") });
+      case "context_read":
+        return contextRead(db, client);
+      case "context_save":
+        return contextSave(db, client, by, str("notes"));
+      case "override_set":
+        return overrideSet(db, client, by, { id: id("id"), start: str("start_month"), end: str("end_month"), amount: b.monthly_usd, reason: str("reason") });
+      case "override_clear":
+        return overrideClear(db, client, by, id("id"));
       case "budget_weight":
         return budgetWeight(db, client, by, { weight: b.weight, excluded: b.excluded });
       case "budget_cap":

@@ -267,6 +267,8 @@ test("the upsert sites are the ones we think they are", () => {
       // (account_id, email) - once as the owner at create, once from the form.
       // 30 Sep 2026, BRIEF-3 C4: the second of each is the Stripe webhook's
       // signup (checkout/signup.ts), the client and its owner on T2's keys.
+      // 5 Nov 2026, CSM batch A: one commercial-context note per client (lib/csm/agency.ts contextSave).
+      "client_commercial_context:client_domain_id",
       "client_domains:account_id,domain,market,topic",
       "client_domains:account_id,domain,market,topic",
       // 13 Oct 2026, DIY P10 (spec 10 section 6.3): the month's comparison set,
@@ -335,7 +337,6 @@ test("the upsert sites are the ones we think they are", () => {
       // (opportunities/record.ts writePageRead), on page_reads' unique (client_domain_id, url_key)
       // in 20261014070000_opportunities.sql.
       "page_reads:client_domain_id,url_key",
-      "placement_budget_overrides:client_domain_id,month",
       "placement_budget_settings:id",
       "placement_budgets:client_domain_id",
         "scan_answers:engine,question_id",

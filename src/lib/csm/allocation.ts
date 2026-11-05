@@ -4,8 +4,10 @@
  *
  * - Each client's share is weighted by its plan price (orders.monthly_amount, GBP put on the USD scale with
  *   GBP_TO_USD_WEIGHT), or by placement_budgets.weight_override; an excluded client, or one with no weight, gets none.
- * - A month's override fixes one client's allocation to front-load placements. Everyone else shares what is left of
- *   the cap by weight. Overrides may never add up past the cap: `checkOverride` refuses one that would.
+ * - A client's override (a run of months, placement_budget_overrides) fixes its allocation, deliberately: it may
+ *   exceed the client's share and the cap (Danny, 5 Nov 2026: front-loading is context added client by client). It
+ *   is never refused; it is shown - "over cap by $X, approved by <name>". Everyone else shares what is left of the
+ *   cap by weight.
  * - Spend is shown against the allocation per client and against the cap in total; any breach is a warning.
  *
  * Pure: the amounts arrive from the agency tables and are never written here. Imports are relative and carry the
@@ -19,13 +21,31 @@ export type ClientWeight = { clientId: string; planMonthly: number | null; planC
 export type Allocation = {
   clientId: string;
   allocation: number;
+  /** The client's share of the cap by weight alone, before any override. */
+  share: number;
   overridden: boolean;
+  /** Who approved the override, and how far it takes the client past its share. */
+  approvedBy: string | null;
+  overShareBy: number;
   spent: number;
   remaining: number;
   breach: boolean;
 };
 
-export type MonthBudget = { cap: number | null; allocated: number; spent: number; remaining: number; breach: boolean; clients: Allocation[]; warnings: string[] };
+export type MonthBudget = {
+  cap: number | null;
+  allocated: number;
+  /** How far the month's allocations exceed the cap - only ever by an approved override - and who approved them. */
+  overCapBy: number;
+  approvals: string[];
+  spent: number;
+  remaining: number;
+  breach: boolean;
+  clients: Allocation[];
+  warnings: string[];
+};
+
+export type Override = { amount: number; approvedBy: string };
 
 /** A client's weight on one scale: its override, else its plan price in USD terms; 0 when excluded or unknown. */
 export function weightOf(c: ClientWeight): number {
@@ -38,41 +58,51 @@ export function weightOf(c: ClientWeight): number {
 const cents = (n: number) => Math.round(n * 100) / 100;
 
 /** The month's split, spend against it, and every breach. A cap not yet set allocates nothing and says so. */
-export function monthBudget(p: { cap: number | null; clients: readonly ClientWeight[]; overrides: ReadonlyMap<string, number>; spent: ReadonlyMap<string, number> }): MonthBudget {
+export function monthBudget(p: { cap: number | null; clients: readonly ClientWeight[]; overrides: ReadonlyMap<string, Override>; spent: ReadonlyMap<string, number> }): MonthBudget {
   const warnings: string[] = [];
-  const spentOf = (id: string) => p.spent.get(id) ?? 0;
-  if (p.cap === null) {
-    warnings.push("The global placement cap is not set, so nothing is allocated.");
-    const clients = p.clients.map((c) => ({ clientId: c.clientId, allocation: 0, overridden: false, spent: spentOf(c.clientId), remaining: 0, breach: spentOf(c.clientId) > 0 }));
-    const spent = cents(clients.reduce((a, c) => a + c.spent, 0));
-    return { cap: null, allocated: 0, spent, remaining: 0, breach: spent > 0, clients, warnings };
-  }
-  const fixed = [...p.overrides].filter(([id]) => p.clients.some((c) => c.clientId === id));
-  const fixedTotal = fixed.reduce((a, [, v]) => a + v, 0);
-  if (fixedTotal > p.cap) warnings.push(`This month's overrides add up to $${cents(fixedTotal)}, over the $${p.cap} cap.`);
-  const pool = Math.max(0, p.cap - fixedTotal);
+  const spentOf = (id: string) => cents(p.spent.get(id) ?? 0);
+  const allWeight = p.clients.reduce((a, c) => a + weightOf(c), 0);
+  const shareOf = (c: ClientWeight) => (p.cap !== null && allWeight > 0 ? cents((p.cap * weightOf(c)) / allWeight) : 0);
+  const known = new Set(p.clients.map((c) => c.clientId));
+  const fixed = [...p.overrides].filter(([id]) => known.has(id));
+  const fixedTotal = fixed.reduce((a, [, o]) => a + o.amount, 0);
+  if (p.cap === null) warnings.push("The global placement cap is not set, so only approved overrides are allocated.");
+  const pool = p.cap === null ? 0 : Math.max(0, p.cap - fixedTotal);
   const shared = p.clients.filter((c) => !p.overrides.has(c.clientId));
-  const totalWeight = shared.reduce((a, c) => a + weightOf(c), 0);
+  const sharedWeight = shared.reduce((a, c) => a + weightOf(c), 0);
   const clients = p.clients.map((c) => {
-    const overridden = p.overrides.has(c.clientId);
-    const allocation = cents(overridden ? p.overrides.get(c.clientId)! : totalWeight > 0 ? (pool * weightOf(c)) / totalWeight : 0);
-    const spent = cents(spentOf(c.clientId));
-    return { clientId: c.clientId, allocation, overridden, spent, remaining: cents(allocation - spent), breach: spent > allocation };
+    const o = p.overrides.get(c.clientId) ?? null;
+    const share = shareOf(c);
+    const allocation = cents(o ? o.amount : sharedWeight > 0 ? (pool * weightOf(c)) / sharedWeight : 0);
+    const spent = spentOf(c.clientId);
+    return { clientId: c.clientId, allocation, share, overridden: o !== null, approvedBy: o?.approvedBy ?? null, overShareBy: o ? cents(Math.max(0, o.amount - share)) : 0, spent, remaining: cents(allocation - spent), breach: spent > allocation };
   });
+  const allocated = cents(clients.reduce((a, c) => a + c.allocation, 0));
+  const overCapBy = p.cap === null ? 0 : cents(Math.max(0, allocated - p.cap));
+  const approvals = [...new Set(clients.filter((c) => c.overridden && c.overShareBy > 0).map((c) => c.approvedBy!))];
+  for (const c of clients) if (c.overridden && c.overShareBy > 0) warnings.push(`${c.clientId}: over its share by $${c.overShareBy}, approved by ${c.approvedBy}.`);
+  if (overCapBy > 0) warnings.push(`Allocations are over the $${p.cap} cap by $${overCapBy}, approved by ${approvals.join(", ")}.`);
   for (const c of clients) if (c.breach) warnings.push(`${c.clientId}: $${c.spent} spent against a $${c.allocation} allocation.`);
   const spent = cents(clients.reduce((a, c) => a + c.spent, 0));
-  const allocated = cents(clients.reduce((a, c) => a + c.allocation, 0));
-  if (spent > p.cap) warnings.push(`$${spent} spent this month, over the $${p.cap} cap.`);
-  return { cap: p.cap, allocated, spent, remaining: cents(p.cap - spent), breach: spent > p.cap, clients, warnings };
+  const limit = p.cap === null ? allocated : Math.max(p.cap, allocated);
+  if (p.cap !== null && spent > p.cap) warnings.push(`$${spent} spent this month, over the $${p.cap} cap${spent <= limit ? " (within approved overrides)" : ""}.`);
+  return { cap: p.cap, allocated, overCapBy, approvals, spent, remaining: cents(limit - spent), breach: spent > limit, clients, warnings };
 }
 
-/** Whether a front-loading override fits: with the month's other overrides it may not pass the cap. */
-export function checkOverride(p: { cap: number | null; clientId: string; amount: number; overrides: ReadonlyMap<string, number> }): { ok: true } | { ok: false; message: string } {
-  if (p.cap === null) return { ok: false, message: "Set the global placement cap first." };
-  if (!(p.amount >= 0)) return { ok: false, message: "An allocation is zero or more." };
-  const others = [...p.overrides].filter(([id]) => id !== p.clientId).reduce((a, [, v]) => a + v, 0);
-  if (others + p.amount > p.cap) return { ok: false, message: `With this month's other overrides ($${cents(others)}) that is $${cents(others + p.amount)}, over the $${p.cap} cap.` };
-  return { ok: true };
+export type OverrideRange = { id: string; startMonth: string | null; endMonth: string | null; monthlyUsd: number; approvedBy: string };
+
+/** The override covering a month, if any: its start (or no start) on or before, its end (or no end) on or after. */
+export function overrideFor(month: string, ranges: readonly OverrideRange[]): OverrideRange | null {
+  return ranges.find((r) => (r.startMonth === null || r.startMonth <= month) && (r.endMonth === null || r.endMonth >= month)) ?? null;
+}
+
+/** Whether a new range would overlap one of the client's others: a month may have one override, so it is refused. */
+export function checkRange(next: { id?: string; startMonth: string | null; endMonth: string | null }, others: readonly OverrideRange[]): { ok: true } | { ok: false; message: string } {
+  if (next.startMonth && next.endMonth && next.endMonth < next.startMonth) return { ok: false, message: "The end month is before the start month." };
+  const lo = (m: string | null) => m ?? "0000-00-01";
+  const hi = (m: string | null) => m ?? "9999-12-01";
+  const clash = others.find((o) => o.id !== next.id && lo(o.startMonth) <= hi(next.endMonth) && lo(next.startMonth) <= hi(o.endMonth));
+  return clash ? { ok: false, message: `That overlaps the $${clash.monthlyUsd}/month override ${clash.startMonth ?? "from the start"} to ${clash.endMonth ?? "open-ended"}; end or change that one first.` } : { ok: true };
 }
 
 /** Whether buying an item would breach the client's allocation or the cap, and by how much - shown before Kev approves. */
