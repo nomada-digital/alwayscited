@@ -40,7 +40,7 @@ export type ShortlistResult = {
 
 export async function buildShortlist(
   db: SupabaseClient,
-  p: { clientId: string; clusterId: string; reason: "onboarded" | "cluster_changed" | "month_end" | "manual"; dryRun?: boolean; budget?: UnitBudget },
+  p: { clientId: string; clusterId: string; reason: "onboarded" | "cluster_changed" | "month_end" | "manual"; dryRun?: boolean; budget?: UnitBudget; unitCap?: number },
 ): Promise<ShortlistResult> {
   const { data: client, error: cErr } = await db.from("client_domains").select("id, domain, market").eq("id", p.clientId).single();
   if (cErr || !client) throw new Error(`could not read the client: ${cErr?.message ?? "not found"}`);
@@ -52,7 +52,8 @@ export async function buildShortlist(
   const keyword = (kw?.keyword as string | undefined) ?? null;
 
   // The run's units: the per-run cap, cut to what the month has left.
-  const budget = p.budget ?? runBudget();
+  // A caller may ask for fewer units than FATGRID_UNIT_CAP (a trial run, 6 Nov 2026), never more.
+  const budget = p.budget ?? (p.unitCap !== undefined ? new UnitBudget(Math.min(runBudget().cap, p.unitCap)) : runBudget());
   if (!p.budget) {
     const left = await unitsLeft(db);
     if (left < budget.cap) budget.spend(budget.cap - left);

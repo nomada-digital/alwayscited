@@ -40,7 +40,7 @@ export async function readMonthBudget(db: SupabaseClient, month = monthOf()): Pr
     { data: spendRows, error: spendErr },
   ] = await Promise.all([
     db.from("placement_budget_settings").select("global_cap_usd").eq("id", true).maybeSingle(),
-    db.from("client_domains").select("id, tier").eq("status", "active").is("archived_at", null).in("tier", PLACEMENT_TIERS),
+    db.from("client_domains").select("id, domain, tier").eq("status", "active").is("archived_at", null).in("tier", PLACEMENT_TIERS),
     db.from("orders").select("client_domain_id, monthly_amount, currency, created_at").not("client_domain_id", "is", null).order("created_at", { ascending: false }),
     db.from("placement_budgets").select("client_domain_id, weight_override, excluded"),
     // Every range, filtered here: a client has a handful at most, and "covers this month" is two open-ended bounds.
@@ -69,7 +69,10 @@ export async function readMonthBudget(db: SupabaseClient, month = monthOf()): Pr
     const r = overrideFor(month, rs);
     if (r) overrides.set(id, { amount: r.monthlyUsd, approvedBy: r.approvedBy });
   }
-  return monthBudget({ cap, clients: list, overrides, spent });
+  const b = monthBudget({ cap, clients: list, overrides, spent });
+  // Warnings name clients by domain for staff; allocation.ts only knows ids.
+  const names = new Map((clientRows ?? []).map((c) => [c.id as string, c.domain as string]));
+  return { ...b, warnings: b.warnings.map((w) => w.replace(/^([0-9a-f-]{36}):/, (m, id: string) => `${names.get(id) ?? id}:`)) };
 }
 
 const rangeOf = (o: Record<string, unknown>): OverrideRange => ({
@@ -101,14 +104,16 @@ export async function shortlistRead(db: SupabaseClient, client: Client): Promise
   };
 }
 
-export async function shortlistRun(db: SupabaseClient, client: Client, by: string, clusterId: string): Promise<Done> {
+export async function shortlistRun(db: SupabaseClient, client: Client, by: string, clusterId: string, unitCap?: unknown): Promise<Done> {
+  const cap = unitCap === undefined || unitCap === null || unitCap === "" ? undefined : Number(unitCap);
+  if (cap !== undefined && !(Number.isInteger(cap) && cap >= 0)) return { ok: false, message: "A unit cap is a whole number, at most the per-run cap." };
   const { data: clusters, error } = await db.from("tracked_clusters").select("id, name").eq("client_domain_id", client.id).is("stopped_on", null);
   if (error) return { ok: false, message: `Could not read the clusters: ${error.message}` };
   const targets = (clusters ?? []).filter((c) => !clusterId || c.id === clusterId);
   if (!targets.length) return { ok: false, message: "No live cluster to build a shortlist for." };
   const lines: string[] = [];
   for (const c of targets) {
-    const r = await buildShortlist(db, { clientId: client.id, clusterId: c.id as string, reason: "manual" });
+    const r = await buildShortlist(db, { clientId: client.id, clusterId: c.id as string, reason: "manual", unitCap: cap });
     lines.push(`${c.name}: ${r.outcome}, ${r.items.length} items (${r.added} new, ${r.dropped} dropped), ${r.units} units, DR floor ${r.floor.floor} from ${r.floor.source === "serp" ? "the SERP" : "the default"}`);
     if (r.outcome === "capped" || r.outcome === "no_key") break;
   }

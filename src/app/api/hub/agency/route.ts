@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       case "shortlist_read":
         return shortlistRead(db, client);
       case "shortlist_run":
-        return shortlistRun(db, client, by, id("cluster_id"));
+        return shortlistRun(db, client, by, id("cluster_id"), b.unit_cap);
       case "shortlist_decide":
         return shortlistDecide(db, client, by, { id: id("id"), decision: b.decision, note: str("note") });
       case "spend_record":
