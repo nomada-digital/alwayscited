@@ -2,8 +2,9 @@ import "server-only";
 
 import { enginesFor } from "@/config/pricing";
 import { type TierKey } from "@/components/TierName";
-import { extractBrands } from "@/lib/scan/anthropic";
-import { brandKey, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
+import { classifyBrands, extractBrands } from "@/lib/scan/anthropic";
+import { judgedTopic, notACompetitor } from "@/lib/scan/competitor-filter";
+import { brandKey, namesAsBrand, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
 import { runLocalGrids } from "@/lib/local/run";
 import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
 import { type Market } from "@/lib/scan/domain";
@@ -470,7 +471,30 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       }),
     );
 
-    const brandsIn = (a: AnswerRow) => (a.response_text ? (others.get(a.engine) ?? []).filter((n) => namesSubject(a.response_text!, n)) : []);
+    // 5 Nov 2026 (Luke, COMMON): the names an answer is credited with are competitors it names AS brands. Three
+    // filters, cheapest first: the keyword's own subject and, for a service, the platforms (competitor-filter.ts);
+    // then one judgement over the day's names, as the free scan makes - could a buyer choose this INSTEAD of the
+    // client? - which catches a platform's maker and the tools no list holds. A judgement that fails leaves the
+    // first filter standing rather than every name. Then each answer is credited only with the names it uses as
+    // brands (namesAsBrand), not every answer containing the word: one answer naming the agency Engage had put
+    // "Engage" on every answer with the verb in it.
+    const terms = [client.topic as string | null, ...keywords.map((k) => k.keyword as string | null)];
+    const candidates = [...new Set([...others.values()].flat())].filter((n) => !notACompetitor(n, terms));
+    let suppliers: Set<string> | null = null;
+    if (candidates.length) {
+      try {
+        const judged = await classifyBrands({ topic: judgedTopic(terms), brand, positioning: null, names: candidates });
+        spend.calls += judged.calls;
+        if (!judged.failedBatches) suppliers = new Set(judged.brands.filter((b) => b.supplier).map((b) => brandKey(b.name)));
+        else console.warn(`[track] ${runId} competitor judgement: ${judged.failedBatches} batch(es) failed, so only the lists filter today`);
+      } catch (err) {
+        console.warn(`[track] ${runId} competitor judgement failed, so only the lists filter today: ${message(err)}`);
+      }
+    }
+    for (const [engine, names] of others) {
+      others.set(engine, names.filter((n) => !notACompetitor(n, terms) && (!suppliers || suppliers.has(brandKey(n)))));
+    }
+    const brandsIn = (a: AnswerRow) => (a.response_text ? (others.get(a.engine) ?? []).filter((n) => namesAsBrand(a.response_text!, n)) : []);
     const answerRows = answers.map((a) => ({
       run_id: runId,
       client_domain_id: client.id,

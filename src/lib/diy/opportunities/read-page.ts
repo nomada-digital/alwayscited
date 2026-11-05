@@ -1,4 +1,4 @@
-import { namesBrand } from "../../scan/brand-name.ts";
+import { namesAsBrand } from "../../scan/brand-name.ts";
 import type { ParsedPage } from "../../scan/dataforseo-request.ts";
 import type { Day } from "../../tracking/figures.ts";
 import { type Subject, namesBrandIn } from "../../tracking/limits.ts";
@@ -141,7 +141,8 @@ export function snippetAround(text: string, s: Subject): string | null {
 
 /** Which of these brands the text names, each once, in the order given. */
 export function brandsIn(text: string, brands: readonly string[]): string[] {
-  return [...new Set(brands)].filter((b) => namesBrand(text, b));
+  // As brands, not as words (5 Nov 2026): a page using "engage" as a verb does not name the agency Engage.
+  return [...new Set(brands)].filter((b) => namesAsBrand(text, b));
 }
 
 /** The rel tokens that tell a search engine not to follow a link. */

@@ -486,3 +486,86 @@ export function siteSpelling(brand: string, domain: string | null | undefined, s
   for (const j of joined) tally.set(j, (tally.get(j) ?? 0) + 1);
   return [...tally].sort((a, b) => b[1] - a[1])[0][0];
 }
+
+/**
+ * Does this text use the name as a brand? The strict counterpart of `namesBrand`, for deciding which competitors an
+ * answer or a page names (Luke, 5 Nov 2026: "Engage" listed on pages where it was only the verb). `namesBrand`
+ * folds case, which is right for "does the engine name the client" - an engine writing "goodtrip" names Goodtrip -
+ * and wrong for other companies' names, half of which are ordinary words: Engage, Mud, Mutual, Fever, Extreme.
+ *
+ * - A name with a capital in it must appear with its capitals (or in full capitals). "engage" is not Engage.
+ * - A one-word name at the start of a sentence is the same ambiguity one step on ("Engage your audience"), so it
+ *   only counts where text sets a name apart: a list item, a heading, bold, or link text. Mid-sentence it counts.
+ * - A name written all in lower case by its owner (webdna, alwayscited) has no capitals to require, and matches in
+ *   any case, as `namesBrand` does.
+ */
+export function namesAsBrand(text: string, name: string): boolean {
+  if (!text || !name) return false;
+  const clean = cleanBrandName(name).replace(/\s+/g, " ").trim().replace(/^the\s+/i, "").replace(TRAILING_STOP, "");
+  if (clean.replace(/[^A-Za-z0-9]/g, "").length < 2) return false;
+  if (clean === clean.toLowerCase()) return namesBrand(text, name);
+  // A link to the company's own site names it: "www.angelfish-marketing.com" for Angelfish Marketing.
+  const key = brandKey(clean);
+  // Engines run a citation list together ("…marketing.comwww.clarity.global"): split where a www. follows a letter.
+  const links = text.replace(/(?<=[a-z0-9])www\./gi, " www.");
+  for (const host of links.matchAll(/\b(?:https?:\/\/)?(?:www\.)?((?:[a-z0-9-]+\.)+[a-z]{2,})(?=[\/\s),;:]|\.\s|\.$|$)/gi)) {
+    if (key.length >= 4 && domainStem(host[1]) === key) return true;
+  }
+  // Only a plain word is ambiguous: a name with a dot, a digit or a capital inside it (Otterly.ai, 93x, MadeByShape)
+  // is not an ordinary word anywhere it stands.
+  const oneWord = /^[A-Z][a-z]+$/.test(clean) || (/^[A-Z]+$/.test(clean) && clean.length > 1);
+  // As written, in full capitals, and - for a name stored in capitals ("POLARIS") - in title case ("Polaris"); a
+  // name ending in a domain also as two words ("Otterly AI" for Otterly.ai).
+  const titled = clean === clean.toUpperCase() ? clean.toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()) : clean;
+  const spaced = /\.(ai|io|com|co|app|so|net)$/i.test(clean) ? clean.replace(/\.(\w+)$/, " $1") : clean;
+  const forms = [...new Set([clean, clean.toUpperCase(), titled, spaced])];
+  const re = new RegExp(`(^|[^A-Za-z0-9])(${forms.map((f) => capsFirst(brandPattern(f))).join("|")})(?=$|[^A-Za-z0-9])`, "g");
+  for (const m of text.matchAll(re)) {
+    if (!oneWord) return true;
+    // Full capitals where the name is not written that way sets it apart wherever it stands ("ENGAGE is our pick").
+    if (m[2] !== clean && m[2] === clean.toUpperCase() && clean !== clean.toUpperCase()) return true;
+    const at = m.index + m[1].length;
+    const before = text.slice(Math.max(0, at - 40), at);
+    const lineStart = before.slice(before.lastIndexOf("\n") + 1);
+    const sentenceStart = /(^|[.!?]["')\]]?\s+)$/.test(before) || /^\s*$/.test(lineStart);
+    // Joined to another word by a slash it is part of a compound ("Entry/Field bulk-editing"), not a name.
+    if (/[A-Za-z]\/$/.test(before) || /^\/[A-Za-z]/.test(text.slice(at + m[2].length))) continue;
+    if (!sentenceStart) return true;
+    // Set apart as a name: "- Engage", "1. Engage", "## Engage", "**Engage**", "[Engage](", "| Engage".
+    // Bold may open before the marker too: "**3. Engage Agency**"; an escaped number ("2\\.") is still a list.
+    if (/^\s*(\*\*|__)?\s*([-*•|]|\d+\\?[.)]|#{1,6})\s*(\*\*|__)?\[?$/.test(lineStart) || /(\*\*|__|\[)$/.test(before)) return true;
+    const after = text.slice(at + m[2].length, at + m[2].length + 40);
+    if (/^(\*\*|__|\]\()/.test(after)) return true;
+    // A line that is only the name, or the name and more title-case words: a heading or a card title.
+    if (/^\s*[:.\-\u2013\u2014]?\s*(\n|$)/.test(after) || /^(\s+[A-Z][\w&'’.-]*)+\s*(\n|$)/.test(text.slice(at + m[2].length, at + m[2].length + 120))) return true;
+    // Or what follows describes a company: "Brightly is fine", "Engage, a Leeds studio", "Mud (Leeds)".
+    if (BRAND_FOLLOWS.test(after)) return true;
+  }
+  return false;
+}
+
+/**
+ * What follows a company's name at the start of a sentence, and seldom follows the same word used as a word: a verb
+ * describing a company, punctuation, or a company word that makes it a longer name ("Impression Digital").
+ */
+const BRAND_FOLLOWS = new RegExp(
+  "^(['’]s\\b|\\s*[,:(\\u2013\\u2014/]|\\s+-\\s|\\s+[A-Z][a-z]+(\\s[A-Z][a-z]+)?\\s?:|\\s+(is|are|was|were|has|have|offers|provides|specialises|specializes|builds|works|helps|focuses|delivers|" +
+    "combines|brings|creates|designs|develops|excels|boasts|stands|leads|runs|serves|handles|operates|positions|remains|tops)\\b|" +
+    "\\s+(Digital|Agency|Marketing|Media|Group|Studio|Studios|Partners|Labs|Design|Creative|Consulting|Ltd|Limited|Inc|Co|LLC|Web|Interactive|Solutions)\\b)",
+);
+
+/**
+ * A brand pattern with only its word-initial capitals held to case: "Otterly.ai" also matches "Otterly.AI", while
+ * "Engage" still needs its capital E. Lower-case letters become a two-case class; escapes and gaps are left alone.
+ */
+function capsFirst(pattern: string): string {
+  let out = "";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i]!;
+    if (c === "\\") { out += c + (pattern[++i] ?? ""); continue; }
+    const wordStart = i === 0 || !/[A-Za-z0-9]/.test(pattern[i - 1]!);
+    out += /[A-Za-z]/.test(c) && !wordStart ? `[${c.toLowerCase()}${c.toUpperCase()}]` : c;
+  }
+  return out;
+}
+

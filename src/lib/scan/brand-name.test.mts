@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { brandKey, cleanBrandName, displayNamesFor, domainStem, namesBrand, namesSubject, pickDisplayName, siteSpelling, subjectKeys } from "./brand-name.ts";
+import { brandKey, cleanBrandName, displayNamesFor, domainStem, namesBrand, namesSubject, namesAsBrand, pickDisplayName, siteSpelling, subjectKeys } from "./brand-name.ts";
 
 /**
  * `namesBrand` decides `scan_answers.brand_named`, which is the number this
@@ -251,4 +251,39 @@ test("3 Nov 2026: a name the domain runs together keeps the site's own spelling"
   assert.equal(siteSpelling("Acme Labs", "acme.co.uk", "Acme Labs builds"), "Acme Labs", "words that are not the stem are untouched");
   assert.equal(siteSpelling("Goodtrip", "goodtrip.co.uk", "goodtrip"), "Goodtrip", "one word is untouched");
   assert.equal(siteSpelling("always cited", "alwayscited.com", "nothing here"), "always cited", "with no evidence the read stands");
+});
+
+test("5 Nov 2026 (Luke, COMMON): 'Engage' the verb is not Engage the agency", () => {
+  const verb = "Craft CMS agencies help you engage your audience. Engage visitors with fast pages. Mutual trust and extreme care matter.";
+  assert.equal(namesAsBrand(verb, "Engage"), false, "lowercase verb and sentence-initial verb are not the agency");
+  assert.equal(namesAsBrand(verb, "Mutual"), false);
+  assert.equal(namesAsBrand(verb, "Extreme"), false);
+  assert.equal(namesBrand(verb, "Engage"), true, "the old, case-folding matcher is what credited it");
+  assert.equal(namesAsBrand("Top Craft CMS partners include Engage, Mud and Fever.", "Engage"), true, "mid-sentence, capitalised");
+  assert.equal(namesAsBrand("1. **Engage** - a Manchester agency\n2. Mud", "Engage"), true, "a list item set apart in bold");
+  assert.equal(namesAsBrand("## Engage\nA studio in Leeds.", "Engage"), true, "a heading");
+  assert.equal(namesAsBrand("- Mud: Craft specialists", "Mud"), true, "a list item");
+  assert.equal(namesAsBrand("Agencies like Pixel & Tonic partners", "Pixel & Tonic"), true, "a multi-word name needs no context");
+  assert.equal(namesAsBrand("built by webdna in Brighton", "webdna"), true, "a name its owner writes lower case matches as written");
+  assert.equal(namesAsBrand("ENGAGE is our pick", "Engage"), true, "full capitals");
+  assert.equal(namesAsBrand("**3. Engage Agency**\nLeeds studio.", "Engage"), true, "a numbered item inside bold (COMMON's own answers)");
+  // Nomada Digital's answers, 5 Nov 2026: named by its own site, stored in capitals, a longer name at a sentence start.
+  assert.equal(namesAsBrand("checked. www.angelfish-marketing.comwww.clarity.global", "Angelfish Marketing"), true, "its own site");
+  assert.equal(namesAsBrand("checked. www.angelfish-marketing.comwww.clarity.global", "Clarity"), true, "its own site, run together");
+  assert.equal(namesAsBrand("- **Polaris — London:** B2B agency", "POLARIS"), true, "stored in capitals, written in title case");
+  assert.equal(namesAsBrand("and tech. Impression Digital (Nottingham): a B2B agency", "Impression"), true, "a company word follows");
+  assert.equal(namesAsBrand("| Low impression share | Budget |", "Impression"), false);
+  assert.equal(namesAsBrand("You have found two specialists. Found across Google and AI.", "Found"), false);
+  assert.equal(namesAsBrand("4. Primary objective? Objective clarity matters.", "Objective"), false);
+  // Listicle formats, 5 Nov 2026 recompute: a domain-named brand in any case or spacing, card labels, escaped numbers.
+  assert.equal(namesAsBrand("- **Otterly.AI** — budget tracker", "Otterly.ai"), true);
+  assert.equal(namesAsBrand("- **Otterly AI** – a starter tracker", "Otterly.ai"), true);
+  assert.equal(namesAsBrand("positioning. Otterly.ai Best For: SMB", "Otterly.ai"), true);
+  assert.equal(namesAsBrand("search awards. Gripped Location: United Kingdom", "Gripped"), true, "a card label follows");
+  assert.equal(namesAsBrand("2\\. Randolphs Private Household Staff", "Randolphs"), true, "an escaped list number");
+  assert.equal(namesAsBrand("Randolphs Private Household Staff Agency\nLondon", "Randolphs"), true, "a title-case heading line");
+  assert.equal(namesAsBrand("Clarity / 93x (London): strategy", "Clarity"), true);
+  assert.equal(namesAsBrand("Engage visitors with fast pages. Engage Them Now", "Engage"), true, "a title-case line is read as a heading");
+  assert.equal(namesAsBrand("Engage visitors with fast pages.", "Engage"), false, "the verb still is not");
+  assert.equal(namesAsBrand("**5. Entry/Field bulk-editing tools (e.g. Sup", "Field"), false, "a slash compound is not a name");
 });

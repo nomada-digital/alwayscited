@@ -87,6 +87,9 @@ export type RawOpportunity = {
   route: string | null;
   status: string;
   evidence: { engines?: string[]; answers?: number; competitors?: string[]; last_cited?: string; prompt_count?: number } | null;
+  url_key?: string;
+  /** Competitors the page's own read found on it (5 Nov 2026); null when it was not read, or not read cleanly. */
+  on_page?: string[] | null;
 };
 export type RawPlacement = {
   id: string;

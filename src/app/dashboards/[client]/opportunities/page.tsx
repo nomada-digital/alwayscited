@@ -16,6 +16,12 @@ const ROUTES: Record<string, [string, string]> = {
   publish_own: ["Publish on your own site", "A question nobody answers well yet."],
 };
 
+/** The competitors the page names, in the answers' order (most often named first), three at most. */
+function onPage(o: { on_page?: string[] | null; evidence: { competitors?: string[] } | null }): string[] {
+  const found = new Set(o.on_page ?? []);
+  return (o.evidence?.competitors ?? []).filter((c) => found.has(c)).slice(0, 3);
+}
+
 export default async function Opportunities({ params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
   const { ws } = await pageData(slug);
@@ -39,13 +45,21 @@ export default async function Opportunities({ params }: { params: Promise<{ clie
             {ROUTE_GUIDES[k] ? <div style={{ marginBottom: 12 }}><GuideBox guide={{ ...ROUTE_GUIDES[k]!, title: "How to do this yourself" }} /></div> : null}
             <div className="tbl-wrap">
               <table className="tbl">
-                <thead><tr><th>Page</th><th className="r">Answers citing it</th><th>Names instead</th></tr></thead>
+                <thead><tr><th>Page</th><th className="r">Answers citing it</th><th>Competitors on this page</th></tr></thead>
                 <tbody>
                   {list.slice(0, 15).map((o) => (
                     <tr key={o.url}>
                       <td style={{ maxWidth: 420 }}><a href={o.url} target="_blank" rel="noopener noreferrer">{o.title ?? o.domain}</a><div className="sub">{o.domain}{cluster(o.cluster_id) ? ` · ${cluster(o.cluster_id)}` : ""}</div></td>
                       <td className="r num">{o.evidence?.answers ?? "-"}</td>
-                      <td className="muted" style={{ fontSize: 12.5 }}>{(o.evidence?.competitors ?? []).slice(0, 3).join(", ") || "-"}</td>
+                      <td className="muted" style={{ fontSize: 12.5 }}>
+                        {/* 5 Nov 2026 (Luke): what the page itself names, read off it, not the answers' names. A page
+                            not read yet says where its names came from instead. */}
+                        {o.on_page
+                          ? onPage(o).join(", ") || "None named"
+                          : (o.evidence?.competitors ?? []).length
+                            ? <>{(o.evidence?.competitors ?? []).slice(0, 3).join(", ")}<div className="sub">named in the answers; page not read yet</div></>
+                            : "-"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -80,24 +80,28 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     { data: consoleData, error: consoleErr },
     { data: keyPageRows, error: keyPageErr },
     { count: gridCount, error: gridErr },
+    { data: readRows, error: readsErr },
   ] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
     db.from("tracked_keywords").select(kwCols).eq("client_domain_id", cid),
     db.from("tracked_questions").select(pCols).eq("client_domain_id", cid),
     db.from("tracking_runs").select("run_date, status, engines").eq("client_domain_id", cid).gte("run_date", since).order("run_date"),
     db.from("keyword_footprints").select("pulled_on, rows").eq("client_domain_id", cid).order("pulled_on", { ascending: false }).limit(1),
-    db.from("opportunities").select("id, cluster_id, lens, url, domain, title, route, status, evidence").eq("client_domain_id", cid).eq("live", true).limit(200),
+    db.from("opportunities").select("id, cluster_id, lens, url, url_key, domain, title, route, status, evidence").eq("client_domain_id", cid).eq("live", true).limit(200),
     db.from("placements").select("id, cluster_id, kind, url, domain, status, scheduled_on, live_on, anchor_text").eq("client_domain_id", cid).neq("status", "removed"),
     db.from("integration_connections").select("provider, status, property, requested_at, connected_at, last_synced_at").eq("client_domain_id", cid),
     db.from("search_console_queries").select("provider, query, clicks, impressions, ctr, position, period_end").eq("client_domain_id", cid).gte("period_end", addDays(today, -60)).limit(5000),
     db.from("key_pages").select("url, origin, cluster_ids, added_on, removed_on").eq("client_domain_id", cid).is("removed_on", null).limit(50),
     // Map pack grids (22 Oct 2026, lib/local): only whether there are any, for the nav. The page reads them itself.
     db.from("local_grids").select("id", { count: "exact", head: true }).eq("client_domain_id", cid).eq("active", true),
+    // 5 Nov 2026 (Luke): each opportunity page's own read, so the table shows the competitors ON the page.
+    db.from("page_reads").select("url_key, status, brands_found").eq("client_domain_id", cid).limit(1000),
   ]);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
   if (core) throw new Error(`could not read what is tracked: ${core.message}`);
   // The DIY reads and the 17 Oct tables are extras: a failure or an absent table draws an empty section, never a broken page.
   if (footErr) console.warn(`[dash] footprint read failed: ${footErr.message}`);
+  if (readsErr) console.warn(`[dash] page reads failed: ${readsErr.message}`);
   if (oppsErr) console.warn(`[dash] opportunities read failed: ${oppsErr.message}`);
   if (placeErr) console.warn(`[dash] placements read failed: ${placeErr.message}`);
   if (connErr && !absent(connErr)) console.warn(`[dash] connections read failed: ${connErr.message}`);
@@ -149,7 +153,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     serp,
     answers: [...verdicts, ...cites],
     footprint: foot ? { pulled_on: foot.pulled_on, rows: Array.isArray(foot.rows) ? (foot.rows as FootRow[]) : [] } : null,
-    opportunities: (oppsErr ? [] : (oppRows ?? [])) as RawOpportunity[],
+    opportunities: withPageBrands((oppsErr ? [] : (oppRows ?? [])) as RawOpportunity[], readsErr ? [] : (readRows ?? [])),
     placements: (placeErr ? [] : (placeRows ?? [])) as RawPlacement[],
     connections: (connErr ? [] : (connRows ?? [])) as RawConnection[],
     consoleRows: (consoleErr ? [] : (consoleData ?? [])) as RawConsoleRow[],
@@ -158,3 +162,18 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     localGrids: gridErr ? 0 : (gridCount ?? 0),
   };
 }
+
+/**
+ * Joins each opportunity to its page's read (5 Nov 2026): `on_page` is the competitors the read found on the page
+ * itself, null when the page has not been read or the read failed - then the table says the names came from the
+ * answers instead, rather than letting the reader assume they are in the article.
+ */
+function withPageBrands(opps: RawOpportunity[], reads: readonly Record<string, unknown>[]): RawOpportunity[] {
+  const byKey = new Map(reads.map((r) => [String(r.url_key), r]));
+  return opps.map((o) => {
+    const read = o.url_key ? byKey.get(o.url_key) : undefined;
+    const found = read && read.status === "ok" && Array.isArray(read.brands_found) ? (read.brands_found as unknown[]).filter((b): b is string => typeof b === "string") : null;
+    return { ...o, on_page: found };
+  });
+}
+
