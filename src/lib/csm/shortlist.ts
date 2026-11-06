@@ -198,7 +198,9 @@ export async function buildShortlist(
   const items = rankShortlist({ clientDomain: client.domain, clientDr: listings.get(own)?.dr ?? null, floor: floor.floor, keyword, cited: keptCited, listings, inventory, hosts }).filter((c) => c.ownSite || !rejected.has(c.domain));
   // Units are what Fatgrid returned on this run: one per domain on the Pro plan.
   const outcome = stopped === "done" ? "ok" : stopped;
-  const out = [...gatedOut].map(([d, why]) => `${d} (${why})`);
+  // The note holds 500 characters, so each host gets the first clause of why ("8% UK traffic", "off topic"); the
+  // full reading is in shortlist_host_checks once batch B is in.
+  const out = [...gatedOut].map(([d, why]) => `${d} (${why.split(/[:;,]/)[0]!.trim()})`);
   const gateNote = [
     detail ?? null,
     out.length ? `Gated out: ${out.join("; ")}.` : null,
