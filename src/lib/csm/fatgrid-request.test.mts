@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { capFrom, FATGRID_DEFAULTS } from "../../config/csm.ts";
-import { PAGE_MAX, UnitBudget, inventoryQuery, priceFor, readListing, readPage, searchBatch } from "./fatgrid-request.ts";
+import { PAGE_MAX, UnitBudget, errorSnippet, inventoryQuery, priceFor, readListing, readPage, searchBatch } from "./fatgrid-request.ts";
 
 test("a read never asks for more domains than the budget has left, and stops at zero", () => {
   const b = new UnitBudget(50);
@@ -33,4 +33,11 @@ test("a response item keeps only what the shortlist uses; prices and DRs are num
 test("a cap from the environment is a positive integer or the default, never no cap", () => {
   for (const raw of [undefined, "", "0", "-5", "abc", "2.5"]) assert.equal(capFrom(raw, FATGRID_DEFAULTS.unitCapPerRun), FATGRID_DEFAULTS.unitCapPerRun, String(raw));
   assert.equal(capFrom("400", 50), 400);
+});
+
+test("a refusal's body is logged as one short line with the key cut out", () => {
+  assert.equal(errorSnippet('{"error":"Insufficient units"}\n', "k-123"), '{"error":"Insufficient units"}');
+  assert.equal(errorSnippet("bad key k-123 in ?key=k-123", "k-123"), "bad key [key] in ?key=[key]");
+  assert.equal(errorSnippet("x".repeat(300), "k-123"), `${"x".repeat(200)}...`);
+  assert.equal(errorSnippet("  a \n\t b  ", ""), "a b");
 });

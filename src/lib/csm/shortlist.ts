@@ -95,9 +95,9 @@ export async function buildShortlist(
   let stopped: "done" | "capped" | "no_key" | "failed" = "done";
   let detail: string | undefined;
   const missing = (ds: string[]) => ds.filter((d) => !listings.has(d));
-  for (const batch of [missing([...top3, normalizeDomain(client.domain)]), missing(citedHosts).slice(0, Math.max(0, Math.floor(budget.left / 2)))]) {
+  for (const [i, batch] of [missing([...top3, normalizeDomain(client.domain)]), missing(citedHosts).slice(0, Math.max(0, Math.floor(budget.left / 2)))].entries()) {
     if (!batch.length || stopped === "no_key" || stopped === "failed") continue;
-    const r = await readDomains(batch, budget);
+    const r = await readDomains(batch, budget, `search-domains batch ${i + 1}`);
     for (const l of r.listings) listings.set(l.domain, l);
     read.push(...r.listings);
     if (r.stopped !== "done") ({ stopped, detail } = r);

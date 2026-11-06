@@ -112,6 +112,16 @@ export function readListing(raw: unknown): Listing | null {
   };
 }
 
+/**
+ * A refused request's body for the log and the run's note (6 Nov 2026: a 400 whose body was dropped could not be
+ * told apart from any other). One line, at most `max` characters, with the key cut out wherever Fatgrid echoes it.
+ * An error body carries no listings; the request's headers are never passed in.
+ */
+export function errorSnippet(body: string, key: string, max = 200): string {
+  const s = (key ? body.split(key).join("[key]") : body).replace(/\s+/g, " ").trim();
+  return s.length > max ? `${s.slice(0, max)}...` : s;
+}
+
 /** The listings in a `domains_list` or `search-domains` answer, and whether `domains_list` has another page. */
 export function readPage(body: unknown): { listings: Listing[]; hasMore: boolean } {
   const b = (body ?? {}) as { items?: unknown; hasMore?: unknown };

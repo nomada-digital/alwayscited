@@ -2,7 +2,7 @@ import "server-only";
 
 import { FATGRID_DEFAULTS, capFrom } from "@/config/csm";
 
-import { FATGRID_BASE, type InventoryFilters, type Listing, UnitBudget, inventoryQuery, readPage, searchBatch } from "./fatgrid-request";
+import { FATGRID_BASE, type InventoryFilters, type Listing, UnitBudget, errorSnippet, inventoryQuery, readPage, searchBatch } from "./fatgrid-request";
 
 /**
  * Fatgrid reads for the placement shortlist (phase 1, 5 Nov 2026). AGENCY ONLY - see fatgrid-request.ts.
@@ -14,6 +14,14 @@ import { FATGRID_BASE, type InventoryFilters, type Listing, UnitBudget, inventor
  * it has so far and says why it stopped. Never throws.
  */
 export type ReadOutcome = { listings: Listing[]; units: number; stopped: "done" | "capped" | "no_key" | "failed"; detail?: string };
+
+/** A refusal, named by the call that met it: the status and the start of Fatgrid's own message. Logged and returned. */
+async function refused(res: Response, call: string, key: string): Promise<string> {
+  const body = await res.text().catch(() => "");
+  const detail = `Fatgrid answered ${res.status} on ${call}${body ? `: ${errorSnippet(body, key)}` : ""}`;
+  console.warn(`[csm] ${detail}`);
+  return detail;
+}
 
 export function runBudget(): UnitBudget {
   return new UnitBudget(capFrom(process.env.FATGRID_UNIT_CAP, FATGRID_DEFAULTS.unitCapPerRun));
@@ -35,7 +43,7 @@ export async function readInventory(filters: InventoryFilters, budget: UnitBudge
     q.set("key", key);
     try {
       const res = await fetch(`${FATGRID_BASE}?${q}`, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) return { listings, units: budget.used - start, stopped: "failed", detail: `Fatgrid answered ${res.status}` };
+      if (!res.ok) return { listings, units: budget.used - start, stopped: "failed", detail: await refused(res, `domains_list ${filters.offerType} page ${page}`, key) };
       const read = readPage(await res.json());
       budget.spend(read.listings.length);
       listings.push(...read.listings);
@@ -48,7 +56,7 @@ export async function readInventory(filters: InventoryFilters, budget: UnitBudge
 }
 
 /** `search-domains` for named domains (the SERP's top three, the client's own, cited pages' hosts). */
-export async function readDomains(domains: readonly string[], budget: UnitBudget): Promise<ReadOutcome> {
+export async function readDomains(domains: readonly string[], budget: UnitBudget, call = "search-domains"): Promise<ReadOutcome> {
   const key = process.env.FATGRID_API_KEY;
   if (!key) return { listings: [], units: 0, stopped: "no_key" };
   const batch = searchBatch(domains, budget.left);
@@ -60,7 +68,7 @@ export async function readDomains(domains: readonly string[], budget: UnitBudget
       body: JSON.stringify({ search: batch.join(",") }),
       signal: AbortSignal.timeout(30_000),
     });
-    if (!res.ok) return { listings: [], units: 0, stopped: "failed", detail: `Fatgrid answered ${res.status}` };
+    if (!res.ok) return { listings: [], units: 0, stopped: "failed", detail: await refused(res, call, key) };
     const { listings } = readPage(await res.json());
     budget.spend(listings.length);
     return { listings, units: listings.length, stopped: batch.length < new Set(domains).size ? "capped" : "done" };
