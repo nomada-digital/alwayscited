@@ -1047,3 +1047,50 @@ export async function draftBuyingPrompts(
   if (!parsed) throw new Error(`the model returned no prompts (stop: ${res.stop_reason})`);
   return parsed.prompts.map((p) => ({ angle: p.angle, text: freshenYears(p.text.replace(/\s+/g, " ").trim()) }));
 }
+
+/**
+ * Whether each host covers a client's subject - 7 November 2026, the placement shortlist's topic gate
+ * (lib/csm/host-gates.ts). Agency only: the answer is stored in an agency table and never shown to a client. The
+ * small model, because each verdict is a yes or no and a line of why over a few dozen headlines; a host it leaves
+ * out stays unknown, which the gate treats as not proven.
+ */
+export const HOST_FIT_MODEL = "claude-haiku-5-5";
+
+const HostFit = z.object({
+  hosts: z.array(z.object({ domain: z.string(), fits: z.boolean(), reason: z.string() })),
+});
+
+export async function readHostFit(
+  profile: string,
+  hosts: readonly { domain: string; lines: readonly string[]; categories: readonly string[] }[],
+  billed: { calls: number } = { calls: 0 },
+): Promise<z.infer<typeof HostFit>["hosts"]> {
+  if (!hosts.length) return [];
+  const res = await withRetry(() => anthropic(billed).messages.parse({
+    model: HOST_FIT_MODEL,
+    max_tokens: 2000,
+    output_config: { format: zodOutputFormat(HostFit) },
+    system: [
+      "You vet websites for a link-building team. For each site, decide whether an article about the client's subject",
+      "would sit naturally there: does the site already publish for the same audience about the same subject or a close",
+      "neighbour of it? A general business or marketing site that covers web development, CMS platforms, agencies or",
+      "digital services can fit a web agency; a site about music, fashion, gaming, gambling, health or celebrity news",
+      "does not, whatever its authority. When the evidence is thin or mixed, answer no.",
+      "",
+      'reason: one line, under 140 characters, naming what the site covers - e.g. "UK tech and SaaS news; runs CMS and',
+      'agency reviews" or "music and band interviews; nothing on web or software". No prices, no metrics.',
+    ].join("\n"),
+    messages: [
+      {
+        role: "user",
+        content: [
+          profile,
+          "",
+          "Sites:",
+          ...hosts.map((h) => [`## ${h.domain}`, h.categories.length ? `Marketplace categories: ${h.categories.join(", ")}` : null, h.lines.length ? h.lines.join("\n") : "(the homepage could not be read)"].filter(Boolean).join("\n")),
+        ].join("\n"),
+      },
+    ],
+  }));
+  return res.parsed_output?.hosts ?? [];
+}

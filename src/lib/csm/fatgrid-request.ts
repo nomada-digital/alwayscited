@@ -76,6 +76,25 @@ export function inventoryQuery(f: InventoryFilters, page: number, left: number):
   return q;
 }
 
+/** Domains in one inventory page. Fixed, so a page number is always the same offset and a cursor can resume. */
+export const INVENTORY_PAGE = 5;
+
+/** Where the inventory pull got to, kept on the run (7 Nov 2026): the next page of each offer, for one filter set. */
+export type InventoryCursor = { sig: string; page_size: number; guest_post: number; link_insertion: number };
+
+/** The filters that decide which domains a page holds. A change to any of them starts the pull again from page 1. */
+export function inventorySig(f: Omit<InventoryFilters, "offerType">): string {
+  return JSON.stringify([f.minDr ?? null, f.maxDr ?? null, f.minTraffic ?? null, f.maxPrice ?? null, f.categories ?? [], f.languages ?? [], f.databases ?? []]);
+}
+
+/** The last run's cursor when it was for the same filters and page size, else a fresh one at page 1. */
+export function cursorFrom(prev: unknown, sig: string, pageSize = INVENTORY_PAGE): InventoryCursor {
+  const c = (prev ?? {}) as Partial<InventoryCursor>;
+  const page = (n: unknown) => (Number.isInteger(n) && (n as number) >= 1 && (n as number) <= 10_000 ? (n as number) : 1);
+  if (c.sig !== sig || c.page_size !== pageSize) return { sig, page_size: pageSize, guest_post: 1, link_insertion: 1 };
+  return { sig, page_size: pageSize, guest_post: page(c.guest_post), link_insertion: page(c.link_insertion) };
+}
+
 /** The domains for one `search-domains` request: normalised, deduplicated, and cut to what the budget has left. */
 export function searchBatch(domains: readonly string[], left: number): string[] {
   const out: string[] = [];

@@ -353,6 +353,10 @@ test("the upsert sites are the ones we think they are", () => {
       "search_console_queries:client_domain_id,page,period_end,provider,query",
       "sheet_links:client_domain_id,kind,url_key",
       "sheet_syncs:client_domain_id,kind",
+      // 7 Nov 2026, the shortlist's quality gates: one market-share and topic reading per client and host on
+      // shortlist_host_checks' primary key (20261107000000_csm_batch_b.sql), so a rerun inside 30 days reads it back
+      // rather than paying DataForSEO and the model again (lib/csm/host-check.ts).
+      "shortlist_host_checks:client_domain_id,domain",
       "shortlist_items:client_domain_id,cluster_id,domain,kind",
       // 29 Sep 2026, the daily tracking runner (T1), each on its own unique
       // constraint in 20260929000000_tracking_dashboard.sql: one run per client

@@ -143,14 +143,16 @@ export const PAID: Record<string, { module: string; what: string }> = {
    * 6 Nov 2026, the CSM build: the placement shortlist reads Fatgrid, which bills in units on the Pro plan. By hand
    * from the agency view (hub/agency shortlist_run) and nightly (autoShortlists, from cron/reap-stalled-scans); every
    * read spends from FATGRID_UNIT_CAP a run, cut to what FATGRID_MONTHLY_UNIT_CAP has left in fatgrid_usage.
+   * Since 7 Nov 2026 a run also vets hosts (lib/csm/host-check.ts): at most HOST_CHECKS_PER_RUN (24) fresh hosts, each
+   * one DataForSEO Labs read (about $0.02) and a share of one small-model call in eight, kept 30 days per client.
    */
   shortlistRun: {
     module: "src/lib/csm/agency.ts",
-    what: "a staff member's shortlist build: Fatgrid reads within the run and month unit caps",
+    what: "a staff member's shortlist build: Fatgrid reads within the run and month unit caps, and at most 24 host checks (about $0.50)",
   },
   autoShortlists: {
     module: "src/lib/csm/auto.ts",
-    what: "the nightly shortlist builds for onboarded, changed and month-end clusters, within the unit caps",
+    what: "the nightly shortlist builds for onboarded, changed and month-end clusters, within the unit caps and 24 host checks a run",
   },
   /** 3 Nov 2026: unchecked scan positions read again, from the 03:45 cron. */
   retryUncheckedClusterRanks: {

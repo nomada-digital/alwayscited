@@ -40,7 +40,15 @@ export type Candidate = {
   clientVisible: boolean;
   ownSite: boolean;
   note: string | null;
+  /** The host's share of organic traffic in the client's market, 0 to 1, when it was measured (host-gates.ts). */
+  marketShare: number | null;
+  market: string | null;
+  /** One line on why the host fits the client's topic, from the topic gate. */
+  fitReason: string | null;
 };
+
+/** What the gates found of a host that passed them, carried onto its items. */
+export type HostNote = { marketShare: number | null; market: string | null; fitReason: string | null };
 
 /** Per month at most, so a queue stays something a person reads. */
 export const PER_MONTH = 8;
@@ -69,15 +77,17 @@ export function rankShortlist(p: {
   cited: readonly CitedPage[];
   listings: ReadonlyMap<string, Listing>;
   inventory: readonly { listing: Listing; offer: "guest_post" | "link_insertion" }[];
+  hosts?: ReadonlyMap<string, HostNote>;
 }): Candidate[] {
   const own = normalizeDomain(p.clientDomain);
   const out: Candidate[] = [];
   const seen = new Set<string>();
-  const add = (c: Omit<Candidate, "score" | "queueMonth">) => {
+  const add = (c: Omit<Candidate, "score" | "queueMonth" | keyof HostNote>) => {
     const key = `${c.domain}|${c.kind}`;
     if (seen.has(key)) return;
     seen.add(key);
-    out.push({ ...c, queueMonth: 2, score: score(c, p.floor) });
+    const h = p.hosts?.get(c.domain);
+    out.push({ ...c, marketShare: h?.marketShare ?? null, market: h?.market ?? null, fitReason: h?.fitReason ?? null, queueMonth: 2, score: score(c, p.floor) });
   };
 
   // Cited pages on buyable hosts, the strongest evidence, grouped by host and kind.
@@ -125,7 +135,7 @@ export function rankShortlist(p: {
   if (p.clientDr !== null && p.clientDr >= p.floor) {
     queued.unshift({
       domain: own, pageUrl: null, kind: "new_listicle", queueMonth: 1, priceUsd: 0, dr: p.clientDr, traffic: null, citedBy: 0, score: 0,
-      opportunityId: null, clientVisible: false, ownSite: true,
+      opportunityId: null, clientVisible: false, ownSite: true, marketShare: null, market: null, fitReason: null,
       note: `Self-referencing listicle on the client's own site${p.keyword ? ` for "${p.keyword}"` : ""}: its DR ${p.clientDr} reaches the floor of ${p.floor}.`,
     });
   }

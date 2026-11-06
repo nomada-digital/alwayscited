@@ -31,28 +31,27 @@ export function monthlyUnitCap(): number {
   return capFrom(process.env.FATGRID_MONTHLY_UNIT_CAP, FATGRID_DEFAULTS.monthlyUnitCap);
 }
 
-/** `domains_list`, page by page, until the inventory or the budget runs out. */
-export async function readInventory(filters: InventoryFilters, budget: UnitBudget): Promise<ReadOutcome> {
+/**
+ * One page of `domains_list`, `pageSize` domains, from the budget. The page size is fixed by the caller so a page
+ * number always means the same offset, and a rerun can start where the last run stopped (shortlist.ts keeps the
+ * cursor) instead of paying again for domains it has already seen.
+ */
+export async function readInventoryPage(filters: InventoryFilters, page: number, pageSize: number, budget: UnitBudget): Promise<ReadOutcome & { hasMore: boolean }> {
   const key = process.env.FATGRID_API_KEY;
-  if (!key) return { listings: [], units: 0, stopped: "no_key" };
-  const listings: Listing[] = [];
-  const start = budget.used;
-  for (let page = 1; page <= 20; page++) {
-    const q = inventoryQuery(filters, page, budget.left);
-    if (!q) return { listings, units: budget.used - start, stopped: "capped" };
-    q.set("key", key);
-    try {
-      const res = await fetch(`${FATGRID_BASE}?${q}`, { signal: AbortSignal.timeout(30_000) });
-      if (!res.ok) return { listings, units: budget.used - start, stopped: "failed", detail: await refused(res, `domains_list ${filters.offerType} page ${page}`, key) };
-      const read = readPage(await res.json());
-      budget.spend(read.listings.length);
-      listings.push(...read.listings);
-      if (!read.hasMore) return { listings, units: budget.used - start, stopped: "done" };
-    } catch (err) {
-      return { listings, units: budget.used - start, stopped: "failed", detail: err instanceof Error ? err.message : String(err) };
-    }
+  if (!key) return { listings: [], units: 0, stopped: "no_key", hasMore: false };
+  if (budget.left < pageSize) return { listings: [], units: 0, stopped: "capped", hasMore: true };
+  const q = inventoryQuery(filters, page, pageSize);
+  if (!q) return { listings: [], units: 0, stopped: "capped", hasMore: true };
+  q.set("key", key);
+  try {
+    const res = await fetch(`${FATGRID_BASE}?${q}`, { signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) return { listings: [], units: 0, stopped: "failed", hasMore: false, detail: await refused(res, `domains_list ${filters.offerType} page ${page}`, key) };
+    const read = readPage(await res.json());
+    budget.spend(read.listings.length);
+    return { listings: read.listings, units: read.listings.length, stopped: "done", hasMore: read.hasMore };
+  } catch (err) {
+    return { listings: [], units: 0, stopped: "failed", hasMore: false, detail: err instanceof Error ? err.message : String(err) };
   }
-  return { listings, units: budget.used - start, stopped: "done" };
 }
 
 /** `search-domains` for named domains (the SERP's top three, the client's own, cited pages' hosts). */

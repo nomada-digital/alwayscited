@@ -90,7 +90,13 @@ test("rule 1: the walk finds the model calls it is written about", () => {
   // Reached only from src/lib/agency/edit.ts draftPrompts, behind /api/hub/agency's HUB_OFFER_SECRET and the hub's
   // staff check: one call per staff click, never by a customer or a schedule. `beta.messages.parse` on
   // `anthropic(billed)`, so the method set and rules 2-4 stand unchanged. A twelfth needs its own.
-  assert.equal(calls.length, 11, "anthropic.ts makes eleven model calls; a twelfth needs a decision, not a default");
+  // Twelve since 7 Nov 2026: readHostFit, the placement shortlist's topic gate - Danny's brief that day, after Kev
+  // rejected all of Common's first shortlist ("classify topical fit ... with a cheap LLM call"). Reached only from
+  // src/lib/csm/host-check.ts: a staff member's shortlist run or the nightly auto shortlists, at most
+  // HOST_CHECKS_PER_RUN (24) fresh hosts a run in batches of 8, so three calls a run at most, and a host read is kept
+  // 30 days. `messages.parse` on `anthropic(billed)`, so the method set and rules 2-4 stand unchanged. A thirteenth
+  // needs its own.
+  assert.equal(calls.length, 12, "anthropic.ts makes twelve model calls; a thirteenth needs a decision, not a default");
   assert.deepEqual(
     [...new Set(calls.map((c) => c.method))],
     ["parse"],

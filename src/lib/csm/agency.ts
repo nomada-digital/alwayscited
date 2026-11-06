@@ -84,8 +84,12 @@ const rangeOf = (o: Record<string, unknown>): OverrideRange => ({
 });
 
 export async function shortlistRead(db: SupabaseClient, client: Client): Promise<Done> {
+  const items = (cols: string) => db.from("shortlist_items").select(cols).eq("client_domain_id", client.id).order("queue_month").order("score", { ascending: false }).limit(300);
+  const base = "id, cluster_id, domain, page_url, kind, queue_month, price_usd, dr, traffic, cited_by, score, client_visible, own_site, state, first_run_id, last_run_id, decided_by, decided_at, note";
+  // The gates' columns (batch B, 7 Nov 2026) when the migration is in; the rest of the panel works without them.
+  const gated = await items(`${base}, market_share, market, fit_reason, reject_reason`);
   const [{ data: itemRows, error: itemsErr }, { data: runRows, error: runsErr }, budget, units] = await Promise.all([
-    db.from("shortlist_items").select("id, cluster_id, domain, page_url, kind, queue_month, price_usd, dr, traffic, cited_by, score, client_visible, own_site, state, first_run_id, last_run_id, decided_by, decided_at, note").eq("client_domain_id", client.id).order("queue_month").order("score", { ascending: false }).limit(300),
+    gated.error ? items(base) : Promise.resolve(gated),
     db.from("shortlist_runs").select("id, cluster_id, keyword, reason, dr_floor, dr_floor_source, serp_read_on, units_used, outcome, note, created_at").eq("client_domain_id", client.id).order("created_at", { ascending: false }).limit(12),
     readMonthBudget(db),
     unitsThisMonth(db),
@@ -96,7 +100,8 @@ export async function shortlistRead(db: SupabaseClient, client: Client): Promise
     ok: true,
     message: "ok",
     data: {
-      items: (itemRows ?? []).map((i) => ({ ...i, new_since_last_run: lastRun !== null && i.first_run_id === lastRun })),
+      items: ((itemRows ?? []) as unknown as Record<string, unknown>[]).map((i) => ({ ...i, new_since_last_run: lastRun !== null && i.first_run_id === lastRun })),
+      rejectReasons: REJECT_REASONS,
       runs: runRows ?? [],
       budget: { month: monthOf(), mine: budget.clients.find((c) => c.clientId === client.id) ?? null, total: { cap: budget.cap, allocated: budget.allocated, spent: budget.spent, remaining: budget.remaining, breach: budget.breach }, warnings: budget.warnings },
       units: { used: units, monthlyCap: monthlyUnitCap(), perRunCap: runBudget().cap },
@@ -121,16 +126,31 @@ export async function shortlistRun(db: SupabaseClient, client: Client, by: strin
   return { ok: true, message: lines.join("; ") };
 }
 
-export async function shortlistDecide(db: SupabaseClient, client: Client, by: string, p: { id: string; decision: unknown; note: string }): Promise<Done> {
+/** Why Kev turned a host down (7 Nov 2026). Stored on the item; a rejected domain is never offered to that client again. */
+export const REJECT_REASONS = { wrong_market: "Wrong market traffic", off_topic: "Off-topic", low_quality: "Low quality", other: "Other" } as const;
+
+export async function shortlistDecide(db: SupabaseClient, client: Client, by: string, p: { id: string; decision: unknown; note: string; reason?: unknown }): Promise<Done> {
   const decision = p.decision === "approve" ? "approved" : p.decision === "reject" ? "rejected" : null;
   if (!decision || !p.id) return { ok: false, message: "Approve or reject one item." };
+  const reason = decision === "rejected" && typeof p.reason === "string" && p.reason in REJECT_REASONS ? (p.reason as keyof typeof REJECT_REASONS) : null;
   const { data: item, error } = await db.from("shortlist_items").select("id, domain, kind, price_usd, state").eq("id", p.id).eq("client_domain_id", client.id).maybeSingle();
   if (error || !item) return { ok: false, message: error ? `Could not read the item: ${error.message}` : "No such item on this client." };
-  const { error: wErr } = await db.from("shortlist_items").update({ state: decision, decided_by: by, decided_at: new Date().toISOString(), note: p.note.slice(0, 500) || undefined, updated_at: new Date().toISOString() }).eq("id", p.id);
-  if (wErr) return { ok: false, message: `Not saved: ${wErr.message}` };
-  await audit(db, client.id, by, `shortlist_${decision}`, item.domain as string, item.state, decision);
+  const now = new Date().toISOString();
+  const said = [reason ? `Rejected: ${REJECT_REASONS[reason]}.` : null, p.note.trim() || null].filter(Boolean).join(" ").slice(0, 500);
+  const row = { state: decision, decided_by: by, decided_at: now, note: said || undefined, updated_at: now };
+  // A rejection is of the host, so every open suggestion of that domain for this client goes with it.
+  const target = decision === "rejected"
+    ? db.from("shortlist_items").update({ ...row, ...(reason ? { reject_reason: reason } : {}) }).eq("client_domain_id", client.id).eq("domain", item.domain as string).in("state", ["proposed", "dropped"])
+    : db.from("shortlist_items").update(row).eq("id", p.id);
+  const { error: wErr } = await target;
+  // Before batch B there is no reject_reason column: the reason is still in the note, so the write goes again without it.
+  const retry = wErr && reason && /reject_reason/.test(wErr.message);
+  const { error: retryErr } = retry ? await db.from("shortlist_items").update(row).eq("client_domain_id", client.id).eq("domain", item.domain as string).in("state", ["proposed", "dropped"]) : { error: null };
+  const saveErr = retry ? retryErr : wErr;
+  if (saveErr) return { ok: false, message: `Not saved: ${saveErr.message}` };
+  await audit(db, client.id, by, `shortlist_${decision}`, item.domain as string, item.state, reason ? `${decision}: ${reason}` : decision);
   const warn = decision === "approved" && item.price_usd !== null ? wouldBreach(await readMonthBudget(db), client.id, Number(item.price_usd)) : [];
-  return { ok: true, message: `${item.domain} ${decision}.${warn.length ? ` Buying it ${warn.join(" and ")}.` : ""}`, data: { warnings: warn } };
+  return { ok: true, message: `${item.domain} ${decision}${reason ? ` (${REJECT_REASONS[reason].toLowerCase()})` : ""}.${decision === "rejected" ? " It will not be suggested to this client again." : ""}${warn.length ? ` Buying it ${warn.join(" and ")}.` : ""}`, data: { warnings: warn } };
 }
 
 export async function spendRecord(db: SupabaseClient, client: Client, by: string, p: { itemId: string; amount: unknown; description: string; month: string }): Promise<Done> {

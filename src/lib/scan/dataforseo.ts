@@ -184,6 +184,17 @@ export async function readRankingFootprint(
 }
 
 /**
+ * A domain's organic traffic in every location DataForSEO Labs has it, in one task - 7 November 2026, for the
+ * placement shortlist's market gate (lib/csm/host-gates.ts). `domain_rank_overview/live` with no location answers one
+ * item per location and language, about $0.02. Throws on failure; the caller decides what an unread host means.
+ */
+export async function readTrafficByLocation(domain: string): Promise<{ items: { location_code?: unknown; metrics?: { organic?: { etv?: unknown } } }[]; cost: number }> {
+  const raw = await post("/v3/dataforseo_labs/google/domain_rank_overview/live", [{ target: domain }], 15000);
+  const task = firstTask(raw) as { cost?: number; result?: { items?: { location_code?: unknown; metrics?: { organic?: { etv?: unknown } } }[] }[] };
+  return { items: task.result?.[0]?.items ?? [], cost: Number(task.cost) || 0 };
+}
+
+/**
  * Monthly Google searches for the derived head keywords - one task for the
  * whole scan (R39, Danny, 27 Sep 2026). The request shape and the reader live
  * in `dataforseo-request.ts`; this is the one door that sends it.

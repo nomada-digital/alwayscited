@@ -8,8 +8,9 @@ import { test } from "node:test";
  * the client view, the client API responses, or this public repo.
  *
  * Three facts hold it in code:
- * 1. The agency-only tables are the ones migration 20261106000000 marks AGENCY-ONLY, each with row level security on,
- *    no policy anywhere, and no grant to anon or authenticated - derived from the migrations, not typed here.
+ * 1. The agency-only tables are the ones the CSM batches (20261106000000 A, 20261107000000 B) mark AGENCY-ONLY, each
+ *    with row level security on in its own batch, no policy anywhere, and no grant to anon or authenticated - derived
+ *    from the migrations, not typed here.
  * 2. A secret table's name is written only under src/lib/csm/ (the agency code), never anywhere else in src.
  * 3. Nothing a client can reach - the dashboards pages, their API routes, the dashboard libraries and components -
  *    imports src/lib/csm/, directly or through anything it imports. The walk follows every import, so routing around
@@ -31,19 +32,21 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 const migrations = readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).map((f) => readFileSync(join(MIGRATIONS, f), "utf8"));
-const batchA = readFileSync(join(MIGRATIONS, "20261106000000_csm_batch_a.sql"), "utf8");
+/** The CSM batches, A (6 Nov 2026) then B (7 Nov 2026, the shortlist's quality gates). Two at least: a rename is caught. */
+const BATCHES = readdirSync(MIGRATIONS).filter((f) => /_csm_batch_[a-z]\.sql$/.test(f)).sort().map((f) => readFileSync(join(MIGRATIONS, f), "utf8"));
 
-/** Every table the batch marks AGENCY-ONLY: the comment line, then its create table. */
-const AGENCY_TABLES = [...batchA.matchAll(/-- AGENCY-ONLY[^\n]*\n(?:--[^\n]*\n)*create table if not exists public\.([a-z_]+)/g)].map((m) => m[1]!);
-/** The ones that hold Fatgrid data or our costs: never named outside src/lib/csm. */
-const SECRET_TABLES = ["fatgrid_listings", "fatgrid_usage", "shortlist_runs", "shortlist_items", "placement_budget_settings", "placement_budgets", "placement_budget_overrides", "client_commercial_context", "placement_spend"];
+/** Every table a batch marks AGENCY-ONLY: the comment line, then its create table - with the batch that made it. */
+const AGENCY_TABLES = BATCHES.flatMap((b) => [...b.matchAll(/-- AGENCY-ONLY[^\n]*\n(?:--[^\n]*\n)*create table if not exists public\.([a-z_]+)/g)].map((m) => ({ t: m[1]!, batch: b })));
+/** The ones that hold Fatgrid data, relevance verdicts or our costs: never named outside src/lib/csm. */
+const SECRET_TABLES = ["fatgrid_listings", "fatgrid_usage", "shortlist_runs", "shortlist_items", "placement_budget_settings", "placement_budgets", "placement_budget_overrides", "client_commercial_context", "placement_spend", "shortlist_host_checks"];
 
 test("the agency-only tables are locked: row level security on, no policy, no grant to the browser roles", () => {
-  assert.ok(AGENCY_TABLES.length >= 12, `found ${AGENCY_TABLES.length} AGENCY-ONLY tables`);
-  for (const t of SECRET_TABLES) assert.ok(AGENCY_TABLES.includes(t), `${t} is not marked AGENCY-ONLY`);
-  const revoked = batchA.slice(batchA.indexOf("revoke all on table"));
-  for (const t of AGENCY_TABLES) {
-    assert.match(batchA, new RegExp(`alter table public\\.${t} enable row level security;`), `${t}: row level security`);
+  assert.ok(BATCHES.length >= 2, `found ${BATCHES.length} CSM batches`);
+  assert.ok(AGENCY_TABLES.length >= 13, `found ${AGENCY_TABLES.length} AGENCY-ONLY tables`);
+  for (const t of SECRET_TABLES) assert.ok(AGENCY_TABLES.some((a) => a.t === t), `${t} is not marked AGENCY-ONLY`);
+  for (const { t, batch } of AGENCY_TABLES) {
+    const revoked = batch.slice(batch.indexOf("revoke all on table"));
+    assert.match(batch, new RegExp(`alter table public\\.${t} enable row level security;`), `${t}: row level security`);
     assert.ok(!migrations.some((m) => new RegExp(`create policy[^;]*\\bon\\s+(public\\.)?${t}\\b`, "i").test(m)), `${t} has a policy`);
     assert.match(revoked, new RegExp(`public\\.${t}\\b`), `${t}: not revoked from anon and authenticated`);
   }

@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       case "shortlist_run":
         return shortlistRun(db, client, by, id("cluster_id"), b.unit_cap);
       case "shortlist_decide":
-        return shortlistDecide(db, client, by, { id: id("id"), decision: b.decision, note: str("note") });
+        return shortlistDecide(db, client, by, { id: id("id"), decision: b.decision, note: str("note"), reason: b.reason });
       case "spend_record":
         return spendRecord(db, client, by, { itemId: id("item_id"), amount: b.amount_usd, description: str("description"), month: str("month") });
       case "context_read":
