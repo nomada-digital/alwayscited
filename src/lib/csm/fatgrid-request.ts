@@ -64,7 +64,8 @@ export type InventoryFilters = {
 export function inventoryQuery(f: InventoryFilters, page: number, left: number): URLSearchParams | null {
   const limit = Math.min(PAGE_MAX, left);
   if (limit < 1) return null;
-  const q = new URLSearchParams({ type: "domains_list", page: String(page), limit: String(limit), offerType: f.offerType, linkFollow: "dofollow", sponsored: "false" });
+  // `sponsored` is a number, 0 or 1: Fatgrid answered "false" (the fatgrid skill's form) with a 400, 6 Nov 2026.
+  const q = new URLSearchParams({ type: "domains_list", page: String(page), limit: String(limit), offerType: f.offerType, linkFollow: "dofollow", sponsored: "0" });
   if (f.minDr !== undefined) q.set("minDr", String(Math.round(f.minDr)));
   if (f.maxDr !== undefined) q.set("maxDr", String(Math.round(f.maxDr)));
   if (f.minTraffic !== undefined) q.set("minTotalOrganicTraffic", String(Math.round(f.minTraffic)));

@@ -12,7 +12,7 @@ test("a read never asks for more domains than the budget has left, and stops at 
   assert.equal(b.left, 0);
   assert.equal(inventoryQuery({ offerType: "guest_post" }, 2, b.left), null, "no budget, no request");
   const q = inventoryQuery({ offerType: "link_insertion", minDr: 61.4, minTraffic: 5000, maxPrice: 500, databases: ["uk"] }, 3, 10)!;
-  assert.deepEqual(Object.fromEntries(q), { type: "domains_list", page: "3", limit: "10", offerType: "link_insertion", linkFollow: "dofollow", sponsored: "false", minDr: "61", minTotalOrganicTraffic: "5000", maxPrice: "500", databases: "uk" });
+  assert.deepEqual(Object.fromEntries(q), { type: "domains_list", page: "3", limit: "10", offerType: "link_insertion", linkFollow: "dofollow", sponsored: "0", minDr: "61", minTotalOrganicTraffic: "5000", maxPrice: "500", databases: "uk" });
 });
 
 test("a domain batch is normalised, deduplicated and cut to the budget", () => {
