@@ -145,8 +145,18 @@ export async function buildShortlist(
   const listings = new Map<string, Listing>();
   const fresh = new Date(Date.now() - LISTING_TTL_DAYS * 86_400_000).toISOString();
   const citedAll = [...new Map(cited.sort((a, b) => b.answers - a.answers).map((c) => [c.domain, c])).keys()].filter((d) => d !== own && !d.endsWith(`.${own}`) && !rejected.has(d));
-  // A cited host is checked for topic before a unit is spent on it; its market share is shown, not gated.
-  await check(citedAll);
+  // A cited host is checked for topic before a unit is spent on it; its market share is shown, not gated. Where the
+  // page the engines cite is itself a list or directory of the client's kind of firm (route ask_added or get_listed),
+  // that page is the topic evidence and the homepage is not asked: parexcellence.vip reads as a yachting magazine,
+  // and its cited page is "the nine best household and domestic staffing agencies in Europe" (MOR, 7 Nov 2026).
+  const listPage = new Map<string, string>();
+  for (const c of cited) if ((c.route === "ask_added" || c.route === "get_listed") && !listPage.has(c.domain)) listPage.set(c.domain, c.url);
+  await check(citedAll.filter((d) => !listPage.has(d)));
+  for (const [d, url] of listPage) {
+    if (!citedAll.includes(d)) continue;
+    const path = url.replace(/^https?:\/\/[^/]+/, "").replace(/\?.*$/, "").slice(0, 120) || "/";
+    checks.set(d, { ...(checks.get(d) ?? { domain: d, market, marketShare: null, marketEtv: null, totalEtv: null }), fits: true, fitReason: `AI engines already cite its list page ${path} for this client's questions` });
+  }
   const citedHosts = citedAll.filter((d) => passes(d, true));
   const wanted = [...new Set([...top3, own, ...citedHosts])];
   const { data: cache, error: cacheErr } = await db.from("fatgrid_listings").select("domain, dr, traffic, best_price_usd, offers, categories, language, sponsored, link_follow").in("domain", wanted).gte("fetched_at", fresh);
