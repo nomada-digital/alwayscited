@@ -119,12 +119,17 @@ export function readListing(raw: unknown): Listing | null {
   const domain = typeof r.url === "string" ? normalizeDomain(r.url) : "";
   if (!domain) return null;
   const resources = Array.isArray(r.resources) ? r.resources : [];
+  // Fatgrid answers one item per domain and offer type, the type and its best price on the item itself (the hub's
+  // _shared/fatgrid.ts reads it so); `resources` entries carry no type. Read only from there, Spear's two offers came
+  // back untyped and the ranker dropped it (MOR, 7 Nov 2026).
+  const own = offerType(r.type);
+  const fromResources = resources.map((o) => ({ type: offerType((o as Record<string, unknown>)?.type), price: num((o as Record<string, unknown>)?.price) }));
   return {
     domain,
     dr: num(r.dr),
     traffic: num(r.totalOrganicTraffic),
     bestPrice: num(r.bestPrice),
-    offers: resources.map((o) => ({ type: offerType((o as Record<string, unknown>)?.type), price: num((o as Record<string, unknown>)?.price) })),
+    offers: own ? [{ type: own, price: num(r.bestPrice) }, ...fromResources.filter((o) => o.type !== null)] : fromResources,
     categories: Array.isArray(r.categories) ? r.categories.filter((c): c is string => typeof c === "string").slice(0, 12) : [],
     language: typeof r.language === "string" ? r.language : null,
     sponsored: typeof r.sponsored === "boolean" ? r.sponsored : null,
@@ -145,8 +150,29 @@ export function errorSnippet(body: string, key: string, max = 200): string {
 /** The listings in a `domains_list` or `search-domains` answer, and whether `domains_list` has another page. */
 export function readPage(body: unknown): { listings: Listing[]; hasMore: boolean } {
   const b = (body ?? {}) as { items?: unknown; hasMore?: unknown };
-  const listings = (Array.isArray(b.items) ? b.items : []).map(readListing).filter((l): l is Listing => l !== null);
-  return { listings, hasMore: b.hasMore === true };
+  const byDomain = new Map<string, Listing>();
+  for (const l of (Array.isArray(b.items) ? b.items : []).map(readListing)) {
+    if (!l) continue;
+    const had = byDomain.get(l.domain);
+    if (!had) {
+      byDomain.set(l.domain, l);
+      continue;
+    }
+    // A domain comes once per offer type: one listing, its offers together, the best of each figure.
+    const best = (pick: (x: Listing) => number | null, f: (...n: number[]) => number) => {
+      const v = [pick(had), pick(l)].filter((x): x is number => x !== null);
+      return v.length ? f(...v) : null;
+    };
+    byDomain.set(l.domain, {
+      ...had,
+      dr: best((x) => x.dr, Math.max),
+      traffic: best((x) => x.traffic, Math.max),
+      bestPrice: best((x) => x.bestPrice, Math.min),
+      offers: [...had.offers, ...l.offers],
+      categories: [...new Set([...had.categories, ...l.categories])].slice(0, 12),
+    });
+  }
+  return { listings: [...byDomain.values()], hasMore: b.hasMore === true };
 }
 
 /** The cheapest offer of a type, else the best price. */

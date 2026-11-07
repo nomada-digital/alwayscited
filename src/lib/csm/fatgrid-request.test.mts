@@ -41,3 +41,18 @@ test("a refusal's body is logged as one short line with the key cut out", () => 
   assert.equal(errorSnippet("x".repeat(300), "k-123"), `${"x".repeat(200)}...`);
   assert.equal(errorSnippet("  a \n\t b  ", ""), "a b");
 });
+
+test("one item per domain and offer type is read as one listing with both offers typed (the hub's reading)", () => {
+  const { listings } = readPage({ items: [
+    { url: "https://www.spearswms.com/", type: "guest_post", bestPrice: 400, dr: 72, totalOrganicTraffic: 44851, categories: ["Finance"], resources: [{ price: 400 }] },
+    { url: "spearswms.com", type: "link_insertion", bestPrice: 250, dr: 71, categories: ["Business"], resources: [{ price: 250 }] },
+  ] });
+  assert.equal(listings.length, 1);
+  const l = listings[0]!;
+  assert.equal(l.dr, 72);
+  assert.equal(l.bestPrice, 250);
+  assert.equal(priceFor(l, "guest_post"), 400);
+  assert.equal(priceFor(l, "link_insertion"), 250);
+  assert.deepEqual(l.categories, ["Finance", "Business"]);
+  assert.ok(l.offers.every((o) => o.type !== null), "every offer typed");
+});

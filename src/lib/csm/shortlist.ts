@@ -161,7 +161,8 @@ export async function buildShortlist(
   const wanted = [...new Set([...top3, own, ...citedHosts])];
   const { data: cache, error: cacheErr } = await db.from("fatgrid_listings").select("domain, dr, traffic, best_price_usd, offers, categories, language, sponsored, link_follow").in("domain", wanted).gte("fetched_at", fresh);
   if (!cacheErr) {
-    for (const r of cache ?? []) listings.set(r.domain as string, { domain: r.domain as string, dr: r.dr === null ? null : Number(r.dr), traffic: r.traffic === null ? null : Number(r.traffic), bestPrice: r.best_price_usd === null ? null : Number(r.best_price_usd), offers: (r.offers as Listing["offers"]) ?? [], categories: (r.categories as string[]) ?? [], language: (r.language as string | null) ?? null, sponsored: (r.sponsored as boolean | null) ?? null, linkFollow: (r.link_follow as string | null) ?? null });
+    // A listing cached before 7 Nov 2026's parser fix has its offers untyped and could never be ranked: read again.
+    for (const r of (cache ?? []).filter((x) => !((x.offers as Listing["offers"]) ?? []).length || ((x.offers as Listing["offers"]) ?? []).some((o) => o.type !== null))) listings.set(r.domain as string, { domain: r.domain as string, dr: r.dr === null ? null : Number(r.dr), traffic: r.traffic === null ? null : Number(r.traffic), bestPrice: r.best_price_usd === null ? null : Number(r.best_price_usd), offers: (r.offers as Listing["offers"]) ?? [], categories: (r.categories as string[]) ?? [], language: (r.language as string | null) ?? null, sponsored: (r.sponsored as boolean | null) ?? null, linkFollow: (r.link_follow as string | null) ?? null });
   }
   const read: Listing[] = [];
   let stopped: "done" | "capped" | "no_key" | "failed" = "done";
