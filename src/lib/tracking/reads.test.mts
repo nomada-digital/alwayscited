@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { firstTask, keywordRankRequest, SERP_DEPTH } from "../scan/dataforseo-request.ts";
-import { parseGoogleAio, parseOrganic, rankOf, rankOfRead } from "../scan/engines.ts";
+import { parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb } from "../scan/engines.ts";
 
 import { billedCost, failureSummary, keywordOutcome, readFailureReason, readRetryDelay, runOutcome } from "./decide.ts";
 
@@ -88,6 +88,24 @@ test("3 Nov 2026: a page of google.com/goto links is not ranked on, found or not
   const one = parseOrganic({ items: items.map((it, i) => (i === 1 ? it : { ...it, domain: `site${i}.example`, url: `https://site${i}.example/` })) });
   assert.equal(rankOfRead(one, "site4.example", false), 5);
   assert.equal(rankOfRead(one, "absent.example", false), null);
+});
+
+test("7 Nov 2026: a wrapped result is ranked on the site its breadcrumb names", () => {
+  // As Google served a customer's keyword (UK) on 7 Nov: every link wrapped, every breadcrumb a site.
+  const items = Array.from({ length: 20 }, (_, i) => ({
+    type: "organic", rank_group: i + 1, domain: "google.com", url: `https://google.com/goto?url=CAES${i}`,
+    breadcrumb: i === 6 ? "https://www.talent-boutique.example › household-staff › ..." : i === 2 ? "https://site2.example › a › b" : `https://site${i}.example`,
+  }));
+  const organic = parseOrganic({ items });
+  assert.equal(serpFault(organic), null, "a page whose wrapped links all carry a breadcrumb can be ranked on");
+  assert.equal(rankOfRead(organic, "talent-boutique.example", false), 7);
+  assert.equal(organic[6].url, "https://www.talent-boutique.example/", "a breadcrumb cut short gives the home page");
+  assert.equal(organic[2].url, "https://site2.example/a/b", "a whole one gives the page");
+  assert.equal(rankOfRead(organic, "absent.example", false), null, "and a miss is a miss");
+  assert.equal(unwrapByCrumb("Tiger Recruitment"), null, "no address in the breadcrumb: nothing to read");
+  // Wrapped results with no breadcrumb are still the degraded page of 3 Nov.
+  const bare = parseOrganic({ items: items.map((it, i) => (i < 3 ? { ...it, breadcrumb: undefined } : it)) });
+  assert.equal(serpFault(bare), "wrapped");
 });
 
 test("a task DataForSEO failed keeps its status, its billed cost and a short reason", () => {

@@ -190,7 +190,7 @@ function collectCitations(
 type AioRef = { source?: string; domain?: string; url?: string; title?: string };
 type AioElement = { text?: string; references?: AioRef[] };
 type AioItem = { type: string; markdown?: string; items?: AioElement[]; references?: AioRef[] };
-type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string };
+type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string; breadcrumb?: string };
 
 /**
  * The organic results, from the same response as the Overview. The request is
@@ -201,6 +201,12 @@ function collectOrganic(items: OrganicItem[]): OrganicHit[] {
   const out: OrganicHit[] = [];
   for (const i of items) {
     if (i.type !== "organic") continue;
+    const shown = wrappedLink(i.url ?? null) ? unwrapByCrumb(i.breadcrumb) : null;
+    if (shown) {
+      const rank = typeof i.rank_group === "number" ? i.rank_group : i.rank_absolute;
+      if (typeof rank === "number") out.push({ domain: shown.domain, url: shown.url, rank });
+      continue;
+    }
     const domain = normalizeDomain(i.domain || i.url || "");
     const rank = typeof i.rank_group === "number" ? i.rank_group : i.rank_absolute;
     if (!domain || typeof rank !== "number") continue;
@@ -234,6 +240,24 @@ export function rankOf(organic: OrganicHit[] | undefined, subject: string): numb
  */
 export const SERP_MIN_ORGANIC = 10;
 
+/**
+ * The site behind a wrapped result, read off its breadcrumb (7 Nov 2026, as the
+ * hub's rank pull does since 3 Nov: pull_ranks_dfs.item_link). Google now links
+ * most organic results through google.com/goto, and DataForSEO reports those
+ * as google.com; the breadcrumb, "https://www.x.com › a › b", still names the
+ * site. The url is the site's own when the path is shown whole, its home page
+ * when the breadcrumb cuts it short. Null without a readable breadcrumb.
+ */
+export function unwrapByCrumb(breadcrumb: string | undefined | null): { domain: string; url: string } | null {
+  const m = /^(https?:\/\/[^\s/›]+)(.*)$/.exec((breadcrumb ?? "").trim());
+  if (!m) return null;
+  const domain = normalizeDomain(m[1]);
+  if (!domain) return null;
+  const parts = m[2].split("›").map((p) => p.trim()).filter(Boolean);
+  const cut = parts.some((p) => p.includes("...") || p.includes("…") || p.includes(" "));
+  return { domain, url: cut || !parts.length ? `${m[1]}/` : `${m[1]}/${parts.join("/")}` };
+}
+
 /** An organic result whose link is Google's own redirect (`/goto` or `/url` on a google host) rather than the site's. */
 function wrappedLink(url: string | null): boolean {
   if (!url) return false;
@@ -253,7 +277,11 @@ function wrappedLink(url: string | null): boolean {
  * wrapped as google.com/goto and the site only in the breadcrumb. Every
  * tracking_serp read from 30 Oct carried three or more; none before did. The
  * count of results did not drop, so only the links give it away. A wrapped
- * page is the wrong page: nothing on it is a rank or a miss.
+ * page is the wrong page: nothing on it is a rank or a miss. Since 7 Nov a
+ * wrapped result takes its site from its breadcrumb (`unwrapByCrumb`, in
+ * `collectOrganic`), so only those with no breadcrumb to read still count here:
+ * the page Google serves for MOR's keywords on 7 Nov was the right one, with
+ * every one of its twenty links wrapped.
  *
  * "thin": fewer than SERP_MIN_ORGANIC organic results, read like a partial -
  * found is a rank, not found is not measured.
