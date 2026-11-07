@@ -12,7 +12,7 @@ import { sheetRef } from "@/lib/links/sheet-parse";
 import { precheckKeyword } from "@/lib/tracking/add-cluster";
 import { adminEdit, adminStop } from "@/lib/tracking/admin-edit";
 import { dayAfter, liveOn, trackingDay } from "@/lib/tracking/decide";
-import { ANGLES, type Angle, insertCluster, insertKeyword, insertPrompts, readingsFor } from "@/lib/tracking/limits";
+import { ANGLES, type Angle, KEYWORDS_PER_CLUSTER, PROMPTS_PER_CLUSTER, insertCluster, insertKeyword, insertPrompts, readingsFor } from "@/lib/tracking/limits";
 import { refuseSlotText } from "@/lib/tracking/prompt-text";
 import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { marketDrafts } from "@/lib/tracking/starter-pick";
@@ -149,6 +149,32 @@ export async function setTier(db: SupabaseClient, client: Client, by: string, ti
   await audit(db, client.id, by, "set_tier", null, client.tier, tier);
   if (cErr) return { ok: false, message: `Plan changed, but its clusters were not: ${cErr.message}` };
   return { ok: true, message: `Plan changed to ${tier}; ${(moved ?? []).length} cluster${(moved ?? []).length === 1 ? "" : "s"} moved with it. Engines change from the next daily check.` };
+}
+
+/**
+ * The client's allowance by hand (Danny, 8 Nov 2026: Volunteero, invoiced by hand, needs ten prompts on one cluster).
+ * `cluster_limit` sets clusters, and prompts and keywords per cluster (limits.ts). Stripe also sets it, at checkout,
+ * per pack and on every customer.subscription.updated (signup.ts onSubscriptionUpdated: a locked contract plan back to
+ * 1), so on a client with a Stripe subscription the answer says so. A lower limit refuses new rows only: the daily
+ * check reads every live prompt and keyword, so nothing already tracked stops. Never below the clusters already live.
+ * Audited like every edit here. Stripe itself is never touched.
+ */
+export async function setClusterLimit(db: SupabaseClient, client: Client, by: string, limit: unknown): Promise<Done> {
+  const n = typeof limit === "number" ? limit : Number(limit);
+  if (!Number.isInteger(n) || n < 1 || n > 40) return { ok: false, message: "The allowance is 1 to 40 clusters." };
+  const { data: cur, error } = await db.from("client_domains").select("cluster_limit").eq("id", client.id).single();
+  if (error) return { ok: false, message: `Could not read the allowance: ${error.message}` };
+  if (cur.cluster_limit === n) return { ok: true, message: "Nothing changed." };
+  const { data: subs, error: oErr } = await db.from("orders").select("stripe_subscription_id").eq("client_domain_id", client.id).not("stripe_subscription_id", "is", null);
+  if (oErr) return { ok: false, message: `Could not read its orders: ${oErr.message}` };
+  const { count, error: cErr } = await db.from("tracked_clusters").select("id", { count: "exact", head: true }).eq("client_domain_id", client.id).is("stopped_on", null);
+  if (cErr) return { ok: false, message: `Could not count its clusters: ${cErr.message}` };
+  if ((count ?? 0) > n) return { ok: false, message: `It has ${count} live clusters: stop some before lowering the allowance to ${n}.` };
+  const { error: uErr } = await db.from("client_domains").update({ cluster_limit: n }).eq("id", client.id);
+  if (uErr) return { ok: false, message: `Could not change the allowance: ${uErr.message}` };
+  await audit(db, client.id, by, "set_cluster_limit", null, cur.cluster_limit, n);
+  const stripe = (subs ?? []).length ? " It has a Stripe subscription: Stripe's next update to it sets the allowance back to the plan's, which stops new additions but nothing already tracked." : "";
+  return { ok: true, message: `Allowance is now ${n} cluster${n === 1 ? "" : "s"}: ${n * PROMPTS_PER_CLUSTER} prompts and ${n * KEYWORDS_PER_CLUSTER} keyword${n * KEYWORDS_PER_CLUSTER === 1 ? "" : "s"}.${stripe}` };
 }
 
 export async function setStatus(db: SupabaseClient, client: Client, by: string, status: string): Promise<Done> {
@@ -297,7 +323,7 @@ function readDrafts(raw: unknown, live: readonly string[]): Draft[] | string {
 }
 
 /** Replace every live prompt in a cluster with these: the old stop tomorrow (their readings stay), the new start then. */
-export async function replacePrompts(db: SupabaseClient, client: Client, by: string, p: { clusterId: string; prompts: unknown }): Promise<Done> {
+export async function replacePrompts(db: SupabaseClient, client: Client, by: string, p: { clusterId: string; prompts: unknown; rerun?: boolean }): Promise<Done> {
   const c = await liveCluster(db, client, p.clusterId);
   if (typeof c === "string") return { ok: false, message: c };
   const { data: old, error } = await db.from("tracked_questions").select("id, text, angle").eq("client_domain_id", client.id).eq("cluster_id", p.clusterId).is("stopped_on", null).is("allowance", null);
@@ -313,12 +339,19 @@ export async function replacePrompts(db: SupabaseClient, client: Client, by: str
     const { error: sErr } = await db.from("tracked_questions").update({ stopped_on: dayAfter(today), stopped_by: BY }).in("id", ids).is("stopped_on", null);
     if (sErr) return { ok: false, message: `Could not stop the old prompts: ${sErr.message}` };
   }
-  const w = await insertPrompts(db, client.id, p.clusterId, drafts.map((d) => ({ ...d, source: BY, origin_kind: "nomada" as const, added_on: dayAfter(today), added_by: BY })), { pooled: true });
+  // `rerun` (8 Nov 2026), as change_keyword's: the new prompts start today and today's check reads them now, so a new
+  // baseline exists at once. The old ones still stop tomorrow, after today's reading they already have.
+  const start = p.rerun ? today : dayAfter(today);
+  const w = await insertPrompts(db, client.id, p.clusterId, drafts.map((d) => ({ ...d, source: BY, origin_kind: "nomada" as const, added_on: start, added_by: BY })), { pooled: true });
   if (!w.ok) {
     const { error: uErr } = ids.length ? await db.from("tracked_questions").update({ stopped_on: null, stopped_by: null }).in("id", ids) : { error: null };
     return { ok: false, message: `Not changed: ${w.message}${uErr ? `. The old prompts are stopped from tomorrow and could not be put back (${uErr.message})` : ""}` };
   }
-  await audit(db, client.id, by, "replace_prompts", p.clusterId, (old ?? []).map((o) => ({ id: o.id, text: o.text, angle: o.angle })), drafts);
+  await audit(db, client.id, by, "replace_prompts", p.clusterId, (old ?? []).map((o) => ({ id: o.id, text: o.text, angle: o.angle })), { prompts: drafts, starts: start });
+  if (p.rerun) {
+    const r = await runChecksNow(db, client, by);
+    return { ok: true, message: `${drafts.length} prompts saved, starting today; the old ones stop tomorrow and keep their readings. ${r.message}` };
+  }
   return { ok: true, message: `${drafts.length} prompts saved; they start at tomorrow's daily check, and the old ones keep their readings.` };
 }
 

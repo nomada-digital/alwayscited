@@ -1,5 +1,5 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
-import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { budgetCap, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -78,6 +78,8 @@ export async function POST(req: Request) {
         return setBrand(db, client, by, { brand: b.brand, aliases: b.aliases, exactCase: b.exact_case });
       case "set_tier":
         return setTier(db, client, by, str("tier"));
+      case "set_cluster_limit":
+        return setClusterLimit(db, client, by, b.cluster_limit);
       case "set_status":
         return setStatus(db, client, by, str("status"));
       case "archive":
@@ -93,7 +95,7 @@ export async function POST(req: Request) {
       case "draft_prompts":
         return draftPrompts(client, str("keyword"));
       case "replace_prompts":
-        return replacePrompts(db, client, by, { clusterId: id("cluster_id"), prompts: b.prompts });
+        return replacePrompts(db, client, by, { clusterId: id("cluster_id"), prompts: b.prompts, rerun: b.rerun === true });
       case "change_keyword":
         return changeKeyword(db, client, by, { clusterId: id("cluster_id"), keyword: str("keyword"), prompts: b.prompts, rerun: b.rerun === true });
       case "run_checks":
