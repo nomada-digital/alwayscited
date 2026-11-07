@@ -5,17 +5,21 @@ import { useMemo, useState } from "react";
 
 import type { PlanShape } from "@/lib/dash/allowance";
 import { buildWorkspace } from "@/lib/dash/model";
-import { KEYWORD_MAX, NAME_MAX } from "@/lib/dash/ops";
+import { KEYWORD_MAX, NAME_MAX, addedClusterTier } from "@/lib/dash/ops";
 import type { Raw } from "@/lib/dash/types";
+import TierName from "@/components/TierName";
 import { otherForm } from "@/lib/tracking/plural";
 
 import { InlineText, Menu } from "./ClusterEditor";
-import { Change, Pos, Rate, Spark, TargetPage } from "./Figures";
+import { Change, LimitsLine, Pos, Rate, Spark, TargetPage } from "./Figures";
 import Icon from "./Icon";
 import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
 
-/** Every cluster, with add, rename and remove in place (17 Oct 2026). */
+/**
+ * Every cluster, with add, rename and remove in place (17 Oct 2026). On a paid plan, a cluster we do not work on is
+ * labelled tracking only, with its way onto the plan - a swap or an add - one click away (7 Nov 2026).
+ */
 export default function ClustersBoard({ slug, base, initial, plan, demo = false }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo?: boolean }) {
   const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
@@ -23,11 +27,16 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
   const [renaming, setRenaming] = useState<string | null>(null);
   const a = ws.allowances;
   const full = a.clusters.used >= a.clusters.limit;
+  const paid = ws.client.tier !== "tracked";
+  const planName = <TierName tier={ws.client.tier} />;
+  const owner = ws.role === "owner" && !demo;
+  // What a cluster added now becomes: a paid slot not yet used, or tracking only.
+  const nextIsPlan = paid && addedClusterTier(shown) !== "tracked";
 
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <span className="muted"><b style={{ color: "var(--ink)" }}>{a.clusters.used}</b> of {a.clusters.limit} clusters in use</span>
+        <LimitsLine a={a} />
         {ws.canWrite ? (
           full ? (
             <span style={{ marginLeft: "auto" }}><PackButton slug={slug} owner={ws.role === "owner"} demo={demo} label="Add 5 more clusters" /></span>
@@ -36,7 +45,7 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
           )
         ) : null}
       </div>
-      {adding ? <NewCluster onDone={() => setAdding(false)} run={run} keywordsFull={a.keywords.used >= a.keywords.limit} /> : null}
+      {adding ? <NewCluster onDone={() => setAdding(false)} run={run} keywordsFull={a.keywords.used >= a.keywords.limit} note={!paid ? null : nextIsPlan ? <>This one goes on your {planName} plan: it has a cluster not yet set up, so we work on it every month.</> : <>Tracking only, not part of your {planName} plan: free within your allowance. Add it to your plan or swap it in afterwards.</>} /> : null}
       {ws.clusters.length === 0 && !adding ? (
         <div className="dash-card empty">
           <b>No clusters yet</b>
@@ -61,13 +70,21 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
                   <div className="muted" style={{ fontSize: 12.5, marginTop: 2 }}>
                     {c.headKeyword ? <>Keyword <b style={{ color: "var(--ink)" }}>{c.headKeyword}</b>{c.headVolume ? ` · ${c.headVolume.toLocaleString("en-GB")}/mo` : ""}</> : "No keyword yet"} · <TargetPage url={c.target} prefix="Target" />
                   </div>
+                  {paid && !c.managed && !pending ? <div style={{ marginTop: 6 }}><span className="pill" style={{ whiteSpace: "normal" }} title="Measured every day, free within your allowance. We do not place for it.">Tracking only, not part of your {planName} plan</span></div> : null}
                 </div>
                 {c.suggested ? <span className="pill" title="We picked this keyword and its five prompts from your site when you signed up, so tracking could start straight away. Change any of them whenever you like.">Suggested - yours to edit</span> : null}
-                {c.managed ? <span className="pill accent" title="We work on this cluster each month. Its keyword changes on request, from your next billing date.">Managed by us</span> : null}
+                {c.managed ? <span className="pill accent" title="We work on this cluster each month. Swap it from the plan page; the swap takes effect on the 1st of next month.">Managed by us</span> : null}
                 {ws.canWrite && !pending && !c.managed ? (
                   <Menu label={`Options for ${c.name}`}>
                     {(close) => (
                       <>
+                        {paid && owner ? (
+                          <>
+                            <Link href={`${base}/${slug}/managed?${new URLSearchParams({ add: c.id })}#plan-add`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }} onClick={close}>Add to my plan…</Link>
+                            <Link href={`${base}/${slug}/managed?${new URLSearchParams({ swap: c.id })}#swap`} style={{ display: "block", padding: "7px 10px", fontSize: 13, color: "inherit", textDecoration: "none" }} onClick={close}>Use in a swap…</Link>
+                            <hr />
+                          </>
+                        ) : null}
                         <button onClick={() => { close(); setRenaming(c.id); }}>Rename</button>
                         <hr />
                         <button style={{ color: "var(--bad-fg)" }} onClick={() => { close(); run({ op: "cluster.remove", id: c.id }, `Stopped ${c.name} from tomorrow, with its keywords and prompts.`); }}>Stop tracking this cluster</button>
@@ -92,7 +109,7 @@ export default function ClustersBoard({ slug, base, initial, plan, demo = false 
   );
 }
 
-function NewCluster({ onDone, run, keywordsFull }: { onDone: () => void; run: ReturnType<typeof useOps>["run"]; keywordsFull: boolean }) {
+function NewCluster({ onDone, run, keywordsFull, note }: { onDone: () => void; run: ReturnType<typeof useOps>["run"]; keywordsFull: boolean; note: React.ReactNode }) {
   const [kw, setKw] = useState("");
   const [name, setName] = useState("");
   // 18 Oct 2026 (brief 2c): the keyword's plural (or singular), ticked by default, free, same cluster and target page.
@@ -109,6 +126,7 @@ function NewCluster({ onDone, run, keywordsFull }: { onDone: () => void; run: Re
     <form className="dash-card" onSubmit={submit} style={{ marginBottom: 16 }}>
       <h2>New cluster</h2>
       <p className="intro">Start from the search you want to win. Split it into groups and add prompts on the next screen.</p>
+      {note ? <p style={{ margin: "6px 0 0", fontSize: 13 }}>{note}</p> : null}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr) auto", gap: 8, alignItems: "end", marginTop: 12 }}>
         <label>
           <span className="dash-micro" style={{ marginBottom: 4 }}>Keyword</span>

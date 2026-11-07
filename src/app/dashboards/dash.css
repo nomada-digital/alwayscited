@@ -318,3 +318,36 @@ body:has([data-dash-tree]) .site-chrome { display: none; }
 @media (max-width: 900px) { .pair { grid-template-columns: minmax(0, 1fr); } }
 .seg .seg-link { font-size: 12.5px; font-weight: 600; color: var(--soft); padding: 5px 11px; border-radius: 8px; text-decoration: none; }
 .seg .seg-link[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 8%, transparent); }
+/* Customer controls (7 Nov 2026): Overview tiles that open their page, the shared-allowance line, the answer panel
+   (a side panel; a bottom sheet on a phone), and the prompt table stacked into cards on a phone. */
+a.kpi { color: inherit; text-decoration: none; transition: border-color 0.15s; }
+a.kpi:hover { border-color: var(--accent); }
+a.kpi:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.kpi .go { font-size: 12px; font-weight: 600; color: var(--accent); }
+.limits { font-size: 13px; color: var(--soft); }
+.limits b { color: var(--ink); }
+button.cell { border: 0; padding: 0; font: inherit; cursor: pointer; }
+button.cell:hover { box-shadow: inset 0 0 0 1.5px var(--ink); }
+button.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel-scrim { position: fixed; inset: 0; z-index: 70; background: color-mix(in srgb, var(--ink) 30%, transparent); }
+.panel { position: fixed; top: 0; right: 0; bottom: 0; z-index: 71; width: min(540px, 100vw); background: var(--surface); color: var(--ink); border-left: 1px solid var(--line); box-shadow: -12px 0 40px color-mix(in srgb, var(--ink) 14%, transparent); display: flex; flex-direction: column; animation: panel-in 0.18s ease-out; }
+.panel-head { display: flex; align-items: flex-start; gap: 10px; padding: 16px 18px 12px; border-bottom: 1px solid var(--line); }
+.panel-head h2 { margin: 0; font-size: 16px; display: flex; gap: 8px; align-items: center; }
+.panel-body { padding: 14px 18px 28px; overflow-y: auto; flex: 1; overscroll-behavior: contain; }
+@keyframes panel-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes sheet-in { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.chances li + li { border-top: 1px solid var(--hair); }
+.plan-box { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.plan-box + .plan-box { margin-top: 10px; }
+@media (max-width: 640px) {
+  .panel { top: auto; left: 0; width: 100%; max-height: 86vh; border-left: 0; border-top: 1px solid var(--line); border-radius: 18px 18px 0 0; animation-name: sheet-in; }
+  .tbl.stack thead { display: none; }
+  .tbl.stack, .tbl.stack tbody, .tbl.stack tr, .tbl.stack td { display: block; width: 100%; }
+  .tbl.stack tr { position: relative; padding: 12px 0; border-bottom: 1px solid var(--hair); }
+  .tbl.stack tr:last-child { border-bottom: 0; }
+  .tbl.stack td { border: 0; padding: 3px 0; max-width: none; }
+  .tbl.stack td:first-child { padding-right: 40px; }
+  .tbl.stack td[data-l]::before { content: attr(data-l); display: block; font-size: 11px; font-weight: 700; color: var(--soft); margin-bottom: 2px; }
+  .tbl.stack td.r { position: absolute; top: 8px; right: 0; width: auto; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .panel { animation: none; } }

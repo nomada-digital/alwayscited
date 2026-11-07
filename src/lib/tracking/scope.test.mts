@@ -170,7 +170,7 @@ test("readTeam: every live member of the account with their scope; before the mi
 });
 
 const inviteTo = (db: SupabaseClient, over: Partial<Parameters<typeof invite>[1]> = {}) =>
-  invite(db, { accountId: "a1", clientId: "A", email: "lead@client.example", role: "viewer", by: "owner@agency.example", scope: "client", elsewhere: null, ...over });
+  invite(db, { accountId: "a1", clientId: "A", email: "lead@client.example", role: "viewer", by: "owner@agency.example", scope: "client", elsewhere: null, first: "Ana", last: null, ...over });
 const rm = (db: SupabaseClient, row: TeamRow) => removeMember(db, { accountId: "a1", email: row.email, by: "owner@agency.example", clientId: "A", row });
 
 test("an invite to A only: the viewer sees A and not B; the member row goes live last", async () => {

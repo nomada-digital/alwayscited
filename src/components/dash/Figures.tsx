@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import EngineLogo from "@/components/EngineLogo";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { fullness } from "@/lib/dash/allowance";
@@ -109,14 +111,25 @@ export function Meter({ label, used, limit }: { label: string; used: number; lim
   );
 }
 
-export function Kpi({ label, value, unit, sub, children }: { label: string; value: React.ReactNode; unit?: string; sub?: React.ReactNode; children?: React.ReactNode }) {
-  return (
-    <div className="kpi">
+/** A headline figure. With `href` the whole tile opens the page behind the figure (7 Nov 2026). */
+export function Kpi({ label, value, unit, sub, children, href }: { label: string; value: React.ReactNode; unit?: string; sub?: React.ReactNode; children?: React.ReactNode; href?: string }) {
+  const body = (
+    <>
       <span className="l">{label}</span>
       <span className="v">{value}{unit ? <small>{unit}</small> : null}</span>
       {children}
       {sub ? <span className="s">{sub}</span> : null}
-    </div>
+    </>
+  );
+  return href ? <Link className="kpi" href={href}>{body}</Link> : <div className="kpi">{body}</div>;
+}
+
+/** The plan's shared allowance in one line (Danny, 7 Nov 2026): "5 of 50 prompts · 1 of 10 clusters". */
+export function LimitsLine({ a }: { a: { prompts: { used: number; limit: number }; clusters: { used: number; limit: number } } }) {
+  return (
+    <span className="limits" title="Your plan's allowance, shared across every cluster">
+      <b>{a.prompts.used}</b> of {a.prompts.limit} prompts · <b>{a.clusters.used}</b> of {a.clusters.limit} clusters
+    </span>
   );
 }
 

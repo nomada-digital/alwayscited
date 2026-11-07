@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 
 import { applyOp, editReplaces, refuseOp, type Op } from "./ops";
 import { planShape } from "./plan";
-import type { FootRow, Raw, RawClient, TierKey } from "./types";
+import { nextMonthStart, refuseSwap, refuseUpgrade } from "./plan-change";
+import type { FootRow, PlanUpgrade, Raw, RawClient, TierKey } from "./types";
 
 /**
  * A local run of the dashboards host with no database (17 Oct 2026).
@@ -65,6 +66,8 @@ function store(): Store {
     trial_ends_at: (d.trial_ends_at as string | null) ?? null,
     payment_status: (d.payment_status as string | null) ?? null,
     brand_aliases: (d.brand_aliases as string[] | null) ?? [],
+    plan_slots: (d.plan_slots as number | null | undefined) ?? null,
+    ...(d.order ? { order: d.order } : {}),
   };
   const clusters = s.clusters;
   const keywords = s.keywords.map((k) => ({ ...k, cluster_id: k.cluster_id ?? clusters.find((c) => c.keyword_id === k.id)?.id ?? null, group_id: k.group_id ?? null }));
@@ -85,6 +88,7 @@ function store(): Store {
     connections: [],
     consoleRows: [],
     groupsReady: true,
+    planRequests: { swap: null, upgrades: [] },
   };
   g[KEY] = { raw, n: 0 };
   return g[KEY];
@@ -115,4 +119,55 @@ export function fixtureRequest(provider: "ga4" | "gsc" | "bing"): void {
   const s = store();
   const now = new Date().toISOString();
   s.raw = { ...s.raw, connections: [...s.raw.connections.filter((c) => c.provider !== provider), { provider, status: "requested", property: null, requested_at: now, connected_at: null, last_synced_at: null }] };
+}
+
+/**
+ * A plan change on the snapshot (7 Nov 2026): the plan route's rules (plan-change.ts), held in memory like every
+ * other fixture write, so the swap and add-to-plan flows can be driven end to end locally. A keyword starts a
+ * tracking-only cluster through fixtureWrite first, as the route does. Nothing is posted anywhere.
+ */
+export function fixturePlan(b: { action: string; from?: string; to?: string; keyword?: string; clusterId?: string; id?: string }): { ok: true; id: string; slack: false; onPlan?: true } | { ok: false; message: string } {
+  const s = store();
+  const req = s.raw.planRequests ?? { swap: null, upgrades: [] };
+  const now = new Date().toISOString();
+  const start = (keyword: string): string | { message: string } => {
+    const w = fixtureWrite({ op: "cluster.add", tempId: "plan", name: keyword, keyword });
+    return w.ok ? w.ids.plan! : { message: w.message };
+  };
+  if (b.action === "swap.cancel") {
+    if (!req.swap || req.swap.id !== b.id) return { ok: false, message: "That swap is not booked any more." };
+    s.raw = { ...s.raw, planRequests: { ...req, swap: null } };
+    return { ok: true, id: b.id, slack: false };
+  }
+  if (b.action === "upgrade.cancel") {
+    if (!req.upgrades.some((u) => u.id === b.id)) return { ok: false, message: "That request is not waiting any more." };
+    s.raw = { ...s.raw, planRequests: { ...req, upgrades: req.upgrades.filter((u) => u.id !== b.id) } };
+    return { ok: true, id: b.id!, slack: false };
+  }
+  if (b.action === "swap") {
+    let to = b.to ?? null;
+    if (!to && b.keyword) {
+      if (req.swap) return { ok: false, message: "A swap is already booked. Cancel it first to choose another." };
+      const made = start(b.keyword);
+      if (typeof made !== "string") return { ok: false, message: made.message };
+      to = made;
+    }
+    const no = refuseSwap(s.raw, b.from ?? "", to ?? "", req.swap);
+    if (no) return { ok: false, message: no };
+    const id = `fx-swap-${++s.n}`;
+    s.raw = { ...s.raw, planRequests: { ...req, swap: { id, from_cluster_id: b.from!, to_cluster_id: to!, effective_on: nextMonthStart(s.raw.today), status: "pending", requested_by: FIXTURE_EMAIL, created_at: now } } };
+    return { ok: true, id, slack: false };
+  }
+  let clusterId = b.clusterId ?? null;
+  if (!clusterId && b.keyword) {
+    const made = start(b.keyword);
+    if (typeof made === "string") clusterId = made;
+  }
+  const started = clusterId ? s.raw.clusters.find((c) => c.id === clusterId) : null;
+  if (started && s.raw.client.tier !== "tracked" && started.tier === s.raw.client.tier) return { ok: true, id: started.id, slack: false, onPlan: true };
+  const no = refuseUpgrade(s.raw, clusterId, clusterId ? null : (b.keyword ?? null), req.upgrades);
+  if (no) return { ok: false, message: no };
+  const u: PlanUpgrade = { id: `fx-up-${++s.n}`, cluster_id: clusterId, keyword: clusterId ? null : (b.keyword ?? null), price_amount: 99500, currency: "gbp", price_source: "order", status: "requested", requested_by: FIXTURE_EMAIL, created_at: now };
+  s.raw = { ...s.raw, planRequests: { ...req, upgrades: [...req.upgrades, u] } };
+  return { ok: true, id: u.id, slack: false };
 }

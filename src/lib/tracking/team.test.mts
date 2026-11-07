@@ -10,6 +10,7 @@ import {
   TEAM_WHY,
   type TeamForm,
   type TeamRow,
+  fullName,
   inviteChoice,
   inviteMail,
   inviteRefusal,
@@ -233,7 +234,8 @@ const agency: TeamRow[] = [
   { ...row("lead@client-a.example", "viewer"), id: "lead", clients: [A] },
   { ...row("books@client-b.example", "editor"), id: "books", clients: [B] },
 ];
-const form = (o: Partial<TeamForm>): TeamForm => ({ op: "invite", email: "new@client-a.example", role: "viewer", scope: null, ...o });
+// 7 Nov 2026: an invite carries a first name (planTeam refuses one without); the planTeam tests below invite with one.
+const form = (o: Partial<TeamForm>): TeamForm => ({ op: "invite", email: "new@client-a.example", role: "viewer", scope: null, first: "Ana", last: null, ...o });
 const plan = (f: TeamForm, over: Partial<Parameters<typeof planTeam>[0]> = {}) =>
   planTeam({ form: f, actor: "owner@agency.example", rows: agency, scoping: true, clientId: A, clientIds: [A, B], invitesToday: 0, ...over });
 
@@ -248,8 +250,8 @@ test("planTeam: Remove and a role change on A reach only who sees A - never some
 });
 
 test("planTeam: an invite finds someone on the account for other clients on the whole team, and refuses who already sees this client", () => {
-  assert.deepEqual(plan(form({ email: "books@client-b.example" })), { op: "invite", role: "viewer", scope: "client", elsewhere: agency[3] });
-  assert.deepEqual(plan(form({})), { op: "invite", role: "viewer", scope: "client", elsewhere: null });
+  assert.deepEqual(plan(form({ email: "books@client-b.example" })), { op: "invite", role: "viewer", scope: "client", elsewhere: agency[3], first: "Ana", last: null });
+  assert.deepEqual(plan(form({})), { op: "invite", role: "viewer", scope: "client", elsewhere: null, first: "Ana", last: null });
   assert.equal(plan(form({ email: "lead@client-a.example" })), TEAM_WHY.already);
   assert.equal(plan(form({ email: "staff@agency.example", scope: "account" })), TEAM_WHY.already);
   assert.equal(plan(form({}), { invitesToday: INVITES_PER_OWNER_PER_DAY }), TEAM_WHY.limit);
@@ -257,10 +259,10 @@ test("planTeam: an invite finds someone on the account for other clients on the 
 
 test("planTeam: one client on the account is this client only; before the table, one client is every client and two refuse anything else", () => {
   const solo = [agency[0]!];
-  assert.deepEqual(plan(form({ scope: "account" }), { rows: solo, clientIds: [A] }), { op: "invite", role: "viewer", scope: "client", elsewhere: null });
-  assert.deepEqual(plan(form({}), { rows: solo, clientIds: [A], scoping: false }), { op: "invite", role: "viewer", scope: "account", elsewhere: null });
+  assert.deepEqual(plan(form({ scope: "account" }), { rows: solo, clientIds: [A] }), { op: "invite", role: "viewer", scope: "client", elsewhere: null, first: "Ana", last: null });
+  assert.deepEqual(plan(form({}), { rows: solo, clientIds: [A], scoping: false }), { op: "invite", role: "viewer", scope: "account", elsewhere: null, first: "Ana", last: null });
   assert.equal(plan(form({}), { scoping: false }), SCOPE_NOT_READY, "nowhere to write one client yet");
-  assert.deepEqual(plan(form({ scope: "account" }), { scoping: false }), { op: "invite", role: "viewer", scope: "account", elsewhere: null });
+  assert.deepEqual(plan(form({ scope: "account" }), { scoping: false }), { op: "invite", role: "viewer", scope: "account", elsewhere: null, first: "Ana", last: null });
   // The posting client counts even if the account read missed it.
   assert.equal((plan(form({ scope: "account" }), { clientIds: [B] }) as { scope: string }).scope, "account");
 });
@@ -273,7 +275,7 @@ test("planTeam: an invite to every client is held to the cap on every client, no
   assert.equal(plan(form({ email: "x@agency.example" }), { rows, clientId: B }), TEAM_WHY.full, "from B, refused");
   assert.equal(plan(form({ email: "x@agency.example", scope: "account" }), { rows }), TEAM_WHY.fullOther, "from A to every client, refused too");
   assert.equal(refuseEveryClient({ rows, email: "x@agency.example", clientIds: [A, B] }), TEAM_WHY.fullOther);
-  assert.deepEqual(plan(form({ email: "x@agency.example" }), { rows }), { op: "invite", role: "viewer", scope: "client", elsewhere: null }, "to A only: B is not touched");
+  assert.deepEqual(plan(form({ email: "x@agency.example" }), { rows }), { op: "invite", role: "viewer", scope: "client", elsewhere: null, first: "Ana", last: null }, "to A only: B is not touched");
   // Someone already seeing B adds nobody to it: books@, limited to B, can be given every client from A.
   assert.equal((plan(form({ email: "books@client-b.example", scope: "account" }), { rows }) as { scope: string }).scope, "account");
   assert.equal(refuseEveryClient({ rows: [...rows.slice(0, -1), row("gone@client-b.example", "viewer", true)], email: "x@agency.example", clientIds: [A, B] }), null, "a removed row is not counted");
@@ -286,7 +288,8 @@ test("the member route and the fixture run planTeam on the account's whole live 
   assert.match(route, /const plan = planTeam\(\{ form: f, actor: email, rows: team\.rows, scoping: team\.scoping, clientId: client\.id, clientIds, invitesToday: n \}\);\s*if \(typeof plan === "string"\) return refused\(plan\);/);
   assert.match(route, /const clientIds = ids\.map\(\(c\) => c\.id as string\);/);
   assert.match(route, /\.from\("client_domains"\)\.select\("id"\)\.eq\("account_id", accountId\)\.not\("slug", "is", null\)/, "clientIds are the account's slugged clients");
-  assert.match(route, /await invite\(db, \{ accountId, clientId: client\.id, email: f\.email, role: plan\.role, by: email, scope: plan\.scope, elsewhere: plan\.elsewhere \}\)/);
+  // 7 Nov 2026: the invite carries the first and last name planTeam read off the form.
+  assert.match(route, /await invite\(db, \{ accountId, clientId: client\.id, email: f\.email, role: plan\.role, by: email, scope: plan\.scope, elsewhere: plan\.elsewhere, first: plan\.first, last: plan\.last \}\)/);
   assert.match(route, /await changeRole\(db, \{ accountId, email: f\.email, role: plan\.role \}\)/);
   assert.match(route, /await removeMember\(db, \{ accountId, email: f\.email, by: email, clientId: client\.id, row: plan\.row \}\)/);
   assert.match(route, /const everyClient = plan\.scope === "account" && clientIds\.length > 1 \? clientIds\.length : null;/);
@@ -300,4 +303,18 @@ test("census probe: the route pin fires on a narrowed team and on a rule run out
   const pin = /const plan = planTeam\(\{ form: f, actor: email, rows: team\.rows,/;
   assert.doesNotMatch("const plan = planTeam({ form: f, actor: email, rows: onClient(team.rows, client.id),", pin);
   assert.match("const no = refuseChange({ rows: team.rows, actor: email });", /\b(onClient|inviteScope|refuseInvite|refuseChange|refuseEveryClient)\(/);
+});
+
+// ---- Names (Danny, 7 Nov 2026): a first name to invite anyone, a last name optional, and the owner can set either. ----
+
+test("names: an invite needs a first name; a name change reaches only who sees this client", () => {
+  const f = (o: Record<string, string>) => readTeamForm((k) => o[k] ?? null);
+  assert.deepEqual(f({ op: "invite", email: "x@tallyroo.com", role: "viewer", first: "  Michael ", last: "" }), { op: "invite", email: "x@tallyroo.com", role: "viewer", scope: null, first: "Michael", last: null });
+  assert.equal(f({ op: "name", email: "x@tallyroo.com", first: "" }), null, "a name change without a first name is not one");
+  assert.equal(f({ op: "invite", email: "x@tallyroo.com", role: "viewer", first: "<b>" })!.first, undefined, "markup is not a name");
+  assert.equal(plan(form({ first: undefined })), TEAM_WHY.first);
+  assert.deepEqual(plan(form({ op: "name", email: "lead@client-a.example", role: null, first: "Lea", last: "Ray" })), { op: "name", row: agency[2], first: "Lea", last: "Ray" });
+  assert.equal(plan(form({ op: "name", email: "books@client-b.example", role: null, first: "Bo" })), TEAM_WHY.gone);
+  assert.equal(fullName("Michael", null), "Michael");
+  assert.equal(fullName("Michael", "Smith"), "Michael Smith");
 });

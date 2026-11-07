@@ -5,6 +5,7 @@ import { dashEmail } from "@/lib/dash/access";
 import { dashFixturePath, fixtureClient, fixtureWrite } from "@/lib/dash/fixture";
 import { readOp } from "@/lib/dash/ops";
 import type { RawClient, TierKey } from "@/lib/dash/types";
+import { planSlots } from "@/lib/dash/plan-requests";
 import { loadStructure, writeOp } from "@/lib/dash/write";
 
 export const runtime = "nodejs";
@@ -39,6 +40,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
     started_on: c.started_on, cluster_limit: c.cluster_limit ?? 10, trial_ends_at: c.trial_ends_at ?? null, payment_status: null, brand_aliases: [],
   };
   const db = supabaseAdmin();
+  // 7 Nov 2026: a cluster added fills a paid plan slot first, then is tracking only (ops.ts addedClusterTier).
+  client.plan_slots = await planSlots(db, c.id, client.tier);
   const raw = await loadStructure(db, { client, role: c.role, today: trackingDay() });
   if (typeof raw === "string") return Response.json({ ok: false, message: raw }, { status: 502 });
   const r = await writeOp(db, raw, op, email);

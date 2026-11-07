@@ -222,6 +222,21 @@ export function isManaged(raw: Pick<Raw, "client" | "clusters">, clusterId: stri
   return !!c && (MANAGED_TIERS as readonly string[]).includes(c.tier);
 }
 
+/**
+ * The tier a cluster added self-serve takes (Danny, 7 Nov 2026): the plan's, while the plan has a paid cluster
+ * not yet set up - so a new customer's first cluster is worked on, as before - and otherwise "tracked", a
+ * tracking-only cluster we do not work on. Adding a cluster to the plan is a billing step (plan-change.ts), never
+ * a free side effect of adding one. `plan_slots` is the order's quantity; with none, the plan clusters already set
+ * up, and at least one.
+ */
+export function addedClusterTier(raw: Pick<Raw, "client" | "clusters">): string {
+  const t = raw.client.tier;
+  if (t === "tracked") return "tracked";
+  const managed = raw.clusters.filter((c) => live(c) && (MANAGED_TIERS as readonly string[]).includes(c.tier)).length;
+  const slots = Math.max(raw.client.plan_slots ?? 0, managed, 1);
+  return managed < slots ? t : "tracked";
+}
+
 /** The reason an op is refused on these rows, or null when it may go ahead. */
 export function refuseOp(raw: Raw, op: Op, plan: PlanShape): string | null {
   const role = refuseRole(raw.client.status === "ended" ? "viewer" : raw.role);
@@ -411,7 +426,7 @@ export function applyOp(raw: Raw, op: Op, ctx: { by: string; newId?: (tempId: st
     case "cluster.add": {
       const cid = nid(op.tempId);
       const kw = op.keyword && op.keyword.trim() ? newKeyword(`${op.tempId}-k`, op.keyword, cid, null) : null;
-      next.clusters.push({ id: cid, name: op.name.trim(), keyword_id: kw?.id ?? null, tier: raw.client.tier, started_on: day, stopped_on: null });
+      next.clusters.push({ id: cid, name: op.name.trim(), keyword_id: kw?.id ?? null, tier: addedClusterTier(raw), started_on: day, stopped_on: null });
       if (kw) next.keywords.push(kw);
       if (kw && op.pair?.trim()) next.keywords.push({ ...newKeyword(`${op.tempId}-p`, op.pair, cid, null), form: pairForm(kw.keyword, op.pair), pair_of: kw.id });
       break;

@@ -42,14 +42,14 @@ export const INVITES_PER_OWNER_PER_DAY = 20;
 export const EMAIL_MAX = APP_LIMITS.email;
 export const INVITE_EVENT = "member_invite";
 
-export type TeamOp = "invite" | "role" | "remove";
+export type TeamOp = "invite" | "role" | "remove" | "name";
 export type InviteRole = "editor" | "viewer";
 /**
  * A member as the rules read them. `id` is the dashboard_members row, read by
  * readTeam and absent from rows a test builds. `clients` is their scope
  * (scope.ts): absent or null is every client on the account.
  */
-export type TeamRow = { email: string; role: string; removed_at: string | null; id?: string; clients?: ClientScope };
+export type TeamRow = { email: string; role: string; removed_at: string | null; id?: string; clients?: ClientScope; first?: string | null; last?: string | null };
 
 /** Trimmed, lowercased and format-checked by the site's one shape check, or null. */
 export function readEmail(raw: unknown): string | null {
@@ -63,17 +63,36 @@ export const readRole = (raw: unknown): InviteRole | null => (raw === "editor" |
 /** An invite's posted scope word, or null when the form sent none it knows (inviteScope decides then). */
 export const readScopeWord = (raw: unknown): InviteScope | null => (raw === "client" || raw === "account" ? raw : null);
 
-export type TeamForm = { op: TeamOp; email: string; role: InviteRole | null; scope: InviteScope | null };
+/**
+ * `first` and `last` (Danny, 7 Nov 2026): a member's first name, which an invite needs (planTeam), and last name,
+ * which it may leave out. Present on an invite or a name change that sent them; absent otherwise.
+ */
+export type TeamForm = { op: TeamOp; email: string; role: InviteRole | null; scope: InviteScope | null; first?: string; last?: string | null };
+
+export const NAME_PART_MAX = 60;
+
+/** One part of a person's name: trimmed, spaces collapsed, 1 to 60 characters of plain text; null otherwise. */
+export function readNamePart(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const n = raw.replace(/\s+/g, " ").trim();
+  return n.length >= 1 && n.length <= NAME_PART_MAX && !/[<>{}@]/.test(n) ? n : null;
+}
+
+/** "Michael", "Michael Smith": the name the rest of the product shows, or null with no first name. */
+export const fullName = (first: string | null | undefined, last: string | null | undefined): string | null => (first ? (last ? `${first} ${last}` : first) : null);
 
 /** The posted form, or null if it is not a change this page makes. */
 export function readTeamForm(get: (k: string) => unknown): TeamForm | null {
   const op = get("op");
-  if (op !== "invite" && op !== "role" && op !== "remove") return null;
+  if (op !== "invite" && op !== "role" && op !== "remove" && op !== "name") return null;
   const email = readEmail(get("email"));
   if (!email) return null;
+  const first = readNamePart(get("first"));
+  const last = readNamePart(get("last"));
+  if (op === "name") return first ? { op, email, role: null, scope: null, first, last } : null;
   const role = readRole(get("role"));
   if (op !== "remove" && !role) return null;
-  return { op, email, role: op === "remove" ? null : role, scope: op === "invite" ? readScopeWord(get("scope")) : null };
+  return { op, email, role: op === "remove" ? null : role, scope: op === "invite" ? readScopeWord(get("scope")) : null, ...(op === "invite" && first ? { first, last } : {}) };
 }
 
 /**
@@ -141,11 +160,12 @@ export const TEAM_WHY = {
   owner: "A dashboard needs at least one owner.",
   editor: "They are already an editor.",
   viewer: "They are already a viewer.",
+  first: "Add their first name.",
 } as const;
 export type TeamWhy = keyof typeof TEAM_WHY;
 
 /** The refusals the invite form answers on its own field rather than in the page's toast. */
-export const INVITE_WHYS: readonly TeamWhy[] = ["email", "already", "full", "fullOther", "limit"];
+export const INVITE_WHYS: readonly TeamWhy[] = ["email", "already", "full", "fullOther", "limit", "first"];
 
 /** A code from the URL, or the code of one of TEAM_WHY's sentences; anything else is null. */
 export function teamWhy(raw: unknown): TeamWhy | null {
@@ -194,9 +214,10 @@ export function refuseChange(p: { rows: TeamRow[]; actor: string; email: string;
 
 /** What the member route writes once every rule has passed: planTeam's answer. */
 export type TeamPlan =
-  | { op: "invite"; role: InviteRole; scope: InviteScope; elsewhere: TeamRow | null }
+  | { op: "invite"; role: InviteRole; scope: InviteScope; elsewhere: TeamRow | null; first: string; last: string | null }
   | { op: "role"; role: InviteRole; row: TeamRow }
-  | { op: "remove"; row: TeamRow };
+  | { op: "remove"; row: TeamRow }
+  | { op: "name"; row: TeamRow; first: string; last: string | null };
 
 /**
  * Every rule the member route runs before a write, in its order, and what to
@@ -219,6 +240,8 @@ export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; sc
   const { op, email, role } = p.form;
   if (op === "invite") {
     if (!role) return "Pick a role.";
+    // 7 Nov 2026 (Danny): everyone on the team has a first name, so emails and the team list can use it.
+    if (!p.form.first) return TEAM_WHY.first;
     const ids = [...new Set([p.clientId, ...p.clientIds])];
     const scope = inviteScope(p.form.scope, ids.length, p.scoping);
     if (scope === "client" && !p.scoping) return SCOPE_NOT_READY;
@@ -226,7 +249,13 @@ export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; sc
     if (no) return no;
     const full = scope === "account" ? refuseEveryClient({ rows: team, email, clientIds: ids }) : null;
     if (full) return full;
-    return { op, role, scope, elsewhere: team.find((r) => r.email === email) ?? null };
+    return { op, role, scope, elsewhere: team.find((r) => r.email === email) ?? null, first: p.form.first, last: p.form.last ?? null };
+  }
+  if (op === "name") {
+    // Anyone on this client's team, the owner included; never someone who does not see it.
+    const row = here.find((r) => r.email === email);
+    if (!row) return TEAM_WHY.gone;
+    return p.form.first ? { op, row, first: p.form.first, last: p.form.last ?? null } : TEAM_WHY.first;
   }
   const no = refuseChange({ rows: here, actor: p.actor, email, op, role });
   if (no) return no;
@@ -237,7 +266,7 @@ export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; sc
 
 // ---- Where the route sends the browser back to, and the toast the page draws. ----
 
-export type TeamDone = "invited" | "removed" | "role" | "refused";
+export type TeamDone = "invited" | "removed" | "role" | "named" | "refused";
 
 /**
  * The same return on the dashboards host (18 Oct 2026 brief 2d): Settings is `${base}/<slug>/settings` there,
@@ -366,14 +395,14 @@ export type TeamResult = { ok: true } | { ok: false; message: string };
  * dashboard_member_clients is not there yet.
  */
 export async function readTeam(db: SupabaseClient, accountId: string): Promise<{ rows: TeamRow[]; scoping: boolean } | string> {
-  const { data, error } = await db.from("dashboard_members").select("id, email, role, removed_at").eq("account_id", accountId).is("removed_at", null);
+  const { data, error } = await db.from("dashboard_members").select("id, email, role, removed_at, first_name, last_name").eq("account_id", accountId).is("removed_at", null);
   if (error) return `Could not read the team: ${error.message}`;
   const ids = (data ?? []).map((r) => r.id as string);
   const scopes = await readScopes(db, ids).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
   if (typeof scopes === "string") return `Could not read the team: ${scopes}`;
   return {
     scoping: scopes.ready,
-    rows: (data ?? []).map((r) => ({ id: r.id as string, email: r.email as string, role: r.role as string, removed_at: (r.removed_at as string | null) ?? null, clients: scopes.of.get(r.id as string) ?? null })),
+    rows: (data ?? []).map((r) => ({ id: r.id as string, email: r.email as string, role: r.role as string, removed_at: (r.removed_at as string | null) ?? null, clients: scopes.of.get(r.id as string) ?? null, first: (r.first_name as string | null) ?? null, last: (r.last_name as string | null) ?? null })),
   };
 }
 
@@ -392,11 +421,11 @@ export async function invitesToday(db: SupabaseClient, p: { email: string; today
  * `unique (account_id, email)`: a new row, or a removed one brought back on
  * the same row with the new role.
  */
-async function writeMember(db: SupabaseClient, p: { accountId: string; email: string; role: InviteRole; by: string; live: boolean }): Promise<{ id: string } | { error: string }> {
+async function writeMember(db: SupabaseClient, p: { accountId: string; email: string; role: InviteRole; by: string; live: boolean; first: string; last: string | null }): Promise<{ id: string } | { error: string }> {
   const { data, error } = await db
     .from("dashboard_members")
     .upsert(
-      { account_id: p.accountId, email: p.email, role: p.role, invited_by: p.by, removed_at: p.live ? null : new Date().toISOString(), removed_by: p.live ? null : "invite not finished" },
+      { account_id: p.accountId, email: p.email, role: p.role, invited_by: p.by, removed_at: p.live ? null : new Date().toISOString(), removed_by: p.live ? null : "invite not finished", first_name: p.first, last_name: p.last, name: fullName(p.first, p.last) },
       { onConflict: "account_id,email" },
     )
     .select("id")
@@ -418,7 +447,7 @@ async function writeMember(db: SupabaseClient, p: { accountId: string; email: st
  */
 export async function invite(
   db: SupabaseClient,
-  p: { accountId: string; clientId: string; email: string; role: InviteRole; by: string; scope: InviteScope; elsewhere: TeamRow | null },
+  p: { accountId: string; clientId: string; email: string; role: InviteRole; by: string; scope: InviteScope; elsewhere: TeamRow | null; first: string; last: string | null },
 ): Promise<TeamResult> {
   const failed = (why: string): TeamResult => ({ ok: false, message: `Could not invite them: ${why}` });
   const kept = p.elsewhere ? await keepRow(db, { ...p, elsewhere: p.elsewhere }) : false;
@@ -452,14 +481,27 @@ export async function invite(
  * brought them back live, and the Remove's scope clear that followed left
  * them with no client - which reads as every client.
  */
-async function keepRow(db: SupabaseClient, p: { accountId: string; clientId: string; role: InviteRole; by: string; scope: InviteScope; elsewhere: TeamRow }): Promise<boolean | string> {
+async function keepRow(db: SupabaseClient, p: { accountId: string; clientId: string; role: InviteRole; by: string; scope: InviteScope; elsewhere: TeamRow; first: string; last: string | null }): Promise<boolean | string> {
   const id = p.elsewhere.id;
   if (!id) return "their row has no id";
   const e = p.scope === "client" ? await addScope(db, { memberId: id, clientId: p.clientId, by: p.by }) : await clearScope(db, { memberId: id, by: p.by });
   if (e) return e;
-  const { data, error } = await db.from("dashboard_members").update({ role: p.role }).eq("account_id", p.accountId).eq("id", id).is("removed_at", null).select("id");
+  // A name already on their row is theirs; the inviter's only fills one that is missing.
+  const named = p.elsewhere.first ? {} : { first_name: p.first, last_name: p.last, name: fullName(p.first, p.last) };
+  const { data, error } = await db.from("dashboard_members").update({ role: p.role, ...named }).eq("account_id", p.accountId).eq("id", id).is("removed_at", null).select("id");
   if (error) return error.message;
   return (data ?? []).length > 0;
+}
+
+/** A member's first and last name (7 Nov 2026); `name` keeps the two together for every reader that shows it. */
+export async function setName(db: SupabaseClient, p: { accountId: string; email: string; first: string; last: string | null }): Promise<TeamResult> {
+  const { error } = await db
+    .from("dashboard_members")
+    .update({ first_name: p.first, last_name: p.last, name: fullName(p.first, p.last) })
+    .eq("account_id", p.accountId)
+    .eq("email", p.email)
+    .is("removed_at", null);
+  return error ? { ok: false, message: `Could not save the name: ${error.message}` } : { ok: true };
 }
 
 export async function changeRole(db: SupabaseClient, p: { accountId: string; email: string; role: InviteRole }): Promise<TeamResult> {

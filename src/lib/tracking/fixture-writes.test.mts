@@ -113,14 +113,14 @@ test("R168 part 2: a pending cluster's prompts are rewritten in place; a prompt 
 test("R168 part 3: invite, role and remove change fixture.members under team.ts's rules", () => {
   const now = "2026-10-02T00:00:00Z";
   const live = (f: typeof fx) => f.members.filter((m) => !m.removed_at).map((m) => `${m.email}:${m.role}`);
-  const i = fixtureTeam(fx, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now });
+  const i = fixtureTeam(fx, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" });
   assert.ok(i.ok);
   assert.ok(live(i.fixture).includes("new@example.com:viewer"));
-  const back = fixtureTeam(fx, { op: "invite", email: "gone@example.com", role: "viewer", scope: null, slug: "tallyroo", now });
+  const back = fixtureTeam(fx, { op: "invite", email: "gone@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" });
   assert.ok(back.ok);
   assert.equal(back.fixture.members.filter((m) => m.email === "gone@example.com").length, 1, "a removed row is revived, not duplicated");
   assert.ok(live(back.fixture).includes("gone@example.com:viewer"));
-  assert.equal(fixtureTeam(fx, { op: "invite", email: "editor@example.com", role: "viewer", scope: null, slug: "tallyroo", now }).ok, false, "already on the team");
+  assert.equal(fixtureTeam(fx, { op: "invite", email: "editor@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" }).ok, false, "already on the team");
   const r = fixtureTeam(fx, { op: "role", email: "editor@example.com", role: "viewer", scope: null, slug: "tallyroo", now });
   assert.ok(r.ok && live(r.fixture).includes("editor@example.com:viewer"));
   assert.equal(fixtureTeam(fx, { op: "role", email: "viewer@example.com", role: "viewer", scope: null, slug: "tallyroo", now }).ok, false, "already a viewer");
@@ -129,7 +129,7 @@ test("R168 part 3: invite, role and remove change fixture.members under team.ts'
   assert.equal(x.fixture.members.find((m) => m.email === "viewer@example.com")!.removed_at, now, "removing never deletes");
   assert.equal(fixtureTeam(fx, { op: "remove", email: fx.member.email, role: null, scope: null, slug: "tallyroo", now }).ok, false, "never yourself");
   const editor = { ...fx, member: { email: "editor@example.com", role: "editor" } };
-  assert.deepEqual(fixtureTeam(editor, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now }), { ok: false, message: "Only owners can change the team." });
+  assert.deepEqual(fixtureTeam(editor, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" }), { ok: false, message: "Only owners can change the team." });
 });
 
 test("AG-1 (9 Oct 2026): on the two-clients fixture an invite is to this client only unless it says every client; Remove takes one client", () => {
@@ -138,16 +138,16 @@ test("AG-1 (9 Oct 2026): on the two-clients fixture an invite is to this client 
   const b = FIXTURE_SECOND_CLIENT.id;
   const team = (f: typeof two, id: string) => fixtureSettings(f, id).members.map((m) => m.email);
   // Invited on Tallyroo with no scope word: Tallyroo only.
-  const i = fixtureTeam(two, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now });
+  const i = fixtureTeam(two, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" });
   assert.ok(i.ok);
   assert.deepEqual(i.fixture.members.find((m) => m.email === "new@example.com")!.clients, [two.client.id]);
   assert.ok(team(i.fixture, two.client.id).includes("new@example.com"));
   assert.ok(!team(i.fixture, b).includes("new@example.com"), "Ledgerline's Settings does not list them");
   // Every client: no list.
-  const e = fixtureTeam(two, { op: "invite", email: "staff@example.com", role: "editor", scope: "account", slug: "ledgerline", now });
+  const e = fixtureTeam(two, { op: "invite", email: "staff@example.com", role: "editor", scope: "account", slug: "ledgerline", now, first: "Ana" });
   assert.ok(e.ok && !("clients" in e.fixture.members.find((m) => m.email === "staff@example.com")!));
   // books@ sees Ledgerline only, so on Tallyroo they are not "already": Tallyroo joins their list.
-  const add = fixtureTeam(two, { op: "invite", email: "books@example.com", role: "editor", scope: "client", slug: "tallyroo", now });
+  const add = fixtureTeam(two, { op: "invite", email: "books@example.com", role: "editor", scope: "client", slug: "tallyroo", now, first: "Ana" });
   assert.ok(add.ok);
   assert.deepEqual(add.fixture.members.find((m) => m.email === "books@example.com")!.clients, [b, two.client.id]);
   // Remove on Tallyroo takes Tallyroo only from them; on Ledgerline it then takes their last, and them.
@@ -163,7 +163,7 @@ test("AG-1 (9 Oct 2026): on the two-clients fixture an invite is to this client 
   // The scoped viewer's session sees Tallyroo only; a post on Ledgerline's route is refused before any rule.
   const lead = fixtureState(fx, { TRACKING_FIXTURE_STATE: "two-clients", TRACKING_FIXTURE_ROLE: "scoped" });
   assert.deepEqual(fixtureClients(lead, lead.member.email).map((c) => c.slug), ["tallyroo"]);
-  assert.equal(fixtureTeam({ ...two, member: { email: "owner@example.com", role: "owner" } }, { op: "invite", email: "x@example.com", role: "viewer", scope: null, slug: "nowhere", now }).ok, false, "an unknown client is refused");
+  assert.equal(fixtureTeam({ ...two, member: { email: "owner@example.com", role: "owner" } }, { op: "invite", email: "x@example.com", role: "viewer", scope: null, slug: "nowhere", now, first: "Ana" }).ok, false, "an unknown client is refused");
 });
 
 /**
@@ -176,7 +176,7 @@ test("AG-1 (9 Oct 2026): on the two-clients fixture an invite is to this client 
 test("AG-1 review: one-client invites are that client only; an every-client invite counts on every client; before the migration, every client only", () => {
   const now = "2026-10-09T12:00:00Z";
   // The default fixture has one client: the invitee is limited to it, so a client the account gains later stays hidden.
-  const one = fixtureTeam(fx, { op: "invite", email: "lead@client.example", role: "viewer", scope: "account", slug: "tallyroo", now });
+  const one = fixtureTeam(fx, { op: "invite", email: "lead@client.example", role: "viewer", scope: "account", slug: "tallyroo", now, first: "Ana" });
   assert.ok(one.ok);
   assert.deepEqual(one.fixture.members.find((m) => m.email === "lead@client.example")!.clients, [fx.client.id]);
 
@@ -185,23 +185,23 @@ test("AG-1 review: one-client invites are that client only; an every-client invi
   const b = FIXTURE_SECOND_CLIENT.id;
   let full = two;
   for (let i = 0; fixtureSettings(full, b).members.length < MEMBERS_PER_CLIENT; i++) {
-    const r = fixtureTeam(full, { op: "invite", email: `l${i}@ledgerline.example`, role: "viewer", scope: "client", slug: "ledgerline", now });
+    const r = fixtureTeam(full, { op: "invite", email: `l${i}@ledgerline.example`, role: "viewer", scope: "client", slug: "ledgerline", now, first: "Ana" });
     assert.ok(r.ok);
     full = r.fixture;
   }
-  assert.deepEqual(fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "client", slug: "ledgerline", now }), { ok: false, message: TEAM_WHY.full });
-  assert.deepEqual(fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "account", slug: "tallyroo", now }), { ok: false, message: TEAM_WHY.fullOther });
+  assert.deepEqual(fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "client", slug: "ledgerline", now, first: "Ana" }), { ok: false, message: TEAM_WHY.full });
+  assert.deepEqual(fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "account", slug: "tallyroo", now, first: "Ana" }), { ok: false, message: TEAM_WHY.fullOther });
   assert.equal(fixtureSettings(full, b).members.length, MEMBERS_PER_CLIENT, "Ledgerline stays at ten");
-  const tallyOnly = fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "client", slug: "tallyroo", now });
+  const tallyOnly = fixtureTeam(full, { op: "invite", email: "late@example.com", role: "viewer", scope: "client", slug: "tallyroo", now, first: "Ana" });
   assert.ok(tallyOnly.ok, "to Tallyroo only, Ledgerline is not touched");
 
   // Before the migration: nobody is limited, the invite is to every client, and one client cannot be asked for.
   const before = fixtureState(fx, { TRACKING_FIXTURE_STATE: "two-clients", TRACKING_FIXTURE_SCOPING: "0" });
   assert.equal(before.scoping, false);
-  assert.deepEqual(fixtureTeam(before, { op: "invite", email: "new@example.com", role: "viewer", scope: "client", slug: "tallyroo", now }), { ok: false, message: SCOPE_NOT_READY });
-  const wide = fixtureTeam(before, { op: "invite", email: "new@example.com", role: "viewer", scope: "account", slug: "tallyroo", now });
+  assert.deepEqual(fixtureTeam(before, { op: "invite", email: "new@example.com", role: "viewer", scope: "client", slug: "tallyroo", now, first: "Ana" }), { ok: false, message: SCOPE_NOT_READY });
+  const wide = fixtureTeam(before, { op: "invite", email: "new@example.com", role: "viewer", scope: "account", slug: "tallyroo", now, first: "Ana" });
   assert.ok(wide.ok && !("clients" in wide.fixture.members.find((m) => m.email === "new@example.com")!));
-  const solo = fixtureTeam(fixtureState(fx, { TRACKING_FIXTURE_SCOPING: "0" }), { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now });
+  const solo = fixtureTeam(fixtureState(fx, { TRACKING_FIXTURE_SCOPING: "0" }), { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" });
   assert.ok(solo.ok && !("clients" in solo.fixture.members.find((m) => m.email === "new@example.com")!), "one client before the migration: every client, as before AG-1");
 });
 

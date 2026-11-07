@@ -18,6 +18,8 @@ import { anchorWarning, nextForm } from "@/lib/tracking/placement-target";
 import { readClusterAim } from "@/lib/tracking/placement-target-io";
 import { placementSaved } from "@/lib/diy/prompts/placement-prompt";
 import { clearScope } from "@/lib/tracking/scope";
+import { REQUEST_NOTE_MAX } from "@/lib/dash/plan-change";
+import { decideUpgrade } from "@/lib/dash/plan-requests";
 
 /**
  * /admin/tracking's writes - T2 of docs/tracked-dashboard-2026-09-29/BRIEF.md
@@ -541,4 +543,22 @@ export async function runNow(_prev: AdminResult | null, form: FormData): Promise
   }
   revalidatePath("/admin/tracking");
   return { ok: true, message: rerun ? "Re-run dispatched: it reads again only what did not come back. Refresh in a few minutes." : "Run dispatched. Refresh in a few minutes." };
+}
+
+/**
+ * An add-to-plan request answered (7 Nov 2026, lib/dash/plan-requests.ts decideUpgrade). Confirm only once the
+ * subscription has been changed in Stripe by hand: the cluster then becomes a plan cluster at once. Nothing here
+ * charges anyone.
+ */
+export async function decidePlanRequest(_prev: AdminResult | null, form: FormData): Promise<AdminResult> {
+  const refused = await refuseUnlessAdmin();
+  if (refused) return refused;
+  const id = text(form, "request");
+  const decision = text(form, "decision");
+  if (!/^[0-9a-f-]{36}$/.test(id) || (decision !== "confirmed" && decision !== "declined")) return { ok: false, message: "That request could not be read." };
+  const note = text(form, "note").slice(0, REQUEST_NOTE_MAX) || null;
+  const e = await decideUpgrade(supabaseAdmin(), { id, decision, by: "admin", note });
+  if (e) return { ok: false, message: `Not saved: ${e}` };
+  revalidatePath("/admin/tracking");
+  return { ok: true, message: decision === "confirmed" ? "Confirmed. The cluster is on their plan from now." : "Declined. Nothing changed." };
 }

@@ -5,6 +5,7 @@ import { Pos, longDay } from "@/components/dash/Figures";
 import GuideBox from "@/components/dash/GuideBox";
 import KeywordManager from "@/components/dash/KeywordManager";
 import Nudges from "@/components/dash/Nudges";
+import SerpChances from "@/components/dash/SerpChances";
 import { KEYWORD_GUIDES } from "@/config/guidance";
 import { keywordSituation } from "@/lib/dash/guidance";
 import { PageHead } from "@/components/dash/Shell";
@@ -32,6 +33,7 @@ export default async function Google({ params }: { params: Promise<{ client: str
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
       <Nudges ws={ws} base={base} ctx={nudge} only={["to-cited"]} />
       <KeywordManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} metrics={metrics} audience={defaultAudience(await orderSector(raw.client.id))} />
+      <SerpChances slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} />
       {situations.length ? (
         <div className="dash-card">
           <h2>Doing it yourself</h2>

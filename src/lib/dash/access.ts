@@ -11,6 +11,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { FIXTURE_EMAIL, dashFixturePath, fixtureClient, fixtureRaw } from "./fixture";
 import { SAMPLE_SLUG } from "./host";
 import { type ClientRow, loadRaw } from "./load";
+import { settleSwaps, withPlan } from "./plan-requests";
 import { sampleRaw } from "./sample-world";
 import type { Raw } from "./types";
 
@@ -45,7 +46,11 @@ export const dashRaw = cache(async (email: string, slug: string): Promise<Raw | 
   const clients = await clientsFor(email);
   const c = clients.find((x) => x.slug === slug);
   if (!c) return null;
-  return loadRaw(c as Parameters<typeof loadRaw>[0], c.role, trackingDay());
+  // 7 Nov 2026: a plan swap due today is applied before the read, and the plan's slots and requests ride on the rows.
+  const db = supabaseAdmin();
+  const today = trackingDay();
+  if (c.tier !== "tracked") await settleSwaps(db, c.id, today);
+  return withPlan(db, await loadRaw(c as Parameters<typeof loadRaw>[0], c.role, today, db));
 });
 
 /**

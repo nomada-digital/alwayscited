@@ -6,9 +6,13 @@ import TierName from "@/components/TierName";
 import { Change, Pos, Rate, Spark, TargetPage, fullDay, pct } from "@/components/dash/Figures";
 import { PageHead } from "@/components/dash/Shell";
 import WorkCompleted from "@/components/dash/WorkCompleted";
+import PlanControls from "@/components/dash/PlanControls";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { pageData } from "@/lib/dash/page-data";
 import { deliverables, delivered, tierInfo } from "@/lib/dash/plan";
+import { money, monthDay, nextMonthStart } from "@/lib/dash/plan-change";
+import { priceFor } from "@/lib/dash/plan-requests";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { readWork } from "@/lib/dash/work";
 import type { ClusterView, Workspace } from "@/lib/dash/types";
 
@@ -22,8 +26,11 @@ export const metadata: Metadata = { title: "Your plan's clusters", robots: { ind
  * month, and what has moved since we started; the clusters the client only
  * tracks are listed apart, so which is which is never a question.
  */
-export default async function Managed({ params }: { params: Promise<{ client: string }> }) {
+const one = (v: string | string[] | undefined, max = 120) => (typeof v === "string" && v.length <= max ? v : undefined);
+
+export default async function Managed({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
+  const sp = await searchParams;
   const { ws, base, raw, demo, viewAs } = await pageData(slug);
   // A tracking plan has no clusters we work on: its plan page says what does.
   if (ws.client.tier === "tracked") redirect(`${base}/${slug}/plan`);
@@ -32,6 +39,10 @@ export default async function Managed({ params }: { params: Promise<{ client: st
   const managed = ws.clusters.filter((c) => c.managed);
   const trackedOnly = ws.clusters.filter((c) => !c.managed);
   const sample = managed.some((c) => c.placements.some((p) => p.sample));
+  // 7 Nov 2026: what one more plan cluster adds, from the sector table or the customer's own order; never on a demo.
+  const price = demo ? null : await priceFor(supabaseAdmin(), raw).catch(() => null);
+  const nameOf = (id: string) => raw.clusters.find((c) => c.id === id)?.name ?? "a cluster";
+  const req = raw.planRequests;
   return (
     <>
       <PageHead
@@ -50,16 +61,29 @@ export default async function Managed({ params }: { params: Promise<{ client: st
         managed.map((c, i) => <ManagedCluster key={c.id} ws={ws} c={c} n={i + 1} href={`${base}/${slug}/clusters/${c.id}`} />)
       )}
       <WorkCompleted items={work} base={base} slug={slug} />
+      <PlanControls
+        slug={slug}
+        owner={ws.role === "owner"}
+        readOnly={demo || !!viewAs}
+        plan={ws.client.tier}
+        managed={managed.map((c) => ({ id: c.id, name: c.name }))}
+        trackingOnly={trackedOnly.map((c) => ({ id: c.id, name: c.name }))}
+        effective={monthDay(nextMonthStart(ws.today))}
+        price={price ? money(price.amount, price.currency) : null}
+        swap={req?.swap ? { id: req.swap.id, from: nameOf(req.swap.from_cluster_id), to: nameOf(req.swap.to_cluster_id), on: monthDay(req.swap.effective_on) } : null}
+        upgrades={(req?.upgrades ?? []).map((u) => ({ id: u.id, what: u.cluster_id ? nameOf(u.cluster_id) : (u.keyword ?? "a cluster"), price: money(u.price_amount, u.currency), on: monthDay(u.created_at.slice(0, 10)) }))}
+        start={{ swap: one(sp.swap, 64), swapKeyword: one(sp.swapKeyword), add: one(sp.add, 64), addKeyword: one(sp.addKeyword) }}
+      />
       <div className="dash-card">
         <h2>Changing a cluster we work on</h2>
         <p className="intro" style={{ maxWidth: 720 }}>
-          Each month&rsquo;s placements are built around the cluster keyword, so the keyword itself changes on request and takes effect from your next billing date - the month&rsquo;s work in progress is finished first. Inside the cluster you can change groups, keywords and prompts whenever you like; they are read from the next morning. Clusters you only track can be added, swapped and removed freely, within your allowance.
+          Inside a cluster we work on you can change groups, keywords and prompts whenever you like; they are read from the next morning. The cluster keyword itself is what each month&rsquo;s placements are built around, so it changes by a swap, above, from the 1st of next month. Clusters you only track can be added and removed freely, within your allowance.
         </p>
       </div>
       {trackedOnly.length ? (
         <div className="dash-card">
-          <h2>Tracked only</h2>
-          <p className="intro">Measured every day, and yours to change at any time. We do not place for these.</p>
+          <h2>Tracking only</h2>
+          <p className="intro">Not part of your <TierName tier={ws.client.tier} /> plan: measured every day, free within your allowance, and yours to change at any time. We do not place for these. Swap one in, or add it to your plan, above.</p>
           <div className="tbl-wrap" style={{ marginTop: 10 }}>
             <table className="tbl">
               <thead><tr><th>Cluster</th><th className="r">Google</th><th>AI names you</th></tr></thead>
@@ -80,7 +104,6 @@ function ManagedCluster({ ws, c, n, href }: { ws: Workspace; c: ClusterView; n: 
   const monthStart = `${ws.today.slice(0, 7)}-01`;
   const list = deliverables(ws.client.tier);
   const moved = c.startPos !== null && c.headPos !== null ? c.startPos - c.headPos : null;
-  const swap = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Swap cluster ${n} (${c.name}) - ${ws.client.domain}`)}`;
   return (
     <section className="dash-card" aria-label={`Cluster ${n}: ${c.name}`}>
       <div className="dash-card-head">
@@ -93,7 +116,7 @@ function ManagedCluster({ ws, c, n, href }: { ws: Workspace; c: ClusterView; n: 
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Link className="btn" href={href}>Groups, keywords and prompts</Link>
-          <a className="btn ghost" href={swap}>Ask to swap</a>
+          <a className="btn ghost" href="#swap">Swap it</a>
         </div>
       </div>
       <h3 className="dash-micro" style={{ margin: "4px 0 8px" }}>This month</h3>

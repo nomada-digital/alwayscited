@@ -294,5 +294,8 @@ test("the six call sites are the ones we think they are", () => {
     // 13 Oct 2026, DIY P1 (spec 10 section 5.6 item 4): every sum a DIY
     // reservation checks, in one read-only round trip (ledger.ts readDiySpend).
     diy_spend: 1,
+    // 7 Nov 2026, customer controls: the plan swaps due today, applied by the daily check and before a dashboard
+    // read (lib/dash/plan-requests.ts applyDueSwaps).
+    apply_plan_swaps: 1,
   });
 });

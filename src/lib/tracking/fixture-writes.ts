@@ -9,7 +9,7 @@ import { refuseRekey } from "./rekey.ts";
 import { refuseSlotText } from "./slot.ts";
 import { type StopKind, refuseRole, refuseStop, refuseUndo, stopDay } from "./stop.ts";
 import type { InviteScope } from "./scope.ts";
-import { type InviteRole, type TeamOp, planTeam, refuseActor, removeKind } from "./team.ts";
+import { type InviteRole, type TeamOp, fullName, planTeam, refuseActor, removeKind } from "./team.ts";
 
 /**
  * R168 (Danny, 2 Oct 2026, danny.md lines 177-179): `TRACKING_FIXTURE_WRITE=1`
@@ -156,14 +156,14 @@ export function fixtureEditPrompts(f: Fixture, p: { clusterId: string; edits: re
  * No mail: sendInvite is never reached on the fixture. The daily invite cap
  * is not counted here - the fixture keeps no event rows.
  */
-export function fixtureTeam(f: Fixture, p: { op: TeamOp; email: string; role: InviteRole | null; scope: InviteScope | null; slug: string; now: string }): FixtureWritten {
+export function fixtureTeam(f: Fixture, p: { op: TeamOp; email: string; role: InviteRole | null; scope: InviteScope | null; slug: string; now: string; first?: string; last?: string | null }): FixtureWritten {
   const actor = refuseActor(f.member.role);
   if (actor) return { ok: false, message: actor };
   const client = fixtureClients(f, f.member.email).find((c) => c.slug === p.slug);
   if (!client) return { ok: false, message: "Not found." };
   const all = f.members.filter((m) => !m.removed_at).map((m) => ({ email: m.email, role: m.role, removed_at: null, clients: m.clients ?? null }));
   const plan = planTeam({
-    form: { op: p.op, email: p.email, role: p.role, scope: p.op === "invite" ? p.scope : null },
+    form: { op: p.op, email: p.email, role: p.role, scope: p.op === "invite" ? p.scope : null, ...(p.first ? { first: p.first, last: p.last ?? null } : {}) },
     actor: f.member.email,
     rows: all,
     scoping: f.scoping !== false,
@@ -184,9 +184,10 @@ export function fixtureTeam(f: Fixture, p: { op: TeamOp; email: string; role: In
     const had = f.members.some((m) => m.email === p.email);
     const members = had
       ? f.members.map((m) => (m.email === p.email ? scoped({ ...m, role: plan.role, removed_at: null }, after(m)) : m))
-      : [...f.members, scoped({ email: p.email, name: null, role: plan.role, last_login_at: null, removed_at: null }, after(null))];
+      : [...f.members, scoped({ email: p.email, name: fullName(plan.first, plan.last), role: plan.role, last_login_at: null, removed_at: null }, after(null))];
     return { ok: true, fixture: { ...f, members } };
   }
+  if (plan.op === "name") return { ok: true, fixture: { ...f, members: f.members.map((m) => (m.email === p.email && !m.removed_at ? { ...m, name: fullName(plan.first, plan.last) } : m)) } };
   const kind = removeKind(plan.row);
   const hit = (m: Fixture["members"][number]) => m.email === p.email && !m.removed_at;
   const members = f.members.map((m) =>

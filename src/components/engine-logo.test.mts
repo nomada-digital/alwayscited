@@ -41,6 +41,8 @@ const SPRITE_FILES = [
   "app/dashboards/[client]/ai/[prompt]/page.tsx",
   "app/dashboards/[client]/sources/[domain]/page.tsx",
   "components/dash/PromptManager.tsx",
+  // 7 Nov 2026: the AI tab's answer panel, opened from PromptManager, under app/dashboards/layout.tsx.
+  "components/dash/AnswerPanel.tsx",
   "app/dashboards/[client]/sources/page.tsx",
   "components/dash/Figures.tsx",
   // 18 Oct 2026 (brief 2g): the alwaystracked view's engine row, under app/dashboards/layout.tsx.

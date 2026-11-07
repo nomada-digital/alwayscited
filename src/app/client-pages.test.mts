@@ -79,7 +79,14 @@ const KEYS: Record<string, Record<string, string>> = {
   "/links": {},
   // 22 Oct 2026: the map pack grids. No query keys.
   "/local": {},
-  "/managed": {},
+  // 7 Nov 2026: a choice handed over from Clusters or Google (a cluster id, or a keyword), each capped by `one`, only
+  // ever a select's starting value or an input's first text; the plan route judges every value again on submit.
+  "/managed": {
+    swap: "one(sp.swap, 64)",
+    swapKeyword: "one(sp.swapKeyword)",
+    add: "one(sp.add, 64)",
+    addKeyword: "one(sp.addKeyword)",
+  },
   "/opportunities": {},
   // The billing and pack routes' 303 codes, drawn only through each table's own fixed words; nothing is echoed.
   "/plan": {
@@ -107,6 +114,8 @@ const ROLE_READS: Record<string, string[]> = {
   "/settings": ['const owner = raw.role === "owner" && !readOnly;'],
   // Only an owner sees Open billing and Track more; the billing and pack routes refuse anyone else too.
   // 22 Oct 2026: the invoice history is read for the owner only, never in a demo or a view-as (lib/dash/invoices.ts).
+  // 7 Nov 2026: only an owner sees the swap and add-to-plan forms; the plan route refuses anyone else too.
+  "/managed": ['owner={ws.role === "owner"}'],
   "/plan": ['ws.role === "owner" ? (', 'ws.role === "owner" && !demo ? (', 'const inv = ws.role === "owner" && !demo && !viewAs ? await readInvoices(raw.client.id) : null;'],
 };
 

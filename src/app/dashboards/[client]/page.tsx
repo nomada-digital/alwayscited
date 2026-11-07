@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Change, EngineHeads, Kpi, Pos, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
+import { Change, EngineHeads, Kpi, LimitsLine, Pos, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
 import Nudges from "@/components/dash/Nudges";
 import PlanCard from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
@@ -50,18 +50,19 @@ export default async function Overview({ params }: { params: Promise<{ client: s
           <Link className="btn sm primary" href={`${base}/${slug}/plan`}>See options</Link>
         </div>
       ) : null}
+      {/* 7 Nov 2026: each tile opens the page behind its figure. */}
       <div className="dash-grid k4">
-        <Kpi label="AI names you" value={pct(ws.rate)} sub={delta !== null && ws.dates.length > 1 ? <span className={delta > 0 ? "up" : delta < 0 ? "down" : ""}>{delta > 0 ? "+" : ""}{delta} pts over {ws.dates.length} readings</span> : "Answers naming you, latest reading"}>
+        <Kpi href={`${base}/${slug}/ai`} label="AI names you" value={pct(ws.rate)} sub={delta !== null && ws.dates.length > 1 ? <span className={delta > 0 ? "up" : delta < 0 ? "down" : ""}>{delta > 0 ? "+" : ""}{delta} pts over {ws.dates.length} readings</span> : "Answers naming you, latest reading"}>
           <Spark values={ws.rateTrend} width={120} />
         </Kpi>
-        <Kpi label="Keywords on page 1" value={top10} unit={`of ${tracked.length}`} sub={ranked.length ? `${ranked.length} ranking in the top 100` : "Tracked keywords, Google, today"} />
-        <Kpi label="Clusters" value={ws.allowances.clusters.used} unit={`of ${ws.allowances.clusters.limit}`} sub={`${ws.clusters.reduce((n, c) => n + c.groups.length, 0)} keyword groups`} />
-        <Kpi label="AI cites your site" value={cites ? cites.answers : 0} unit="answers" sub="Last 7 readings, any engine" />
+        <Kpi href={`${base}/${slug}/google`} label="Keywords on page 1" value={top10} unit={`of ${tracked.length}`} sub={ranked.length ? `${ranked.length} ranking in the top 100` : "Tracked keywords, Google, today"} />
+        <Kpi href={`${base}/${slug}/clusters`} label="Clusters" value={ws.allowances.clusters.used} unit={`of ${ws.allowances.clusters.limit}`} sub={`${ws.allowances.prompts.used} of ${ws.allowances.prompts.limit} prompts · ${ws.clusters.reduce((n, c) => n + c.groups.length, 0)} keyword groups`} />
+        <Kpi href={`${base}/${slug}/sources`} label="AI cites your site" value={cites ? cites.answers : 0} unit="answers" sub="Last 7 readings, any engine" />
       </div>
       <div className="dash-grid side" style={{ marginTop: 16 }}>
         <div className="dash-card">
           <div className="dash-card-head">
-            <div><h2>Clusters</h2><p className="intro">Each keyword you are working on, and how it is doing in both places.</p></div>
+            <div><h2>Clusters</h2><p className="intro">Each keyword you are working on, and how it is doing in both places.</p><p style={{ margin: "4px 0 0" }}><LimitsLine a={ws.allowances} /></p></div>
             <Link className="btn" href={`${base}/${slug}/clusters`}>Manage</Link>
           </div>
           {ws.clusters.length ? (

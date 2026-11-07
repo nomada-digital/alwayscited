@@ -14,7 +14,7 @@ import { sendInvite } from "@/lib/tracking/invite-mail";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
 import { writeFixture } from "@/lib/tracking/repo";
 import { readKept } from "@/lib/tracking/stop";
-import { type TeamDone, type TeamWhy, changeRole, dashTeamReturn, invite, inviteMail, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, teamReturn, teamWhy } from "@/lib/tracking/team";
+import { type TeamDone, type TeamWhy, changeRole, dashTeamReturn, invite, inviteMail, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, setName, teamReturn, teamWhy } from "@/lib/tracking/team";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 import { dashBase } from "@/lib/dash/host";
 
@@ -51,9 +51,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   if (!f) return back("refused", form?.get("op") === "invite" ? "email" : null);
   if (fixtureMode()) {
     // R168: invite, role and remove held in memory on the writable fixture; sendInvite is never reached here.
-    const r = writeFixture((fx) => fixtureTeam(fx, { op: f.op, email: f.email, role: f.role, scope: f.scope, slug, now: new Date().toISOString() }));
+    const r = writeFixture((fx) => fixtureTeam(fx, { op: f.op, email: f.email, role: f.role, scope: f.scope, slug, now: new Date().toISOString(), first: f.first, last: f.last }));
     if (r && !r.ok) console.warn(`[app] fixture team ${f.op} refused: ${r.message}`);
-    return r?.ok ? back(f.op === "invite" ? "invited" : f.op === "role" ? "role" : "removed") : back("refused", r ? teamWhy(r.message) : null);
+    return r?.ok ? back(f.op === "invite" ? "invited" : f.op === "role" ? "role" : f.op === "name" ? "named" : "removed") : back("refused", r ? teamWhy(r.message) : null);
   }
 
   const email = await sessionEmail();
@@ -89,7 +89,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     // Read before the write: agency mode must be known, or the mail could name a nomada tier.
     const { data: account, error: aErr } = await db.from("accounts").select("upsell_mode").eq("id", accountId).maybeSingle();
     if (aErr || !account) return refused(`could not read the account: ${aErr?.message ?? "none"}`);
-    const r = await invite(db, { accountId, clientId: client.id, email: f.email, role: plan.role, by: email, scope: plan.scope, elsewhere: plan.elsewhere });
+    const r = await invite(db, { accountId, clientId: client.id, email: f.email, role: plan.role, by: email, scope: plan.scope, elsewhere: plan.elsewhere, first: plan.first, last: plan.last });
     if (!r.ok) return refused(r.message);
     const agency = upsellMode(account.upsell_mode) === "agency";
     // The mail says when they will see every client; an invite to one client names that client only.
@@ -103,6 +103,10 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     return back("invited");
   }
 
+  if (plan.op === "name") {
+    const r = await setName(db, { accountId, email: f.email, first: plan.first, last: plan.last });
+    return r.ok ? back("named") : refused(r.message);
+  }
   const r =
     plan.op === "role"
       ? await changeRole(db, { accountId, email: f.email, role: plan.role })

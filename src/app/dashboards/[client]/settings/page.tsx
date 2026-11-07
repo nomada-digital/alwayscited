@@ -6,12 +6,12 @@ import TierName from "@/components/TierName";
 import { pageData } from "@/lib/dash/page-data";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ADMIN_LIMITS } from "@/lib/tracking/decide";
-import { TEAM_WHY, readTeam, teamWhy } from "@/lib/tracking/team";
+import { NAME_PART_MAX, TEAM_WHY, fullName, readTeam, teamWhy } from "@/lib/tracking/team";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Settings", robots: { index: false, follow: false } };
 
-const DONE: Record<string, string> = { invited: "Invited. They get an email with a sign-in link.", removed: "Removed. They can no longer sign in to this dashboard.", role: "Role changed." };
+const DONE: Record<string, string> = { invited: "Invited. They get an email with a sign-in link.", removed: "Removed. They can no longer sign in to this dashboard.", role: "Role changed.", named: "Name saved." };
 
 /**
  * Settings on the dashboards host (18 Oct 2026 brief 2d): who can see this
@@ -26,7 +26,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const { raw, base, demo, viewAs } = await pageData(slug);
   const readOnly = demo || !!viewAs;
   const owner = raw.role === "owner" && !readOnly;
-  let team: { email: string; role: string }[] | null = null;
+  let team: { email: string; role: string; first?: string | null; last?: string | null }[] | null = null;
   if (!demo) {
     // The account is read here, server-side only, to read the team; it is never rendered (as the member route reads it).
     const { data: row, error: aErr } = await supabaseAdmin().from("client_domains").select("account_id").eq("id", raw.client.id).maybeSingle();
@@ -46,11 +46,28 @@ export default async function Settings({ params, searchParams }: { params: Promi
         {team === null ? <p className="faint">The team could not be read just now.</p> : (
           <div className="tbl-wrap" style={{ marginTop: 10 }}>
             <table className="tbl">
-              <thead><tr><th>Email</th><th>Role</th><th aria-label="Actions" /></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th aria-label="Actions" /></tr></thead>
               <tbody>
                 {team.map((m) => (
                   <tr key={m.email}>
-                    <td>{m.email}</td>
+                    <td>
+                      {fullName(m.first, m.last) ?? <span className="faint">No name yet</span>}
+                      {owner ? (
+                        // 7 Nov 2026: a first name is required, a last name optional; the owner sets either for anyone here.
+                        <details style={{ marginTop: 4 }}>
+                          <summary className="muted" style={{ fontSize: 12, cursor: "pointer" }}>{m.first ? "Edit name" : "Add name"}</summary>
+                          <form method="post" action={`/api/app/${slug}/member`} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+                            <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
+                            <input type="hidden" name="op" value="name" maxLength={ADMIN_LIMITS.email} />
+                            <input type="hidden" name="email" value={m.email} maxLength={ADMIN_LIMITS.email} />
+                            <input className="field" name="first" required defaultValue={m.first ?? ""} placeholder="First name" aria-label="First name" maxLength={NAME_PART_MAX} style={{ flex: "1 1 120px" }} />
+                            <input className="field" name="last" defaultValue={m.last ?? ""} placeholder="Last name (optional)" aria-label="Last name, optional" maxLength={NAME_PART_MAX} style={{ flex: "1 1 120px" }} />
+                            <button className="btn sm">Save</button>
+                          </form>
+                        </details>
+                      ) : null}
+                    </td>
+                    <td style={{ overflowWrap: "anywhere" }}>{m.email}</td>
                     <td className="muted">{m.role}</td>
                     <td className="r">
                       {owner && m.role !== "owner" ? (
@@ -73,6 +90,8 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
             <input type="hidden" name="op" value="invite" maxLength={ADMIN_LIMITS.email} />
             <input type="hidden" name="scope" value="client" maxLength={ADMIN_LIMITS.email} />
+            <input className="field" name="first" required placeholder="First name" aria-label="First name" maxLength={NAME_PART_MAX} style={{ flex: "1 1 130px" }} autoComplete="off" />
+            <input className="field" name="last" placeholder="Last name (optional)" aria-label="Last name, optional" maxLength={NAME_PART_MAX} style={{ flex: "1 1 150px" }} autoComplete="off" />
             <input className="field" type="email" name="email" required placeholder="name@company.com" aria-label="Email address to invite" maxLength={ADMIN_LIMITS.email} style={{ flex: "1 1 240px" }} autoFocus={!!why} />
             <select className="field" name="role" defaultValue="editor" aria-label="Role">
               <option value="editor">Editor</option>

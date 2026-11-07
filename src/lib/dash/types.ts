@@ -29,6 +29,12 @@ export type RawClient = {
   trial_ends_at: string | null;
   payment_status: string | null;
   brand_aliases: string[];
+  /**
+   * The clusters the plan is paid to work on (7 Nov 2026): the Stripe order's quantity, or null where there is no
+   * order (invoiced, or a snapshot). A cluster added self-serve fills one of these first and is otherwise tracking
+   * only (ops.ts addedClusterTier). Absent on a snapshot taken before then.
+   */
+  plan_slots?: number | null;
 };
 
 /** tracked_keywords.added_by for a keyword picked for the buyer at signup (tracking/starter.ts, 22 Oct 2026). */
@@ -130,7 +136,24 @@ export type Raw = {
   keyPages?: KeyPageRow[];
   /** Active map pack grids (lib/local, 22 Oct 2026). Absent on a snapshot or demo, which then has no Map pack page. */
   localGrids?: number;
+  /** The pending swap and open add-to-plan requests (plan-change.ts, 7 Nov 2026). Absent on a snapshot or demo. */
+  planRequests?: PlanRequests;
 };
+
+export type PlanSwap = { id: string; from_cluster_id: string; to_cluster_id: string; effective_on: Day; status: string; requested_by: string; created_at: string };
+export type PlanUpgrade = {
+  id: string;
+  cluster_id: string | null;
+  keyword: string | null;
+  /** Minor units a month, as Stripe; null when the price is a call. */
+  price_amount: number | null;
+  currency: "usd" | "gbp" | null;
+  price_source: "sector" | "order" | "call" | null;
+  status: string;
+  requested_by: string;
+  created_at: string;
+};
+export type PlanRequests = { swap: PlanSwap | null; upgrades: PlanUpgrade[] };
 
 // ---------------------------------------------------------------- derived
 

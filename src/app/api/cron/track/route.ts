@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/constant-time";
 import { pullConnectionsSafely } from "@/lib/dash/connect-io";
+import { applyDueSwapsSafely } from "@/lib/dash/plan-requests";
+import { trackingDay } from "@/lib/tracking/decide";
 import { sweepLifecycleMailSafely } from "@/lib/email/lifecycle-cron";
 import { runHealthAfterDispatch } from "@/lib/tracking/health-io";
 import { dispatchTrackingRuns } from "@/lib/tracking/runner";
@@ -38,6 +40,9 @@ export const maxDuration = 60;
  * the reason. A day with runs in flight is reported by the last run to
  * close. Never fatal to the answer either.
  *
+ * First, any plan swap due today (7 Nov 2026, lib/dash/plan-requests.ts): on the 1st the old plan cluster becomes
+ * tracking only and the one swapped in takes its place. Never fatal.
+ *
  * Last, the data connections' daily pull (2 Nov 2026, sg-37): Windsor's
  * last 28 days for each connected property into search_console_queries and
  * ga4_daily. Never fatal either.
@@ -50,6 +55,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  const swaps = await applyDueSwapsSafely(trackingDay());
+  if (typeof swaps === "string") console.warn(`[track] ${swaps}`);
   let answer: { body: Record<string, unknown>; status: number };
   let note: string | null = null;
   try {
@@ -72,5 +79,5 @@ export async function GET(req: Request) {
   const mail = await sweepLifecycleMailSafely();
   // 2 Nov 2026 (sg-37): the daily pull for every connected Search Console, GA4 and Bing property (lib/dash/connect-io.ts).
   const connections = await pullConnectionsSafely();
-  return NextResponse.json({ ...answer.body, health, mail, connections }, { status: answer.status });
+  return NextResponse.json({ ...answer.body, swaps, health, mail, connections }, { status: answer.status });
 }

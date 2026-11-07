@@ -5,7 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { insertCluster, insertKeyword, insertKeywordPair, insertPrompts, missingColumn, readingsFor } from "@/lib/tracking/limits";
 import { stopDay } from "@/lib/tracking/stop";
 
-import { cleanTerms, pairForm, refuseOp, type Op } from "./ops";
+import { addedClusterTier, cleanTerms, pairForm, refuseOp, type Op } from "./ops";
 import { setClusterTarget } from "./target-write";
 import { planShape } from "./plan";
 import type { Raw, RawCluster, RawGroup, RawKeyword, RawPrompt } from "./types";
@@ -80,7 +80,7 @@ export async function writeOp(db: SupabaseClient, raw: Raw, op: Op, by: string):
 
   switch (op.op) {
     case "cluster.add": {
-      const c = await insertCluster(db, cid, { name: op.name.trim(), tier: raw.client.tier, started_on: day });
+      const c = await insertCluster(db, cid, { name: op.name.trim(), tier: addedClusterTier(raw), started_on: day });
       if (!c.ok) return fail(c.message);
       const ids: Record<string, string> = { [op.tempId]: c.ids[0]! };
       if (op.keyword && op.keyword.trim()) {

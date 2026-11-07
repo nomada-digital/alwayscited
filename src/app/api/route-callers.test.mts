@@ -135,7 +135,8 @@ export function callsIn(file: string, src: string): Call[] {
       else if (")]}".includes(c)) d--;
       else if (c === "," && d === 0) break;
     }
-    const path = normalisePath(whole.slice(0, k));
+    // 7 Nov 2026: a query string is not part of the route (the AI tab's answer panel GETs `/answer?prompt=…`).
+    const path = normalisePath(whole.slice(0, k)).replace(/\?.*$/, "");
     if (!path.startsWith("/api/")) continue;
     const method = whole.slice(k).match(/method:\s*["'`](\w+)["'`]/)?.[1] ?? "GET";
     out.push({ file, path, method: method.toUpperCase() });

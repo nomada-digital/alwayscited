@@ -552,6 +552,10 @@ const SQL_READERS: Record<string, string> = {
   hub_view_as:
     "Mints a view-as token. service_role only. Reads account_id to find the owner's email and returns " +
     "jsonb of token, slug and expires_at only.",
+  // 7 Nov 2026, customer controls (20261108000000).
+  apply_plan_swaps:
+    "Applies due plan swaps. service_role only (20261108010000). Reads client_domains for the tier and " +
+    "returns an integer count; no column reaches the caller.",
 };
 
 test("the SQL walk can see the functions it is sweeping", () => {

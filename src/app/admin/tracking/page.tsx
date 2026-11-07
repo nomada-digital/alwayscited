@@ -11,6 +11,7 @@ import { type HealthRun, RUN_STATES, type RunHealth, STATE_WORDS, readRunHealth,
 import { SETUP_CONFIRMED_EVENT, setupState } from "@/lib/tracking/setup-landing";
 
 import { ActionForm } from "./ActionForm";
+import PlanSignals from "./PlanSignals";
 import { addTracked, createClientFromScan, editTracked, groupCluster, runNow, setMember, setUpsell, stopTracked } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -137,6 +138,8 @@ export default async function TrackingAdmin() {
       </p>
 
       <RunStrip health={health} today={today} />
+
+      <PlanSignals db={db} clients={clients ?? []} clusters={clusters} keywords={keywords} />
 
       <section style={{ border: `1px solid ${T.line}`, borderRadius: "10px", padding: "16px", marginBottom: "24px" }}>
         <h2 style={{ fontSize: "16px", margin: "0 0 8px" }}>Create a client from a scan</h2>
