@@ -190,7 +190,7 @@ function collectCitations(
 type AioRef = { source?: string; domain?: string; url?: string; title?: string };
 type AioElement = { text?: string; references?: AioRef[] };
 type AioItem = { type: string; markdown?: string; items?: AioElement[]; references?: AioRef[] };
-type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string; breadcrumb?: string };
+type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string; breadcrumb?: string; website_name?: string };
 
 /**
  * The organic results, from the same response as the Overview. The request is
@@ -201,7 +201,7 @@ function collectOrganic(items: OrganicItem[]): OrganicHit[] {
   const out: OrganicHit[] = [];
   for (const i of items) {
     if (i.type !== "organic") continue;
-    const shown = wrappedLink(i.url ?? null) ? unwrapByCrumb(i.breadcrumb) : null;
+    const shown = wrappedLink(i.url ?? null) ? (unwrapByCrumb(i.breadcrumb) ?? unwrapByPlatform(i.website_name)) : null;
     if (shown) {
       const rank = typeof i.rank_group === "number" ? i.rank_group : i.rank_absolute;
       if (typeof rank === "number") out.push({ domain: shown.domain, url: shown.url, rank });
@@ -256,6 +256,21 @@ export function unwrapByCrumb(breadcrumb: string | undefined | null): { domain: 
   const parts = m[2].split("›").map((p) => p.trim()).filter(Boolean);
   const cut = parts.some((p) => p.includes("...") || p.includes("…") || p.includes(" "));
   return { domain, url: cut || !parts.length ? `${m[1]}/` : `${m[1]}/${parts.join("/")}` };
+}
+
+/**
+ * A wrapped social post (7 Nov 2026): its breadcrumb is "350+ followers" or "20+ comments · 2 years ago", not an
+ * address, but website_name names the platform first ("Instagram · princetakespictures"). Those platforms are never a
+ * customer's own site, and two such posts on a page were enough to call it degraded. Null for any other name.
+ */
+const PLATFORMS: Record<string, string> = {
+  facebook: "facebook.com", instagram: "instagram.com", youtube: "youtube.com", reddit: "reddit.com", linkedin: "linkedin.com",
+  tiktok: "tiktok.com", x: "x.com", twitter: "x.com", pinterest: "pinterest.com", quora: "quora.com", medium: "medium.com", threads: "threads.net",
+};
+export function unwrapByPlatform(websiteName: string | undefined | null): { domain: string; url: null } | null {
+  const name = (websiteName ?? "").split(/[\u00a0\s]*\u00b7/)[0].trim().toLowerCase();
+  const domain = PLATFORMS[name];
+  return domain ? { domain, url: null } : null;
 }
 
 /** An organic result whose link is Google's own redirect (`/goto` or `/url` on a google host) rather than the site's. */

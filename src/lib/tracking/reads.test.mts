@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { firstTask, keywordRankRequest, SERP_DEPTH } from "../scan/dataforseo-request.ts";
-import { parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb } from "../scan/engines.ts";
+import { parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb, unwrapByPlatform } from "../scan/engines.ts";
 
 import { billedCost, failureSummary, keywordOutcome, readFailureReason, readRetryDelay, runOutcome } from "./decide.ts";
 
@@ -103,6 +103,12 @@ test("7 Nov 2026: a wrapped result is ranked on the site its breadcrumb names", 
   assert.equal(organic[2].url, "https://site2.example/a/b", "a whole one gives the page");
   assert.equal(rankOfRead(organic, "absent.example", false), null, "and a miss is a miss");
   assert.equal(unwrapByCrumb("Tiger Recruitment"), null, "no address in the breadcrumb: nothing to read");
+  // Social posts carry no address in the breadcrumb; the platform comes from website_name (Leeds, 7 Nov).
+  const social = parseOrganic({ items: items.map((it, i) => (i === 3 || i === 12 ? { ...it, breadcrumb: i === 3 ? "5.9k+ followers" : "1 comment \u00a0\u00b7\u00a0 6 months ago", website_name: i === 3 ? "Instagram\u00a0\u00b7\u00a0someone" : "Facebook\u00a0\u00b7\u00a0A group" } : it)) });
+  assert.equal(serpFault(social), null, "wrapped social posts do not make the page degraded");
+  assert.equal(social[3].domain, "instagram.com");
+  assert.equal(rankOfRead(social, "talent-boutique.example", false), 7);
+  assert.equal(unwrapByPlatform("Some Blog \u00b7 a post"), null, "only the known platforms");
   // Wrapped results with no breadcrumb are still the degraded page of 3 Nov.
   const bare = parseOrganic({ items: items.map((it, i) => (i < 3 ? { ...it, breadcrumb: undefined } : it)) });
   assert.equal(serpFault(bare), "wrapped");
