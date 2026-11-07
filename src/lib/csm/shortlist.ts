@@ -8,7 +8,7 @@ import { normalizeDomain } from "@/lib/scan/domain";
 import { INVENTORY_PAGE, type InventoryCursor, type Listing, UnitBudget, cursorFrom, inventorySig } from "./fatgrid-request";
 import { readDomains, readInventoryPage, runBudget } from "./fatgrid";
 import { checkHosts, readHomepage } from "./host-check";
-import { HOST_CHECKS_PER_RUN, type HostCheck, clientProfile, marketVerdict, topicVerdict } from "./host-gates";
+import { GEO_CHECKS_PER_RUN, TOPIC_CHECKS_PER_RUN, type HostCheck, clientProfile, marketVerdict, topicVerdict } from "./host-gates";
 import { recordUnits, unitsLeft } from "./usage";
 import { type Candidate, type CitedPage, type HostNote, rankShortlist } from "./shortlist-rank";
 import { type TopRow, drFloor, latestUsableTop, topThree } from "./serp-floor";
@@ -48,6 +48,8 @@ export type ShortlistResult = {
 
 /** Inventory hosts that passed both gates, after which no further page is bought. */
 export const ENOUGH_PASSING = 8;
+/** No inventory page is bought after this long into a run, so the request ends inside the route's limit with its run recorded. */
+export const RUN_MS = 180_000;
 
 /** Whether migration 20261107000000 (batch B) is in: its columns are written only then. */
 async function hasBatchB(db: SupabaseClient): Promise<boolean> {
@@ -99,6 +101,7 @@ export async function buildShortlist(
     answers: Number((o.evidence as { answers?: number } | null)?.answers) || 0,
   }));
 
+  const started = Date.now();
   const stored = await hasBatchB(db);
   const own = normalizeDomain(client.domain);
 
@@ -118,12 +121,14 @@ export async function buildShortlist(
   });
   const market = (client.market as string | null) ?? null;
   const checks = new Map<string, HostCheck>();
-  let checkBudget = HOST_CHECKS_PER_RUN;
+  let topicBudget = TOPIC_CHECKS_PER_RUN;
+  let geoBudget = GEO_CHECKS_PER_RUN;
   let checkCost = 0;
   let modelCalls = 0;
   const check = async (domains: string[], categories?: Map<string, string[]>) => {
-    const r = await checkHosts(db, { clientId: p.clientId, market, profile, domains: domains.filter((d) => !checks.has(d)), categories, limit: checkBudget, stored });
-    checkBudget -= r.fresh;
+    const r = await checkHosts(db, { clientId: p.clientId, market, profile, domains: domains.filter((d) => !checks.has(d)), categories, topicLimit: topicBudget, geoLimit: geoBudget, stored });
+    topicBudget -= r.topicReads;
+    geoBudget -= r.geoReads;
     checkCost += r.costUsd;
     modelCalls += r.modelCalls;
     for (const [d, c] of r.checks) checks.set(d, c);
@@ -171,8 +176,11 @@ export async function buildShortlist(
   const inventory: { listing: Listing; offer: "guest_post" | "link_insertion" }[] = [];
   const passed = new Set<string>();
   const offers = ["guest_post", "link_insertion"] as const;
+  // A page is bought only while it can be vetted and the request has time left: a host the run cannot read cannot
+  // pass, so buying it is paying for nothing (MOR's first run, 7 Nov 2026, had 22 cited hosts to read first).
+  const vettable = () => topicBudget >= INVENTORY_PAGE && geoBudget >= 1 && Date.now() - started < RUN_MS;
   for (let turn = 0; turn < 40; turn++) {
-    if (stopped === "no_key" || stopped === "failed" || budget.left < INVENTORY_PAGE || passed.size >= ENOUGH_PASSING) break;
+    if (stopped === "no_key" || stopped === "failed" || budget.left < INVENTORY_PAGE || passed.size >= ENOUGH_PASSING || !vettable()) break;
     const offer = offers[turn % 2]!;
     const page = cursor[offer];
     const r = await readInventoryPage({ ...filters, offerType: offer }, page, INVENTORY_PAGE, budget);

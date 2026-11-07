@@ -6,8 +6,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// changeKeyword reads the site, drafts with the model, measures the keyword and dispatches the check.
-export const maxDuration = 120;
+// changeKeyword reads the site, drafts with the model, measures the keyword and dispatches the check. A shortlist run
+// reads Fatgrid pages and vets each one's hosts; it stops buying pages at RUN_MS (180s) so it ends inside this, and
+// this stays under the scan pipeline's 270s ceiling (run-duration.test.mts), so it needs no exemption there.
+export const maxDuration = 240;
 
 /**
  * The agency view's edits (29 Oct 2026, lib/agency/edit.ts). Server to server only: the hub's edge function

@@ -11,10 +11,12 @@ import { HOST_CHECK_TTL_DAYS, type HostCheck, MARKET_LOCATION, homepageHeadlines
  * The reads behind the shortlist's quality gates (7 Nov 2026; the rule is host-gates.ts). AGENCY ONLY.
  *
  * A host is read once per client and kept HOST_CHECK_TTL_DAYS in shortlist_host_checks, so a rerun pays nothing to
- * pass or fail it again. A fresh read is DataForSEO Labs' every-location traffic (about $0.02) and the homepage, then
- * one model call for up to FIT_BATCH hosts, through scan/anthropic.ts readHostFit (the one gate every model call
- * goes through). Nothing here is fatal: a host that cannot be read stays unknown, and the gates treat unknown as not
- * proven.
+ * pass or fail it again. The two halves are read in the order of their cost (7 Nov 2026, MOR's first run): the topic
+ * first - the homepage and one small-model call for up to FIT_BATCH hosts, through scan/anthropic.ts readHostFit (the
+ * one gate every model call goes through), a fraction of a cent a host - and the market only for a host that fits,
+ * DataForSEO Labs' every-location traffic at about $0.02. Most inventory fails on topic and never costs the second.
+ * Each half has its own allowance and its own read date. Nothing here is fatal: a host that cannot be read stays
+ * unknown, and the gates treat unknown as not proven.
  *
  * `stored` is false before migration 20261107000000 is applied: nothing is cached then, and every run reads afresh.
  */
@@ -36,79 +38,89 @@ export async function readHomepage(domain: string): Promise<string[]> {
   return [];
 }
 
+type Row = { domain: string; market: string | null; market_share: number | null; market_etv: number | null; total_etv: number | null; geo_read_on: string | null; fits: boolean | null; fit_reason: string | null; fit_read_on: string | null };
+
+const asCheck = (r: Row): HostCheck => ({
+  domain: r.domain, market: r.market, marketShare: r.market_share === null ? null : Number(r.market_share),
+  marketEtv: r.market_etv === null ? null : Number(r.market_etv), totalEtv: r.total_etv === null ? null : Number(r.total_etv),
+  fits: r.fits, fitReason: r.fit_reason,
+});
+
 /**
- * Every host's reading for one client: the cache first, then at most `limit` fresh reads, cached as they are made.
- * `categories` is what Fatgrid says of a host, when the host has come back from it already; a hint, never the verdict.
+ * Every host's reading for one client: the cache first, then fresh topic reads (at most `topicLimit`), then fresh
+ * market reads for the hosts that fit (at most `geoLimit`), cached as they are made. `categories` is what Fatgrid says
+ * of a host when it has come back from it already; a hint, never the verdict.
  */
 export async function checkHosts(
   db: SupabaseClient,
-  p: { clientId: string; market: string | null; profile: string; domains: readonly string[]; categories?: ReadonlyMap<string, string[]>; limit: number; stored: boolean },
-): Promise<{ checks: Map<string, HostCheck>; fresh: number; costUsd: number; modelCalls: number }> {
-  const checks = new Map<string, HostCheck>();
+  p: { clientId: string; market: string | null; profile: string; domains: readonly string[]; categories?: ReadonlyMap<string, string[]>; topicLimit: number; geoLimit: number; stored: boolean },
+): Promise<{ checks: Map<string, HostCheck>; topicReads: number; geoReads: number; costUsd: number; modelCalls: number }> {
   const wanted = [...new Set(p.domains)];
-  if (!wanted.length) return { checks, fresh: 0, costUsd: 0, modelCalls: 0 };
+  const rows = new Map<string, Row>();
+  const blank = (domain: string): Row => ({ domain, market: p.market, market_share: null, market_etv: null, total_etv: null, geo_read_on: null, fits: null, fit_reason: null, fit_read_on: null });
+  if (!wanted.length) return { checks: new Map(), topicReads: 0, geoReads: 0, costUsd: 0, modelCalls: 0 };
+  const since = new Date(Date.now() - HOST_CHECK_TTL_DAYS * 86_400_000).toISOString();
   if (p.stored) {
-    const since = new Date(Date.now() - HOST_CHECK_TTL_DAYS * 86_400_000).toISOString();
     const { data, error } = await db.from("shortlist_host_checks").select("domain, market, market_share, market_etv, total_etv, geo_read_on, fits, fit_reason, fit_read_on").eq("client_domain_id", p.clientId).in("domain", wanted);
     if (error) console.warn(`[csm] host checks not read: ${error.message}`);
-    for (const r of data ?? []) {
-      // Kept only while both halves are fresh and for the same market; anything else is read again.
-      if (r.market !== p.market || !r.geo_read_on || r.geo_read_on < since || !r.fit_read_on || r.fit_read_on < since) continue;
-      checks.set(r.domain as string, {
-        domain: r.domain as string, market: r.market as string | null, marketShare: r.market_share === null ? null : Number(r.market_share),
-        marketEtv: r.market_etv === null ? null : Number(r.market_etv), totalEtv: r.total_etv === null ? null : Number(r.total_etv),
-        fits: r.fits as boolean | null, fitReason: r.fit_reason as string | null,
+    for (const r of (data ?? []) as Row[]) {
+      // A half is kept while it is fresh; the market half only for the same market. Anything else is read again.
+      const geoFresh = r.market === p.market && !!r.geo_read_on && r.geo_read_on >= since;
+      const fitFresh = !!r.fit_read_on && r.fit_read_on >= since;
+      rows.set(r.domain, {
+        ...blank(r.domain),
+        ...(geoFresh ? { market_share: r.market_share, market_etv: r.market_etv, total_etv: r.total_etv, geo_read_on: r.geo_read_on } : {}),
+        ...(fitFresh ? { fits: r.fits, fit_reason: r.fit_reason, fit_read_on: r.fit_read_on } : {}),
       });
     }
   }
-  const todo = wanted.filter((d) => !checks.has(d)).slice(0, Math.max(0, p.limit));
-  let costUsd = 0;
-  const location = p.market ? MARKET_LOCATION[p.market] : undefined;
-  const read = await Promise.all(
-    todo.map(async (domain) => {
-      let geo: ReturnType<typeof marketShare> | null = null;
-      if (location !== undefined) {
-        try {
-          const r = await readTrafficByLocation(domain);
-          costUsd += r.cost;
-          geo = marketShare(r.items, location);
-        } catch (err) {
-          console.warn(`[csm] traffic by location not read for ${domain}: ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
-      return { domain, geo, lines: await readHomepage(domain) };
-    }),
-  );
-  const fit = new Map<string, { fits: boolean; reason: string }>();
+  for (const d of wanted) if (!rows.has(d)) rows.set(d, blank(d));
+  const now = new Date().toISOString();
+  const touched = new Set<string>();
+
+  // 1. Topic, for the hosts with no fresh reading: the homepage, then the model in batches.
+  const topicTodo = wanted.filter((d) => !rows.get(d)!.fit_read_on).slice(0, Math.max(0, p.topicLimit));
+  const pages = await Promise.all(topicTodo.map(async (domain) => ({ domain, lines: await readHomepage(domain) })));
   const billed = { calls: 0 };
-  for (let i = 0; i < read.length; i += FIT_BATCH) {
-    const batch = read.slice(i, i + FIT_BATCH).map((r) => ({ domain: r.domain, lines: r.lines, categories: p.categories?.get(r.domain) ?? [] }));
+  for (let i = 0; i < pages.length; i += FIT_BATCH) {
+    const batch = pages.slice(i, i + FIT_BATCH).map((r) => ({ domain: r.domain, lines: r.lines, categories: p.categories?.get(r.domain) ?? [] }));
     try {
       for (const h of await readHostFit(p.profile, batch, billed)) {
         const d = h.domain.trim().toLowerCase();
-        if (batch.some((x) => x.domain === d)) fit.set(d, { fits: h.fits, reason: h.reason.replace(/\s+/g, " ").trim().slice(0, 300) });
+        if (!batch.some((x) => x.domain === d)) continue;
+        Object.assign(rows.get(d)!, { fits: h.fits, fit_reason: h.reason.replace(/\s+/g, " ").trim().slice(0, 300), fit_read_on: now });
+        touched.add(d);
       }
     } catch (err) {
       console.warn(`[csm] topic fit not read for ${batch.length} hosts: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
-  const now = new Date().toISOString();
-  const rows = read.map((r) => {
-    const f = fit.get(r.domain) ?? null;
-    const c: HostCheck = {
-      domain: r.domain, market: p.market, marketShare: r.geo?.share ?? null, marketEtv: r.geo ? Math.round(r.geo.marketEtv) : null,
-      totalEtv: r.geo ? Math.round(r.geo.totalEtv) : null, fits: f?.fits ?? null, fitReason: f?.reason ?? null,
-    };
-    checks.set(r.domain, c);
-    return {
-      client_domain_id: p.clientId, domain: r.domain, market: p.market, market_share: c.marketShare, market_etv: c.marketEtv, total_etv: c.totalEtv,
-      // A half that could not be read is not kept as read, so the next run tries it again.
-      geo_read_on: r.geo || location === undefined ? now : null, fits: c.fits, fit_reason: c.fitReason, fit_read_on: f ? now : null,
-    };
-  });
-  if (p.stored && rows.length) {
-    const { error } = await db.from("shortlist_host_checks").upsert(rows, { onConflict: "client_domain_id,domain" });
+
+  // 2. Market, only for hosts that fit and have no fresh reading for this market.
+  const location = p.market ? MARKET_LOCATION[p.market] : undefined;
+  let costUsd = 0;
+  const geoTodo = location === undefined ? [] : wanted.filter((d) => rows.get(d)!.fits === true && !rows.get(d)!.geo_read_on).slice(0, Math.max(0, p.geoLimit));
+  await Promise.all(
+    geoTodo.map(async (domain) => {
+      try {
+        const r = await readTrafficByLocation(domain);
+        costUsd += r.cost;
+        const g = marketShare(r.items, location!);
+        Object.assign(rows.get(domain)!, { market: p.market, market_share: g.share, market_etv: Math.round(g.marketEtv), total_etv: Math.round(g.totalEtv), geo_read_on: now });
+        touched.add(domain);
+      } catch (err) {
+        console.warn(`[csm] traffic by location not read for ${domain}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }),
+  );
+
+  if (p.stored && touched.size) {
+    const out = [...touched].map((d) => ({ client_domain_id: p.clientId, ...rows.get(d)! }));
+    const { error } = await db.from("shortlist_host_checks").upsert(out, { onConflict: "client_domain_id,domain" });
     if (error) console.warn(`[csm] host checks not cached: ${error.message}`);
   }
-  return { checks, fresh: read.length, costUsd: Math.round(costUsd * 10_000) / 10_000, modelCalls: billed.calls };
+  return {
+    checks: new Map([...rows].map(([d, r]) => [d, asCheck(r)])),
+    topicReads: pages.length, geoReads: geoTodo.length, costUsd: Math.round(costUsd * 10_000) / 10_000, modelCalls: billed.calls,
+  };
 }

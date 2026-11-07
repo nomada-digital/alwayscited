@@ -28,8 +28,13 @@ export const MIN_MARKET_SHARE = 0.35;
 export const MIN_TOTAL_ETV = 50;
 /** How long a host's reading is kept before it is read again. Audiences move slowly; a re-read costs money. */
 export const HOST_CHECK_TTL_DAYS = 30;
-/** The most hosts one run reads afresh (about $0.02 of DataForSEO each, and a share of one model call). */
-export const HOST_CHECKS_PER_RUN = 24;
+/**
+ * Fresh readings one run may make (7 Nov 2026): the topic half for up to TOPIC_CHECKS_PER_RUN hosts - eight model
+ * calls at most, a fraction of a cent a host - and the market half for up to GEO_CHECKS_PER_RUN of the hosts that fit,
+ * about $0.02 each. Together about $0.50 a run at most, and nothing for a host read in the last 30 days.
+ */
+export const TOPIC_CHECKS_PER_RUN = 64;
+export const GEO_CHECKS_PER_RUN = 20;
 
 export type HostCheck = {
   domain: string;
