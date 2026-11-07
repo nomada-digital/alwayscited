@@ -35,7 +35,7 @@ export default function AnswerPanel({ slug, prompt, engine, you, domain, detail,
         const b = (await r.json().catch(() => null)) as { ok?: boolean; answer?: Answer | null; message?: string } | null;
         if (!live) return;
         if (b?.ok) setState({ kind: "ok", a: b.answer ?? null });
-        else setState({ kind: "err", message: r.status === 401 ? "Sign in to read the answer here." : (b?.message ?? `The server answered ${r.status}.`) });
+        else setState({ kind: "err", message: r.status === 401 ? "This view does not open answers beside the list. Open the prompt to read every answer." : (b?.message ?? `The server answered ${r.status}.`) });
       })
       .catch(() => live && setState({ kind: "err", message: "No connection. Try again." }));
     return () => {

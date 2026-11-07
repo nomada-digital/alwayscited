@@ -2,6 +2,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { clientsFor } from "@/lib/tracking/member";
 import { dashEmail } from "@/lib/dash/access";
 import { dashFixturePath, fixtureRaw } from "@/lib/dash/fixture";
+import { answerWords } from "@/lib/dash/history";
+import { SAMPLE_CLIENT_ID, SAMPLE_SLUG } from "@/lib/dash/host";
+import { sampleRaw } from "@/lib/dash/sample-world";
+import { trackingDay } from "@/lib/tracking/decide";
 import { ENGINE_ORDER } from "@/lib/dash/model";
 import type { Engine } from "@/lib/dash/types";
 
@@ -21,6 +25,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ client: 
   const prompt = sp.get("prompt") ?? "";
   const engine = sp.get("engine") as Engine | null;
   if (!ID.test(prompt) || !engine || !ENGINE_ORDER.includes(engine)) return Response.json({ ok: false, message: "That answer could not be read." }, { status: 400 });
+  // The public sample client (host.ts SAMPLE_SLUG): generated, nothing real behind it, so its shared demo link reads
+  // its answers here with no session, as its pages do.
+  if (slug === SAMPLE_SLUG) {
+    const day = sampleRaw(trackingDay()).answers.filter((x) => x.question_id === prompt && x.engine === engine).map((x) => x.run_date).sort().at(-1);
+    const a = day ? (await answerWords(SAMPLE_CLIENT_ID, prompt, day)).find((x) => x.engine === engine) ?? null : null;
+    return Response.json({ ok: true, answer: a });
+  }
   const email = await dashEmail();
   if (!email) return Response.json({ ok: false, message: "Your session has ended. Sign in again." }, { status: 401 });
   if (dashFixturePath()) {
