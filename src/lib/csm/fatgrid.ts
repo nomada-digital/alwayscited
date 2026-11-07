@@ -48,7 +48,9 @@ export async function readInventoryPage(filters: InventoryFilters, page: number,
     if (!res.ok) return { listings: [], units: 0, stopped: "failed", hasMore: false, detail: await refused(res, `domains_list ${filters.offerType} page ${page}`, key) };
     const read = readPage(await res.json());
     budget.spend(read.listings.length);
-    return { listings: read.listings, units: read.listings.length, stopped: "done", hasMore: read.hasMore };
+    // A full page may have more behind it whatever `hasMore` says: at five a page Fatgrid answered false on pages that
+    // were not the last, and MOR's run on 7 Nov 2026 bought the same two pages over and over (56 units, 8 domains).
+    return { listings: read.listings, units: read.listings.length, stopped: "done", hasMore: read.hasMore || read.listings.length >= pageSize };
   } catch (err) {
     return { listings: [], units: 0, stopped: "failed", hasMore: false, detail: err instanceof Error ? err.message : String(err) };
   }

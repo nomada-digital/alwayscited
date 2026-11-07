@@ -179,16 +179,30 @@ export async function buildShortlist(
   // A page is bought only while it can be vetted and the request has time left: a host the run cannot read cannot
   // pass, so buying it is paying for nothing (MOR's first run, 7 Nov 2026, had 22 cited hosts to read first).
   const vettable = () => topicBudget >= INVENTORY_PAGE && geoBudget >= 1 && Date.now() - started < RUN_MS;
+  // An offer is done for this run when its pages run out or a page brings nothing this run has not already paid for:
+  // a page is never bought twice in one run, whatever Fatgrid says about the next one.
+  const exhausted = new Set<string>();
+  const seenThisRun = new Set<string>();
+  const notes: string[] = [];
   for (let turn = 0; turn < 40; turn++) {
+    if (exhausted.size === offers.length) break;
     if (stopped === "no_key" || stopped === "failed" || budget.left < INVENTORY_PAGE || passed.size >= ENOUGH_PASSING || !vettable()) break;
     const offer = offers[turn % 2]!;
+    if (exhausted.has(offer)) continue;
     const page = cursor[offer];
     const r = await readInventoryPage({ ...filters, offerType: offer }, page, INVENTORY_PAGE, budget);
     if (r.stopped === "no_key" || r.stopped === "failed") {
       ({ stopped, detail } = r);
       break;
     }
-    cursor[offer] = r.hasMore ? page + 1 : 1;
+    const repeated = r.listings.length > 0 && r.listings.every((l) => seenThisRun.has(`${offer}|${l.domain}`));
+    for (const l of r.listings) seenThisRun.add(`${offer}|${l.domain}`);
+    if (!r.listings.length || !r.hasMore || repeated) {
+      // The end of this offer's inventory, or a page Fatgrid has already sent: start from the top next run.
+      exhausted.add(offer);
+      cursor[offer] = 1;
+      if (repeated) notes.push(`Fatgrid repeated ${offer} page ${page}; stopped that offer.`);
+    } else cursor[offer] = page + 1;
     read.push(...r.listings);
     const incoming = r.listings.filter((l) => !rejected.has(l.domain) && l.domain !== own && !l.domain.endsWith(`.${own}`));
     await check(incoming.map((l) => l.domain), new Map(incoming.map((l) => [l.domain, l.categories])));
@@ -211,6 +225,7 @@ export async function buildShortlist(
   const out = [...gatedOut].map(([d, why]) => `${d} (${why.split(/[:;,]/)[0]!.trim()})`);
   const gateNote = [
     detail ?? null,
+    ...notes,
     out.length ? `Gated out: ${out.join("; ")}.` : null,
     checks.size ? `Host checks: ${checks.size} read, $${checkCost.toFixed(2)} of DataForSEO, ${modelCalls} model calls.` : null,
   ].filter(Boolean).join(" ");
