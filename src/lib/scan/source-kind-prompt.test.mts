@@ -11,8 +11,11 @@ import { sourceKindRequest, sourceKindSystem, trimUrl } from "./source-kind-prom
  */
 
 test("the prompt says a seller in the category is a competitor even when the page is a listicle", () => {
-  const sys = sourceKindSystem("virtual receptionist services");
-  assert.match(sys, /virtual receptionist services/);
+  // 8 Nov 2026 (prompt caching): the topic moved to the request's context block, so the prompt is the same for every
+  // scan and caches; the request test below holds the category, and this one that the prompt carries none.
+  const sys = sourceKindSystem();
+  assert.match(sys, /the category named in the request/);
+  assert.doesNotMatch(sys, /virtual receptionist/);
   assert.match(sys, /sells a product or service in this category is a competitor/);
   assert.match(sys, /EVEN WHEN the cited page is a blog post, a guide, a listicle or a\s+comparison/);
   assert.match(sys, /Judge\s+what the company sells, not what the page looks like/);

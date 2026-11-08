@@ -254,6 +254,12 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => declaredCron("/api/cron/track"),
   },
   {
+    route: "/api/cron/brand-batches",
+    method: "GET",
+    why: "Vercel Cron calls it every ten minutes (the tracking brand-extraction batches, 8 Nov 2026); nothing in the app does.",
+    earns: () => declaredCron("/api/cron/brand-batches"),
+  },
+  {
     route: "/api/cron/stripe-audit",
     method: "GET",
     why: "Vercel Cron calls it weekly (the read-only Stripe invoice audit, 22 Oct 2026); nothing in the app does.",

@@ -2,9 +2,8 @@ import "server-only";
 
 import { enginesFor } from "@/config/pricing";
 import { type TierKey } from "@/components/TierName";
-import { classifyBrands, extractBrands } from "@/lib/scan/anthropic";
-import { judgedTopic, notACompetitor } from "@/lib/scan/competitor-filter";
-import { brandKey, namesAsBrand, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
+import { extractBrands } from "@/lib/scan/anthropic";
+import { brandKey, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
 import { runLocalGrids } from "@/lib/local/run";
 import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
 import { type Market } from "@/lib/scan/domain";
@@ -35,6 +34,8 @@ import { lifecycleOn, sendLifecycle } from "@/lib/email/lifecycle-mail";
 import { dashLink } from "@/lib/dash/host";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { upsellMode } from "./ask.ts";
+import { creditCompetitors } from "./brand-credit.ts";
+import { brandsByBatch, recordBrandBatch, sendBrandBatch } from "./brand-batches.ts";
 import { dispatchRun } from "./dispatch.ts";
 import { keywordsOnPage1, namedRate } from "./figures.ts";
 import { reportRunHealthSafely } from "./health-io.ts";
@@ -449,8 +450,18 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
     const unread = new Set<AnswerRow>();
     const gaps: BrandGap[] = [];
     const context = { topic: (client.topic as string | null) ?? "", brand };
+    // 8 Nov 2026 (prompt-caching audit): on the cron's pass the extraction goes out as one Message Batch at half the
+    // price, and brand-batches.ts credits the answers within the hour (falling back to the call below where a request
+    // fails or the batch is slow). Until then every answer read today is brands_ok=false - "not read yet", which every
+    // brand figure leaves out - and that is not a gap: the run is not partial for it. A re-run, or a batch that cannot
+    // be sent, extracts here as before.
+    let pending = !kept && brandsByBatch() ? await sendBrandBatch(answers, engines, context, runId) : null;
+    // Recorded before anything else, so a batch with no row (the table not there yet, a failed write) is cancelled
+    // and extracted here instead of being left unread.
+    if (pending && !(await recordBrandBatch(db, { runId, clientId: client.id as string, ...pending }))) pending = null;
+    if (pending) for (const a of answers) if (a.answered && a.response_text) unread.add(a);
     const signal = AbortSignal.timeout(extractionWindowMs(remainingMs()));
-    await Promise.all(
+    if (!pending) await Promise.all(
       engines.map(async (engine) => {
         const read = [...answers, ...stored].filter((a) => a.engine === engine && a.answered && a.response_text);
         if (!read.length) return;
@@ -471,30 +482,11 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       }),
     );
 
-    // 5 Nov 2026 (Luke, COMMON): the names an answer is credited with are competitors it names AS brands. Three
-    // filters, cheapest first: the keyword's own subject and, for a service, the platforms (competitor-filter.ts);
-    // then one judgement over the day's names, as the free scan makes - could a buyer choose this INSTEAD of the
-    // client? - which catches a platform's maker and the tools no list holds. A judgement that fails leaves the
-    // first filter standing rather than every name. Then each answer is credited only with the names it uses as
-    // brands (namesAsBrand), not every answer containing the word: one answer naming the agency Engage had put
-    // "Engage" on every answer with the verb in it.
+    // Who each answer is credited with: the competitor judgement and namesAsBrand (brand-credit.ts, shared with the
+    // Message Batch collector).
     const terms = [client.topic as string | null, ...keywords.map((k) => k.keyword as string | null)];
-    const candidates = [...new Set([...others.values()].flat())].filter((n) => !notACompetitor(n, terms));
-    let suppliers: Set<string> | null = null;
-    if (candidates.length) {
-      try {
-        const judged = await classifyBrands({ topic: judgedTopic(terms), brand, positioning: null, names: candidates });
-        spend.calls += judged.calls;
-        if (!judged.failedBatches) suppliers = new Set(judged.brands.filter((b) => b.supplier).map((b) => brandKey(b.name)));
-        else console.warn(`[track] ${runId} competitor judgement: ${judged.failedBatches} batch(es) failed, so only the lists filter today`);
-      } catch (err) {
-        console.warn(`[track] ${runId} competitor judgement failed, so only the lists filter today: ${message(err)}`);
-      }
-    }
-    for (const [engine, names] of others) {
-      others.set(engine, names.filter((n) => !notACompetitor(n, terms) && (!suppliers || suppliers.has(brandKey(n)))));
-    }
-    const brandsIn = (a: AnswerRow) => (a.response_text ? (others.get(a.engine) ?? []).filter((n) => namesAsBrand(a.response_text!, n)) : []);
+    const credit = await creditCompetitors(others, { terms, brand, runId, billed: spend });
+    const brandsIn = (a: AnswerRow) => credit(a);
     const answerRows = answers.map((a) => ({
       run_id: runId,
       client_domain_id: client.id,

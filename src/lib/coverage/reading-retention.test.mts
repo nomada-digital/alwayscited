@@ -312,7 +312,9 @@ const RETENTION_CLAIMS: {
  * update, or this one writing another column, still counts; and a pinned
  * payload the walk no longer finds is reported, so the entry cannot outlive it.
  */
-const BRANDS_ONLY = new Set([".update(hasBrandsOk(kept!) ? { brands, brands_ok: true } : { brands })"]);
+// 8 Nov 2026: and the Message Batch collector's (tracking/brand-batches.ts), which credits the brands a batch read
+// onto the row the run stored brands_ok=false - brands and brands_ok only, never response_text.
+const BRANDS_ONLY = new Set([".update(hasBrandsOk(kept!) ? { brands, brands_ok: true } : { brands })", ".update({ brands, brands_ok: true })"]);
 
 function trackedAnswerRemovers(): string[] {
   const out: string[] = [];

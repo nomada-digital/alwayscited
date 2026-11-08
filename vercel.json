@@ -18,6 +18,10 @@
     {
       "path": "/api/cron/stripe-audit",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/brand-batches",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

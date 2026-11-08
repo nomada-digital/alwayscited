@@ -355,6 +355,9 @@ const LONG_WITHOUT_PASS: Record<string, string> = {
   // 13 Oct 2026, DIY P1 (spec 10 sections 3.6 and 5.7): the DIY night worker.
   // Not a scan pass, and posted only by the DIY dispatcher with an HMAC.
   "src/app/api/diy/run/route.ts": "worker budgets 270 s in after(); closes its own diy_jobs rows",
+  // 8 Nov 2026 (prompt-caching audit): collects the daily tracking's brand batches every ten minutes; a fallback
+  // extraction can take minutes, so it budgets 240 s (brand-batches.ts COLLECT_BUDGET_MS) and leaves the rest to the next pass.
+  "src/app/api/cron/brand-batches/route.ts": "collector budgets 240 s; a batch not reached waits for the next ten-minute pass",
 };
 
 // ---------------------------------------------------------------------------

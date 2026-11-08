@@ -25,10 +25,14 @@ export function trimUrl(url: string | null): string {
   return cut.length > 120 ? `${cut.slice(0, 120)}...` : cut;
 }
 
-export function sourceKindSystem(topic: string): string {
+/**
+ * The same for every scan (8 Nov 2026, prompt caching): the category is in the request's context block, so this
+ * prompt and that block are cached and a scan's later batches read both.
+ */
+export function sourceKindSystem(): string {
   return [
     "You are given website domains that AI search engines cited when answering",
-    `buyers' questions about ${topic || "a product category"}. Sort each one.`,
+    "buyers' questions about the category named in the request. Sort each one.",
     "",
     "competitor: the domain belongs to a company that sells this to the same",
     "buyers. A domain that is plainly one of the named competitors is a",
@@ -69,21 +73,32 @@ export function sourceKindSystem(topic: string): string {
   ].join("\n");
 }
 
-export function sourceKindRequest(
-  input: { topic: string; brand: string; competitors: string[] },
-  domains: SourceDomain[],
-): string {
+/** The scan's context: who the subject is, its category and the competitors named. The cached block. */
+export function sourceKindContext(input: { topic: string; brand: string; competitors: string[] }): string {
   return [
     `Subject brand: ${input.brand}`,
     `Category: ${input.topic || "not stated"}`,
     `Named competitors (the brands the engines named instead of the subject): ${
       input.competitors.length ? input.competitors.join(", ") : "none identified"
     }`,
-    "",
+  ].join("\n");
+}
+
+/** One batch's domains, each with the pages the engines cited. */
+export function sourceKindDomains(domains: SourceDomain[]): string {
+  return [
     "Domains, each with the pages the engines cited:",
     ...domains.flatMap((d) => [
       `- ${d.domain}`,
       ...d.pages.slice(0, 3).map((p) => `    ${p.title ?? "(no title)"}  ${trimUrl(p.url)}`),
     ]),
   ].join("\n");
+}
+
+/** The whole request as one text: the context, then the domains (as the call sends it, in two blocks). */
+export function sourceKindRequest(
+  input: { topic: string; brand: string; competitors: string[] },
+  domains: SourceDomain[],
+): string {
+  return `${sourceKindContext(input)}\n\n${sourceKindDomains(domains)}`;
 }

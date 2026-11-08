@@ -1,17 +1,20 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 
 import { QUESTIONS } from "@/config/scan-shape";
+import { supabaseAdmin, supabaseConfigured } from "@/lib/supabase/admin";
 
 import { brandedQuestions, cleanBrandName, withoutBrand } from "./brand-name";
 import { type Market, marketPlace, marketShort } from "./domain";
 import { batchBlocks, runBatches } from "./prose-batches";
 import { countingFetch, withRetry } from "./retry-policy";
-import { sourceKindRequest, sourceKindSystem } from "./source-kind-prompt";
+import { sourceKindContext, sourceKindDomains, sourceKindSystem } from "./source-kind-prompt";
 import { KEYWORD_FALLBACK, normaliseCandidate } from "./target-keyword";
 
 const MODEL = "claude-opus-5";
@@ -69,7 +72,73 @@ function baseClient(): Anthropic {
 function anthropic(billed?: { calls: number }): Anthropic {
   const base = baseClient();
   if (!billed) return base;
-  return base.withOptions({ fetch: countingFetch(billed, fetch) });
+  return base.withOptions({ fetch: countingFetch(billed, usageFetch(fetch)) });
+}
+
+// ---------------------------------------------------------------- usage log
+
+/**
+ * Every model call's token usage, cache tokens included (8 Nov 2026, the prompt-caching audit: until now only call
+ * counts were kept, so a cache hit rate could not be measured). Read off each Messages response below the SDK, as
+ * countingFetch counts requests, so a retry's usage is logged too and no call site can forget to. One console line
+ * per response (`[model-usage]`, which the platform's logs keep) and one model_usage row (20261108030000), never
+ * fatal: a failed write loses a log line, never an answer.
+ *
+ * The label is the call site's name, set by `labelled` around the call; a response with none logs as "unlabelled".
+ * Message Batches results are logged where they are read (logUsage, batch true), not here.
+ */
+const usageLabel = new AsyncLocalStorage<string>();
+
+/** Runs `fn` with its model calls logged under `label`. */
+export function labelled<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  return usageLabel.run(label, fn);
+}
+
+type Usage = { input_tokens?: number | null; output_tokens?: number | null; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null };
+
+function usageFetch(inner: typeof fetch): typeof fetch {
+  return (async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const res = await inner(input, init);
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    if (/\/v1\/messages(\?|$)/.test(url) && res.ok && (res.headers.get("content-type") ?? "").includes("json")) {
+      const label = usageLabel.getStore() ?? "unlabelled";
+      res.clone().json().then(
+        (body: { model?: string; usage?: Usage }) => logUsage(label, body.model ?? null, body.usage ?? null, false),
+        () => undefined,
+      );
+    }
+    return res;
+  }) as typeof fetch;
+}
+
+/** One call's usage: the console line, then the row. Never throws. */
+export function logUsage(label: string, model: string | null, usage: Usage | null, batch: boolean): void {
+  if (!usage) return;
+  const row = {
+    label,
+    model,
+    batch,
+    input_tokens: usage.input_tokens ?? 0,
+    output_tokens: usage.output_tokens ?? 0,
+    cache_write_tokens: usage.cache_creation_input_tokens ?? 0,
+    cache_read_tokens: usage.cache_read_input_tokens ?? 0,
+  };
+  console.log(`[model-usage] ${label}${batch ? " (batch)" : ""} ${model ?? "?"}: in=${row.input_tokens} cache_write=${row.cache_write_tokens} cache_read=${row.cache_read_tokens} out=${row.output_tokens}`);
+  if (supabaseConfigured()) void storeUsage(row);
+}
+
+async function storeUsage(row: Record<string, unknown>): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin().from("model_usage").insert(row);
+    if (error) console.warn(`[model-usage] not stored: ${error.message}`);
+  } catch (err) {
+    console.warn(`[model-usage] not stored: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** A system prompt the same for every caller, cached (5 minutes): one block with the breakpoint on it. */
+function cachedSystem(text: string): Anthropic.TextBlockParam[] {
+  return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
 }
 
 /**
@@ -141,11 +210,11 @@ export async function readBrand(siteText: string, billed?: { calls: number }): P
   // SDK retries twice inside each one - see `retry-policy.ts`. The run this
   // retry exists for is exactly the run whose cost went unrecorded, and
   // daily_cost_cap_usd is read off that column.
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("read_brand", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: 4000,
     output_config: { effort: EFFORT, format: zodOutputFormat(BrandRead) },
-    system: [
+    system: cachedSystem([
       "You read a company's own website and report what it sells.",
       "",
       "The topic is the hard part. It must be how a BUYER says it, not how the",
@@ -184,9 +253,9 @@ export async function readBrand(siteText: string, billed?: { calls: number }): P
       "stand on its own as a search someone would actually run.",
       "",
       "Set confidence to low when the site does not make the category clear.",
-    ].join("\n"),
+    ].join("\n")),
     messages: [{ role: "user", content: `Website text:\n\n${siteText}` }],
-  }));
+  })));
 
   const out = res.parsed_output;
   if (!out) throw new Error("could not read the brand from that site");
@@ -297,12 +366,14 @@ export async function generateQuestions(input: {
   // result says nothing about how this brand is actually positioned.
   const variants = (input.topicVariants ?? []).filter((v) => v.trim()).slice(0, TOPIC_VARIANT_COUNT);
 
-  const ask = () => withRetry(() => anthropic(billed).messages.parse({
+  const ask = () => labelled("generate_questions", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: 8000,
     output_config: { effort: EFFORT, format: zodOutputFormat(QuestionSet) },
-    system: [
-      `You write the ${QUESTION_COUNT} questions a buyer in ${marketName} would ask`,
+    system: cachedSystem([
+      // 8 Nov 2026 (prompt caching): nothing per scan in here - the market, the year and the keyword are in the
+      // request - so the prompt is the same for every scan and its second ask (a branded set) reads it from cache.
+      `You write the ${QUESTION_COUNT} questions a buyer in the market named in the request would ask`,
       "ChatGPT, Gemini, Perplexity or Google when they are choosing a supplier.",
       "",
       "EVERY QUESTION ASKS FOR A RECOMMENDATION. The buyer wants names back:",
@@ -335,8 +406,8 @@ export async function generateQuestions(input: {
       "Never write a definition question. Nothing starting 'what is', 'what are',",
       "'how does ... work', or 'why is ... important'.",
       "",
-      `The current year is ${year}. Only add a year where a buyer would, and if`,
-      `you do it must be ${year}.`,
+      "The current year is given in the request. Only add a year where a buyer",
+      "would, and if you do it must be that year.",
       "",
       "Every question carries the cluster it belongs to. Copy the broad topic,",
       "or the variant phrase, exactly as it was given to you - do not invent a",
@@ -346,15 +417,11 @@ export async function generateQuestions(input: {
       "a search bar. No question marks. Use the spelling and vocabulary of the",
       "market, not American English for a United Kingdom scan.",
       "Do not name the subject brand in any question.",
-      ...(input.keyword
-        ? [
-            "",
-            "A Google keyword is given. Every question is an angle on that keyword:",
-            "the same buyer choosing the same kind of supplier, one question per kind,",
-            "each still asking for a recommendation and narrowed by at most one thing.",
-          ]
-        : []),
-    ].join("\n"),
+      "",
+      "When a Google keyword is given, every question is an angle on that keyword:",
+      "the same buyer choosing the same kind of supplier, one question per kind,",
+      "each still asking for a recommendation and narrowed by at most one thing.",
+    ].join("\n")),
     messages: [
       {
         role: "user",
@@ -365,6 +432,7 @@ export async function generateQuestions(input: {
             ? `Narrower variants to spread across: ${variants.join("; ")}`
             : "Narrower variants: none were read from the site, so work from the positioning below.",
           `Market: ${marketName}`,
+          `Current year: ${year}`,
           `Brand (do not name it in the questions): ${input.brand}`,
           `How the brand positions itself: ${input.positioning ?? "not stated"}`,
           `Services it sells: ${(input.services ?? []).join("; ") || "not read"}`,
@@ -372,7 +440,7 @@ export async function generateQuestions(input: {
         ].join("\n"),
       },
     ],
-  }));
+  })));
 
   const shape = (res: Awaited<ReturnType<typeof ask>>) => {
     const out = res.parsed_output;
@@ -431,7 +499,7 @@ export type CoverageDraftRead = z.infer<typeof CoverageDraft>;
 export async function readCoverage(input: { text: string; market: Market }, billed: { calls: number } = { calls: 0 }): Promise<CoverageDraftRead> {
   const marketName = marketPlace(input.market);
   const year = currentYear();
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("read_coverage", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: 4000,
     output_config: { effort: EFFORT, format: zodOutputFormat(CoverageDraft) },
@@ -458,7 +526,7 @@ export async function readCoverage(input: { text: string; market: Market }, bill
       "Do not name the brand in any prompt.",
     ].join("\n"),
     messages: [{ role: "user", content: `Market: ${marketName}\n\nThe coverage:\n\n${input.text}` }],
-  }));
+  })));
 
   const out = res.parsed_output;
   if (!out) throw new Error("could not read a draft from that coverage");
@@ -500,7 +568,7 @@ export async function keywordCandidates(
   billed: { calls: number } = { calls: 0 },
 ): Promise<{ supplierNoun: string; byIdx: Map<number, string[]> }> {
   const marketName = marketPlace(input.market);
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("keyword_candidates", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: Math.min(8000, 400 + input.questions.length * 150),
     output_config: { effort: EFFORT, format: zodOutputFormat(KeywordCandidates) },
@@ -521,7 +589,7 @@ export async function keywordCandidates(
         ].join("\n"),
       },
     ],
-  }));
+  })));
   const out = res.parsed_output;
   if (!out) throw new Error("could not read keyword candidates");
   const asked = new Set(input.questions.map((q) => q.idx));
@@ -559,7 +627,7 @@ export async function clusterKeywordCandidates(
   billed: { calls: number } = { calls: 0 },
 ): Promise<string[]> {
   const marketName = marketPlace(input.market);
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("cluster_keyword_candidates", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     max_tokens: 400 + CLUSTER_CANDIDATES_MAX * 60,
     output_config: { effort: EFFORT, format: zodOutputFormat(ClusterKeywordCandidates) },
@@ -588,7 +656,7 @@ export async function clusterKeywordCandidates(
         ].join("\n"),
       },
     ],
-  }));
+  })));
   const out = res.parsed_output;
   if (!out) throw new Error("could not read cluster keyword candidates");
   const noun = out.supplier_noun.trim().toLowerCase();
@@ -669,25 +737,28 @@ async function extractBrandBatch(
   billed: { calls: number },
   signal?: AbortSignal,
 ): Promise<{ brand: string; mentions: number }[]> {
-  const res = await withRetry(() => anthropic(billed).messages.parse({
-    model: MODEL,
-    /**
-     * The same 8,000 as before, and it means something different now.
-     *
-     * The two calls below scale their ceiling with the batch because their
-     * output is one row per input row, so the arithmetic is exact. Here the
-     * output is however many companies happen to be named, which no input
-     * measurement predicts - so the ceiling stays at the maximum for the task
-     * and the INPUT is what got bounded. A fixed ceiling over a bounded batch
-     * is a ceiling that no longer scales with the scan, which was the defect.
-     */
-    max_tokens: 8000,
+  const res = await labelled("extract_brands", () => withRetry(() => anthropic(billed).messages.parse({
+    ...brandExtractionParams(batch, context),
     output_config: { effort: EFFORT, format: zodOutputFormat(BrandList) },
+  }, { signal })));
+
+  return res.parsed_output?.brands ?? [];
+}
+
+/**
+ * The brand extraction request (8 Nov 2026), for both the call above and the daily tracking's Message Batch
+ * (tracking/brand-batches.ts), so the two cannot drift. The 8,000 ceiling is the task's maximum: the output is however
+ * many companies are named, which no input measurement predicts, so the INPUT is what is bounded (prose-batches.ts).
+ * The topic is in the request, not the system prompt, which is the same for every client.
+ */
+export function brandExtractionParams(batch: string[], context: { topic: string; brand: string }) {
+  return {
+    model: MODEL,
+    max_tokens: 8000,
     system: [
       "You are given what an AI search engine answered to several buyers'",
-      `questions about ${context.topic || "a product category"}.`,
-      "List every company or brand named as a supplier, with how many times it",
-      "appears.",
+      "questions about the category named in the request. List every company or",
+      "brand named as a supplier, with how many times it appears.",
       "",
       "Exclude: publications, newspapers, magazines, blogs, directories, review",
       "sites, industry bodies, and generic nouns. Those are sources, not suppliers.",
@@ -699,15 +770,29 @@ async function extractBrandBatch(
     ].join("\n"),
     messages: [
       {
-        role: "user",
-        content: [context.brand ? `Subject brand: ${context.brand}` : "", batch.join("\n\n---\n\n")]
+        role: "user" as const,
+        content: [`Category: ${context.topic || "a product category"}`, context.brand ? `Subject brand: ${context.brand}` : "", batch.join("\n\n---\n\n")]
           .filter(Boolean)
           .join("\n\n"),
       },
     ],
-  }, { signal }));
+  };
+}
 
-  return res.parsed_output?.brands ?? [];
+/** The extraction's structured output, for a Message Batch request (whose params cannot carry the parse helper). */
+export function brandExtractionFormat() {
+  const f = zodOutputFormat(BrandList);
+  return { effort: EFFORT, format: { type: f.type, schema: f.schema } };
+}
+
+/** A batch result's text read as the extraction's list; null when it does not parse. */
+export function readBrandList(text: string): { brand: string; mentions: number }[] | null {
+  try {
+    const parsed = BrandList.safeParse(JSON.parse(text));
+    return parsed.success ? parsed.data.brands : null;
+  } catch {
+    return null;
+  }
 }
 
 // -------------------------------------------------------- brand judgement
@@ -783,14 +868,14 @@ async function judgeBrandBatch(
   names: string[],
   billed: { calls: number },
 ): Promise<z.infer<typeof BrandJudgement>["brands"]> {
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("judge_brands", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     // Headroom per row, so the ceiling is a function of the batch.
     max_tokens: Math.min(8000, 600 + names.length * 60),
     output_config: { effort: EFFORT, format: zodOutputFormat(BrandJudgement) },
-    system: [
+    system: cachedSystem([
       "You are given company and brand names that AI search engines mentioned",
-      `while answering buyers' questions about ${input.topic || "a product category"}.`,
+      "while answering buyers' questions about the category named in the request.",
       "",
       "For each name decide one thing: is it a plausible ALTERNATIVE SUPPLIER -",
       "a company a buyer could choose INSTEAD OF the subject brand, competing",
@@ -820,22 +905,22 @@ async function judgeBrandBatch(
       "marketplace, not a supplier in this category'.",
       "",
       "Return every name you were given, spelled exactly as given, once each.",
-    ].join("\n"),
+    ].join("\n")),
     messages: [
       {
         role: "user",
+        // The context first, cached with the system prompt: a scan's or a run's batches share it (8 Nov 2026).
         content: [
-          `Subject brand: ${input.brand}`,
-          input.positioning ? `What the subject sells: ${input.positioning}` : "",
-          "",
-          "Names:",
-          ...names.map((n) => `- ${n}`),
-        ]
-          .filter(Boolean)
-          .join("\n"),
+          {
+            type: "text" as const,
+            text: [`Category: ${input.topic || "a product category"}`, `Subject brand: ${input.brand}`, input.positioning ? `What the subject sells: ${input.positioning}` : ""].filter(Boolean).join("\n"),
+            cache_control: { type: "ephemeral" as const },
+          },
+          { type: "text" as const, text: ["Names:", ...names.map((n) => `- ${n}`)].join("\n") },
+        ],
       },
     ],
-  }));
+  })));
 
   return res.parsed_output?.brands ?? [];
 }
@@ -924,15 +1009,23 @@ async function classifyBatch(
   domains: { domain: string; pages: { url: string | null; title: string | null }[] }[],
   billed: { calls: number },
 ): Promise<z.infer<typeof SourceJudgement>["sources"]> {
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("classify_sources", () => withRetry(() => anthropic(billed).messages.parse({
     model: MODEL,
     // Headroom per row, so the ceiling scales with the batch rather than
     // being a number somebody picked once.
     max_tokens: Math.min(8000, 600 + domains.length * 90),
     output_config: { effort: EFFORT, format: zodOutputFormat(SourceJudgement) },
-    system: sourceKindSystem(input.topic),
-    messages: [{ role: "user", content: sourceKindRequest(input, domains) }],
-  }));
+    // 8 Nov 2026 (prompt caching): the same system prompt for every scan, and the scan's context as a cached first
+    // block, so a scan's second to eighth batch reads both from cache (source-kind-prompt.ts).
+    system: cachedSystem(sourceKindSystem()),
+    messages: [{
+      role: "user",
+      content: [
+        { type: "text", text: sourceKindContext(input), cache_control: { type: "ephemeral" } },
+        { type: "text", text: sourceKindDomains(domains) },
+      ],
+    }],
+  })));
 
   return res.parsed_output?.sources ?? [];
 }
@@ -976,7 +1069,7 @@ export type DiyModelInput<T> = { system: string; user: string; schema: z.ZodType
 
 /** Page and domain types for up to 50 items a call (P7's classify job). Low effort; the system prompt is cached. */
 export async function classifyPages<T>(input: DiyModelInput<T>, billed: { calls: number }) {
-  return withRetry(() => anthropic(billed).beta.messages.parse({
+  return labelled("diy_classify", () => withRetry(() => anthropic(billed).beta.messages.parse({
     model: DIY_MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
@@ -984,12 +1077,12 @@ export async function classifyPages<T>(input: DiyModelInput<T>, billed: { calls:
     output_config: { effort: "low", format: betaZodOutputFormat(input.schema) },
     system: [{ type: "text", text: input.system, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: input.user }],
-  }));
+  })));
 }
 
 /** One drafted re-optimisation example from the client's own page (P8, on demand). Medium effort. */
 export async function writeReoptExample<T>(input: DiyModelInput<T>, billed: { calls: number }) {
-  return withRetry(() => anthropic(billed).beta.messages.parse({
+  return labelled("diy_reopt_example", () => withRetry(() => anthropic(billed).beta.messages.parse({
     model: DIY_MODEL,
     max_tokens: 16000,
     betas: ["server-side-fallback-2026-07-01"],
@@ -997,7 +1090,7 @@ export async function writeReoptExample<T>(input: DiyModelInput<T>, billed: { ca
     output_config: { effort: "medium", format: betaZodOutputFormat(input.schema) },
     system: input.system,
     messages: [{ role: "user", content: input.user }],
-  }));
+  })));
 }
 
 const BuyingPrompts = z.object({
@@ -1034,7 +1127,7 @@ export async function draftBuyingPrompts(
     "The client's site:",
     input.siteText.slice(0, 24_000),
   ].join("\n");
-  const res = await withRetry(() => anthropic(billed).beta.messages.parse({
+  const res = await labelled("draft_buying_prompts", () => withRetry(() => anthropic(billed).beta.messages.parse({
     model: DIY_MODEL,
     max_tokens: 4000,
     betas: ["server-side-fallback-2026-07-01"],
@@ -1042,7 +1135,7 @@ export async function draftBuyingPrompts(
     output_config: { effort: "medium", format: betaZodOutputFormat(BuyingPrompts) },
     system,
     messages: [{ role: "user", content: user }],
-  }));
+  })));
   const parsed = res.parsed_output;
   if (!parsed) throw new Error(`the model returned no prompts (stop: ${res.stop_reason})`);
   return parsed.prompts.map((p) => ({ angle: p.angle, text: freshenYears(p.text.replace(/\s+/g, " ").trim()) }));
@@ -1066,7 +1159,7 @@ export async function readHostFit(
   billed: { calls: number } = { calls: 0 },
 ): Promise<z.infer<typeof HostFit>["hosts"]> {
   if (!hosts.length) return [];
-  const res = await withRetry(() => anthropic(billed).messages.parse({
+  const res = await labelled("host_fit", () => withRetry(() => anthropic(billed).messages.parse({
     model: HOST_FIT_MODEL,
     max_tokens: 2000,
     output_config: { format: zodOutputFormat(HostFit) },
@@ -1088,14 +1181,62 @@ export async function readHostFit(
     messages: [
       {
         role: "user",
+        // The client's profile first and cached (8 Nov 2026): a run checks up to eight batches against one profile.
         content: [
-          profile,
-          "",
-          "Sites:",
-          ...hosts.map((h) => [`## ${h.domain}`, h.categories.length ? `Marketplace categories: ${h.categories.join(", ")}` : null, h.lines.length ? h.lines.join("\n") : "(the homepage could not be read)"].filter(Boolean).join("\n")),
-        ].join("\n"),
+          { type: "text", text: profile, cache_control: { type: "ephemeral" } },
+          {
+            type: "text",
+            text: ["Sites:", ...hosts.map((h) => [`## ${h.domain}`, h.categories.length ? `Marketplace categories: ${h.categories.join(", ")}` : null, h.lines.length ? h.lines.join("\n") : "(the homepage could not be read)"].filter(Boolean).join("\n"))].join("\n"),
+          },
+        ],
       },
     ],
-  }));
+  })));
   return res.parsed_output?.hosts ?? [];
+}
+
+// ------------------------------------------------------- Message Batches
+
+/**
+ * The daily tracking's brand extraction as a Message Batch (8 Nov 2026, the prompt-caching audit): half the price,
+ * and nobody waits on it - the run stores its answers, and tracking/brand-batches.ts collects the names within the
+ * hour, falling back to extractBrands where a request fails or the batch is slow. The requests are exactly
+ * extractBrands' (brandExtractionParams). Created without withRetry: a create that timed out may have landed, and a
+ * second would be paid for twice. Usage is logged per result as it is read (logUsage, batch true).
+ */
+export type BrandBatchRequest = { custom_id: string; texts: string[]; context: { topic: string; brand: string } };
+
+export async function submitBrandBatch(requests: readonly BrandBatchRequest[], billed: { calls: number }): Promise<string> {
+  const batch = await anthropic(billed).messages.batches.create({
+    requests: requests.map((r) => ({ custom_id: r.custom_id, params: { ...brandExtractionParams(r.texts, r.context), output_config: brandExtractionFormat() } })),
+  });
+  return batch.id;
+}
+
+/** Where a batch stands: ended, and how many requests succeeded and errored. */
+export async function brandBatchState(id: string, billed: { calls: number }): Promise<{ ended: boolean; succeeded: number; errored: number; processing: number }> {
+  const b = await withRetry(() => anthropic(billed).messages.batches.retrieve(id));
+  const c = b.request_counts;
+  return { ended: b.processing_status === "ended", succeeded: c.succeeded, errored: c.errored + c.expired + c.canceled, processing: c.processing };
+}
+
+/** An ended batch's names by custom_id; null for a request that failed or did not parse. */
+export async function brandBatchResults(id: string, billed: { calls: number }): Promise<Map<string, { brand: string; mentions: number }[] | null>> {
+  const out = new Map<string, { brand: string; mentions: number }[] | null>();
+  for await (const r of await anthropic(billed).messages.batches.results(id)) {
+    if (r.result.type !== "succeeded") {
+      out.set(r.custom_id, null);
+      continue;
+    }
+    const m = r.result.message;
+    logUsage("extract_brands", m.model, m.usage, true);
+    const text = m.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+    out.set(r.custom_id, m.stop_reason === "end_turn" ? readBrandList(text) : null);
+  }
+  return out;
+}
+
+/** Stops a batch that ran past the wait; requests already answered are still paid for and still read. */
+export async function cancelBrandBatch(id: string, billed: { calls: number }): Promise<void> {
+  await withRetry(() => anthropic(billed).messages.batches.cancel(id));
 }

@@ -267,3 +267,15 @@ test("the waits are longer than the SDK's own, which is the reason they exist", 
   assert.deepEqual([...RETRY_WAITS], [1500, 4000]);
   for (const w of RETRY_WAITS) assert.ok(w > 1000, `${w}ms is inside the SDK's own backoff`);
 });
+
+test("rule 5: Message Batches calls go through the one counted client, in the one file", () => {
+  // 8 Nov 2026 (prompt-caching audit): the tracking brand extraction goes out as a Message Batch. The walk above reads
+  // `.messages.<method>(`, which `.messages.batches.create(` slips past, so batch calls are held here: only
+  // anthropic.ts makes them, and only on `anthropic(billed)`.
+  const re = /([A-Za-z_$][\w$]*\([^()]*\)|[A-Za-z_$][\w$]*)\.messages\.batches\.(\w+)\s*\(/g;
+  const files = sourceFiles(ROOT).filter((f) => re.test(src(f)));
+  assert.deepEqual(files, ["src/lib/scan/anthropic.ts"], "Message Batches calls are made outside anthropic.ts");
+  const calls = [...src(files[0]!).matchAll(new RegExp(re.source, "g"))];
+  assert.ok(calls.length >= 4, "the walk found the batch calls (create, retrieve, results, cancel)");
+  for (const m of calls) assert.equal(m[1], "anthropic(billed)", `a batch call on ${m[1]} bypasses countingFetch`);
+});
