@@ -62,17 +62,18 @@ export const metadata: Metadata = {
 
 
 /**
- * The five documents the board's sidebar switches between. Four are not
- * drafted anywhere - terms of service, a standalone cookie policy, a data
- * processing agreement and a sub-processor list - and Danny's answer on
- * 19 Sep was that the legal facts wait. They are listed as unpublished
+ * The five documents the board's sidebar switches between. Three are not
+ * drafted anywhere - a standalone cookie policy, a data processing agreement
+ * and a sub-processor list - and Danny's answer on 19 Sep was that the legal
+ * facts wait. The terms of service were published on 8 Nov 2026 (/terms). They are listed as unpublished
  * rather than linked or hidden, because a reader looking for terms should
  * find out they do not exist rather than assume they missed them.
  */
-const DOCUMENTS: { label: string; here?: boolean }[] = [
+const DOCUMENTS: { label: string; here?: boolean; href?: string }[] = [
   { label: "Privacy policy", here: true },
+  // Published 8 Nov 2026 (app/terms/page.tsx): a link now, not "not yet published".
+  { label: "Terms of service", href: "/terms" },
   { label: "Cookies" },
-  { label: "Terms of service" },
   { label: "Data processing" },
   { label: "Sub-processors" },
 ];
@@ -231,6 +232,10 @@ export default function LegalPage() {
                   >
                     {d.label}
                   </span>
+                ) : d.href ? (
+                  <a href={d.href} style={{ display: "block", fontSize: "13.5px", color: T.accent, fontWeight: 600, padding: "7px 11px", textDecoration: "none" }}>
+                    {d.label}
+                  </a>
                 ) : (
                   <span
                     style={{

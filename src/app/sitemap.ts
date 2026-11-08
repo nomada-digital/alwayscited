@@ -100,7 +100,8 @@ const ENTRIES: Entry[] = [
   ["/help/trial-and-cancelling", "2026-10-09", "monthly", 0.5],
   ["/help/billing", "2026-10-09", "monthly", 0.5],
   // 13 Oct 2026: the walkthrough paragraph now names the name, category and market it stores.
-  ["/legal", "2026-10-13", "yearly", 0.3],
+  ["/legal", "2026-11-08", "yearly", 0.3],
+  ["/terms", "2026-11-08", "yearly", 0.3],
   ["/about", "2026-09-19", "yearly", 0.5],
   ["/contact", "2026-09-20", "yearly", 0.5],
 ];

@@ -1055,7 +1055,7 @@ function TrackedSection(p: { token: string; r: RunScanResponse; cluster: ReturnT
           >
             {trialLine("tracked") ? TRIAL_CTA : "Track this cluster"}
           </a>
-          <div style={{ fontSize: "12px", lineHeight: 1.5, color: T.soft }}>{trialLine("tracked") ? `${trialLine("tracked")} The dashboard login arrives by email.` : <>Monthly, 30 days&apos; notice to cancel. The dashboard login arrives by email.</>}</div>
+          <div style={{ fontSize: "12px", lineHeight: 1.5, color: T.soft }}>{trialLine("tracked") ? `${trialLine("tracked")} The dashboard login arrives by email.` : <>Monthly, cancel any time. The dashboard login arrives by email.</>}</div>
         </div>
       ) : (
         <div style={{ background: T.surface, color: T.ink, borderRadius: "18px", padding: "24px", minWidth: 0 }}>

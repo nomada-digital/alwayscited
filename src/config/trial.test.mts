@@ -195,7 +195,8 @@ test("every price surface draws the line through trialLine, so the one constant 
 test("the legal clause is drawn only while the trial is on, and says what Danny asked for", () => {
   assert.match(read("app/legal/page.tsx"), /\.\.\.\(TRIAL\.enabled\s*\?/);
   const terms = TRIAL_TERMS.join(" ");
-  for (const must of [/14-day free trial/, /starts when you complete checkout/, /take a card at checkout/, /day 15/, /Cancel trial/, /one trial per website/, /thirty days to stop/]) {
+  // 8 Nov 2026 (Danny, terms of service v1): "thirty days to stop" became cancel any time, at the end of the paid period.
+  for (const must of [/14-day free trial/, /starts when you complete checkout/, /take a card at checkout/, /day 15/, /Cancel trial/, /one trial per website/, /cancel any time to stop at the end of the period you have paid for/]) {
     assert.match(terms, must);
   }
   assert.doesNotMatch(terms, /[–—]/);

@@ -22,6 +22,7 @@ import { metadata as prAgencies } from "@/app/pr-agencies/page";
 import { metadata as coverageCheck } from "@/app/coverage-check/page";
 import { metadata as llmChecker } from "@/app/llm-visibility-checker/page";
 import { metadata as legal } from "@/app/legal/page";
+import { metadata as terms } from "@/app/terms/page";
 import { metadata as about } from "@/app/about/page";
 import { metadata as contact } from "@/app/contact/page";
 import { metadata as help } from "@/app/help/page";
@@ -108,6 +109,7 @@ export const SECTIONS: { heading: string; pages: LlmsPage[] }[] = [
       { path: "/about", meta: about },
       { path: "/contact", meta: contact },
       { path: "/legal", meta: legal },
+      { path: "/terms", meta: terms },
     ],
   },
 ];

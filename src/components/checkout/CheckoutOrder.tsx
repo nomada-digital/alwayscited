@@ -1,5 +1,6 @@
 "use client";
 
+import { TERMS_PATH, TERMS_VERSION } from "@/config/terms";
 import { useEffect, useRef, useState } from "react";
 
 import { MarketToggle, useSeededMarket } from "@/components/SectorPrice";
@@ -294,7 +295,8 @@ export default function CheckoutOrder({ tier, tierPlain, plan, tierPage, include
             </label>
           </div>
           <p style={{ margin: "16px 0 0", fontSize: "13.5px", lineHeight: 1.6, color: T.soft }}>
-            {trialLine(tier) ? "Free for 14 days, then billed monthly. After the first charge, 30 days' notice to cancel." : <>Billed monthly. 30 days&apos; notice to cancel{perCluster ? ", because placements may still be in progress" : ""}.</>}
+            {/* 8 Nov 2026 (terms of service v1, "Cancelling"): cancel any time, effective at the end of the paid period. */}
+            {trialLine(tier) ? "Free for 14 days, then billed monthly in advance. Cancel any time: it stops at the end of the period you have paid for." : <>Billed monthly in advance. Cancel any time: it stops at the end of the period you have paid for{perCluster ? ", and placements already under way are completed" : ""}.</>}
             {perCluster ? " A refund if the keyword turns out not to be workable." : ""}
           </p>
           <button type="submit" aria-disabled={busy || undefined} style={{ ...button, width: "100%", marginTop: "16px", background: T.accent, color: T.surface, border: `1px solid ${T.accent}`, cursor: busy ? "progress" : "pointer" }}>
@@ -307,7 +309,10 @@ export default function CheckoutOrder({ tier, tierPlain, plan, tierPage, include
               trialLine(tier) ? TRIAL_CTA : "Continue to payment"
             )}
           </button>
-          <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: "13px", lineHeight: 1.6, color: T.soft }}>Got a promo code? Add it on the next page.</p>
+          <p style={{ margin: "10px 0 0", textAlign: "center", fontSize: "13px", lineHeight: 1.6, color: T.soft }}>
+            By subscribing you agree to the{" "}
+            <a href={TERMS_PATH} target="_blank" rel="noopener" style={{ color: T.accent, fontWeight: 600, textDecoration: "none" }}>Terms of Service</a> (version {TERMS_VERSION}). Got a promo code? Add it on the next page.
+          </p>
         </form>
       ) : null}
     </div>

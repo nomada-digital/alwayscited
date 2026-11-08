@@ -1,4 +1,5 @@
 import { MAX_CLUSTERS, type Market, quoteFor } from "../../config/sector-pricing.ts";
+import { TERMS_VERSION } from "../../config/terms.ts";
 import { CHECKOUT_LIMITS } from "../../config/contact.ts";
 import { TRIAL, type TrialRepeat, noTrialLine, trialApplies } from "../../config/trial.ts";
 import { isPlausibleEmail } from "../email-address.ts";
@@ -101,7 +102,9 @@ export function checkoutRequest(order: Order, ctx: CheckoutContext): CheckoutReq
   // monthly_amount (23 Oct 2026): what the plan costs a month, in pence or cents, before VAT and any discount - the
   // agency hub's book value counts it, and the first payment cannot stand in for it (a trial or a code makes it 0).
   const monthly = String(Math.round(unit * quantity * 100));
-  for (const [k, v] of Object.entries({ tier, sector: tier === "tracked" ? "" : order.sector, quantity: String(quantity), market, keyword, monthly_amount: monthly, ...(scan ? { scan_token: scan } : { website }) })) {
+  // terms_version (8 Nov 2026): the terms of service shown beside the pay button (config/terms.ts), kept on the
+  // Session and the subscription so the version a customer accepted is on their order in Stripe.
+  for (const [k, v] of Object.entries({ tier, sector: tier === "tracked" ? "" : order.sector, quantity: String(quantity), market, keyword, monthly_amount: monthly, terms_version: TERMS_VERSION, ...(scan ? { scan_token: scan } : { website }) })) {
     f.set(`metadata[${k}]`, v);
     f.set(`subscription_data[metadata][${k}]`, v);
   }

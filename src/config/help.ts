@@ -507,7 +507,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           id: "paid",
           heading: "Stopping a paid plan",
           blocks: [
-            `${trialOn ? "Once the first charge is taken, there" : "There"} is no cancel button in the dashboard. The plan's terms are ${PLAN_TERMS}. To stop it, an owner uses ${ui("Ask us")} under ${ui("Billing")} in ${ui("Settings")}, or writes to ${MAIL}.`,
+            `The plan's terms are ${PLAN_TERMS}. To stop it, an owner uses ${ui("Open billing")} on the ${ui("Plan")} page, which opens Stripe's billing page, or writes to ${MAIL}.`,
             "If your Settings says billing is handled by your account contact, your plan is billed through them: ask them instead.",
           ],
         },

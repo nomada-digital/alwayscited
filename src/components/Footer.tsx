@@ -17,9 +17,8 @@ import { GRID12, MICRO, T } from "@/config/tokens";
  * three columns - Product, For, Company - and the tier pages are one click
  * away from every package table button and the header's Packages link.
  *
- * Privacy now points at /legal. Terms still does not: terms of service are
- * not drafted, and a link labelled Terms that opens a privacy policy is
- * worse than no link.
+ * Privacy points at /legal, and Terms at /terms since the terms of service were
+ * published (8 Nov 2026).
  */
 
 const PRODUCT: [string, string][] = [
@@ -162,11 +161,12 @@ export default function Footer() {
           }}
         >
           <span>&copy; {new Date().getFullYear()} {COMPANY_LINE}</span>
-          {/* The board's bottom bar has Privacy and Terms. Privacy exists now;
-              terms of service are not drafted, so that link waits rather than
-              pointing at a page with no terms on it. */}
+          {/* The board's bottom bar: Privacy and Terms (terms published 8 Nov 2026). */}
           <Link href="/legal" style={{ color: T.soft, textDecoration: "none" }}>
             Privacy
+          </Link>
+          <Link href="/terms" style={{ color: T.soft, textDecoration: "none" }}>
+            Terms
           </Link>
           {/* Reopens the consent banner, so a yes or a no can be changed (15 Oct 2026). */}
           <CookieSettingsButton style={{ color: T.soft }} />

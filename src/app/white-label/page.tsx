@@ -103,7 +103,7 @@ const ROWS: { surface: string; brand: string; note: string }[] = [
 ];
 
 const TERMS: { label: string; value: string; note: React.ReactNode }[] = [
-  { label: "Contract", value: "Monthly", note: "No minimum term. Thirty days to stop." },
+  { label: "Contract", value: "Monthly", note: "No minimum term. Cancel any time, to stop at the end of the month paid for." },
   {
     label: "Invoicing",
     value: onlyIf("consolidatedInvoicing", "One, to you") ?? "To you",
