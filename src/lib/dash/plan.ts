@@ -53,11 +53,31 @@ export function nextTier(tier: TierKey): TierKey | null {
 
 export type Deliverable = { key: "placements" | "insertions" | "schema" | "pr"; label: string; target: number | null; unit: string };
 
+/** What a client's package leaves out of its tier (client_domains.excluded_deliverables, 8 Nov 2026). */
+export const DELIVERABLE_KEYS: readonly Deliverable["key"][] = ["placements", "insertions", "schema", "pr"];
+
+/**
+ * A tier's "includes" lines (pricing.ts) without the ones a client's package leaves out (Danny, 8 Nov 2026:
+ * Volunteero's alwayscited package has no link insertions - those are for clients with a ranking KPI). Matched on
+ * the line's words, insertions before placements, since "Link insertions from the placements" names both.
+ */
+export function packageIncludes(lines: readonly string[], excluded: readonly string[] = []): string[] {
+  if (!excluded.length) return [...lines];
+  const kind = (l: string): Deliverable["key"] | null =>
+    /link insertion/i.test(l) ? "insertions" : /schema/i.test(l) ? "schema" : /\bPR\b/.test(l) ? "pr" : /placement/i.test(l) ? "placements" : null;
+  return lines.filter((l) => { const k = kind(l); return !k || !excluded.includes(k); });
+}
+
 /**
  * What the paid tiers deliver each month on a worked cluster (pricing.ts,
- * Danny 16 Oct 2026). alwaystracked delivers tracking only, so none.
+ * Danny 16 Oct 2026). alwaystracked delivers tracking only, so none. `excluded`: what this client's package leaves
+ * out (client_domains.excluded_deliverables), so the dashboard never promises it.
  */
-export function deliverables(tier: TierKey): Deliverable[] {
+export function deliverables(tier: TierKey, excluded: readonly string[] = []): Deliverable[] {
+  return tierDeliverables(tier).filter((d) => !excluded.includes(d.key));
+}
+
+function tierDeliverables(tier: TierKey): Deliverable[] {
   const out: Deliverable[] = [];
   if (tier === "tracked") return out;
   out.push({ key: "placements", label: "Placements", target: MONTHLY_PLACEMENTS, unit: "a month" });

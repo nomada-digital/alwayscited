@@ -35,6 +35,8 @@ export type RawClient = {
    * only (ops.ts addedClusterTier). Absent on a snapshot taken before then.
    */
   plan_slots?: number | null;
+  /** What this client's package leaves out of its tier: "placements", "insertions", "schema" or "pr" (8 Nov 2026). */
+  excluded_deliverables?: string[];
 };
 
 /** tracked_keywords.added_by for a keyword picked for the buyer at signup (tracking/starter.ts, 22 Oct 2026). */

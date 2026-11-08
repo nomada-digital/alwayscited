@@ -102,7 +102,7 @@ export default async function Managed({ params, searchParams }: { params: Promis
 
 function ManagedCluster({ ws, c, n, href }: { ws: Workspace; c: ClusterView; n: number; href: string }) {
   const monthStart = `${ws.today.slice(0, 7)}-01`;
-  const list = deliverables(ws.client.tier);
+  const list = deliverables(ws.client.tier, ws.client.excluded_deliverables);
   const moved = c.startPos !== null && c.headPos !== null ? c.startPos - c.headPos : null;
   return (
     <section className="dash-card" aria-label={`Cluster ${n}: ${c.name}`}>

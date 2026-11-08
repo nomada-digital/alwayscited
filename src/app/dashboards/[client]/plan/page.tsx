@@ -12,7 +12,7 @@ import { readInvoices } from "@/lib/dash/invoices";
 import { pageData } from "@/lib/dash/page-data";
 import { readWork } from "@/lib/dash/work";
 import { RETENTION_DAYS } from "@/lib/tracking/retention";
-import { TIER_ORDER, packLine, planCopy, tierInfo } from "@/lib/dash/plan";
+import { TIER_ORDER, packLine, packageIncludes, planCopy, tierInfo } from "@/lib/dash/plan";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Plan", robots: { index: false, follow: false } };
@@ -152,7 +152,7 @@ export default async function Plan({ params, searchParams }: { params: Promise<{
               <div key={t} className={`rung${t === ws.client.tier ? " on" : ""}`}>
                 <TierName tier={t} />
                 <span className="p">{info.priceLabel}</span>
-                <ul>{planCopy(t).includes.slice(0, 3).map((x) => <li key={x}>{x}</li>)}</ul>
+                <ul>{packageIncludes(planCopy(t).includes, t === ws.client.tier ? ws.client.excluded_deliverables : []).slice(0, 3).map((x) => <li key={x}>{x}</li>)}</ul>
                 {t === ws.client.tier ? <span className="pill accent" style={{ alignSelf: "flex-start", marginTop: 8 }}>Your plan</span> : i > at ? <a className="btn sm" style={{ marginTop: 8, alignSelf: "flex-start" }} href={`${SITE_ORIGIN}${info.href}`}>See what it adds</a> : null}
               </div>
             );

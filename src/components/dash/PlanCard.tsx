@@ -1,6 +1,6 @@
 import TierName from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
-import { deliverables, delivered, nextTier, planCopy, tierInfo } from "@/lib/dash/plan";
+import { deliverables, delivered, nextTier, packageIncludes, planCopy, tierInfo } from "@/lib/dash/plan";
 import type { ClusterView, Workspace } from "@/lib/dash/types";
 
 /** The plan the client is on and what it delivers, from pricing.ts (17 Oct 2026). */
@@ -15,7 +15,7 @@ export default function PlanCard({ ws, slug, base }: { ws: Workspace; slug: stri
       <div style={{ fontSize: 22, letterSpacing: "-0.025em", marginTop: 4 }}><TierName tier={t} /></div>
       <p className="intro" style={{ marginTop: 2 }}>{info.positioning}{trial ? ` · trial until ${new Date(`${trial}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long" })}` : ""}</p>
       <ul style={{ margin: "12px 0 0", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5, fontSize: 13 }}>
-        {info.includes.map((x) => <li key={x}><span style={{ color: "var(--accent)", fontWeight: 700, marginRight: 6 }}>✓</span>{x}</li>)}
+        {packageIncludes(info.includes, ws.client.excluded_deliverables).map((x) => <li key={x}><span style={{ color: "var(--accent)", fontWeight: 700, marginRight: 6 }}>✓</span>{x}</li>)}
       </ul>
       <div style={{ display: "flex", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
         <a className="btn" href={`${base}/${slug}/plan`}>Plan and allowances</a>
@@ -31,7 +31,7 @@ export default function PlanCard({ ws, slug, base }: { ws: Workspace; slug: stri
 
 /** This month's delivery on one cluster, for the paid tiers; tracking-only says so and offers the next step. */
 export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView }) {
-  const list = deliverables(ws.client.tier);
+  const list = deliverables(ws.client.tier, ws.client.excluded_deliverables);
   const monthStart = `${ws.today.slice(0, 7)}-01`;
   if (!list.length) {
     return (

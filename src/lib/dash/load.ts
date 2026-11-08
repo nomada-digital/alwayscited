@@ -81,6 +81,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     { data: keyPageRows, error: keyPageErr },
     { count: gridCount, error: gridErr },
     { data: readRows, error: readsErr },
+    { data: pkgRow, error: pkgErr },
   ] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
     db.from("tracked_keywords").select(kwCols).eq("client_domain_id", cid),
@@ -96,7 +97,11 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     db.from("local_grids").select("id", { count: "exact", head: true }).eq("client_domain_id", cid).eq("active", true),
     // 5 Nov 2026 (Luke): each opportunity page's own read, so the table shows the competitors ON the page.
     db.from("page_reads").select("url_key, status, brands_found").eq("client_domain_id", cid).limit(1000),
+    // 8 Nov 2026 (20261108020000): what this client's package leaves out of its tier. Read apart, so a database
+    // before the migration reads as nothing left out rather than failing the client's other reads.
+    db.from("client_domains").select("excluded_deliverables").eq("id", cid).maybeSingle(),
   ]);
+  if (pkgErr && !absent(pkgErr)) console.warn(`[dash] package read failed: ${pkgErr.message}`);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
   if (core) throw new Error(`could not read what is tracked: ${core.message}`);
   // The DIY reads and the 17 Oct tables are extras: a failure or an absent table draws an empty section, never a broken page.
@@ -138,6 +143,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     trial_ends_at: client.trial_ends_at ?? null,
     payment_status: extra?.payment_status ?? client.payment_status ?? null,
     brand_aliases: extra?.brand_aliases ?? [],
+    excluded_deliverables: pkgErr ? [] : (((pkgRow as { excluded_deliverables?: string[] | null } | null)?.excluded_deliverables) ?? []),
   };
   const foot = (footRows?.[0] ?? null) as { pulled_on: Day; rows: unknown } | null;
 
