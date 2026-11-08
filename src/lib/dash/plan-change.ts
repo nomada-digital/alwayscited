@@ -150,3 +150,13 @@ export function upsellSignals(raw: Pick<Raw, "client" | "clusters" | "keywords" 
     close: chances.close.length,
   };
 }
+
+/**
+ * What a client's package leaves out of its tier (Danny, 8 Nov 2026): its excluded_deliverables, and link insertions
+ * when it has no ranking-target KPI (ranking_kpi false) - insertions are only for a client with one.
+ */
+export function packageExcludes(row: { excluded_deliverables?: readonly string[] | null; ranking_kpi?: boolean | null } | null): string[] {
+  const out = [...(row?.excluded_deliverables ?? [])];
+  if (row?.ranking_kpi === false && !out.includes("insertions")) out.push("insertions");
+  return out;
+}

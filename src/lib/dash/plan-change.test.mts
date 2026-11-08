@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { addedClusterTier, applyOp } from "./ops.ts";
-import { limitsLine, money, nextMonthStart, refuseSwap, refuseUpgrade, serpChances, upgradePrice, upsellSignals } from "./plan-change.ts";
+import { limitsLine, packageExcludes, money, nextMonthStart, refuseSwap, refuseUpgrade, serpChances, upgradePrice, upsellSignals } from "./plan-change.ts";
 import type { PlanSwap, PlanUpgrade, Raw, RawCluster } from "./types.ts";
 
 /**
@@ -117,4 +117,11 @@ test("page 1 and close to page 1: untracked, unbranded, by volume", () => {
   const s = upsellSignals({ ...r, clusters: [cl("a", "cited"), { ...cl("b", "tracked"), name: "nannies" }] });
   assert.deepEqual([s.trackingOnly, s.page1, s.close], [["nannies"], 2, 1]);
   assert.equal(serpChances(raw()).page1.length, 0);
+});
+
+test("no ranking-target KPI, no link insertions; anything else excluded stays excluded", () => {
+  assert.deepEqual(packageExcludes({ ranking_kpi: false, excluded_deliverables: [] }), ["insertions"]);
+  assert.deepEqual(packageExcludes({ ranking_kpi: true, excluded_deliverables: ["schema"] }), ["schema"]);
+  assert.deepEqual(packageExcludes({ ranking_kpi: false, excluded_deliverables: ["insertions"] }), ["insertions"]);
+  assert.deepEqual(packageExcludes(null), []);
 });

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { missingColumn } from "@/lib/tracking/limits";
 
+import { packageExcludes } from "./plan-change";
 import type { KeyPageRow } from "./target";
 import type { Day, FootRow, Raw, RawAnswer, RawClient, RawConnection, RawConsoleRow, RawGroup, RawKeyword, RawOpportunity, RawPlacement, RawPrompt, RawRun, RawSerp, TierKey } from "./types";
 
@@ -99,7 +100,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     db.from("page_reads").select("url_key, status, brands_found").eq("client_domain_id", cid).limit(1000),
     // 8 Nov 2026 (20261108020000): what this client's package leaves out of its tier. Read apart, so a database
     // before the migration reads as nothing left out rather than failing the client's other reads.
-    db.from("client_domains").select("excluded_deliverables").eq("id", cid).maybeSingle(),
+    db.from("client_domains").select("excluded_deliverables, ranking_kpi").eq("id", cid).maybeSingle(),
   ]);
   if (pkgErr && !absent(pkgErr)) console.warn(`[dash] package read failed: ${pkgErr.message}`);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
@@ -143,7 +144,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     trial_ends_at: client.trial_ends_at ?? null,
     payment_status: extra?.payment_status ?? client.payment_status ?? null,
     brand_aliases: extra?.brand_aliases ?? [],
-    excluded_deliverables: pkgErr ? [] : (((pkgRow as { excluded_deliverables?: string[] | null } | null)?.excluded_deliverables) ?? []),
+    excluded_deliverables: pkgErr ? [] : packageExcludes(pkgRow as { excluded_deliverables?: string[] | null; ranking_kpi?: boolean | null } | null),
   };
   const foot = (footRows?.[0] ?? null) as { pulled_on: Day; rows: unknown } | null;
 
