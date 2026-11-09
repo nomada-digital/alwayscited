@@ -123,7 +123,7 @@ test("R97 part 4b: pickKind, kindFilters and axisAt", () => {
   assert.equal(pickKind(undefined), null);
   assert.deepEqual(kindFilters(placements.filter((p) => p.status !== "removed")), [
     { kind: null, label: "All 4" },
-    { kind: "guest_post", label: "Guest posts 2" },
+    { kind: "guest_post", label: "Placements 2" },
     { kind: "link_insertion", label: "Link insertions 1" },
     { kind: "on_site", label: "On-site 1" },
   ]);
@@ -136,7 +136,7 @@ test("R97 part 4b: pickKind, kindFilters and axisAt", () => {
 test("R97 part 5: chartMarkers draws live rows on the cluster, inside the chart's days, in day order", () => {
   const rows = [...placements.map((p) => ({ ...p, cluster_id: "c1" })), { ...placements[0]!, id: "other", cluster_id: "c2" }, { ...placements[1]!, id: "late", live_on: "2026-08-01", cluster_id: "c1" }];
   assert.deepEqual(chartMarkers(days, rows, "c1"), [
-    { id: "a", i: 1, kind: "guest_post", label: "Guest post on example.com, live 5 Jul" },
+    { id: "a", i: 1, kind: "guest_post", label: "Placement on example.com, live 5 Jul" },
     { id: "b", i: 3, kind: "link_insertion", label: "Link insertion on example.com, live 7 Jul" },
   ]);
   assert.deepEqual(chartMarkers(days, rows, "c3"), []);

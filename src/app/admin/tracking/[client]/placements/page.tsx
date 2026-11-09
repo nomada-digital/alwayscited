@@ -46,7 +46,7 @@ const input = {
   background: T.surface,
 } as const;
 
-const KIND_LABEL: Record<string, string> = { guest_post: "guest post", link_insertion: "link insertion", on_site: "on-site", coverage: "coverage" };
+const KIND_LABEL: Record<string, string> = { guest_post: "placement", link_insertion: "link insertion", on_site: "on-site", coverage: "coverage" };
 
 type Row = Record<string, unknown>;
 type PlacementPrompt = { id: string; text: string; added_on: string; stopped_on: string | null; origin_ref: string | null };
@@ -112,7 +112,7 @@ export default async function PlacementsAdmin({ params }: { params: Promise<{ cl
       </p>
       <p role="status" style={{ margin: "0 0 24px", fontWeight: promptsOn ? 400 : 700, color: promptsOn ? T.soft : T.ink }}>
         {promptsOn
-          ? `Placement prompts are on: a guest post or coverage that goes live adds one prompt from its title (${livePlacementPrompts} of ${PLACEMENT_PROMPTS_PER_CLIENT} live on this client). Earlier live placements get theirs through Retry.`
+          ? `Placement prompts are on: a placement or coverage that goes live adds one prompt from its title (${livePlacementPrompts} of ${PLACEMENT_PROMPTS_PER_CLIENT} live on this client). Earlier live placements get theirs through Retry.`
           : SWITCHED_OFF}
       </p>
 

@@ -20,7 +20,7 @@ test("R97 part 4: the placements CSV is the table, Whole cluster first, blanks f
     [
       "cluster,page,type,status,live on,answers citing it,engines citing it,named % at go-live,named % now,google at go-live,google now",
       "accounting app,Whole cluster,,1 live,2026-08-05,3,,30,50,10,4",
-      "accounting app,https://example.com/one,Guest post,Live,2026-08-12,3,chatgpt claude,30,50,9,4",
+      "accounting app,https://example.com/one,Placement,Live,2026-08-12,3,chatgpt claude,30,50,9,4",
       "accounting app,https://example.com/two,Link insertion,Writing,,,,,,,",
       "",
       '"Footnote, quoted."',

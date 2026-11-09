@@ -26,7 +26,7 @@ export const WEEKLY_OVER_DAYS = 35;
 export const PLACED_TIERS = ["mentioned", "cited", "everywhere"] as const;
 export const placedTier = (tier: string) => (PLACED_TIERS as readonly string[]).includes(tier);
 
-export const KIND_WORDS: Record<PlacementKind, string> = { guest_post: "Guest post", link_insertion: "Link insertion", on_site: "On-site", coverage: "Coverage" };
+export const KIND_WORDS: Record<PlacementKind, string> = { guest_post: "Placement", link_insertion: "Link insertion", on_site: "On-site", coverage: "Coverage" };
 
 /** "thesmallbizstack.com" and "/best-accounting-apps", as the board's Page column splits a URL. */
 export function pageParts(url: string): { host: string; path: string } {
@@ -198,7 +198,7 @@ export function pickKind(asked: string | null | undefined): PlacementKind | null
   return asked && Object.hasOwn(KIND_WORDS, asked) ? (asked as PlacementKind) : null;
 }
 
-const KIND_PLURAL: Record<PlacementKind, string> = { guest_post: "Guest posts", link_insertion: "Link insertions", on_site: "On-site", coverage: "Coverage" };
+const KIND_PLURAL: Record<PlacementKind, string> = { guest_post: "Placements", link_insertion: "Link insertions", on_site: "On-site", coverage: "Coverage" };
 
 /** The board's filter pills: "All 18", then one per kind the cluster has, in KIND_WORDS order. */
 export function kindFilters(rows: readonly { kind: PlacementKind }[]): { kind: PlacementKind | null; label: string }[] {
