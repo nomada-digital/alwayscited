@@ -27,11 +27,15 @@ export default async function Settings({ params, searchParams }: { params: Promi
   const readOnly = demo || !!viewAs;
   const owner = raw.role === "owner" && !readOnly;
   let team: { email: string; role: string; first?: string | null; last?: string | null }[] | null = null;
-  if (!demo) {
+  // View-as comes back demo: true too (page-data.ts, every write path off), so a demo link is demo without viewAs.
+  // 9 Nov 2026: this read was gated on !demo alone, so every view-as Settings said the team could not be read.
+  // View-as lists the owner's team read-only (owner is false above); a demo link has no real team to list.
+  if (!demo || viewAs) {
     // The account is read here, server-side only, to read the team; it is never rendered (as the member route reads it).
     const { data: row, error: aErr } = await supabaseAdmin().from("client_domains").select("account_id").eq("id", raw.client.id).maybeSingle();
     const t = row && !aErr ? await readTeam(supabaseAdmin(), row.account_id as string) : null;
     team = t && typeof t !== "string" ? t.rows.filter((r) => r.removed_at === null && (!r.clients || r.clients.includes(raw.client.id))) : null;
+    if (team === null) console.error(`[settings] ${slug}: ${aErr ? `Could not read the account: ${aErr.message}` : !row ? "no client_domains row" : typeof t === "string" ? t : "no team"}`);
   }
   const done = typeof sp.team === "string" ? (DONE[sp.team] ?? null) : null;
   const why = sp.team === "refused" ? teamWhy(sp.why) : null;
