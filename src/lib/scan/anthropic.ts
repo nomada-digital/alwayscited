@@ -136,9 +136,18 @@ async function storeUsage(row: Record<string, unknown>): Promise<void> {
   }
 }
 
-/** A system prompt the same for every caller, cached (5 minutes): one block with the breakpoint on it. */
-function cachedSystem(text: string): Anthropic.TextBlockParam[] {
-  return [{ type: "text", text, cache_control: { type: "ephemeral" } }];
+/**
+ * A system prompt the same for every caller, cached: one block with the breakpoint on it. Five minutes unless `ttl` is
+ * "1h" (9 Nov 2026): the hour is for a prefix that comes back 5-60 minutes apart, where it pays for its double-price
+ * write - the brand judgement, read again by each ten-minute pass of the batch collector, and the classify batch.
+ * Scans stay on five minutes: two weeks of scans to 5 Nov had a quarter of their gaps in that window, too few to pay.
+ *
+ * Every cached prefix here is over the 512-token minimum of Claude Opus 5, Opus 5.5 and Haiku 5.5 with its output
+ * schema counted (count_tokens, 9 Nov 2026): brand read 1,360, questions 1,346, judgement 920, source kinds 1,146,
+ * host fit 716, DIY classify 1,295. Brand extraction (551, parallel calls over new text each time) is not cached.
+ */
+function cachedSystem(text: string, ttl: "5m" | "1h" = "5m"): Anthropic.TextBlockParam[] {
+  return [{ type: "text", text, cache_control: ttl === "1h" ? { type: "ephemeral", ttl: "1h" } : { type: "ephemeral" } }];
 }
 
 /**
@@ -905,7 +914,7 @@ async function judgeBrandBatch(
       "marketplace, not a supplier in this category'.",
       "",
       "Return every name you were given, spelled exactly as given, once each.",
-    ].join("\n")),
+    ].join("\n"), "1h"),
     messages: [
       {
         role: "user",
@@ -1080,6 +1089,53 @@ export async function classifyPages<T>(input: DiyModelInput<T>, billed: { calls:
   })));
 }
 
+/**
+ * The nightly classify calls as one Message Batch (9 Nov 2026, the prompt-caching audit): half the price, and the
+ * types are read by the next night's refresh, so nobody waits. The request is classifyPages' less the refusal
+ * fallback, which a batch request cannot carry: a refused result is classified again by classifyPages, fallback on
+ * (diy/opportunities/classify-batches.ts). The system prompt is cached for an hour, as batch requests run in no set
+ * order or time. Created without withRetry, as submitBrandBatch is.
+ */
+export async function submitClassifyBatch<T>(requests: readonly { custom_id: string; input: DiyModelInput<T> }[], billed: { calls: number }): Promise<string> {
+  const batch = await anthropic(billed).messages.batches.create({
+    requests: requests.map((r) => {
+      const f = zodOutputFormat(r.input.schema);
+      return {
+        custom_id: r.custom_id,
+        params: {
+          model: DIY_MODEL,
+          max_tokens: 16000,
+          output_config: { effort: "low" as const, format: { type: f.type, schema: f.schema } },
+          system: cachedSystem(r.input.system, "1h"),
+          messages: [{ role: "user" as const, content: r.input.user }],
+        },
+      };
+    }),
+  });
+  return batch.id;
+}
+
+/** A classify batch's answers by custom_id, parsed against `schema`, with what each billed; null for a request that did not succeed. */
+export async function classifyBatchResults<T>(id: string, schema: z.ZodType<T>, billed: { calls: number }) {
+  const out = new Map<string, { stop_reason: string | null; usage: Anthropic.Usage; model: string; parsed_output: T | null } | null>();
+  for (const [cid, m] of await batchMessages(id, "diy_classify", billed)) {
+    if (!m) {
+      out.set(cid, null);
+      continue;
+    }
+    const text = m.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+    let parsed: T | null = null;
+    try {
+      const p = schema.safeParse(JSON.parse(text));
+      parsed = p.success ? p.data : null;
+    } catch {
+      parsed = null;
+    }
+    out.set(cid, { stop_reason: m.stop_reason, usage: m.usage, model: m.model, parsed_output: parsed });
+  }
+  return out;
+}
+
 /** One drafted re-optimisation example from the client's own page (P8, on demand). Medium effort. */
 export async function writeReoptExample<T>(input: DiyModelInput<T>, billed: { calls: number }) {
   return labelled("diy_reopt_example", () => withRetry(() => anthropic(billed).beta.messages.parse({
@@ -1214,7 +1270,7 @@ export async function submitBrandBatch(requests: readonly BrandBatchRequest[], b
 }
 
 /** Where a batch stands: ended, and how many requests succeeded and errored. */
-export async function brandBatchState(id: string, billed: { calls: number }): Promise<{ ended: boolean; succeeded: number; errored: number; processing: number }> {
+export async function batchState(id: string, billed: { calls: number }): Promise<{ ended: boolean; succeeded: number; errored: number; processing: number }> {
   const b = await withRetry(() => anthropic(billed).messages.batches.retrieve(id));
   const c = b.request_counts;
   return { ended: b.processing_status === "ended", succeeded: c.succeeded, errored: c.errored + c.expired + c.canceled, processing: c.processing };
@@ -1223,20 +1279,28 @@ export async function brandBatchState(id: string, billed: { calls: number }): Pr
 /** An ended batch's names by custom_id; null for a request that failed or did not parse. */
 export async function brandBatchResults(id: string, billed: { calls: number }): Promise<Map<string, { brand: string; mentions: number }[] | null>> {
   const out = new Map<string, { brand: string; mentions: number }[] | null>();
+  for (const [cid, m] of await batchMessages(id, "extract_brands", billed)) {
+    const text = m?.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
+    out.set(cid, m?.stop_reason === "end_turn" ? readBrandList(text) : null);
+  }
+  return out;
+}
+
+/** An ended batch's messages by custom_id, each one's usage logged under `label` (batch true); null for a request that did not succeed. */
+async function batchMessages(id: string, label: string, billed: { calls: number }): Promise<Map<string, Anthropic.Message | null>> {
+  const out = new Map<string, Anthropic.Message | null>();
   for await (const r of await anthropic(billed).messages.batches.results(id)) {
     if (r.result.type !== "succeeded") {
       out.set(r.custom_id, null);
       continue;
     }
-    const m = r.result.message;
-    logUsage("extract_brands", m.model, m.usage, true);
-    const text = m.content.find((b): b is Anthropic.TextBlock => b.type === "text")?.text ?? "";
-    out.set(r.custom_id, m.stop_reason === "end_turn" ? readBrandList(text) : null);
+    logUsage(label, r.result.message.model, r.result.message.usage, true);
+    out.set(r.custom_id, r.result.message);
   }
   return out;
 }
 
 /** Stops a batch that ran past the wait; requests already answered are still paid for and still read. */
-export async function cancelBrandBatch(id: string, billed: { calls: number }): Promise<void> {
+export async function cancelBatch(id: string, billed: { calls: number }): Promise<void> {
   await withRetry(() => anthropic(billed).messages.batches.cancel(id));
 }

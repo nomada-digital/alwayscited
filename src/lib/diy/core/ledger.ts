@@ -352,19 +352,56 @@ export async function paidModelCall<T>(
       return { kind: "failed", reason, cost, readId } as const;
     }
     await debit(rt.db, ctx, spec, billed.calls);
-    const cost = modelCost(res.usage, res.model);
-    if (res.model && res.model !== DIY_MODEL_PRICES.model) console.log(`[diy] ${spec.endpoint} for ${ctx.client.domain} was answered by ${res.model} (refusal fallback); priced at its rates`);
-    const tokens = { tokensIn: res.usage?.input_tokens ?? null, tokensOut: res.usage?.output_tokens ?? null };
-    const stop = res.stop_reason;
-    const failure = stop === "refusal" ? "refusal" : stop === "max_tokens" ? "max_tokens" : res.parsed_output == null ? "no structured output" : null;
-    if (failure) {
-      await settleRead(rt.db, readId, { status: "failed", cost, code: failure, ...tokens }, rt.now());
-      console.warn(`[diy] ${spec.endpoint} for ${ctx.client.domain} failed: ${failure}`);
-      return { kind: "failed", reason: failure, cost, readId } as const;
-    }
-    await settleRead(rt.db, readId, { status: "ok", cost, ...tokens }, rt.now());
-    return { kind: "read", value: res.parsed_output as T, cost, partial: false, readId } as const;
+    return settleModelAnswer(rt.db, readId, res, { endpoint: spec.endpoint, domain: ctx.client.domain }, rt.now());
   });
+}
+
+/**
+ * Settles one model call's reservation from its answer: a `refusal` or `max_tokens` stop, or no structured output, is
+ * a failure at what it billed, and nothing is read from its body. Shared by paidModelCall and the classify batch's
+ * collector (9 Nov 2026, opportunities/classify-batches.ts), which settles a reservation an hour after the worker made
+ * it. `extraCost` is billed beside this answer on the same reservation - a batch result that failed before the direct
+ * call that replaced it; `batch` prices the answer at the Message Batches rate.
+ */
+export async function settleModelAnswer<T>(
+  db: SupabaseClient,
+  readId: string,
+  res: ModelAnswer<T>,
+  p: { endpoint: string; domain: string; batch?: boolean; extraCost?: number },
+  now: number,
+): Promise<ReadResult<T>> {
+  const cost = round5(modelCost(res.usage, res.model, p.batch ?? false) + (p.extraCost ?? 0));
+  if (res.model && res.model !== DIY_MODEL_PRICES.model) console.log(`[diy] ${p.endpoint} for ${p.domain} was answered by ${res.model} (refusal fallback); priced at its rates`);
+  const tokens = { tokensIn: res.usage?.input_tokens ?? null, tokensOut: res.usage?.output_tokens ?? null };
+  const failure = modelFailure(res);
+  if (failure) {
+    await settleRead(db, readId, { status: "failed", cost, code: failure, ...tokens }, now);
+    console.warn(`[diy] ${p.endpoint} for ${p.domain} failed: ${failure}`);
+    return { kind: "failed", reason: failure, cost, readId } as const;
+  }
+  await settleRead(db, readId, { status: "ok", cost, ...tokens }, now);
+  return { kind: "read", value: res.parsed_output as T, cost, partial: false, readId } as const;
+}
+
+/** Why an answer is unusable, or null: a refusal, a `max_tokens` stop, no structured output. */
+export function modelFailure(res: Pick<ModelAnswer<unknown>, "stop_reason" | "parsed_output">): string | null {
+  const stop = res.stop_reason;
+  return stop === "refusal" ? "refusal" : stop === "max_tokens" ? "max_tokens" : res.parsed_output == null ? "no structured output" : null;
+}
+
+/**
+ * A model call's reservation without the call (9 Nov 2026, the classify batch): reserved on the model door exactly as
+ * paidModelCall reserves, caps and headroom checked, at the full-price ceiling. The caller sends the request later (a
+ * Message Batch) and settles it with settleModelAnswer; a reservation never settled stands at its estimate, the most
+ * it could cost.
+ */
+export async function reserveModelCall(
+  ctx: ReadCtx,
+  spec: ModelSpec,
+  modelCalls: { last24h: number; perDay: number } | null,
+): Promise<{ id: string } | { refusal: Refusal }> {
+  if (spec.door !== "model") throw new Error("reserveModelCall is the model door");
+  return reserve(ctx, spec, { modelCalls });
 }
 
 /**
@@ -373,11 +410,16 @@ export async function paidModelCall<T>(
  * nothing is written for zero calls (the table's check refuses it).
  */
 async function debit(db: SupabaseClient, ctx: ReadCtx, spec: ModelSpec, calls: number): Promise<void> {
+  return debitModelCalls(db, { domain: ctx.client.domain, reason: spec.reason }, calls);
+}
+
+/** debit, for a caller holding no ReadCtx: the classify batch's collector (9 Nov 2026). */
+export async function debitModelCalls(db: SupabaseClient, p: { domain: string; reason: string }, calls: number): Promise<void> {
   if (calls <= 0) return;
   try {
-    const { error } = await db.from("model_call_debits").insert({ calls, reason: spec.reason, domain: ctx.client.domain, ip_hash: null });
+    const { error } = await db.from("model_call_debits").insert({ calls, reason: p.reason, domain: p.domain, ip_hash: null });
     if (error) throw new Error(error.message);
   } catch (err) {
-    console.warn(`[diy] could not record ${calls} model call(s) (${spec.reason}): ${msg(err)}`);
+    console.warn(`[diy] could not record ${calls} model call(s) (${p.reason}): ${msg(err)}`);
   }
 }

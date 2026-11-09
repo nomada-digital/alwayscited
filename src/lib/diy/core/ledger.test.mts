@@ -300,6 +300,17 @@ test("13 Oct 2026: a call the refusal fallback answered is priced at the answeri
   assert.equal(modelCost(fellBack, "claude-opus-5"), 0.15, "the declined attempt ($0.05) and the fallback that served it ($0.10)");
 });
 
+test("9 Nov 2026: cache reads at each model's own rate, hour-long writes at double, and a batch result at half", () => {
+  const u = { input_tokens: 1_000, cache_creation_input_tokens: 1_000, cache_read_input_tokens: 10_000, output_tokens: 1_000 };
+  // Opus 5.5: 1k + 1.25k (5-minute write) + 10k x 0.05 = 2.75k input-equivalent at $4/M, plus 1k out at $20/M.
+  assert.equal(modelCost(u, "claude-opus-5-5"), 0.031);
+  // Opus 5 reads at 0.1: 1k + 1.25k + 1k = 3.25k at $5/M, plus 1k at $25/M.
+  assert.equal(modelCost(u, "claude-opus-5"), 0.04125);
+  const hour = { ...u, cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 1_000 } };
+  assert.equal(modelCost(hour, "claude-opus-5-5"), 0.034, "the hour's write at 2x: 3.5k input-equivalent");
+  assert.equal(modelCost(hour, "claude-opus-5-5", true), 0.017, "a Message Batches result bills at half");
+});
+
 test("13 Oct 2026: the ledger settles a fallback-served call from the response's own model", async () => {
   const w = world();
   await paidModelCall(testCtx(w.db, w.clock), MODEL_SPEC, HEADROOM, async (billed) => {

@@ -3,7 +3,10 @@ import type { GuardedGet } from "../core/fetch.ts";
 import type { ReadCtx } from "../core/jobs.ts";
 import type { ReadResult } from "../core/ledger.ts";
 
+import type { Refusal } from "../core/caps.ts";
+
 import type { ClassifyAnswer } from "./classify-prompt.ts";
+import type { Unclassified } from "./derive.ts";
 
 /**
  * The reads Opportunities makes, handed in (13 Oct 2026, DIY P7): our own
@@ -16,14 +19,21 @@ export type OppIO = {
   get: GuardedGet;
   parse: (ctx: ReadCtx, url: string) => Promise<ReadResult<ParsedPage | null>>;
   classify: (ctx: ReadCtx, input: { system: string; user: string; items: number }) => Promise<ReadResult<ClassifyAnswer>>;
+  /**
+   * The night's chunks as one Message Batch (9 Nov 2026, classify-batches.ts): reserved, sent and recorded, collected
+   * within the hour. Answers how many chunks went and the cap that stopped the rest; null when nothing went (the
+   * batch could not be sent or recorded), so the job calls directly. Absent in the tests and with DIY_CLASSIFY_INLINE=1.
+   */
+  batch?: (ctx: ReadCtx, parts: readonly Unclassified[][]) => Promise<{ sent: number; refusal: Refusal | null } | null>;
 };
 
 /** The live reads: crawl.ts guardedRead, doors.ts readContentParsing, model.ts classifyPages with this package's schema. */
 export async function liveIO(): Promise<OppIO> {
-  const [crawl, doors, model, prompt] = await Promise.all([import("../../scan/crawl.ts"), import("../core/doors.ts"), import("../core/model.ts"), import("./classify-prompt.ts")]);
+  const [crawl, doors, model, prompt, batches] = await Promise.all([import("../../scan/crawl.ts"), import("../core/doors.ts"), import("../core/model.ts"), import("./classify-prompt.ts"), import("./classify-batches.ts")]);
   return {
     get: crawl.guardedRead,
     parse: (ctx, url) => doors.readContentParsing(ctx, url),
     classify: (ctx, input) => model.classifyPages(ctx, { system: input.system, user: input.user, schema: prompt.ClassifySchema, items: input.items }),
+    ...(batches.classifyByBatch() ? { batch: (ctx: ReadCtx, parts: readonly Unclassified[][]) => batches.sendClassifyBatch(ctx, parts) } : {}),
   };
 }

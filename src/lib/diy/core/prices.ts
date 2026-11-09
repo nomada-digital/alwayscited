@@ -148,11 +148,15 @@ export const DIY_MODEL_PRICES = { model: "claude-opus-5-5", inPerM: 4, outPerM: 
  * file. A model not listed is priced at the dearest here: an over-count
  * refuses early, never overspends.
  */
-export const MODEL_PRICES: Readonly<Record<string, { inPerM: number; outPerM: number }>> = {
-  "claude-opus-5-5": { inPerM: DIY_MODEL_PRICES.inPerM, outPerM: DIY_MODEL_PRICES.outPerM },
+export const MODEL_PRICES: Readonly<Record<string, ModelPrice>> = {
+  // 9 Nov 2026: Claude Opus 5.5 reads its cache at $0.20 a million, 0.05 of its input price, not the 0.1 the others do.
+  "claude-opus-5-5": { inPerM: DIY_MODEL_PRICES.inPerM, outPerM: DIY_MODEL_PRICES.outPerM, cacheReadX: 0.05 },
   "claude-opus-5": { inPerM: 5, outPerM: 25 },
   "claude-opus-4-8": { inPerM: 5, outPerM: 25 },
 };
+
+/** A model's list prices per million tokens, and its cache-read multiple when it is not CACHE_READ_X. */
+export type ModelPrice = { inPerM: number; outPerM: number; cacheReadX?: number };
 
 const DEAREST = Object.values(MODEL_PRICES).reduce((a, b) => (b.inPerM + b.outPerM > a.inPerM + a.outPerM ? b : a));
 
@@ -162,7 +166,7 @@ const DEAREST = Object.values(MODEL_PRICES).reduce((a, b) => (b.inPerM + b.outPe
  * `claude-opus-5-...` is Opus 5 and `claude-opus-5-5` is not), else the
  * dearest listed.
  */
-export function pricesFor(model: string | null | undefined): { inPerM: number; outPerM: number } {
+export function pricesFor(model: string | null | undefined): ModelPrice {
   if (!model) return MODEL_PRICES[DIY_MODEL_PRICES.model]!;
   const hit = Object.keys(MODEL_PRICES)
     .filter((id) => model === id || model.startsWith(`${id}-`))
@@ -173,10 +177,16 @@ export function pricesFor(model: string | null | undefined): { inPerM: number; o
 /**
  * Cache writes and reads, as multiples of the input price. Anthropic's
  * standard prompt-caching multipliers; an estimate like the rest until the
- * first classify call's usage is compared with the bill.
+ * first classify call's usage is compared with the bill. A write on the
+ * one-hour TTL is CACHE_WRITE_1H_X (9 Nov 2026: the classify batch's system
+ * prompt is written for an hour); a model may read for less (MODEL_PRICES).
  */
 export const CACHE_WRITE_X = 1.25;
+export const CACHE_WRITE_1H_X = 2;
 export const CACHE_READ_X = 0.1;
+
+/** A Message Batches request bills at half the list price, cache tokens included (9 Nov 2026, the classify batch). */
+export const BATCH_X = 0.5;
 
 /** Every DIY call's output ceiling (section 5.3): it bounds thinking plus output. */
 export const DIY_MAX_TOKENS = 16_000;
@@ -195,6 +205,8 @@ type Tokens = {
   output_tokens?: number | null;
   cache_creation_input_tokens?: number | null;
   cache_read_input_tokens?: number | null;
+  /** The writes by TTL, when the API itemises them: the one-hour share bills at CACHE_WRITE_1H_X. */
+  cache_creation?: { ephemeral_5m_input_tokens?: number | null; ephemeral_1h_input_tokens?: number | null } | null;
 };
 
 /** One attempt inside a call (a declined one, then the fallback that served it), each naming its model. */
@@ -207,8 +219,10 @@ export type ModelUsage = Tokens & {
 
 const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? v : 0);
 
-function tokensCost(t: Tokens, price: { inPerM: number; outPerM: number }): number {
-  const input = n(t.input_tokens) + n(t.cache_creation_input_tokens) * CACHE_WRITE_X + n(t.cache_read_input_tokens) * CACHE_READ_X;
+function tokensCost(t: Tokens, price: ModelPrice): number {
+  const hour = Math.min(n(t.cache_creation?.ephemeral_1h_input_tokens), n(t.cache_creation_input_tokens));
+  const writes = (n(t.cache_creation_input_tokens) - hour) * CACHE_WRITE_X + hour * CACHE_WRITE_1H_X;
+  const input = n(t.input_tokens) + writes + n(t.cache_read_input_tokens) * (price.cacheReadX ?? CACHE_READ_X);
   return (input * price.inPerM + n(t.output_tokens) * price.outPerM) / 1_000_000;
 }
 
@@ -216,13 +230,14 @@ function tokensCost(t: Tokens, price: { inPerM: number; outPerM: number }): numb
  * What a model call cost, from the usage it reported. With `iterations`, the
  * sum of every attempt at its own model's prices - a declined attempt that
  * may bill and the fallback that served it; otherwise the top-level usage at
- * the answering model's prices (`model`, the response's own field).
+ * the answering model's prices (`model`, the response's own field). `batch`
+ * is a Message Batches result, at BATCH_X.
  */
-export function modelCost(usage: ModelUsage | null | undefined, model?: string | null): number {
+export function modelCost(usage: ModelUsage | null | undefined, model?: string | null, batch = false): number {
   if (!usage) return 0;
   const its = Array.isArray(usage.iterations) ? usage.iterations : [];
-  if (its.length) return round5(its.reduce((t, it) => t + tokensCost(it, pricesFor(it.model ?? model)), 0));
-  return round5(tokensCost(usage, pricesFor(model)));
+  const full = its.length ? its.reduce((t, it) => t + tokensCost(it, pricesFor(it.model ?? model)), 0) : tokensCost(usage, pricesFor(model));
+  return round5(batch ? full * BATCH_X : full);
 }
 
 /** `diy_reads` holds numeric(10,5). */

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { brandBatchResults, brandBatchState, cancelBrandBatch, describeAnthropicError, extractBrands, labelled, submitBrandBatch, type BrandBatchRequest } from "@/lib/scan/anthropic";
+import { brandBatchResults, batchState, cancelBatch, describeAnthropicError, extractBrands, labelled, submitBrandBatch, type BrandBatchRequest } from "@/lib/scan/anthropic";
 import { brandKey, subjectKeys } from "@/lib/scan/brand-name";
 import { type Engine } from "@/lib/scan/engines";
 import { batchBlocks } from "@/lib/scan/prose-batches";
@@ -72,7 +72,7 @@ export async function recordBrandBatch(
   const { error } = await db.from("tracking_brand_batches").insert({ run_id: p.runId, client_domain_id: p.clientId, batch_id: p.batchId, requests: p.requests, request_count: p.count });
   if (!error) return true;
   console.warn(`[track] ${p.runId} brand batch ${p.batchId} not recorded (${error.message}); cancelling it and extracting now`);
-  await cancelBrandBatch(p.batchId, { calls: 0 }).catch(() => undefined);
+  await cancelBatch(p.batchId, { calls: 0 }).catch(() => undefined);
   return false;
 }
 
@@ -116,11 +116,11 @@ async function collectOne(db: ReturnType<typeof supabaseAdmin>, row: PendingRow,
   if (oErr) throw new Error(`could not read the run: ${oErr.message}`);
   if (open.status === "queued" || open.status === "running") return "waiting";
   const scratch = { calls: 0 };
-  const state = await brandBatchState(row.batch_id, scratch);
+  const state = await batchState(row.batch_id, scratch);
   const late = now - Date.parse(row.created_at) >= BATCH_WAIT_MS;
   if (!state.ended && !late) return "waiting";
   const results = state.ended ? await brandBatchResults(row.batch_id, scratch) : new Map<string, null>();
-  if (!state.ended) await cancelBrandBatch(row.batch_id, scratch).catch(() => undefined);
+  if (!state.ended) await cancelBatch(row.batch_id, scratch).catch(() => undefined);
 
   const [{ data: run, error: rErr }, { data: client, error: cErr }, { data: answers, error: aErr }] = await Promise.all([
     db.from("tracking_runs").select("id, run_date, error").eq("id", row.run_id).single(),

@@ -101,6 +101,30 @@ test("classification: a max_tokens stop counts its whole chunk as failed in the 
   assert.equal(capped.outcome, "deferred");
 });
 
+test("9 Nov 2026: classification goes as one batch when it can, and calls directly when the batch cannot be sent", async () => {
+  let direct = 0;
+  const classify: OppIO["classify"] = async () => (direct++, { kind: "read", value: { items: [] }, cost: 0.01, partial: false, readId: "r" });
+  let parts: number[] = [];
+  const sent = await classifyAll({ classify, batch: async (_ctx, ps) => ((parts = ps.map((c) => c.length)), { sent: ps.length, refusal: null }) }, fakeCtx, unclassified(260), async () => 0);
+  assert.deepEqual(parts, [50, 50, 50, 50], "the same chunks, never above CHUNK");
+  assert.equal(direct, 0, "nothing called directly");
+  assert.equal(sent.outcome, "ok");
+  assert.match(sent.note!, /sent 200 pages to be typed in a batch \(4 calls/);
+  assert.match(sent.note!, /60 wait for tomorrow/);
+
+  const partly = await classifyAll({ classify, batch: async () => ({ sent: 1, refusal: { code: "door_daily", reason: "x" } }) }, fakeCtx, unclassified(70), async () => 0);
+  assert.equal(partly.outcome, "ok");
+  assert.match(partly.note!, /sent 50 pages.*stopped at a cap: door_daily; 20 wait for tomorrow/);
+
+  const capped = await classifyAll({ classify, batch: async () => ({ sent: 0, refusal: { code: "door_daily", reason: "x" } }) }, fakeCtx, unclassified(3), async () => 0);
+  assert.equal(capped.outcome, "deferred", "a cap before the first chunk defers, as a direct call's refusal does");
+  assert.equal(direct, 0);
+
+  const unsent = await classifyAll({ classify, batch: async () => null }, fakeCtx, unclassified(70), async () => 0);
+  assert.equal(direct, 2, "a batch that could not go leaves the direct calls to run");
+  assert.match(unsent.note!, /typed 0 of 70 pages/);
+});
+
 test("classification: an answer types only its own chunk's keys, only what each needed, only enum values", () => {
   const chunk = unclassified(2);
   chunk[1]!.needs = ["page"];

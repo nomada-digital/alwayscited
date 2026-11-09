@@ -6,7 +6,8 @@ import { anthropicCallsSince } from "@/lib/scan/spend";
 
 import { ctxRuntime } from "./ctx.ts";
 import type { ReadCtx } from "./jobs.ts";
-import { paidModelCall, type ReadResult } from "./ledger.ts";
+import { paidModelCall, type ReadResult, reserveModelCall } from "./ledger.ts";
+import type { Refusal } from "./caps.ts";
 import { modelEstimate } from "./prices.ts";
 
 /**
@@ -53,6 +54,19 @@ export async function classifyPages<T>(ctx: ReadCtx, input: DiyModelInput<T> & {
   return paidModelCall(ctx, { door: "model", endpoint: "diy_classify", estimate, params: { items: input.items }, reason: "diy_classify" }, await headroom(now(ctx)), (billed) =>
     classifyCall({ system: input.system, user: input.user, schema: input.schema }, billed),
   );
+}
+
+/**
+ * A classify call's reservation without the call (9 Nov 2026): the night's classify chunks go out as one Message Batch
+ * (opportunities/classify-batches.ts), each reserved here first at the same ceiling and headroom as classifyPages, and
+ * settled when the batch is collected.
+ */
+export async function reserveClassify(ctx: ReadCtx, input: { system: string; user: string; items: number }): Promise<{ id: string } | { refusal: Refusal }> {
+  if (!Number.isInteger(input.items) || input.items < 1 || input.items > CLASSIFY_CHUNK) {
+    throw new Error(`a classify call carries 1-${CLASSIFY_CHUNK} items, not ${input.items}`);
+  }
+  const estimate = modelEstimate(input.system.length + input.user.length);
+  return reserveModelCall(ctx, { door: "model", endpoint: "diy_classify", estimate, params: { items: input.items }, reason: "diy_classify" }, await headroom(now(ctx)));
 }
 
 /** One drafted re-optimisation example (P8, on demand, in `after()`). */

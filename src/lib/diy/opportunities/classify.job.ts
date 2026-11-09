@@ -58,7 +58,7 @@ export function kindsFromAnswer(chunk: readonly Unclassified[], answer: Classify
 }
 
 /** Writes model types, never over a rule's: a key the rules have settled keeps the rule's type. */
-async function writeKinds(db: SupabaseClient, rows: readonly Record<string, unknown>[]): Promise<number> {
+export async function writeKinds(db: SupabaseClient, rows: readonly Record<string, unknown>[]): Promise<number> {
   let n = 0;
   for (const row of rows) {
     const { error } = await db.from("source_kinds").insert(row);
@@ -80,10 +80,25 @@ async function writeKinds(db: SupabaseClient, rows: readonly Record<string, unkn
  * counts its whole chunk as failed and writes nothing for it; a cap stops
  * the night. `write` stores one answer's rows and says how many it stored.
  */
-export async function classifyAll(io: Pick<OppIO, "classify">, ctx: ReadCtx, unclassified: readonly Unclassified[], write: (rows: Record<string, unknown>[]) => Promise<number>): Promise<JobResult> {
+export async function classifyAll(io: Pick<OppIO, "classify" | "batch">, ctx: ReadCtx, unclassified: readonly Unclassified[], write: (rows: Record<string, unknown>[]) => Promise<number>): Promise<JobResult> {
   if (!unclassified.length) return { outcome: "ok", note: "nothing waits for a type" };
   const parts = chunks(unclassified).slice(0, CHUNKS_PER_NIGHT);
   const sent = parts.reduce((n, c) => n + c.length, 0);
+  // 9 Nov 2026 (the prompt-caching audit): the chunks go as one Message Batch at half the price, typed within the
+  // hour by the collector (classify-batches.ts), which calls directly for any the batch did not answer. Nobody waits:
+  // the next night's refresh reads the types. A batch that cannot be sent leaves the calls below to run as before.
+  if (io.batch) {
+    const b = await io.batch(ctx, parts);
+    if (b && b.sent === 0 && b.refusal) {
+      const outcome = jobOutcomeFor(b.refusal.code);
+      return { outcome: outcome === "failed" ? "failed" : outcome, note: `typed 0, 0 failed; stopped at a cap: ${b.refusal.code}` };
+    }
+    if (b) {
+      const pages = parts.slice(0, b.sent).reduce((n, c) => n + c.length, 0);
+      const left = unclassified.length - pages;
+      return { outcome: "ok", note: `sent ${pages} pages to be typed in a batch (${b.sent} call${b.sent === 1 ? "" : "s"}, collected within the hour)${b.refusal ? `; stopped at a cap: ${b.refusal.code}` : ""}${left > 0 ? `; ${left} wait for tomorrow` : ""}` };
+    }
+  }
   let typed = 0;
   let written = 0;
   let failed = 0;
