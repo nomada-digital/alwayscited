@@ -9,6 +9,7 @@ import type { PlanBanner } from "@/lib/tracking/plan-banner";
 
 import { Meter } from "./Figures";
 import { ClientSwitch, Nav } from "./Nav";
+import ViewAsSuggest from "./ViewAsSuggest";
 
 /**
  * The dashboards host's frame: the alwayscited lockup, the site and its plan,
@@ -70,6 +71,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
         </div>
       </aside>
       {/* A shared demo link (17 Oct 2026): said on every page, and edits there stay in the browser (useOps). */}
+      {/* Suggest a change (10 Nov 2026): agency staff on a view-as link only, never a customer or a demo. */}
+      {viewAs ? <ViewAsSuggest slug={ws.client.slug} /> : null}
       {demo && !viewAs ? <span className="demo-badge" role="note" title="A shared demo. Changes made here are not saved.">{isSampleClient(ws.client.id) ? "Sample data, read-only" : "Demo, read-only"}</span> : null}
       <div className="dash-main" id="dash-content">
         <div className="dash-inner">

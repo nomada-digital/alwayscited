@@ -123,6 +123,9 @@ export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200, websi
  */
 export const CONNECT_LIMITS = { gaProperty: 24 };
 
+/** Suggest a change on a view-as page (10 Nov 2026, lib/dash/suggest.ts): the note, as the hub's ac-suggest keeps it. */
+export const SUGGEST_LIMITS = { note: 2000 };
+
 // `website`: asked only when the order has no scan (R158, 1 Oct 2026); a hostname's own bound.
 // gaClientId (15 Oct 2026): the GA client id, "<digits>.<digits>", passed to
 // Stripe's metadata so the webhook's server-side purchase joins the visit.
