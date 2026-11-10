@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  * Invite, change a role, remove - R142 part 2 (1 Oct 2026; BRIEF-4 P2 Team).
  * Posted by plain HTML forms on Settings, so it works with JS off; the answer
  * is a 303 back to the page with the toast in the URL. Session and membership
- * as the stop route; owners only. The rules are team.ts; the invite mail is
+ * as the stop route; owners and editors (team.ts refuseActorOn, 10 Nov 2026). The rules are team.ts; the invite mail is
  * invite-mail.ts. The fixture is read-only unless TRACKING_FIXTURE_WRITE=1
  * (R168), which holds the change in memory; on the fixture nothing is sent.
  *
@@ -78,7 +78,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
   // The daily cap is counted for an invite only.
   const n = f.op === "invite" ? await invitesToday(db, { email, today: trackingDay() }) : 0;
   if (typeof n === "string") return refused(n);
-  const plan = planTeam({ form: f, actor: email, rows: team.rows, scoping: team.scoping, clientId: client.id, clientIds, invitesToday: n });
+  const plan = planTeam({ form: f, actor: email, rows: team.rows, scoping: team.scoping, clientId: client.id, clientIds, invitesToday: n, actorRole: client.role });
   if (typeof plan === "string") return refused(plan);
 
   if (plan.op === "invite") {

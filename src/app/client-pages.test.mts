@@ -111,7 +111,9 @@ const ROLE_READS: Record<string, string[]> = {
   // Setup outstanding sends an owner or editor to setup; a viewer cannot confirm, so is not sent.
   "": ['raw.role !== "viewer" && setupOutstanding('],
   // Only an owner sees Invite and Remove; the member route refuses anyone else too.
-  "/settings": ['const owner = raw.role === "owner" && !readOnly;'],
+  // 10 Nov 2026 (Danny): owners and editors see Invite, and Remove on editors and viewers; only owners edit names.
+  // teamPowers asks team.ts refuseActorOn, the rule the member route runs; a demo or view-as reads as a viewer.
+  "/settings": ['const can = teamPowers(readOnly ? "viewer" : raw.role);'],
   // Only an owner sees Open billing and Track more; the billing and pack routes refuse anyone else too.
   // 22 Oct 2026: the invoice history is read for the owner only, never in a demo or a view-as (lib/dash/invoices.ts).
   // 7 Nov 2026: only an owner sees the swap and add-to-plan forms; the plan route refuses anyone else too.

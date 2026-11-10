@@ -170,6 +170,7 @@ export function fixtureTeam(f: Fixture, p: { op: TeamOp; email: string; role: In
     clientId: client.id,
     clientIds: fixtureAccount(f).map((c) => c.id),
     invitesToday: 0,
+    actorRole: f.member.role,
   });
   if (typeof plan === "string") return { ok: false, message: plan };
   // A member with no `clients` sees every client; the key is left off rather than set to undefined.

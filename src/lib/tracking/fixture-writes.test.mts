@@ -129,7 +129,11 @@ test("R168 part 3: invite, role and remove change fixture.members under team.ts'
   assert.equal(x.fixture.members.find((m) => m.email === "viewer@example.com")!.removed_at, now, "removing never deletes");
   assert.equal(fixtureTeam(fx, { op: "remove", email: fx.member.email, role: null, scope: null, slug: "tallyroo", now }).ok, false, "never yourself");
   const editor = { ...fx, member: { email: "editor@example.com", role: "editor" } };
-  assert.deepEqual(fixtureTeam(editor, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" }), { ok: false, message: "Only owners can change the team." });
+  // 10 Nov 2026 (Danny): an editor invites, and removes editors and viewers, but never an owner; a viewer reads.
+  assert.ok(fixtureTeam(editor, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" }).ok);
+  assert.deepEqual(fixtureTeam(editor, { op: "remove", email: fx.member.email, role: null, scope: null, slug: "tallyroo", now }), { ok: false, message: "Only an owner can change or remove an owner." });
+  const viewer = { ...fx, member: { email: "viewer@example.com", role: "viewer" } };
+  assert.deepEqual(fixtureTeam(viewer, { op: "invite", email: "new@example.com", role: "viewer", scope: null, slug: "tallyroo", now, first: "Ana" }), { ok: false, message: "Viewers can see the team but not change it." });
 });
 
 test("AG-1 (9 Oct 2026): on the two-clients fixture an invite is to this client only unless it says every client; Remove takes one client", () => {

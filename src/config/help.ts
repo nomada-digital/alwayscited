@@ -416,12 +416,12 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           blocks: [
             {
               list: [
-                `Owner: everything an editor can do, plus inviting people, changing roles, removing people${trialOn ? ", cancelling a free trial" : ""} and asking us about billing.`,
-                "Editor: adds, edits and stops clusters and prompts, checks keywords, adds notes and confirms setup.",
+                `Owner: everything an editor can do, plus changing roles and names, removing an owner${trialOn ? ", cancelling a free trial" : ""} and asking us about billing.`,
+                "Editor: adds, edits and stops clusters and prompts, checks keywords, adds notes, confirms setup, and invites and removes editors and viewers.",
                 "Viewer: reads every page and downloads the CSVs, and changes nothing that is tracked.",
               ],
             },
-            `Owners are set up by us. If you need another, write to ${MAIL}. Owners can switch someone between editor and viewer and remove anyone but themselves, and a dashboard always keeps at least one owner.`,
+            `Owners are set up by us. If you need another, write to ${MAIL}. Only an owner changes or removes an owner, owners can switch someone between editor and viewer, nobody removes themselves, and a dashboard always keeps at least one owner.`,
           ],
         },
         {
@@ -430,20 +430,20 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           blocks: [
             {
               steps: [
-                `In ${ui("Settings")}, under ${ui("Team")}, choose ${ui("Invite someone")}. Only owners see it.`,
+                `In ${ui("Settings")}, under ${ui("Team")}, choose ${ui("Invite someone")}. Owners and editors see it.`,
                 "Enter their email address and pick Editor or Viewer.",
                 `If your account has more than one website, choose under ${ui("Who they see")}: only the website you are in, or every website on the account, including any added later.`,
                 `Choose ${ui("Send invite")}. We email them, and they sign in with that address.`,
               ],
             },
-            `Each website has at most ${MEMBERS_PER_CLIENT} people on its team, and each owner can send up to ${INVITES_PER_OWNER_PER_DAY} invites a day. Someone who was removed can be invited again.`,
+            `Each website has at most ${MEMBERS_PER_CLIENT} people on its team, and each owner or editor can send up to ${INVITES_PER_OWNER_PER_DAY} invites a day. Someone who was removed can be invited again.`,
           ],
         },
         {
           id: "remove",
           heading: "Changing a role, or removing someone",
           blocks: [
-            `An owner has ${ui("Make viewer")} or ${ui("Make editor")} beside each editor and viewer, and ${ui("Remove")} beside anyone else on the team, which asks you to confirm. A removed person loses access at once. Nothing they did is undone: the clusters, prompts and history stay as they are.`,
+            `An owner has ${ui("Make viewer")} or ${ui("Make editor")} beside each editor and viewer. Owners and editors have ${ui("Remove")} beside each editor and viewer but themselves, which asks you to confirm. A removed person loses access at once. Nothing they did is undone: the clusters, prompts and history stay as they are.`,
           ],
         },
         {

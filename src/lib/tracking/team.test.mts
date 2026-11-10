@@ -22,12 +22,14 @@ import {
   readEmail,
   readTeamForm,
   refuseActor,
+  refuseActorOn,
   refuseChange,
   refuseEveryClient,
   refuseInvite,
   removeKind,
   removeLine,
   scopeLine,
+  teamPowers,
   teamReturn,
   teamToast,
   teamWhy,
@@ -58,10 +60,36 @@ test("the form: invite and role need Editor or Viewer, never owner; remove needs
   assert.equal(f({ op: "delete", email: "x@tallyroo.com" }), null);
 });
 
-test("owner only", () => {
+test("owners and editors change the team; viewers read (Danny, 10 Nov 2026; was owners only)", () => {
   assert.equal(refuseActor("owner"), null);
-  assert.ok(refuseActor("editor"));
-  assert.ok(refuseActor("viewer"));
+  assert.equal(refuseActor("editor"), null);
+  assert.equal(refuseActor("viewer"), TEAM_WHY.actor);
+  assert.equal(refuseActor("anything"), TEAM_WHY.actor);
+});
+
+test("an editor invites and removes editors and viewers, never an owner, and changes no role or name", () => {
+  assert.equal(refuseActorOn("editor", "invite", null), null);
+  assert.equal(refuseActorOn("editor", "remove", "editor"), null);
+  assert.equal(refuseActorOn("editor", "remove", "viewer"), null);
+  assert.equal(refuseActorOn("editor", "remove", "owner"), TEAM_WHY.ownerOnly);
+  assert.equal(refuseActorOn("editor", "role", "viewer"), TEAM_WHY.roleOnly);
+  assert.equal(refuseActorOn("editor", "name", "viewer"), TEAM_WHY.roleOnly);
+  for (const op of ["invite", "remove", "role", "name"] as const) {
+    assert.equal(refuseActorOn("owner", op, "owner"), null, `an owner may ${op}`);
+    assert.equal(refuseActorOn("viewer", op, "viewer"), TEAM_WHY.actor, `a viewer may not ${op}`);
+  }
+  assert.deepEqual([teamPowers("editor").invite, teamPowers("editor").names, teamPowers("editor").remove("viewer"), teamPowers("editor").remove("owner")], [true, false, true, false]);
+  assert.deepEqual([teamPowers("viewer").invite, teamPowers("viewer").remove("viewer")], [false, false]);
+  assert.deepEqual([teamPowers("owner").invite, teamPowers("owner").names, teamPowers("owner").remove("owner")], [true, true, true]);
+});
+
+test("planTeam runs the actor's rule on the row the change is on", () => {
+  const ed = { actor: "staff@agency.example", actorRole: "editor" };
+  assert.equal((plan(form({}), ed) as { op: string }).op, "invite", "an editor invites");
+  assert.deepEqual(plan(form({ op: "remove", email: "lead@client-a.example", role: null }), ed), { op: "remove", row: agency[2] });
+  assert.equal(plan(form({ op: "remove", email: "owner@agency.example", role: null }), ed), TEAM_WHY.ownerOnly);
+  assert.equal(plan(form({ op: "role", email: "lead@client-a.example", role: "editor" }), ed), TEAM_WHY.roleOnly);
+  assert.equal(plan(form({}), { actor: "lead@client-a.example", actorRole: "viewer" }), TEAM_WHY.actor);
 });
 
 test("invite refuses a live member and lets a removed one back on the same row", () => {
@@ -111,6 +139,8 @@ test("R151 (3 Oct 2026): a refusal comes back as its code and says its reason, n
   // Every sentence a rule returns has a code, so no rule's refusal falls back to "Reload the page".
   const said = [
     refuseActor("viewer"),
+    refuseActorOn("editor", "remove", "owner"),
+    refuseActorOn("editor", "role", "viewer"),
     refuseInvite({ rows: team, email: "ed@tallyroo.com", invitesToday: 0 }),
     refuseInvite({ rows: team, email: "new@tallyroo.com", invitesToday: INVITES_PER_OWNER_PER_DAY }),
     refuseChange({ rows: team, actor: "o2@tallyroo.com", email: "o2@tallyroo.com", op: "remove", role: null }),
@@ -239,7 +269,7 @@ const agency: TeamRow[] = [
 // 7 Nov 2026: an invite carries a first name (planTeam refuses one without); the planTeam tests below invite with one.
 const form = (o: Partial<TeamForm>): TeamForm => ({ op: "invite", email: "new@client-a.example", role: "viewer", scope: null, first: "Ana", last: null, ...o });
 const plan = (f: TeamForm, over: Partial<Parameters<typeof planTeam>[0]> = {}) =>
-  planTeam({ form: f, actor: "owner@agency.example", rows: agency, scoping: true, clientId: A, clientIds: [A, B], invitesToday: 0, ...over });
+  planTeam({ form: f, actor: "owner@agency.example", rows: agency, scoping: true, clientId: A, clientIds: [A, B], invitesToday: 0, actorRole: "owner", ...over });
 
 test("planTeam: Remove and a role change on A reach only who sees A - never someone limited to B, whom Remove would take off the account", () => {
   assert.equal(plan(form({ op: "remove", email: "books@client-b.example", role: null })), TEAM_WHY.gone);
@@ -287,7 +317,7 @@ test("planTeam: an invite to every client is held to the cap on every client, no
 
 test("the member route and the fixture run planTeam on the account's whole live team, and write only what it planned", () => {
   const route = code(readFileSync(new URL("../../app/api/app/[client]/member/route.ts", import.meta.url), "utf8"));
-  assert.match(route, /const plan = planTeam\(\{ form: f, actor: email, rows: team\.rows, scoping: team\.scoping, clientId: client\.id, clientIds, invitesToday: n \}\);\s*if \(typeof plan === "string"\) return refused\(plan\);/);
+  assert.match(route, /const plan = planTeam\(\{ form: f, actor: email, rows: team\.rows, scoping: team\.scoping, clientId: client\.id, clientIds, invitesToday: n, actorRole: client\.role \}\);\s*if \(typeof plan === "string"\) return refused\(plan\);/);
   assert.match(route, /const clientIds = ids\.map\(\(c\) => c\.id as string\);/);
   assert.match(route, /\.from\("client_domains"\)\.select\("id"\)\.eq\("account_id", accountId\)\.not\("slug", "is", null\)/, "clientIds are the account's slugged clients");
   // 7 Nov 2026: the invite carries the first and last name planTeam read off the form.
@@ -295,7 +325,7 @@ test("the member route and the fixture run planTeam on the account's whole live 
   assert.match(route, /await changeRole\(db, \{ accountId, email: f\.email, role: plan\.role \}\)/);
   assert.match(route, /await removeMember\(db, \{ accountId, email: f\.email, by: email, clientId: client\.id, row: plan\.row \}\)/);
   assert.match(route, /const everyClient = plan\.scope === "account" && clientIds\.length > 1 \? clientIds\.length : null;/);
-  assert.doesNotMatch(route, /\b(onClient|inviteScope|refuseInvite|refuseChange|refuseEveryClient)\(/, "the route runs no rule beside planTeam, and never narrows the team itself");
+  assert.doesNotMatch(route, /\b(onClient|inviteScope|refuseInvite|refuseChange|refuseEveryClient|refuseActorOn)\(/, "the route runs no rule beside planTeam, and never narrows the team itself");
   const fixture = code(readFileSync(new URL("./fixture-writes.ts", import.meta.url), "utf8"));
   assert.match(fixture, /const plan = planTeam\(\{\s*form: [^\n]+,\s*actor: f\.member\.email,\s*rows: all,\s*scoping: f\.scoping !== false,\s*clientId: client\.id,\s*clientIds: fixtureAccount\(f\)\.map\(\(c\) => c\.id\),/);
   assert.doesNotMatch(fixture, /\b(onClient|inviteScope|refuseInvite|refuseChange|refuseEveryClient)\(/);

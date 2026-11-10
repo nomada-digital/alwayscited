@@ -6,7 +6,7 @@ import TierName from "@/components/TierName";
 import { pageData } from "@/lib/dash/page-data";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { ADMIN_LIMITS } from "@/lib/tracking/decide";
-import { NAME_PART_MAX, TEAM_WHY, fullName, readTeam, teamWhy } from "@/lib/tracking/team";
+import { NAME_PART_MAX, TEAM_WHY, fullName, readTeam, teamPowers, teamWhy } from "@/lib/tracking/team";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Settings", robots: { index: false, follow: false } };
@@ -23,13 +23,15 @@ const DONE: Record<string, string> = { invited: "Invited. They get an email with
 export default async function Settings({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { raw, base, demo, viewAs } = await pageData(slug);
+  const { raw, base, demo, viewAs, email } = await pageData(slug);
   const readOnly = demo || !!viewAs;
-  const owner = raw.role === "owner" && !readOnly;
+  // 10 Nov 2026 (Danny): owners and editors invite and remove editors and viewers; only owners touch owners, roles and
+  // names. The same rules the member route runs (team.ts refuseActorOn); read-only views get none of them.
+  const can = teamPowers(readOnly ? "viewer" : raw.role);
   let team: { email: string; role: string; first?: string | null; last?: string | null }[] | null = null;
   // View-as comes back demo: true too (page-data.ts, every write path off), so a demo link is demo without viewAs.
   // 9 Nov 2026: this read was gated on !demo alone, so every view-as Settings said the team could not be read.
-  // View-as lists the owner's team read-only (owner is false above); a demo link has no real team to list.
+  // View-as lists the owner's team read-only (a viewer's powers above); a demo link has no real team to list.
   if (!demo || viewAs) {
     // The account is read here, server-side only, to read the team; it is never rendered (as the member route reads it).
     const { data: row, error: aErr } = await supabaseAdmin().from("client_domains").select("account_id").eq("id", raw.client.id).maybeSingle();
@@ -44,7 +46,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
       <PageHead micro="Settings" title="Settings" intro="Who can see this dashboard, the emails it sends, and your plan." />
       <div className="dash-card" id="members">
         <h2>Team</h2>
-        <p className="intro">Everyone here signs in with a link to their own email address. Owners change the team; editors change what is tracked; viewers read.</p>
+        <p className="intro">Everyone here signs in with a link to their own email address. Owners and editors invite and remove people; only owners change owners, roles and names. Editors change what is tracked; viewers read.</p>
         {done ? <div className="banner" role="status" style={{ marginTop: 10 }}>{done}</div> : null}
         {why ? <div className="field-err" role="alert">{TEAM_WHY[why]}</div> : null}
         {team === null ? <p className="faint">The team could not be read just now.</p> : (
@@ -56,7 +58,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
                   <tr key={m.email}>
                     <td>
                       {fullName(m.first, m.last) ?? <span className="faint">No name yet</span>}
-                      {owner ? (
+                      {can.names ? (
                         // 7 Nov 2026: a first name is required, a last name optional; the owner sets either for anyone here.
                         <details style={{ marginTop: 4 }}>
                           <summary className="muted" style={{ fontSize: 12, cursor: "pointer" }}>{m.first ? "Edit name" : "Add name"}</summary>
@@ -74,7 +76,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
                     <td style={{ overflowWrap: "anywhere" }}>{m.email}</td>
                     <td className="muted">{m.role}</td>
                     <td className="r">
-                      {owner && m.role !== "owner" ? (
+                      {can.remove(m.role) && m.role !== "owner" && m.email !== email ? (
                         <form method="post" action={`/api/app/${slug}/member`} style={{ display: "inline" }}>
                           <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
                           <input type="hidden" name="op" value="remove" maxLength={ADMIN_LIMITS.email} />
@@ -89,7 +91,7 @@ export default async function Settings({ params, searchParams }: { params: Promi
             </table>
           </div>
         )}
-        {owner ? (
+        {can.invite ? (
           <form method="post" action={`/api/app/${slug}/member`} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginTop: 12 }}>
             <input type="hidden" name="from" value="dash" maxLength={ADMIN_LIMITS.email} />
             <input type="hidden" name="op" value="invite" maxLength={ADMIN_LIMITS.email} />

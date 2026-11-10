@@ -29,6 +29,8 @@ import { type ClientScope, type InviteScope, addScope, clearScope, dropScope, re
  * their last. A member keeps one role on the account, so an invite or a role
  * change on one client sets the role they have on all of theirs.
  *
+ * Who may change the team (10 Nov 2026): owners and editors, editors short of any owner (refuseActorOn).
+ *
  * Pure rules first so the tests run each one - planTeam is all of them, in
  * the member route's order - and the writers are the network half.
  */
@@ -148,7 +150,10 @@ const live = (rows: TeamRow[]) => rows.filter((r) => r.removed_at === null);
  * heuristic 9). Only the code travels; the page draws these fixed words.
  */
 export const TEAM_WHY = {
-  actor: "Only owners can change the team.",
+  actor: "Viewers can see the team but not change it.",
+  // 10 Nov 2026 (Danny): editors invite and remove editors and viewers; owners alone make, change or remove an owner.
+  ownerOnly: "Only an owner can change or remove an owner.",
+  roleOnly: "Only an owner can change someone's role or name.",
   email: "That email address does not look right. Type it in full, like name@example.com.",
   already: "They are already on the team.",
   full: `A dashboard has at most ${MEMBERS_PER_CLIENT} members. Remove someone to make room.`,
@@ -175,8 +180,30 @@ export function teamWhy(raw: unknown): TeamWhy | null {
   return hit ? (hit[0] as TeamWhy) : null;
 }
 
-/** Only an owner changes the team. */
-export const refuseActor = (role: string): string | null => (role === "owner" ? null : TEAM_WHY.actor);
+/**
+ * Who changes the team (Danny, 10 Nov 2026: "ideally clients are themselves. lets give editors access to add people
+ * as well as owners"). Was owners only (R142, 1 Oct 2026).
+ *
+ * - An owner does everything Settings offers.
+ * - An editor invites editors and viewers (an invite is never as an owner), and removes editors and viewers.
+ * - Only an owner makes, changes or removes an owner, and only an owner changes a role or a name.
+ * - A viewer reads.
+ *
+ * refuseActor is the door: may this role change the team at all. refuseActorOn is the whole rule for one change,
+ * which planTeam runs once it knows whose row the change is on; every caller and every page reads these two.
+ */
+export const refuseActor = (role: string): string | null => (role === "owner" || role === "editor" ? null : TEAM_WHY.actor);
+
+export function refuseActorOn(role: string, op: TeamOp, targetRole: string | null): string | null {
+  const door = refuseActor(role);
+  if (door || role === "owner") return door;
+  if (op === "role" || op === "name") return TEAM_WHY.roleOnly;
+  if (op === "remove" && targetRole === "owner") return TEAM_WHY.ownerOnly;
+  return null;
+}
+
+/** What Settings draws for a member's role: the same rules as refuseActorOn, asked before anything is posted. */
+export const teamPowers = (role: string) => ({ invite: !refuseActorOn(role, "invite", null), names: !refuseActorOn(role, "name", null), remove: (target: string) => !refuseActorOn(role, "remove", target) });
 
 /** `rows` are the members who see this client (onClient, in planTeam): one limited to other clients is not "already" here. */
 export function refuseInvite(p: { rows: TeamRow[]; email: string; invitesToday: number }): string | null {
@@ -234,10 +261,13 @@ export type TeamPlan =
  * - Someone live on the account for other clients only is `elsewhere`, found
  *   on the whole team: invite keeps their row and adds this client to it.
  */
-export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; scoping: boolean; clientId: string; clientIds: readonly string[]; invitesToday: number }): TeamPlan | string {
+export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; scoping: boolean; clientId: string; clientIds: readonly string[]; invitesToday: number; actorRole: string }): TeamPlan | string {
   const team = live(p.rows);
   const here = onClient(team, p.clientId);
   const { op, email, role } = p.form;
+  // Who may make this change, on the row it is on (refuseActorOn): an editor never reaches an owner's row.
+  const who = refuseActorOn(p.actorRole, op, here.find((r) => r.email === email)?.role ?? null);
+  if (who) return who;
   if (op === "invite") {
     if (!role) return "Pick a role.";
     // 7 Nov 2026 (Danny): everyone on the team has a first name, so emails and the team list can use it.
@@ -290,7 +320,8 @@ export function planAgencyTeam(p: { op: "invite" | "role" | "remove"; email: str
   if (p.op === "invite" && p.role === "owner") return "An invite is as an editor or a viewer. Make them an owner once they are on the team.";
   const role = p.role === "owner" ? null : p.role;
   const form: TeamForm = { op: p.op, email: p.email, role, scope: p.scope, ...(p.op === "invite" && p.first ? { first: p.first, last: p.last ?? null } : {}) };
-  return planTeam({ form, actor: p.actor, rows: p.rows, scoping: p.scoping, clientId: p.clientId, clientIds: p.clientIds, invitesToday: p.invitesToday });
+  // Staff act with an owner's reach.
+  return planTeam({ form, actor: p.actor, rows: p.rows, scoping: p.scoping, clientId: p.clientId, clientIds: p.clientIds, invitesToday: p.invitesToday, actorRole: "owner" });
 }
 
 // ---- Where the route sends the browser back to, and the toast the page draws. ----
