@@ -6,7 +6,7 @@
  * allowance. An unparseable or non-positive value falls back to the default, never to "no cap". Nothing refreshes on
  * its own past either cap.
  *
- * No money is written here. The global placement cap is our cost and this repository is public, so it lives in the
+ * No money is written here. The per-customer placement budget is our cost and this repository is public, so it lives in the
  * placement_budget_settings row, set in the database.
  */
 export const FATGRID_DEFAULTS = { unitCapPerRun: 60, monthlyUnitCap: 1000 } as const;
@@ -18,10 +18,10 @@ export const DEFAULT_DR_FLOOR = 40;
 export const LISTING_TTL_DAYS = 14;
 
 /**
- * Plan prices are weights, not money, when the global cap is split; a client paying in GBP and one paying in USD are
- * put on one scale with this. Never used to convert a cost: the cap and every placement are in USD already.
+ * Nomada's own brands on alwayscited (10 Nov 2026, Danny: the per-customer placement budget is for customers). They get
+ * none unless a placement_budgets row puts them in (allocation.ts eligible). Slugs, as client_domains has them.
  */
-export const GBP_TO_USD_WEIGHT = 1.27;
+export const INTERNAL_BRAND_SLUGS: readonly string[] = ["alwayscited-com", "nomadadigital-co-uk"];
 
 /** Read an integer cap from the environment, or its default. */
 export function capFrom(raw: string | undefined, fallback: number): number {

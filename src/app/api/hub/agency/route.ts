@@ -2,7 +2,7 @@ import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { teamChange, teamRead } from "@/lib/agency/team";
 import { storeSheet } from "@/lib/links/sheet-store";
-import { budgetCap, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
+import { budgetCap, budgetRead, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -25,7 +25,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "team_read", "team_invite", "team_role", "team_remove"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -40,8 +40,8 @@ export async function POST(req: Request) {
   const slug = typeof b.slug === "string" && /^[a-z0-9-]{1,80}$/.test(b.slug) ? b.slug : null;
   const by = typeof b.by === "string" ? b.by.trim().toLowerCase() : "";
   if (!ACTIONS.has(action) || !slug) return Response.json({ error: "bad_request" }, { status: 400 });
-  // The hub's sheet schedule runs as itself; every other caller is a staff member the edge function named.
-  if (action !== "sheet_cells" && !/^[^@\s]+@nomadadigital\.co\.uk$/.test(by)) return Response.json({ error: "staff_only" }, { status: 403 });
+  // The hub's sheet schedule runs as itself; budget_read (10 Nov 2026) is the finder's read-only budget lookup.
+  if (action !== "sheet_cells" && action !== "budget_read" && !/^[^@\s]+@nomadadigital\.co\.uk$/.test(by)) return Response.json({ error: "staff_only" }, { status: 403 });
 
   const db = supabaseAdmin();
   const client = await readClient(db, slug);
@@ -74,6 +74,8 @@ export async function POST(req: Request) {
         return overrideClear(db, client, by, id("id"));
       case "budget_weight":
         return budgetWeight(db, client, by, { weight: b.weight, excluded: b.excluded });
+      case "budget_read":
+        return budgetRead(db, client);
       case "budget_cap":
         return budgetCap(db, client, by, b.cap_usd);
       case "set_sheets":
