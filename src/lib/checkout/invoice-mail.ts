@@ -62,7 +62,7 @@ export async function onInvoicePaid(db: SupabaseClient, invoice: Record<string, 
     pdfUrl: f.pdfUrl,
     billing: client ? billingUrl(client.slug) : null,
   });
-  const sent = await sendLifecycle({ memberEmail: f.customerEmail, mail });
+  const sent = await sendLifecycle({ memberEmail: f.customerEmail, mail, transactional: true });   // a receipt: no visibility copy
   if (!sent) console.error(`[invoice] payment_received for ${f.id} NOT sent`);
   if (client) {
     const { error } = await db.from("dashboard_events").insert({ client_domain_id: client.id, member_email: f.customerEmail, event: sent ? "payment_received_sent" : "payment_received_failed", path: "/plan", props: { invoice: f.id } });

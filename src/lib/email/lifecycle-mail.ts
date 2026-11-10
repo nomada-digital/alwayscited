@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { mailFrom } from "@/config/mail-from";
 import { headerSafe } from "@/lib/email-header";
 import type { Rendered } from "@/lib/email/lifecycle";
+import { visibilityCc } from "@/lib/email/visibility-cc";
 
 /**
  * The lifecycle emails' one sender (R159 part 3, 1 Oct 2026). Each call site
@@ -32,20 +33,25 @@ import type { Rendered } from "@/lib/email/lifecycle";
  * owner caps. lifecycleOn lives in lifecycle-flag.ts, so the sweep can load
  * it under node --test, and is re-exported here for every send site.
  *
+ * Every customer update here copies AC_VISIBILITY_CC (visibility-cc.ts, Danny, 10 Nov 2026); a transactional one
+ * (invoice-mail.ts's payment received) says so and copies nobody.
+ *
  * Returns false rather than throwing, as the other senders do.
  */
 export { lifecycleOn } from "./lifecycle-flag.ts";
 
-export async function sendLifecycle(input: { memberEmail: string; mail: Rendered }): Promise<boolean> {
+export async function sendLifecycle(input: { memberEmail: string; mail: Rendered; transactional?: boolean }): Promise<boolean> {
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.error("[mail] RESEND_API_KEY is not set, lifecycle email not sent");
     return false;
   }
+  const cc = input.transactional ? [] : visibilityCc(input.memberEmail);
   try {
     const { error } = await new Resend(key).emails.send({
       from: mailFrom(),
       to: input.memberEmail,
+      ...(cc.length ? { cc } : {}),
       subject: headerSafe(input.mail.subject),
       html: input.mail.html,
       text: input.mail.text,

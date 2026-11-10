@@ -140,7 +140,8 @@ test("the webhook sends it once, after the flag, and never asks Stripe to retry 
   const src = read("src/lib/checkout/invoice-mail.ts");
   assert.match(src, /if \(!f \|\| !worthTelling\(f\)\) return true;/);
   assert.match(src, /if \(!\(await transactionalOn\(db, "payment_received"\)\)\) return true;/);
-  assert.match(src, /const sent = await sendLifecycle\(\{ memberEmail: f\.customerEmail, mail \}\);/, "to the address that paid");
+  // a receipt is transactional: it copies nobody (AC_VISIBILITY_CC is for customer updates; Danny, 10 Nov 2026)
+  assert.match(src, /const sent = await sendLifecycle\(\{ memberEmail: f\.customerEmail, mail, transactional: true \}\);/, "to the address that paid, no visibility copy");
   const after = src.slice(src.indexOf("const sent ="));
   assert.doesNotMatch(after, /return false/, "a failed send never makes the event fail");
   assert.match(read("src/app/api/stripe/webhook/route.ts"), /paymentPaid: \(invoice\) => onInvoicePaid\(supabaseAdmin\(\), invoice\),/);
