@@ -186,6 +186,9 @@ const RECORDED: Record<string, string> = {
   "src/app/api/app/[client]/member/route.ts :: account_id":
     "the member route's team lookup; the 303 carries only the toast word and the email the owner typed.",
   // 18 Oct 2026 (brief 2d): Settings on the dashboards host reads its own client's team, as the member route does.
+  // 10 Nov 2026: the agency door's team (staff on the hub's customer page, through /api/hub/agency).
+  "src/lib/agency/team.ts :: account_id":
+    "the agency door's team lookup; server to server behind hubAuthorised, answering emails, roles and names, never the id.",
   "src/app/dashboards/[client]/settings/page.tsx :: account_id":
     "the Settings page's team lookup for a membership-checked client; the page renders members' emails and roles, never the id.",
   // 1 Oct 2026, R159 part 3: plan_ended finds the ended client's live owners.
@@ -242,6 +245,9 @@ const MENTIONED: Record<string, string> = {
     "sent|refused and us|agency, never the id.",
   // settings-data.ts left this list 13 Oct 2026 (dashboard speed work): its team read embeds the account's members
   // through the foreign key and no longer names the column (R142, 1 Oct 2026, read it to filter the members).
+  "src/lib/agency/team.ts":
+    "10 Nov 2026: reads the customer's account_id to read and change its team with team.ts's writers, for Nomada " +
+    "staff through /api/hub/agency (hubAuthorised); answers emails, roles and names, never the id.",
   "src/app/dashboards/[client]/settings/page.tsx":
     "18 Oct 2026 (brief 2d): reads its own membership-checked client's account_id to read the team (team.ts readTeam). " +
     "Server component; renders emails and roles only, never the id.",

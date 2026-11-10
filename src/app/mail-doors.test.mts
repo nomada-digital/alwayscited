@@ -242,11 +242,13 @@ const SENDERS: Record<
    * 1 Oct 2026, R142 part 2 (BRIEF-4 P2 Team): the team invite. The one
    * sender here whose recipient is typed by the caller - but only a signed-in
    * owner of the client can post it, and it is capped per owner a day.
+   * 10 Nov 2026: and Nomada staff from the hub's customer page (agency/team.ts), through /api/hub/agency.
    */
   "src/lib/tracking/invite-mail.ts": {
     reach: "signed-in owner, limited per owner",
     bound:
-      "Needs a dashboard session and the owner role on the client. Mails the address the owner invited, " +
+      "Needs a dashboard session and the owner role on the client, or (10 Nov 2026) the hub's server secret and a " +
+      "@nomadadigital.co.uk staff actor on /api/hub/agency team_invite, capped the same per staff member. Mails the address the owner invited, " +
       "with no login token, owner as reply-to. At most INVITES_PER_OWNER_PER_DAY invites an owner a day, " +
       "counted off dashboard_events member_invite rows before the write, and MEMBERS_PER_CLIENT live members who see " +
       "each client the invite adds them to (MEMBERS_PER_ACCOUNT an account until 9 Oct 2026, AG-1; an invite to every " +

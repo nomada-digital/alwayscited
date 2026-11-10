@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import { code } from "../source-read.mts";
 import {
+  ALREADY_OWNER,
   INVITES_PER_OWNER_PER_DAY,
   MEMBERS_PER_CLIENT,
   SCOPE_NOT_READY,
@@ -16,6 +17,7 @@ import {
   inviteRefusal,
   inviteScope,
   onClient,
+  planAgencyTeam,
   planTeam,
   readEmail,
   readTeamForm,
@@ -317,4 +319,26 @@ test("names: an invite needs a first name; a name change reaches only who sees t
   assert.equal(plan(form({ op: "name", email: "books@client-b.example", role: null, first: "Bo" })), TEAM_WHY.gone);
   assert.equal(fullName("Michael", null), "Michael");
   assert.equal(fullName("Michael", "Smith"), "Michael Smith");
+});
+
+// ---- The agency door (10 Nov 2026): Nomada staff change a customer's team from the hub (agency/team.ts). ----
+
+const staff = (o: Partial<Parameters<typeof planAgencyTeam>[0]>) =>
+  planAgencyTeam({ op: "role", email: "staff@agency.example", role: "owner", scope: null, first: "Ana", last: null, actor: "luke@nomadadigital.co.uk", rows: agency, scoping: true, clientId: A, clientIds: [A, B], invitesToday: 0, ...o });
+
+test("agency door: staff make an owner of someone on this client, never of a stranger or someone limited to another client", () => {
+  assert.deepEqual(staff({}), { op: "owner", row: agency[1] });
+  assert.equal(staff({ email: "owner@agency.example" }), ALREADY_OWNER);
+  assert.equal(staff({ email: "books@client-b.example" }), TEAM_WHY.gone);
+  assert.equal(staff({ email: "nobody@agency.example" }), TEAM_WHY.gone);
+});
+
+test("agency door: every other change is planTeam's, with the staff member as the actor", () => {
+  assert.equal(staff({ op: "role", email: "owner@agency.example", role: "editor" }), TEAM_WHY.owner, "the last owner is never demoted");
+  assert.equal(staff({ op: "remove", email: "owner@agency.example", role: null }), TEAM_WHY.owner, "nor removed");
+  assert.deepEqual(staff({ op: "remove", email: "lead@client-a.example", role: null }), { op: "remove", row: agency[2] });
+  assert.match(String(staff({ op: "invite", email: "new@client-a.example", role: "owner" })), /editor or a viewer/, "an invite is never as an owner");
+  assert.equal(staff({ op: "invite", email: "new@client-a.example", role: "viewer", first: undefined }), TEAM_WHY.first);
+  assert.equal(staff({ op: "invite", email: "new@client-a.example", role: "viewer", invitesToday: INVITES_PER_OWNER_PER_DAY }), TEAM_WHY.limit, "staff are capped a day as an owner is");
+  assert.equal((staff({ op: "invite", email: "new@client-a.example", role: "editor" }) as { op: string }).op, "invite");
 });

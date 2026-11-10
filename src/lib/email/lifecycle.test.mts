@@ -277,8 +277,14 @@ test("every flag ships off, and each send site asks its flag before sending", as
   assert.match(signup, /: await sendLoginLink\(\{ memberEmail: o\.email, link \}\)/, "the login link stays the default while welcome is off");
   // The invite: branded only outside agency mode and with its flag on, else the plain inviteMail as before.
   // 9 Oct 2026 (AG-1): both take everyClient, the count an invite to every client names.
+  // 10 Nov 2026: composed once in invite-send.ts for the member route and the agency door (agency/team.ts), and both
+  // pass the account's agency mode read before the write.
+  const compose = read("../tracking/invite-send.ts");
+  assert.match(compose, /!p\.agency && \(await lifecycleOn\(db, "invite"\)\)\s*\? inviteEmail\([\s\S]{0,300}: inviteMail\(\{ inviter: p\.inviter, domain: p\.domain, role: p\.role, agency: p\.agency, everyClient: p\.everyClient \}\)/);
   const member = read("../../app/api/app/[client]/member/route.ts");
-  assert.match(member, /!agency && \(await lifecycleOn\(db, "invite"\)\)\s*\? inviteEmail\([\s\S]{0,300}: inviteMail\(\{ inviter: email, domain: client\.domain, role: f\.role!, agency, everyClient \}\)/);
+  assert.match(member, /inviteMessage\(db, \{ inviter: email, role: f\.role!, tier: client\.tier, domain: client\.domain, agency, everyClient \}\)/);
+  const agencyTeam = read("../agency/team.ts");
+  assert.match(agencyTeam, /inviteMessage\(db, \{ inviter: by, role: plan\.role, tier: client\.tier, domain: client\.domain, agency: upsellMode\(account\.upsell_mode\) === "agency", everyClient \}\)/);
 });
 
 test("first_reading: flag first, the client's only finished run, no agency, the Overview's own figures", () => {

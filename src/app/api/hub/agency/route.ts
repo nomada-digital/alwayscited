@@ -1,5 +1,6 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { teamChange, teamRead } from "@/lib/agency/team";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { budgetCap, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -19,9 +20,12 @@ export const maxDuration = 240;
  * sends the cells it read (action sheet_cells) the same way. Customers never reach it: the dashboards host has no
  * link here, and neither header is anything a browser holds.
  *
+ * team_read, team_invite, team_role and team_remove (10 Nov 2026, lib/agency/team.ts) are a customer's team: team.ts's
+ * rules with the staff member as the actor, the same writers and invite email as Settings, and an agency_edits line each.
+ *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "team_read", "team_invite", "team_role", "team_remove"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -100,6 +104,15 @@ export async function POST(req: Request) {
         return changeKeyword(db, client, by, { clusterId: id("cluster_id"), keyword: str("keyword"), prompts: b.prompts, rerun: b.rerun === true });
       case "run_checks":
         return runChecksNow(db, client, by);
+      // A customer's team (10 Nov 2026, lib/agency/team.ts): team.ts's rules with the staff member as the actor.
+      case "team_read":
+        return teamRead(db, client);
+      case "team_invite":
+        return teamChange(db, client, by, "invite", b);
+      case "team_role":
+        return teamChange(db, client, by, "role", b);
+      case "team_remove":
+        return teamChange(db, client, by, "remove", b);
       case "sheet_cells": {
         const kind = b.kind === "insertion" || b.kind === "placement" ? b.kind : null;
         if (!kind) return { ok: false as const, message: "kind is insertion or placement" };

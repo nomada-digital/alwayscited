@@ -1,20 +1,16 @@
 import { NextResponse } from "next/server";
 
-import { invite as inviteEmail } from "@/lib/email/lifecycle";
-import { lifecycleOn } from "@/lib/email/lifecycle-mail";
-import { siteUrl } from "@/lib/scan/verify-email";
-import { appUrl } from "@/lib/app-host";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { TIER_PLAIN, type TierKey } from "@/lib/tier-text";
 import { upsellMode } from "@/lib/tracking/ask";
 import { trackingDay } from "@/lib/tracking/decide";
 import { fixtureMode } from "@/lib/tracking/fixture-mode";
 import { fixtureTeam } from "@/lib/tracking/fixture-writes";
 import { sendInvite } from "@/lib/tracking/invite-mail";
+import { inviteMessage } from "@/lib/tracking/invite-send";
 import { clientsFor, sessionEmail } from "@/lib/tracking/member";
 import { writeFixture } from "@/lib/tracking/repo";
 import { readKept } from "@/lib/tracking/stop";
-import { type TeamDone, type TeamWhy, changeRole, dashTeamReturn, invite, inviteMail, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, setName, teamReturn, teamWhy } from "@/lib/tracking/team";
+import { type TeamDone, type TeamWhy, changeRole, dashTeamReturn, invite, invitesToday, planTeam, readTeam, readTeamForm, refuseActor, removeMember, setName, teamReturn, teamWhy } from "@/lib/tracking/team";
 import { dashPath, dashUrl } from "@/lib/tracking/app-redirect";
 import { dashBase } from "@/lib/dash/host";
 
@@ -94,11 +90,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ client: string
     const agency = upsellMode(account.upsell_mode) === "agency";
     // The mail says when they will see every client; an invite to one client names that client only.
     const everyClient = plan.scope === "account" && clientIds.length > 1 ? clientIds.length : null;
-    // The branded invite (R159) names alwayscited and the tier, so never in agency mode; off until its flag is on.
-    const mail =
-      !agency && (await lifecycleOn(db, "invite"))
-        ? inviteEmail({ tier: (client.tier in TIER_PLAIN ? client.tier : "tracked") as TierKey, domain: client.domain, link: appUrl("/login", siteUrl()), inviter: email, role: f.role!, everyClient })
-        : inviteMail({ inviter: email, domain: client.domain, role: f.role!, agency, everyClient });
+    const mail = await inviteMessage(db, { inviter: email, role: f.role!, tier: client.tier, domain: client.domain, agency, everyClient });
     if (!(await sendInvite({ to: f.email, replyTo: email, ...mail }))) console.warn("[app] invite saved but the mail was not sent");
     return back("invited");
   }

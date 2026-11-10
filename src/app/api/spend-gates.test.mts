@@ -413,7 +413,8 @@ const EXEMPT: Record<string, { why: string; evidence: RegExp; where: string }> =
     why:
       "Staff only, server to server: hubAuthorised and a @nomadadigital.co.uk actor before any action. shortlist_run " +
       "reads Fatgrid within FATGRID_UNIT_CAP a run, cut to what FATGRID_MONTHLY_UNIT_CAP has left in fatgrid_usage; " +
-      "a month with no units left reads nothing.",
+      "a month with no units left reads nothing. team_invite (10 Nov 2026, agency/team.ts) sends one invite mail, " +
+      "capped at INVITES_PER_OWNER_PER_DAY a staff member a day and MEMBERS_PER_CLIENT, as an owner's invite is.",
     evidence: /if \(left < budget\.cap\) budget\.spend\(budget\.cap - left\);/,
     where: "src/lib/csm/shortlist.ts",
   },

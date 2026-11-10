@@ -264,6 +264,35 @@ export function planTeam(p: { form: TeamForm; actor: string; rows: TeamRow[]; sc
   return role ? { op, role, row } : "Pick a role.";
 }
 
+// ---- The agency door (10 Nov 2026): Nomada staff change a customer's team from the hub (agency/team.ts). ----
+
+/** A role staff may set: an invite's two, and owner, which staff may give to someone already on the team. */
+export type AgencyRole = InviteRole | "owner";
+export const readAgencyRole = (raw: unknown): AgencyRole | null => (raw === "owner" ? "owner" : readRole(raw));
+
+/** The refusal when staff make an owner of someone who already is one. */
+export const ALREADY_OWNER = "They are already an owner.";
+
+/**
+ * The staff door's rules (Danny, 10 Nov 2026: COMMON's only owner was a billing inbox and an editor's request had
+ * nowhere to go). Every rule planTeam runs, with `actor` the staff member - who is not on the team, so the self
+ * rule never bites, and invites are capped per staff member a day off the same member_invite rows - plus one
+ * thing an owner cannot do on Settings: make someone already on this client's team an owner. The last owner can
+ * still be neither demoted nor removed. An invite stays editor or viewer; an owner is made from a member.
+ */
+export type AgencyPlan = TeamPlan | { op: "owner"; row: TeamRow };
+export function planAgencyTeam(p: { op: "invite" | "role" | "remove"; email: string; role: AgencyRole | null; scope: InviteScope | null; first?: string; last?: string | null; actor: string; rows: TeamRow[]; scoping: boolean; clientId: string; clientIds: readonly string[]; invitesToday: number }): AgencyPlan | string {
+  if (p.op === "role" && p.role === "owner") {
+    const row = onClient(live(p.rows), p.clientId).find((r) => r.email === p.email);
+    if (!row) return TEAM_WHY.gone;
+    return row.role === "owner" ? ALREADY_OWNER : { op: "owner", row };
+  }
+  if (p.op === "invite" && p.role === "owner") return "An invite is as an editor or a viewer. Make them an owner once they are on the team.";
+  const role = p.role === "owner" ? null : p.role;
+  const form: TeamForm = { op: p.op, email: p.email, role, scope: p.scope, ...(p.op === "invite" && p.first ? { first: p.first, last: p.last ?? null } : {}) };
+  return planTeam({ form, actor: p.actor, rows: p.rows, scoping: p.scoping, clientId: p.clientId, clientIds: p.clientIds, invitesToday: p.invitesToday });
+}
+
 // ---- Where the route sends the browser back to, and the toast the page draws. ----
 
 export type TeamDone = "invited" | "removed" | "role" | "named" | "refused";
@@ -504,7 +533,8 @@ export async function setName(db: SupabaseClient, p: { accountId: string; email:
   return error ? { ok: false, message: `Could not save the name: ${error.message}` } : { ok: true };
 }
 
-export async function changeRole(db: SupabaseClient, p: { accountId: string; email: string; role: InviteRole }): Promise<TeamResult> {
+/** `owner` only from the agency door (planAgencyTeam); Settings sets editor or viewer. */
+export async function changeRole(db: SupabaseClient, p: { accountId: string; email: string; role: AgencyRole }): Promise<TeamResult> {
   const { error } = await db.from("dashboard_members").update({ role: p.role }).eq("account_id", p.accountId).eq("email", p.email).is("removed_at", null);
   return error ? { ok: false, message: `Could not change the role: ${error.message}` } : { ok: true };
 }
