@@ -1,5 +1,6 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { targetRead, targetSet } from "@/lib/agency/targets";
 import { teamChange, teamRead } from "@/lib/agency/team";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { budgetCap, budgetRead, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
@@ -25,7 +26,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -40,8 +41,8 @@ export async function POST(req: Request) {
   const slug = typeof b.slug === "string" && /^[a-z0-9-]{1,80}$/.test(b.slug) ? b.slug : null;
   const by = typeof b.by === "string" ? b.by.trim().toLowerCase() : "";
   if (!ACTIONS.has(action) || !slug) return Response.json({ error: "bad_request" }, { status: 400 });
-  // The hub's sheet schedule runs as itself; budget_read (10 Nov 2026) is the finder's read-only budget lookup.
-  if (action !== "sheet_cells" && action !== "budget_read" && !/^[^@\s]+@nomadadigital\.co\.uk$/.test(by)) return Response.json({ error: "staff_only" }, { status: 403 });
+  // The hub's sheet schedule runs as itself; budget_read (10 Nov) and target_read (11 Nov 2026) are the finder's and brief's reads.
+  if (action !== "sheet_cells" && action !== "budget_read" && action !== "target_read" && !/^[^@\s]+@nomadadigital\.co\.uk$/.test(by)) return Response.json({ error: "staff_only" }, { status: 403 });
 
   const db = supabaseAdmin();
   const client = await readClient(db, slug);
@@ -74,6 +75,11 @@ export async function POST(req: Request) {
         return overrideClear(db, client, by, id("id"));
       case "budget_weight":
         return budgetWeight(db, client, by, { weight: b.weight, excluded: b.excluded });
+      // Each live cluster's target page, a suggestion where none is set (11 Nov 2026, lib/agency/targets.ts).
+      case "target_read":
+        return targetRead(db, client);
+      case "target_set":
+        return targetSet(db, client, by, { clusterId: id("cluster_id"), url: str("url"), confirmed: b.confirmed === true });
       case "budget_read":
         return budgetRead(db, client);
       case "budget_cap":

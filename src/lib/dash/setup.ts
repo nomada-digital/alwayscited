@@ -4,9 +4,10 @@
  * keyword (checked on Google, with its plural ticked), target page, then the
  * five prompts, which the customer saves; nothing is approved for them.
  *
- * A worked cluster (tier mentioned, cited or everywhere) cannot be confirmed
- * without its target page: it is where every placement for it links. A
- * tracking-only cluster may go without one.
+ * No cluster can be confirmed without its target page (Danny, 11 Nov 2026,
+ * after MOR's was never set: "make sure this is clear for mor and all
+ * customers"). It is where every placement for it links, and the page a
+ * tracked cluster is read against. Until then only worked clusters needed one.
  *
  * Pure, so the page, the confirm route and the tests share one rule.
  */
@@ -50,7 +51,7 @@ export function setupGaps(clusters: readonly SetupCluster[]): string[] {
   if (!clusters.length) out.push("Add a cluster first.");
   for (const c of clusters) {
     if (!c.keyword) out.push(`${c.name}: check and set its Google keyword.`);
-    if (worked(c.tier) && !c.target) out.push(`${c.name}: choose its target page - every placement for it links there.`);
+    if (!c.target) out.push(`${c.name}: choose its target page - every placement for it links there.`);
     if (c.prompts === 0) out.push(`${c.name}: save its prompts.`);
   }
   return out;
@@ -59,7 +60,7 @@ export function setupGaps(clusters: readonly SetupCluster[]): string[] {
 /** The step a cluster is on: the first thing it lacks, or done. */
 export function stepOf(c: SetupCluster): "keyword" | "target" | "prompts" | "done" {
   if (!c.keyword) return "keyword";
-  if (!c.target && worked(c.tier)) return "target";
+  if (!c.target) return "target";
   if (c.prompts === 0) return "prompts";
   return "done";
 }

@@ -152,9 +152,9 @@ function ClusterSetup({ n, c, slug, homepage, canWrite, run, prompts }: { n: num
         {ranks && canWrite && (!keywordDone || (withPair && !c.pair)) ? <button className="btn primary" style={{ marginTop: 10 }} onClick={saveKeyword}>{keywordDone ? "Add the other form" : "Use this keyword"}</button> : null}
       </section>
 
-      {keywordDone && worked(c.tier) || (keywordDone && c.target) ? (
+      {keywordDone ? (
         <section style={{ marginTop: 16 }}>
-          <div className="dash-micro">2 · Target page{worked(c.tier) ? "" : " (optional on a tracked cluster)"}</div>
+          <div className="dash-micro">2 · Target page</div>
           <p className="intro" style={{ margin: "4px 0" }}>The one page this cluster should rank and be cited with. Every placement and link insertion for it links here.</p>
           {canWrite ? (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
