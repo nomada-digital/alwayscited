@@ -1,6 +1,7 @@
 import TierName from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { deliverables, delivered, nextTier, packageIncludes, planCopy, tierInfo } from "@/lib/dash/plan";
+import { targetLabel } from "@/lib/dash/target";
 import type { ClusterView, Workspace } from "@/lib/dash/types";
 
 /** The plan the client is on and what it delivers, from pricing.ts (17 Oct 2026). */
@@ -79,7 +80,7 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
             <tbody>
               {cluster.placements.map((p) => (
                 <tr key={p.id}>
-                  <td>{p.sample ? <span>{p.domain} <span className="pill sample">Sample</span></span> : <a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>}{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
+                  <td>{p.sample ? <span>{p.domain} <span className="pill sample">Sample</span></span> : <a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>}{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}{cluster.target ? <div className="sub">Links to: {targetLabel(cluster.target)}</div> : null}</td>
                   <td>{p.kind.replace("_", " ")}</td>
                   <td><span className={`pill${p.status === "live" ? " good" : ""}`}>{p.status}</span></td>
                   <td className="r num">{p.live_on ?? "-"}</td>
