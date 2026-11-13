@@ -10,6 +10,7 @@ import { FREE_ANSWERS, FREE_ENGINE_LABELS, QUESTIONS, listOf } from "@/config/sc
 import { formatPrice } from "@/config/sector-pricing";
 import { BRAND, ld, SITE_URL } from "@/config/schema";
 import { T } from "@/config/tokens";
+import { nomadaPostLive, publishedHubPosts } from "@/lib/hub-posts";
 
 /**
  * The US agencies list, from docs/drafts/best-ai-seo-agencies-us.md (R66,
@@ -31,9 +32,17 @@ import { T } from "@/config/tokens";
 
 const post = requirePost("best-ai-seo-agencies");
 
+/**
+ * Re-read so the related lists below appear once they are live (13 Nov 2026): the UK best AEO agencies
+ * list on nomadadigital.co.uk (scheduled 23 Nov) and the B2B AI SEO list here (scheduled 7 Dec).
+ */
+export const revalidate = 300;
+
+const UK_LIST = "https://www.nomadadigital.co.uk/blog/best-aeo-agencies-uk";
+
 const COPY: PostCopy = {
   description:
-    "The best AI SEO agencies in the US for getting named in AI answers, ranked on what a buyer can check before signing: measurement, placements, published prices and reporting.",
+    "The best AI SEO agencies in the US, AEO and GEO agencies included, for getting named in AI answers. Ranked on what a buyer can check before signing: measurement, placements, published prices and reporting.",
   ogDescription:
     "Nine US AI SEO agencies, ranked on what you can check before you sign. We put ourselves first, and say where we are not the fit.",
 };
@@ -43,7 +52,7 @@ export const metadata: Metadata = postMetadata(post, COPY);
 const postSchema = blogPostingSchema(post, COPY);
 
 const STANDFIRST =
-  "Who to hire to get your brand named in AI answers, ranked on what you can check before you sign.";
+  "Looking for the best AI SEO agency? Who to hire to get your brand named in AI answers, whether they call it AI SEO, AEO or GEO, ranked on what you can check before you sign.";
 
 type Agency = { id: string; name: string; url: string; heading: string; body: string; bestFor: string };
 
@@ -128,6 +137,7 @@ const itemListSchema = {
 };
 
 const SECTIONS = [
+  { id: "ai-seo-aeo-geo", label: "AI SEO, AEO and GEO" },
   { id: "how-we-ranked-them", label: "How we ranked them" },
   { id: "alwayscited", label: "1. Our own service" },
   ...OTHERS.map((a, i) => ({ id: a.id, label: `${i + 2}. ${a.name}` })),
@@ -136,7 +146,9 @@ const SECTIONS = [
 
 const B = ({ children }: { children: React.ReactNode }) => <strong style={{ color: T.ink }}>{children}</strong>;
 
-export default function Post() {
+export default async function Post() {
+  const [ukListLive, hubPosts] = await Promise.all([nomadaPostLive("best-aeo-agencies-uk"), publishedHubPosts()]);
+  const b2bListLive = hubPosts.some((p) => p.slug === "best-b2b-ai-seo-agencies");
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld(postSchema) }} />
@@ -145,6 +157,21 @@ export default function Post() {
         <P>
           <B>Disclosure first.</B> We run <TierName tier="cited" />. We put it at number one, and below we say why, and
           where it is not the right fit. The useful lists say so. So do we.
+        </P>
+
+        <H2 id="ai-seo-aeo-geo">AI SEO, AEO and GEO: one job, three names</H2>
+        <P>
+          Agencies sell this under three names: AI SEO,{" "}
+          <Link href="/blog/answer-engine-optimization" style={{ color: T.accent, fontWeight: 600 }}>
+            answer engine optimization (AEO)
+          </Link>{" "}
+          and{" "}
+          <Link href="/blog/generative-engine-optimization" style={{ color: T.accent, fontWeight: 600 }}>
+            generative engine optimization (GEO)
+          </Link>
+          . All three mean getting your brand named, and your pages cited, in the answers ChatGPT, Gemini,
+          Perplexity and Google&apos;s AI Overviews give. So when you look for the best AI SEO agency, an AEO or
+          GEO agency is the same hire. Every agency below does this work, whatever it calls it.
         </P>
 
         <H2 id="how-we-ranked-them">How we ranked them</H2>
@@ -249,6 +276,29 @@ export default function Post() {
           </Link>{" "}
           - it takes about two minutes.
         </P>
+
+        {(b2bListLive || ukListLive) && (
+          <P>
+            {b2bListLive && (
+              <>
+                Selling to other businesses? See the{" "}
+                <Link href="/blog/best-b2b-ai-seo-agencies" style={{ color: T.accent, fontWeight: 600 }}>
+                  best B2B AI SEO agencies
+                </Link>
+                .{" "}
+              </>
+            )}
+            {ukListLive && (
+              <>
+                Based in the UK? Nomada Digital, which runs <TierName tier="cited" />, ranks the{" "}
+                <a href={UK_LIST} style={{ color: T.accent, fontWeight: 600 }}>
+                  best AEO agencies in the UK
+                </a>
+                .
+              </>
+            )}
+          </P>
+        )}
 
         <Method>
           How we researched this: each agency&apos;s description was read on its own site on 28 September 2026.

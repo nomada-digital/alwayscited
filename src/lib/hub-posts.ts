@@ -23,6 +23,24 @@ export const HUB_BLOG_FEED = "https://qpsrvmnmtozvailsyqqz.supabase.co/functions
 /** Seconds between re-reads of the feed. A post goes live within this of being published. */
 export const HUB_BLOG_REVALIDATE = 300;
 
+/**
+ * The Nomada Digital blog's feed on the same function (13 Nov 2026), read only to link to one of its posts
+ * from here once that post is live, so a link set up ahead of a scheduled post never points at a 404.
+ */
+export const NOMADA_BLOG_FEED = "https://qpsrvmnmtozvailsyqqz.supabase.co/functions/v1/blog?site=nomadadigital.co.uk";
+
+/** Whether a post is live on nomadadigital.co.uk. Never fatal: a feed that fails means "not yet". */
+export async function nomadaPostLive(slug: string): Promise<boolean> {
+  try {
+    const res = await fetch(NOMADA_BLOG_FEED, { next: { revalidate: HUB_BLOG_REVALIDATE } });
+    if (!res.ok) return false;
+    const body = (await res.json()) as { posts?: { slug?: unknown }[] };
+    return (body.posts ?? []).some((p) => p.slug === slug);
+  } catch {
+    return false;
+  }
+}
+
 /** Where the hub keeps a post's images. The only remote images the site shows (next.config.ts `images`). */
 export const HUB_IMAGE_ROOT = "https://qpsrvmnmtozvailsyqqz.supabase.co/storage/v1/object/public/blog-images/";
 
