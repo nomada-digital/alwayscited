@@ -212,6 +212,8 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/dashboards/[client]/opportunities",
     "/dashboards/[client]/plan",
     // 18 Oct 2026 (brief 2d / 2g): setup, Settings and the alwaystracked view, same reason.
+    // 14 Nov 2026: /schema (Schema for your site), behind the same sign-in.
+    "/dashboards/[client]/schema",
     "/dashboards/[client]/settings",
     "/dashboards/[client]/setup",
     "/dashboards/[client]/sources",
