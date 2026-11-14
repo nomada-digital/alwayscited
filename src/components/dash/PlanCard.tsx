@@ -94,8 +94,8 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
         </div>
       ) : cluster.inProgress.length ? null : <p className="faint" style={{ margin: "12px 0 0", fontSize: 12.5 }}>No placements on this cluster yet. Each one shows here from the day it is pitched.</p>}
       {cluster.inProgress.length ? (
-        // 14 Nov 2026 (Danny): what is written and waiting to publish - its title, keyword and expected month. The site
-        // it runs on is named once it is live; no price, DR or vendor is ever read for this page.
+        // 14 Nov 2026 (Danny): what is written and waiting to publish - its title, keyword and expected month, and the
+        // publisher's site once it is booked (the sync stores none before). No price, DR or vendor is ever read here.
         <div style={{ marginTop: 14 }}>
           <div className="dash-micro">Placements in progress</div>
           <div className="tbl-wrap" style={{ marginTop: 6 }}>
@@ -104,15 +104,20 @@ export function Delivery({ ws, cluster }: { ws: Workspace; cluster: ClusterView 
               <tbody>
                 {cluster.inProgress.map((p) => (
                   <tr key={p.id}>
-                    <td>{p.title}{p.keyword ? <div className="sub">For “{p.keyword}”</div> : null}</td>
-                    <td><span className="pill">In progress</span></td>
+                    <td>
+                      {p.title}
+                      {p.booked && p.site ? <div className="sub">On {p.site}</div> : null}
+                      {p.keyword ? <div className="sub">Anchor: {p.keyword}</div> : null}
+                      {cluster.target ? <div className="sub">Links to: {targetLabel(cluster.target)}</div> : null}
+                    </td>
+                    <td><span className="pill">{p.booked ? "Booked" : "In progress"}</span></td>
                     <td className="r num">{p.expected_month ? expectedMonth(p.expected_month) : "-"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="faint" style={{ margin: "6px 0 0", fontSize: 12.5 }}>Written and with the publisher. Each one moves to the list above, with its site and link, the day it goes live.</p>
+          <p className="faint" style={{ margin: "6px 0 0", fontSize: 12.5 }}>Booked means ordered with the publisher, waiting for them to publish; the site is named from then. Each one moves to the list above, with its link, the day it goes live.</p>
         </div>
       ) : null}
     </div>

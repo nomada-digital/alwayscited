@@ -8,7 +8,9 @@
 -- month it is expected. When the sheet gives it an address and marks it live, the live placement goes into placements
 -- as before and this row is marked live, so it stops showing as in progress.
 --
--- Customer-facing: title, keyword and expected month only. No site, domain, price, DR or vendor is ever stored here.
+-- Customer-facing: title, keyword and expected month; and the publisher's site once the placement is booked (ordered
+-- with the publisher), never before (Danny, 14 Nov 2026). No price, DR or vendor (the marketplace or agency it was
+-- ordered through) is ever stored here.
 -- Service-role reads only, as every tracking table: RLS on with no policies.
 create table if not exists public.placements_in_progress (
   id               uuid primary key default gen_random_uuid(),
@@ -24,5 +26,8 @@ create table if not exists public.placements_in_progress (
   updated_at       timestamptz not null default now(),
   unique (client_domain_id, placement_ref)
 );
+-- 14 Nov 2026, before this file was applied: booked, and the site, written only when booked.
+alter table public.placements_in_progress add column if not exists booked boolean not null default false;
+alter table public.placements_in_progress add column if not exists site text check (site is null or site ~ '^[a-z0-9.-]+\.[a-z]{2,}$');
 create index if not exists placements_in_progress_client_idx on public.placements_in_progress (client_domain_id, stage);
 alter table public.placements_in_progress enable row level security;

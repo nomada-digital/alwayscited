@@ -24,7 +24,8 @@ import { urlKey } from "@/lib/tracking/placements";
  * site only once it is live. A live item marks its in-progress row live; one that has left the sheet is dropped.
  */
 export type SheetItem = { pid: string; url: string; live_on: string; keyword: string | null; kind: string | null; outlet: string | null };
-export type ProgressItem = { pid: string; stage: "written" | "awaiting"; title: string; title_source: "slack" | "topic"; keyword: string | null; expected_month: string | null };
+/** `site` only with `booked` (ordered with the publisher, Danny 14 Nov 2026): a site sent unbooked is not stored. */
+export type ProgressItem = { pid: string; stage: "written" | "awaiting"; title: string; title_source: "slack" | "topic"; keyword: string | null; expected_month: string | null; booked: boolean; site: string | null };
 
 const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -49,7 +50,9 @@ export function readProgress(raw: unknown): ProgressItem[] {
     const pid = str(o.pid, 20), title = str(o.title, 300);
     if (!/^NOM-\d{4,}$/.test(pid) || (o.stage !== "written" && o.stage !== "awaiting") || title.length < 3) return [];
     const month = typeof o.expected_month === "string" && /^\d{4}-\d{2}-01$/.test(o.expected_month) ? o.expected_month : null;
-    return [{ pid, stage: o.stage, title, title_source: o.title_source === "slack" ? "slack" : "topic", keyword: str(o.keyword, 200) || null, expected_month: month }];
+    const booked = o.booked === true;
+    const site = str(o.site, 200).toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+    return [{ pid, stage: o.stage, title, title_source: o.title_source === "slack" ? "slack" : "topic", keyword: str(o.keyword, 200) || null, expected_month: month, booked, site: booked && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(site) ? site : null }];
   });
 }
 
@@ -63,7 +66,7 @@ async function syncProgress(db: SupabaseClient, client: Client, clusterFor: (k: 
   const now = new Date().toISOString();
   if (progress.length) {
     const { error: e } = await db.from("placements_in_progress").upsert(
-      progress.map((p) => ({ client_domain_id: client.id, cluster_id: clusterFor(p.keyword).id, placement_ref: p.pid, title: p.title, title_source: p.title_source, keyword: p.keyword, expected_month: p.expected_month, stage: p.stage, updated_at: now })),
+      progress.map((p) => ({ client_domain_id: client.id, cluster_id: clusterFor(p.keyword).id, placement_ref: p.pid, title: p.title, title_source: p.title_source, keyword: p.keyword, expected_month: p.expected_month, stage: p.stage, booked: p.booked, site: p.site, updated_at: now })),
       { onConflict: "client_domain_id,placement_ref" },
     );
     if (e) return `In progress not written: ${e.message}`;

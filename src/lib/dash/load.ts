@@ -102,8 +102,8 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     // 8 Nov 2026 (20261108020000): what this client's package leaves out of its tier. Read apart, so a database
     // before the migration reads as nothing left out rather than failing the client's other reads.
     db.from("client_domains").select("excluded_deliverables, ranking_kpi").eq("id", cid).maybeSingle(),
-    // 14 Nov 2026 (20261114000000): placements written and waiting to publish - title, keyword and expected month only.
-    db.from("placements_in_progress").select("id, cluster_id, title, keyword, expected_month, stage").eq("client_domain_id", cid).in("stage", ["written", "awaiting"]).order("expected_month", { ascending: true }),
+    // 14 Nov 2026 (20261114000000): placements written and waiting to publish - title, keyword, expected month, and the site once booked.
+    db.from("placements_in_progress").select("id, cluster_id, title, keyword, expected_month, stage, booked, site").eq("client_domain_id", cid).in("stage", ["written", "awaiting"]).order("expected_month", { ascending: true }),
   ]);
   if (pkgErr && !absent(pkgErr)) console.warn(`[dash] package read failed: ${pkgErr.message}`);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;

@@ -114,9 +114,10 @@ export type RawPlacement = {
 };
 /**
  * A placement written and waiting to publish (placements_in_progress, 14 Nov 2026): its title, the keyword it supports
- * and the month it is expected. No site, price or vendor: those are never on a customer's page before it is live.
+ * and the month it is expected; once booked with the publisher, the publisher's site (Danny, 14 Nov). Never a price, DR
+ * or the vendor it was ordered through.
  */
-export type RawInProgress = { id: string; cluster_id: string | null; title: string; keyword: string | null; expected_month: Day | null; stage: string };
+export type RawInProgress = { id: string; cluster_id: string | null; title: string; keyword: string | null; expected_month: Day | null; stage: string; booked?: boolean; site?: string | null };
 /** A placement's kind as a customer reads it (14 Nov 2026: "placements", never "guest posts"). */
 export const PLACEMENT_KIND_LABEL: Record<RawPlacement["kind"], string> = { guest_post: "Placement", link_insertion: "Link insertion", on_site: "On your site", coverage: "Coverage" };
 export type Provider = "ga4" | "gsc" | "bing";
