@@ -30,6 +30,20 @@ export function faqsIn(html: string): { q: string; a: string }[] {
   return out;
 }
 
+const TRACKING = /^(utm_[a-z]+|_t|_r|igsh|igshid|si|fbclid|gclid|ref|ref_src|mibextid)$/i;
+
+/** A profile address with tracking parameters taken off and no trailing slash. */
+export function untracked(u: string): string {
+  try {
+    const x = new URL(u);
+    for (const k of [...x.searchParams.keys()]) if (TRACKING.test(k)) x.searchParams.delete(k);
+    x.hash = "";
+    return x.toString().replace(/\/+$/, "").replace(/\/\?/, "?");
+  } catch {
+    return u;
+  }
+}
+
 export async function readPage(url: string): Promise<{ facts: PageFacts; platform: Platform } | null> {
   const r = await guardedRead(url, { capBytes: PAGE_BYTES, ua: UA, timeoutMs: READ_MS }).catch(() => null);
   if (!r || !r.ok || r.status >= 400) return null;
@@ -44,8 +58,8 @@ export async function readPage(url: string): Promise<{ facts: PageFacts; platfor
       ogSiteName: p.ogSiteName,
       // A logo only from the site's own header: a share image is usually a photo, not the logo.
       logo: p.logo?.from === "header" ? p.logo.url : null,
-      // Profile addresses without their tracking parameters.
-      social: [...new Set(p.social.map((u) => u.replace(/[?#].*$/, "").replace(/\/+$/, "")))],
+      // Profile addresses without their tracking parameters (an id a profile needs, as Facebook's, is kept).
+      social: [...new Set(p.social.map(untracked))],
       addressText: p.facts.addressText,
       phoneText: p.facts.phoneText,
       publishedTime: p.publishedTime,
