@@ -1,9 +1,28 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { jsonLdNodes, parseOwnPage } from "@/lib/diy/pages/own-parse";
 import { guardedRead } from "@/lib/scan/crawl";
 
 import { type PageFacts, type Platform, detectPlatform } from "./schema-build";
+
+/**
+ * Rendered reads of the customer's pages (page_checks, Your pages' monthly or on-demand read with JavaScript): the
+ * schema an app or plugin injects after load - a review widget, a store app - that a plain read cannot see. Types and
+ * property names only, by url_key, newest read first. Never fatal: none when the read fails.
+ */
+export async function renderedSchema(db: SupabaseClient, clientId: string): Promise<Map<string, { types: string[]; props: string[] }[]>> {
+  const { data, error } = await db.from("page_checks").select("url_key, checked_at, schema_found").eq("client_domain_id", clientId).not("schema_found", "is", null).order("checked_at", { ascending: false }).limit(200);
+  const out = new Map<string, { types: string[]; props: string[] }[]>();
+  if (error) return out;
+  for (const r of data ?? []) {
+    if (out.has(r.url_key as string)) continue;
+    const blocks = ((r.schema_found as { blocks?: { types: string[]; props: string[]; via: string }[] } | null)?.blocks ?? []).filter((b) => b.via === "rendered");
+    out.set(r.url_key as string, blocks.map((b) => ({ types: b.types, props: b.props })));
+  }
+  return out;
+}
 
 /**
  * The customer's own pages, read for "Schema for your site" (schema-build.ts) each time the page opens or Check again
@@ -67,6 +86,7 @@ export async function readPage(url: string): Promise<{ facts: PageFacts; platfor
       byline: p.byline,
       nodes: jsonLdNodes(r.html).nodes as Record<string, unknown>[],
       faqs: faqsIn(r.html),
+      microdataTypes: p.microdataTypes,
     },
   };
 }

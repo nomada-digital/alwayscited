@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import SchemaTabs, { CheckAgain } from "@/components/dash/SchemaTabs";
 import { PageHead } from "@/components/dash/Shell";
 import { pageData } from "@/lib/dash/page-data";
-import { PLATFORM_NAME, aiPrompt, buildSchema, developerText, gtmText, liveStatus, short, whereText } from "@/lib/dash/schema-build";
-import { readPage } from "@/lib/dash/schema-read";
+import { PLATFORM_NAME, type PageFacts, aiPrompt, buildSchema, developerText, gtmText, short, whereText } from "@/lib/dash/schema-build";
+import { readPage, renderedSchema } from "@/lib/dash/schema-read";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { urlKey } from "@/lib/tracking/placements";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Schema", robots: { index: false, follow: false } };
@@ -19,18 +21,21 @@ export default async function Schema({ params }: { params: Promise<{ client: str
   const domain = ws.client.domain;
   const live = ws.clusters.filter((c) => c.managed || ws.client.tier === "tracked");
   const targets = [...new Set(live.map((c) => c.target).filter((t): t is string => !!t))].slice(0, 6);
-  const [home, ...pages] = await Promise.all([readPage(`https://${domain}/`), ...targets.map((t) => readPage(t))]);
-  const pageOf = new Map(targets.map((t, i) => [t, pages[i]?.facts ?? null]));
+  // Live first: every page is read now, and what a rendered read found (app- and plugin-injected schema) joins it.
+  const [home, rendered, ...pages] = await Promise.all([readPage(`https://${domain}/`), renderedSchema(supabaseAdmin(), raw.client.id).catch(() => new Map()), ...targets.map((t) => readPage(t))]);
+  const withRendered = (f: PageFacts | null, url: string): PageFacts | null => (f ? { ...f, rendered: rendered.get(urlKey(url) ?? "") ?? [] } : null);
+  const homeFacts = withRendered(home?.facts ?? null, `https://${domain}/`);
+  const pageOf = new Map(targets.map((t, i) => [t, withRendered(pages[i]?.facts ?? null, t)]));
   const plan = buildSchema({
     domain,
     brand: raw.client.brand,
     market: raw.client.market,
     local: !!raw.localGrids,
-    home: home?.facts ?? null,
+    home: homeFacts,
     clusters: live.map((c) => ({ name: c.name, keyword: c.headKeyword, target: c.target, page: c.target ? (pageOf.get(c.target) ?? null) : null })),
   });
-  const status = liveStatus(plan, [home?.facts ?? null, ...pages.map((p) => p?.facts ?? null)]);
-  const onSite = status.filter((s) => s.live).length;
+  const onSite = plan.blocks.filter((b) => b.status === "already").length;
+  const STATUS = { already: "Already on your site", partly: "Partly there - add these fields", missing: "Missing" } as const;
   const platform = home?.platform ?? null;
   return (
     <>
@@ -40,21 +45,18 @@ export default async function Schema({ params }: { params: Promise<{ client: str
           <h2 style={{ margin: 0 }}>On your site now</h2>
           <CheckAgain />
         </div>
-        <p className="intro">{home ? `We checked ${short(`https://${domain}/`)}${targets.length ? ` and ${targets.length} target page${targets.length === 1 ? "" : "s"}` : ""} just now. ${onSite} of ${plan.blocks.length} ${plan.blocks.length === 1 ? "block is" : "blocks are"} live.` : "We couldn't reach your site just now. Press Check again in a minute."}</p>
+        <p className="intro">{home ? `We checked ${short(`https://${domain}/`)}${targets.length ? ` and ${targets.length} target page${targets.length === 1 ? "" : "s"}` : ""} just now. ${onSite} of ${plan.blocks.length} ${plan.blocks.length === 1 ? "is" : "are"} already on your site; the code below covers only what's missing.` : "We couldn't reach your site just now. Press Check again in a minute."}</p>
         <div className="tbl-wrap">
           <table className="tbl">
             <thead><tr><th>Schema</th><th>Goes on</th><th>Status</th></tr></thead>
             <tbody>
-              {plan.blocks.map((b) => {
-                const on = status.find((s) => s.id === b.id)?.live;
-                return (
-                  <tr key={b.id}>
-                    <td>{b.label}</td>
-                    <td className="muted">{whereText(b)}</td>
-                    <td><span className={`pill${on ? " good" : ""}`}>{on ? "Live on your site" : "Not added yet"}</span></td>
-                  </tr>
-                );
-              })}
+              {plan.blocks.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.label}{b.status === "partly" ? <div className="sub">Add: {b.missing.join(", ")}</div> : null}</td>
+                  <td className="muted">{whereText(b)}</td>
+                  <td><span className={`pill${b.status === "already" ? " good" : ""}`}>{STATUS[b.status]}</span></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
