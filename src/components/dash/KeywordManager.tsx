@@ -45,9 +45,6 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
   const trackedKeys = new Set(tracked.map((k) => keywordKey(k.keyword)));
   const a = ws.allowances.keywords;
   const full = a.used >= a.limit;
-  const missingKd = tracked.filter((k) => metrics[keywordKey(k.keyword)]?.kd == null).length;
-  const [filling, setFilling] = useState(false);
-  const [fillMsg, setFillMsg] = useState<string | null>(null);
   const targets = ws.clusters.flatMap((c) => [...c.groups.map((g) => ({ c, g: g.id, label: `${c.name} · ${g.name}` })), { c, g: null as string | null, label: c.groups.length ? `${c.name} · no group` : c.name }]);
   const [target, setTarget] = useState(targets[0] ? `${targets[0].c.id}|${targets[0].g ?? ""}` : "");
   const [seed, setSeed] = useState("");
@@ -69,14 +66,6 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
     setRows(j.rows ?? []);
     setMetrics((m) => ({ ...m, ...Object.fromEntries((j.rows ?? []).map((x) => [keywordKey(x.keyword), x])) }));
   };
-  const fill = async () => {
-    if (demo) return setFillMsg("Not available in a read-only view.");
-    setFilling(true);
-    const r = await fetch(`/api/dash/${slug}/keywords`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ difficulty: true }) }).catch(() => null);
-    const j = (await r?.json().catch(() => null)) as { ok?: boolean; filled?: number; message?: string } | null;
-    setFilling(false);
-    setFillMsg(j?.ok ? "Difficulty added. Reload to see it." : (j?.message ?? "That did not go through."));
-  };
   const track = (x: ResearchedKeyword) => {
     const [cid, gid] = target.split("|");
     if (!cid) return setErr("Add a cluster first, then track keywords into it.");
@@ -87,8 +76,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
     <>
       <div className="dash-card">
         <div className="dash-card-head">
-          <div><h2>Tracked daily</h2><p className="intro">{a.used} of {a.limit} keywords. Change is against 7 days ago; a page switch is marked so a jump is not read as a gain or a loss. Open one for every reading and Google&rsquo;s top 20.</p></div>
-          {missingKd && ws.canWrite ? <span style={{ display: "flex", gap: 8, alignItems: "center" }}><button className="btn sm" onClick={fill} disabled={filling}>{filling ? "Looking up…" : `Add difficulty for ${missingKd}`}</button>{fillMsg ? <span className="muted" style={{ fontSize: 12.5 }}>{fillMsg}</span> : null}</span> : null}
+          <div><h2>Tracked daily</h2><p className="intro">{a.used} of {a.limit} keywords tracked. Change compares with 7 days ago. Tap a keyword to see every reading and Google&rsquo;s top 20.</p></div>
         </div>
         {tracked.length ? (
           <div className="tbl-wrap">
@@ -100,10 +88,18 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                   const pending = !!k.id && k.id.startsWith("t");
                   return (
                     <tr key={k.id ?? k.keyword} className={pending ? "item pending" : undefined}>
-                      <td>{k.id && !pending ? <Link href={`${base}/${slug}/google/${k.id}`} style={{ fontWeight: 600 }}>{k.keyword}</Link> : k.keyword}<div className="sub"><Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.cluster.name}</Link>{k.group ? ` · ${k.group}` : ""}{k.form && k.form !== "primary" ? <> · <span className="pill" style={{ padding: "0 7px" }} title="Same cluster and target page as the keyword above. Free: it does not use a keyword from your plan.">{k.form}, free</span></> : null}</div></td>
+                      <td>{k.id && !pending ? <Link href={`${base}/${slug}/google/${k.id}`} style={{ fontWeight: 600 }}>{k.keyword}</Link> : k.keyword}{(() => {
+                        // 14 Nov 2026 (Danny): the cluster or group only when it names something other than the keyword itself.
+                        const same = (x: string | null | undefined) => !!x && x.trim().toLowerCase() === k.keyword.trim().toLowerCase();
+                        const showCluster = !same(k.cluster.name);
+                        const showGroup = !!k.group && !same(k.group) && k.group !== k.cluster.name;
+                        const pair = k.form && k.form !== "primary";
+                        if (!showCluster && !showGroup && !pair) return null;
+                        return <div className="sub">{showCluster ? <Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.cluster.name}</Link> : null}{showGroup ? `${showCluster ? " · " : ""}${k.group}` : ""}{pair ? <>{showCluster || showGroup ? " · " : ""}<span className="pill" style={{ padding: "0 7px" }} title="Same cluster and target page as the keyword above. Free: it does not use a keyword from your plan.">{k.form}, free</span></> : null}</div>;
+                      })()}</td>
                       <td className="r num">{(k.volume ?? m?.volume)?.toLocaleString("en-GB") ?? "-"}</td>
                       <td><Kd kd={m?.kd} /></td>
-                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : <Pos pos={k.pos} />}</td>
+                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : k.pos !== null ? <Pos pos={k.pos} /> : k.hist.length ? <span className="muted" style={{ fontSize: 12.5 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span> : <span className="faint" style={{ fontSize: 12.5 }}>Not read yet</span>}</td>
                       <td className="r"><Change n={k.change} /></td>
                       <td><Spark values={k.hist.map(([, p]) => p)} invert width={80} height={22} /></td>
                       <td className="muted" style={{ fontSize: 12.5, maxWidth: 240, overflowWrap: "anywhere" }}>{pathOf(k.url) ?? "-"}{k.pageChange ? <div className="sub"><span className="pill warn">Page changed {longDay(k.pageChange.on)}</span></div> : null}</td>

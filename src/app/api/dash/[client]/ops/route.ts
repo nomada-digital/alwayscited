@@ -1,3 +1,6 @@
+import { after } from "next/server";
+
+import { fillDifficulty } from "@/lib/dash/research";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { trackingDay } from "@/lib/tracking/decide";
 import { clientsFor } from "@/lib/tracking/member";
@@ -46,5 +49,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
   if (typeof raw === "string") return Response.json({ ok: false, message: raw }, { status: 502 });
   const r = await writeOp(db, raw, op, email);
   if (!r.ok) return Response.json(r, { status: r.status ?? 422 });
+  // 14 Nov 2026: a keyword added gets its difficulty straight after, in the background - no customer presses a lookup.
+  if (op.op === "keyword.add") {
+    const kw = op.keyword;
+    after(() => fillDifficulty(db, { clientId: c.id, market: c.market, member: email, keywords: [kw], today: trackingDay() }).then((x) => { if (!x.ok) console.warn(`[dash] difficulty not filled for a new keyword: ${x.message}`); }).catch(() => {}));
+  }
   return Response.json(r);
 }

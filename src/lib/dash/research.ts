@@ -112,6 +112,26 @@ export async function knownMetrics(db: SupabaseClient, market: string, keywords:
   return out;
 }
 
+/**
+ * The daily backfill (Danny, 14 Nov 2026: no customer should ever see a button that starts a paid lookup): difficulty
+ * for every live tracked keyword the cache does not know yet, on every active customer, through fillDifficulty - the
+ * same capped read, on the DIY ledger as the daily run. A keyword added during the day is filled straight after it is
+ * added (the ops route); this catches any that missed. Never fatal: a customer that fails says so in the count.
+ */
+export async function backfillDifficulty(db: SupabaseClient, today: string): Promise<{ clients: number; filled: number; failed: number }> {
+  const { data: clients, error } = await db.from("client_domains").select("id, market").eq("status", "active").is("archived_at", null).not("slug", "is", null);
+  if (error) throw new Error(`could not read the customers: ${error.message}`);
+  let filled = 0, failed = 0;
+  for (const c of clients ?? []) {
+    const { data: kws, error: kErr } = await db.from("tracked_keywords").select("keyword").eq("client_domain_id", c.id as string).is("stopped_on", null);
+    if (kErr || !kws?.length) continue;
+    const r = await fillDifficulty(db, { clientId: c.id as string, market: c.market as string, member: "daily run", keywords: kws.map((k) => String(k.keyword)), today }).catch((e: unknown) => ({ ok: false as const, message: String(e) }));
+    if (r.ok) filled += r.filled;
+    else failed++;
+  }
+  return { clients: (clients ?? []).length, filled, failed };
+}
+
 /** Difficulty for tracked keywords the cache does not know yet: one capped Labs read for up to 100. */
 export async function fillDifficulty(db: SupabaseClient, p: { clientId: string; market: string; member: string; keywords: readonly string[]; today: string }): Promise<{ ok: true; filled: number } | { ok: false; message: string }> {
   const market = p.market === "UK" ? "UK" : "US";

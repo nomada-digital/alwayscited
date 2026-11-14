@@ -7,6 +7,8 @@ import { trackingDay } from "@/lib/tracking/decide";
 import { sweepLifecycleMailSafely } from "@/lib/email/lifecycle-cron";
 import { runHealthAfterDispatch } from "@/lib/tracking/health-io";
 import { dispatchTrackingRuns } from "@/lib/tracking/runner";
+import { backfillDifficulty } from "@/lib/dash/research";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,5 +81,7 @@ export async function GET(req: Request) {
   const mail = await sweepLifecycleMailSafely();
   // 2 Nov 2026 (sg-37): the daily pull for every connected Search Console, GA4 and Bing property (lib/dash/connect-io.ts).
   const connections = await pullConnectionsSafely();
-  return NextResponse.json({ ...answer.body, swaps, health, mail, connections }, { status: answer.status });
+  // 14 Nov 2026: keyword difficulty for any tracked keyword still without it, so no customer ever needs a lookup button.
+  const difficulty = await backfillDifficulty(supabaseAdmin(), trackingDay()).catch((e: unknown) => { console.warn(`[track] difficulty backfill failed: ${e instanceof Error ? e.message : String(e)}`); return null; });
+  return NextResponse.json({ ...answer.body, swaps, health, mail, connections, difficulty }, { status: answer.status });
 }
