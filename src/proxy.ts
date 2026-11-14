@@ -88,6 +88,12 @@ const ADMIN = (p: string) => p === "/admin" || p.startsWith("/admin/");
  * pattern short of "everything" that catches them. Each request costs one
  * host comparison when APP_HOST is unset.
  */
+/** Old path -> its replacement. Both sides are exact paths on the marketing host. */
+export const MOVED: Record<string, string> = {
+  // Two posts on one query; the newer one is the one kept.
+  "/blog/aeo-vs-seo-whats-actually-different": "/blog/aeo-vs-seo",
+};
+
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   // Runs on every request, so the cheapest possible exit comes first.
@@ -137,6 +143,12 @@ export function proxy(request: NextRequest) {
     if (demo || view) res.headers.set("referrer-policy", "no-referrer");
     return res;
   }
+  /**
+   * Retired posts (Danny, 14 Nov 2026): a permanent 301, not Next's 308, to the post that replaced each one. The old
+   * page is gone from the tree, the sitemap, llms.txt and the blog index, so nothing on the site links to it.
+   */
+  const moved = MOVED[pathname.replace(/\/$/, "")];
+  if (moved) return NextResponse.redirect(new URL(`${moved}${search}`, request.url), 301);
   // On the marketing host /dashboards is the same tree, for a signed-in member only (pageData 404s anyone else)
   // and noindex by next.config.ts's header rule: a preview until the subdomain's DNS exists.
 

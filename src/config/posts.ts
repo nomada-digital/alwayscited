@@ -47,15 +47,6 @@ const REGISTERED: Post[] = [
     readMinutes: 5,
   },
   {
-    slug: "aeo-vs-seo-whats-actually-different",
-    title: "AEO vs SEO: what is actually different",
-    blurb:
-      "Two overlapping channels with different surfaces, different measurement and different time horizons. What carries over, and what does not.",
-    kind: "Findings",
-    date: "2026-04-30",
-    readMinutes: 5,
-  },
-  {
     slug: "why-most-aeo-audits-are-a-waste-of-money",
     title: "Why most AEO audits are a waste of money",
     blurb:
