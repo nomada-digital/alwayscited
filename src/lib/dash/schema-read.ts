@@ -42,8 +42,10 @@ export async function readPage(url: string): Promise<{ facts: PageFacts; platfor
       description: p.description,
       h1: p.h1[0] ?? null,
       ogSiteName: p.ogSiteName,
-      logo: p.logo?.url ?? null,
-      social: p.social,
+      // A logo only from the site's own header: a share image is usually a photo, not the logo.
+      logo: p.logo?.from === "header" ? p.logo.url : null,
+      // Profile addresses without their tracking parameters.
+      social: [...new Set(p.social.map((u) => u.replace(/[?#].*$/, "").replace(/\/+$/, "")))],
       addressText: p.facts.addressText,
       phoneText: p.facts.phoneText,
       publishedTime: p.publishedTime,

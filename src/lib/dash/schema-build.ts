@@ -150,7 +150,8 @@ export function detectPlatform(html: string, headers: Record<string, string> = {
 }
 
 export const scriptTag = (b: SchemaBlock) => `<script type="application/ld+json">\n${JSON.stringify(b.jsonld, null, 2)}\n</script>`;
-export const whereText = (b: SchemaBlock) => (b.where === "sitewide" ? "Every page (in the <head> of your site template)" : `Only on ${short(b.where)}`);
+const isHome = (u: string) => { try { return new URL(u).pathname.replace(/\/+$/, "") === ""; } catch { return false; } };
+export const whereText = (b: SchemaBlock) => (b.where === "sitewide" ? "Every page (in the <head> of your site template)" : isHome(b.where) ? "Your homepage only" : `Only on ${short(b.where)}`);
 
 const STEPS: Record<Exclude<Platform, null>, { sitewide: string; page: string }> = {
   shopify: { sitewide: "In Shopify admin go to Online Store > Themes > Edit code, open layout/theme.liquid and paste it just before </head>.", page: "In theme.liquid, wrap it in {% if request.path == '<path>' %} ... {% endif %} just before </head>, so it only appears on that page." },
