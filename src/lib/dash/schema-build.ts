@@ -43,6 +43,8 @@ export type PageFacts = {
 };
 
 export type SchemaInput = {
+  /** Schema Nomada delivered (schema_delivered): reported as delivered, and never recommended again. */
+  delivered?: DeliveredRow[];
   domain: string;
   brand: string | null;
   market: string;
@@ -54,7 +56,41 @@ export type SchemaInput = {
 export type BlockStatus = "already" | "partly" | "missing";
 /** `jsonld` is what to add: the whole block when missing, only the missing fields (on the existing @id) when partly. */
 export type SchemaBlock = { id: string; label: string; where: "sitewide" | string; jsonld: Record<string, unknown>; extends: string | null; liveIds: string[]; status: BlockStatus; missing: string[]; existingType: string | null };
-export type SchemaPlan = { blocks: SchemaBlock[]; notes: string[] };
+/**
+ * Schema Nomada delivered (schema_delivered, 14 Nov 2026): one row per block and version, with each node's @id, types
+ * and property names as supplied. It overrides the recommendation: a delivered block is reported on its own terms, and
+ * nothing it covers is recommended again.
+ */
+export type DeliveredRow = { block_key: string; version: number; label: string; where_url: string; how: string | null; supplied_on: string; supplied_by: string; expected: Record<string, { types: string[]; props: string[] }> };
+export type DeliveredStatus = "added" | "updated_waiting" | "waiting";
+export type DeliveredBlock = { key: string; label: string; where: string; how: string | null; status: DeliveredStatus; text: string; liveVersionOn: string | null };
+export type SchemaPlan = { blocks: SchemaBlock[]; notes: string[]; delivered: DeliveredBlock[] };
+
+const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** Each delivered block against the live pages: its latest version on the site, an earlier one, or none yet. */
+export function deliveredStatus(rows: readonly DeliveredRow[], pages: readonly (PageFacts | null)[]): DeliveredBlock[] {
+  const live = new Map<string, Set<string>>();
+  for (const pg of pages) for (const n of pg?.nodes ?? []) {
+    if (typeof n["@id"] !== "string") continue;
+    const k = normId(n["@id"] as string);
+    const set = live.get(k) ?? new Set<string>();
+    for (const [f, v] of Object.entries(n)) if (!f.startsWith("@") && v !== null && v !== undefined && v !== "") set.add(f);
+    live.set(k, set);
+  }
+  const isLive = (r: DeliveredRow) => Object.entries(r.expected).every(([id, e]) => { const have = live.get(normId(id)); return !!have && e.props.every((f) => have.has(f)); });
+  const byKey = new Map<string, DeliveredRow[]>();
+  for (const r of rows) byKey.set(r.block_key, [...(byKey.get(r.block_key) ?? []), r]);
+  return [...byKey.values()].map((vs) => {
+    vs.sort((a, b) => b.version - a.version);
+    const latest = vs[0]!;
+    const by = latest.supplied_by.split(",")[0]!.trim();
+    const liveOne = vs.find(isLive) ?? null;
+    if (liveOne === latest) return { key: latest.block_key, label: latest.label, where: latest.where_url, how: latest.how, status: "added" as const, text: `Added by ${/nomada/i.test(latest.supplied_by) ? "Nomada" : by} on ${day(latest.supplied_on)}`, liveVersionOn: latest.supplied_on };
+    if (liveOne) return { key: latest.block_key, label: latest.label, where: latest.where_url, how: latest.how, status: "updated_waiting" as const, text: `Updated version supplied ${day(latest.supplied_on)}, waiting to go live (the ${day(liveOne.supplied_on)} version is live)`, liveVersionOn: liveOne.supplied_on };
+    return { key: latest.block_key, label: latest.label, where: latest.where_url, how: latest.how, status: "waiting" as const, text: `Supplied ${day(latest.supplied_on)}, waiting to go live`, liveVersionOn: null };
+  });
+}
 
 const COUNTRY: Record<string, string> = { GB: "United Kingdom", UK: "United Kingdom", US: "United States", IE: "Ireland", AU: "Australia", CA: "Canada", NZ: "New Zealand", DE: "Germany", FR: "France", ES: "Spain", NL: "Netherlands" };
 const ORG_TYPES = ["Organization", "LocalBusiness", "Corporation", "ProfessionalService", "Store", "OnlineStore"];
@@ -151,7 +187,7 @@ export function buildSchema(p: SchemaInput): SchemaPlan {
   // Per cluster: Service on its target page, and FAQPage or Article where that page calls for it.
   for (const c of p.clusters) {
     if (!c.target) {
-      notes.push(`"${c.name}" has no target page yet, so its service markup is waiting for one.`);
+      if (c.name) notes.push(`"${c.name}" has no target page yet, so its service markup is waiting for one.`);
       continue;
     }
     const pg = c.page;
@@ -170,7 +206,24 @@ export function buildSchema(p: SchemaInput): SchemaPlan {
         { "@context": "https://schema.org", "@type": "Article", "@id": `${c.target}#article`, headline: clip(pg?.h1 ?? pg?.title, 110), ...(pg?.publishedTime ? { datePublished: pg.publishedTime } : {}), ...(pg?.modifiedTime ? { dateModified: pg.modifiedTime } : {}), ...(pg?.byline ? { author: { "@type": "Person", name: pg.byline } } : {}), publisher: { "@id": orgRef }, mainEntityOfPage: c.target }, artEv);
     }
   }
-  return { blocks, notes };
+  // Nomada's delivered schema owns what it covers: no generated block repeats one of its @ids, its business node, or a
+  // type it put on the same page.
+  const rows = p.delivered ?? [];
+  const delIds = new Set(rows.flatMap((r) => Object.keys(r.expected).map(normId)));
+  const delOrg = rows.some((r) => Object.values(r.expected).some((e) => e.types.some(isOrg)));
+  const delTypesAt = new Set(rows.flatMap((r) => Object.values(r.expected).flatMap((e) => e.types.map((t) => `${r.where_url === "sitewide" ? "sitewide" : normId(r.where_url)}|${t}`))));
+  const covered = (b: SchemaBlock) => {
+    const id = typeof b.jsonld["@id"] === "string" ? normId(b.jsonld["@id"] as string) : b.extends ? normId(b.extends) : null;
+    const t = typeof b.jsonld["@type"] === "string" ? (b.jsonld["@type"] as string) : b.existingType;
+    if (id && delIds.has(id)) return true;
+    if (b.id === "organization" && delOrg) return true;
+    if (b.id === "website" && rows.some((r) => Object.values(r.expected).some((e) => e.types.includes("WebSite")))) return true;
+    const at = b.where === "sitewide" ? "sitewide" : normId(b.where);
+    return !!t && delTypesAt.has(`${at}|${t}`);
+  };
+  const kept = rows.length ? blocks.filter((b) => !covered(b)) : blocks;
+  const delivered = deliveredStatus(rows, [home, ...p.clusters.map((c) => c.page)]);
+  return { blocks: kept, notes: rows.length ? notes.filter((n) => !/markup (has no @id|is complete)/.test(n)) : notes, delivered };
 }
 
 export const short = (u: string) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/+$/, "") || u;

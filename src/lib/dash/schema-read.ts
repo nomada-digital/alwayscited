@@ -5,7 +5,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { jsonLdNodes, parseOwnPage } from "@/lib/diy/pages/own-parse";
 import { guardedRead } from "@/lib/scan/crawl";
 
-import { type PageFacts, type Platform, detectPlatform } from "./schema-build";
+import { type DeliveredRow, type PageFacts, type Platform, detectPlatform } from "./schema-build";
+
+/** Schema Nomada delivered to this customer (schema_delivered, 20261114010000); none before that is applied, never thrown. */
+export async function readDelivered(db: SupabaseClient, clientId: string): Promise<DeliveredRow[]> {
+  const { data, error } = await db.from("schema_delivered").select("block_key, version, label, where_url, how, supplied_on, supplied_by, expected").eq("client_domain_id", clientId);
+  return error ? [] : ((data ?? []) as DeliveredRow[]);
+}
 
 /**
  * Rendered reads of the customer's pages (page_checks, Your pages' monthly or on-demand read with JavaScript): the

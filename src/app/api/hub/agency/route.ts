@@ -1,5 +1,6 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
 import { teamChange, teamRead } from "@/lib/agency/team";
@@ -28,7 +29,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "placements_sync", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -85,6 +86,11 @@ export async function POST(req: Request) {
       // Live placements from Kev's master sheet (sg-89, 11 Nov 2026, lib/agency/sheet-placements.ts), sent by the hub's sheet job.
       case "placements_sync":
         return placementsSync(db, client, readItems(b.items), trackingDay(), readProgress(b.items));
+      // Schema Nomada delivered (14 Nov 2026, lib/agency/schema-delivered.ts): read, and record a block or a new version.
+      case "schema_delivered_read":
+        return schemaDeliveredRead(db, client);
+      case "schema_delivered_set":
+        return schemaDeliveredSet(db, client, by, { key: str("block_key"), label: str("label"), where: str("where_url"), how: str("how"), suppliedOn: str("supplied_on"), suppliedBy: str("supplied_by"), jsonld: str("jsonld") });
       case "budget_read":
         return budgetRead(db, client);
       case "budget_cap":

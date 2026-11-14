@@ -56,3 +56,24 @@ test("the three ways, and the platform", () => {
   assert.equal(detectPlatform('<script src="/wp-content/themes/a.js">'), "wordpress");
   assert.equal(detectPlatform("<html></html>"), null);
 });
+
+// ---- Schema Nomada delivered (14 Nov 2026): reported on its own terms, and never recommended again. ----
+
+test("delivered schema: added when its latest version is live, waiting when only an earlier one is, never duplicated", () => {
+  const org = "https://www.example.com/#organization";
+  const svc = "https://www.example.com/craft#service";
+  const v1 = { block_key: "site", version: 1, label: "Site-wide graph", where_url: "sitewide", how: null, supplied_on: "2026-10-29", supplied_by: "Luke Wilson, Nomada", expected: { [org]: { types: ["Organization"], props: ["name", "url"] } } };
+  const v2 = { ...v1, version: 2, supplied_on: "2026-11-13", expected: { [org]: { types: ["Organization"], props: ["name", "url", "slogan"] }, "https://www.example.com/#phil": { types: ["Person"], props: ["name"] } } };
+  const craft = { block_key: "craft", version: 1, label: "Craft page", where_url: "https://www.example.com/craft", how: null, supplied_on: "2026-11-13", supplied_by: "Luke Wilson, Nomada", expected: { [svc]: { types: ["Service"], props: ["name"] } } };
+  const home = page({ nodes: [{ "@type": "Organization", "@id": org, name: "Example", url: "https://www.example.com/" }] });
+  const p = buildSchema({ domain: "example.com", brand: "Example", market: "GB", local: false, home, clusters: [], delivered: [v1, v2, craft] });
+  const by = Object.fromEntries(p.delivered.map((d) => [d.key, d]));
+  assert.equal(by.site!.status, "updated_waiting");
+  assert.match(by.site!.text, /^Updated version supplied 13 Nov 2026, waiting to go live/);
+  assert.equal(by.craft!.status, "waiting");
+  assert.match(by.craft!.text, /^Supplied 13 Nov 2026, waiting to go live/);
+  assert.equal(p.blocks.find((b) => b.id === "organization"), undefined, "never a second Organization");
+  const live = buildSchema({ domain: "example.com", brand: "Example", market: "GB", local: false, home: page({ nodes: [{ "@type": "Organization", "@id": org, name: "E", url: "u", slogan: "s" }, { "@type": "Person", "@id": "https://www.example.com/#phil", name: "Phil" }] }), clusters: [], delivered: [v1, v2] });
+  assert.equal(live.delivered[0]!.status, "added");
+  assert.equal(live.delivered[0]!.text, "Added by Nomada on 13 Nov 2026");
+});
