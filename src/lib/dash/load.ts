@@ -7,7 +7,7 @@ import { missingColumn } from "@/lib/tracking/limits";
 
 import { packageExcludes } from "./plan-change";
 import type { KeyPageRow } from "./target";
-import type { Day, FootRow, Raw, RawAnswer, RawClient, RawConnection, RawConsoleRow, RawGroup, RawKeyword, RawOpportunity, RawPlacement, RawPrompt, RawRun, RawSerp, TierKey } from "./types";
+import type { Day, FootRow, Raw, RawAnswer, RawClient, RawConnection, RawConsoleRow, RawGroup, RawKeyword, RawOpportunity, RawInProgress, RawPlacement, RawPrompt, RawRun, RawSerp, TierKey } from "./types";
 
 /**
  * One client's rows for the dashboards host, read in parallel with the
@@ -83,6 +83,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     { count: gridCount, error: gridErr },
     { data: readRows, error: readsErr },
     { data: pkgRow, error: pkgErr },
+    { data: progRows, error: progErr },
   ] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id, tier, started_on, stopped_on").eq("client_domain_id", cid),
     db.from("tracked_keywords").select(kwCols).eq("client_domain_id", cid),
@@ -101,6 +102,8 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     // 8 Nov 2026 (20261108020000): what this client's package leaves out of its tier. Read apart, so a database
     // before the migration reads as nothing left out rather than failing the client's other reads.
     db.from("client_domains").select("excluded_deliverables, ranking_kpi").eq("id", cid).maybeSingle(),
+    // 14 Nov 2026 (20261114000000): placements written and waiting to publish - title, keyword and expected month only.
+    db.from("placements_in_progress").select("id, cluster_id, title, keyword, expected_month, stage").eq("client_domain_id", cid).in("stage", ["written", "awaiting"]).order("expected_month", { ascending: true }),
   ]);
   if (pkgErr && !absent(pkgErr)) console.warn(`[dash] package read failed: ${pkgErr.message}`);
   const core = clustersErr ?? keywordsErr ?? promptsErr ?? runsErr;
@@ -114,6 +117,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   if (consoleErr && !absent(consoleErr)) console.warn(`[dash] console read failed: ${consoleErr.message}`);
   if (keyPageErr && !absent(keyPageErr)) console.warn(`[dash] key pages read failed: ${keyPageErr.message}`);
   if (gridErr && !absent(gridErr)) console.warn(`[dash] grid count failed: ${gridErr.message}`);
+  if (progErr && !absent(progErr)) console.warn(`[dash] placements in progress read failed: ${progErr.message}`);
 
   // Started together, awaited one by one: paged() throws on any page's error, so nothing here is held unchecked.
   const serpRead = paged<RawSerp>(() => db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
@@ -162,6 +166,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     footprint: foot ? { pulled_on: foot.pulled_on, rows: Array.isArray(foot.rows) ? (foot.rows as FootRow[]) : [] } : null,
     opportunities: withPageBrands((oppsErr ? [] : (oppRows ?? [])) as RawOpportunity[], readsErr ? [] : (readRows ?? [])),
     placements: (placeErr ? [] : (placeRows ?? [])) as RawPlacement[],
+    inProgress: (progErr ? [] : (progRows ?? [])) as RawInProgress[],
     connections: (connErr ? [] : (connRows ?? [])) as RawConnection[],
     consoleRows: (consoleErr ? [] : (consoleData ?? [])) as RawConsoleRow[],
     groupsReady,

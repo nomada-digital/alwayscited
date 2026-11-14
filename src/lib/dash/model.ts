@@ -313,6 +313,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       trackedKeywords: kws.length,
       prompts: ps.length,
       placements: raw.placements.filter((p) => p.cluster_id === c.id),
+      inProgress: (raw.inProgress ?? []).filter((p) => p.cluster_id === c.id),
       managed: raw.client.tier !== "tracked" && (MANAGED_TIERS as readonly string[]).includes(c.tier),
       startPos: headHist.find(([, p]) => p !== null)?.[1] ?? null,
       startRate: firstRate,

@@ -1,6 +1,6 @@
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
-import { placementsSync, readItems } from "@/lib/agency/sheet-placements";
+import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
 import { teamChange, teamRead } from "@/lib/agency/team";
 import { storeSheet } from "@/lib/links/sheet-store";
@@ -84,7 +84,7 @@ export async function POST(req: Request) {
         return targetSet(db, client, by, { clusterId: id("cluster_id"), url: str("url"), confirmed: b.confirmed === true });
       // Live placements from Kev's master sheet (sg-89, 11 Nov 2026, lib/agency/sheet-placements.ts), sent by the hub's sheet job.
       case "placements_sync":
-        return placementsSync(db, client, readItems(b.items), trackingDay());
+        return placementsSync(db, client, readItems(b.items), trackingDay(), readProgress(b.items));
       case "budget_read":
         return budgetRead(db, client);
       case "budget_cap":

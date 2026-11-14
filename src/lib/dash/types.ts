@@ -112,6 +112,11 @@ export type RawPlacement = {
   live_on: Day | null;
   anchor_text: string | null;
 };
+/**
+ * A placement written and waiting to publish (placements_in_progress, 14 Nov 2026): its title, the keyword it supports
+ * and the month it is expected. No site, price or vendor: those are never on a customer's page before it is live.
+ */
+export type RawInProgress = { id: string; cluster_id: string | null; title: string; keyword: string | null; expected_month: Day | null; stage: string };
 export type Provider = "ga4" | "gsc" | "bing";
 export type RawConnection = { provider: Provider; status: string; property: string | null; requested_at: string | null; connected_at: string | null; last_synced_at: string | null };
 export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };
@@ -130,6 +135,8 @@ export type Raw = {
   footprint: { pulled_on: Day; rows: FootRow[] } | null;
   opportunities: RawOpportunity[];
   placements: RawPlacement[];
+  /** Placements in progress (14 Nov 2026). Absent on a snapshot or demo, and empty until 20261114000000 is applied. */
+  inProgress?: RawInProgress[];
   connections: RawConnection[];
   consoleRows: RawConsoleRow[];
   /** False until 20261017000000 is applied: no groups table, no group_id columns. Groups are then read-only and empty. */
@@ -231,6 +238,8 @@ export type ClusterView = {
   trackedKeywords: number;
   prompts: number;
   placements: RawPlacement[];
+  /** Written and waiting to publish on this cluster (placements_in_progress), title and expected month only. */
+  inProgress: RawInProgress[];
   /** Worked by us on the client's plan (tracked_clusters.tier is a paid tier), not only tracked. */
   managed: boolean;
   /** The cluster keyword's first position held, and the cluster's first naming rate, for "since we started". */

@@ -339,6 +339,9 @@ test("the upsert sites are the ones we think they are", () => {
       "page_reads:client_domain_id,url_key",
       "placement_budget_settings:id",
       "placement_budgets:client_domain_id",
+      // 14 Nov 2026: placements in progress, one row a sheet placement_id - unique (client_domain_id, placement_ref)
+      // in 20261114000000_placements_in_progress.sql.
+      "placements_in_progress:client_domain_id,placement_ref",
         "scan_answers:engine,question_id",
       "scan_brands:brand,engine,scan_id",
       "scan_sources:domain,scan_id",

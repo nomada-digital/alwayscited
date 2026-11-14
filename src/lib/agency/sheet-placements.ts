@@ -17,7 +17,14 @@ import { urlKey } from "@/lib/tracking/placements";
  * sheet's id (NOM-0130) rides in internal_note. Cost, vendor and DR are never sent here, so nothing to keep out of the
  * customer's view.
  */
+/**
+ * 14 Nov 2026 (Danny: "make it clear we have the other placements in progress"): an item may also be written or
+ * awaiting publication - no address yet. It goes to placements_in_progress (20261114000000) with its title (Kev's,
+ * from #alwayscited, else "Article on <topic>"), keyword and expected month, and no site: the customer's page names the
+ * site only once it is live. A live item marks its in-progress row live; one that has left the sheet is dropped.
+ */
 export type SheetItem = { pid: string; url: string; live_on: string; keyword: string | null; kind: string | null; outlet: string | null };
+export type ProgressItem = { pid: string; stage: "written" | "awaiting"; title: string; title_source: "slack" | "topic"; keyword: string | null; expected_month: string | null };
 
 const isDay = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -26,14 +33,56 @@ export function readItems(raw: unknown): SheetItem[] {
   const str = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, n) : "");
   return raw.slice(0, 500).flatMap((x) => {
     const o = (x ?? {}) as Record<string, unknown>;
+    if (o.stage !== undefined && o.stage !== "live") return [];
     const pid = str(o.pid, 20), url = str(o.url, 500);
     if (!/^NOM-\d{4,}$/.test(pid) || !/^https?:\/\//i.test(url) || !isDay(o.live_on)) return [];
     return [{ pid, url, live_on: o.live_on, keyword: str(o.keyword, 200) || null, kind: str(o.kind, 40) || null, outlet: str(o.outlet, 200) || null }];
   });
 }
 
-export async function placementsSync(db: SupabaseClient, client: Client, items: SheetItem[], today: string): Promise<Done> {
-  if (!items.length) return { ok: true, message: "Nothing to add.", data: { added: [], kept: [], skipped: [] } };
+/** The in-progress items in a posted batch (stage written or awaiting), with a title; others are not read here. */
+export function readProgress(raw: unknown): ProgressItem[] {
+  if (!Array.isArray(raw)) return [];
+  const str = (v: unknown, n: number) => (typeof v === "string" ? v.replace(/\s+/g, " ").trim().slice(0, n) : "");
+  return raw.slice(0, 500).flatMap((x) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const pid = str(o.pid, 20), title = str(o.title, 300);
+    if (!/^NOM-\d{4,}$/.test(pid) || (o.stage !== "written" && o.stage !== "awaiting") || title.length < 3) return [];
+    const month = typeof o.expected_month === "string" && /^\d{4}-\d{2}-01$/.test(o.expected_month) ? o.expected_month : null;
+    return [{ pid, stage: o.stage, title, title_source: o.title_source === "slack" ? "slack" : "topic", keyword: str(o.keyword, 200) || null, expected_month: month }];
+  });
+}
+
+const tableMissing = (e: { code?: string; message?: string } | null) => !!e && (e.code === "PGRST205" || e.code === "42P01" || /placements_in_progress/.test(e.message ?? "") && /schema cache|does not exist/.test(e.message ?? ""));
+
+/** Written into placements_in_progress, live ones marked live, those gone from the sheet dropped. Words, never thrown. */
+async function syncProgress(db: SupabaseClient, client: Client, clusterFor: (k: string | null) => { id: string }, progress: ProgressItem[], live: string[]): Promise<string> {
+  const { data: rows, error } = await db.from("placements_in_progress").select("placement_ref, stage").eq("client_domain_id", client.id);
+  if (tableMissing(error)) return progress.length ? `${progress.length} in progress not shown yet: 20261114000000_placements_in_progress.sql is not applied.` : "";
+  if (error) return `In progress not read: ${error.message}`;
+  const now = new Date().toISOString();
+  if (progress.length) {
+    const { error: e } = await db.from("placements_in_progress").upsert(
+      progress.map((p) => ({ client_domain_id: client.id, cluster_id: clusterFor(p.keyword).id, placement_ref: p.pid, title: p.title, title_source: p.title_source, keyword: p.keyword, expected_month: p.expected_month, stage: p.stage, updated_at: now })),
+      { onConflict: "client_domain_id,placement_ref" },
+    );
+    if (e) return `In progress not written: ${e.message}`;
+  }
+  const sent = new Set(progress.map((p) => p.pid));
+  const open = (rows ?? []).filter((r) => r.stage === "written" || r.stage === "awaiting").map((r) => r.placement_ref as string);
+  const nowLive = open.filter((ref) => live.includes(ref));
+  const gone = open.filter((ref) => !sent.has(ref) && !live.includes(ref));
+  const flip = async (refs: string[], stage: "live" | "dropped") => {
+    if (!refs.length) return "";
+    const { error: e } = await db.from("placements_in_progress").update({ stage, updated_at: now }).eq("client_domain_id", client.id).in("placement_ref", refs);
+    return e ? ` Not marked ${stage}: ${e.message}.` : "";
+  };
+  const failed = (await flip(nowLive, "live")) + (await flip(gone, "dropped"));
+  return `${progress.length} in progress${nowLive.length ? `, ${nowLive.length} now live` : ""}${gone.length ? `, ${gone.length} no longer on the sheet` : ""}.${failed}`;
+}
+
+export async function placementsSync(db: SupabaseClient, client: Client, items: SheetItem[], today: string, progress: ProgressItem[] = []): Promise<Done> {
+  if (!items.length && !progress.length) return { ok: true, message: "Nothing to add.", data: { added: [], kept: [], skipped: [] } };
   const [{ data: cl, error: e1 }, { data: kw, error: e2 }, { data: pages, error: e3 }, { data: have, error: e4 }] = await Promise.all([
     db.from("tracked_clusters").select("id, name, keyword_id").eq("client_domain_id", client.id).is("stopped_on", null).is("superseded_by", null).order("created_at", { ascending: true }),
     db.from("tracked_keywords").select("id, keyword, cluster_id").eq("client_domain_id", client.id).is("stopped_on", null),
@@ -69,5 +118,6 @@ export async function placementsSync(db: SupabaseClient, client: Client, items: 
     added.push(it.pid);
   }
   if (added.length) await audit(db, client.id, "hub sheet sync", "placements_sync", null, null, { added, kept: kept.length });
-  return { ok: true, message: `${added.length} added, ${kept.length} already here${skipped.length ? `, ${skipped.length} skipped` : ""}.`, data: { added, kept, skipped } };
+  const inProgress = await syncProgress(db, client, clusterFor, progress, [...added, ...kept]);
+  return { ok: true, message: `${added.length} added, ${kept.length} already here${skipped.length ? `, ${skipped.length} skipped` : ""}. ${inProgress}`.trim(), data: { added, kept, skipped, in_progress: inProgress } };
 }
