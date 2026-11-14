@@ -117,6 +117,8 @@ export type RawPlacement = {
  * and the month it is expected. No site, price or vendor: those are never on a customer's page before it is live.
  */
 export type RawInProgress = { id: string; cluster_id: string | null; title: string; keyword: string | null; expected_month: Day | null; stage: string };
+/** A placement's kind as a customer reads it (14 Nov 2026: "placements", never "guest posts"). */
+export const PLACEMENT_KIND_LABEL: Record<RawPlacement["kind"], string> = { guest_post: "Placement", link_insertion: "Link insertion", on_site: "On your site", coverage: "Coverage" };
 export type Provider = "ga4" | "gsc" | "bing";
 export type RawConnection = { provider: Provider; status: string; property: string | null; requested_at: string | null; connected_at: string | null; last_synced_at: string | null };
 export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };

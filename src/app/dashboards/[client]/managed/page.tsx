@@ -14,7 +14,7 @@ import { money, monthDay, nextMonthStart } from "@/lib/dash/plan-change";
 import { priceFor } from "@/lib/dash/plan-requests";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { readWork } from "@/lib/dash/work";
-import type { ClusterView, Workspace } from "@/lib/dash/types";
+import { PLACEMENT_KIND_LABEL, type ClusterView, type Workspace } from "@/lib/dash/types";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your plan's clusters", robots: { index: false, follow: false } };
@@ -156,7 +156,7 @@ function ManagedCluster({ ws, c, n, href }: { ws: Workspace; c: ClusterView; n: 
               {c.placements.map((p) => (
                 <tr key={p.id}>
                   <td>{p.sample ? <span>{p.domain} <span className="pill sample">Sample</span></span> : <a href={p.url} target="_blank" rel="noopener noreferrer">{p.domain}</a>}{p.anchor_text ? <div className="sub">Anchor: {p.anchor_text}</div> : null}</td>
-                  <td>{p.kind.replace("_", " ")}</td>
+                  <td>{PLACEMENT_KIND_LABEL[p.kind]}</td>
                   <td><span className={`pill${p.status === "live" ? " good" : ""}`}>{p.status}</span></td>
                   <td className="r num">{p.live_on ?? "-"}</td>
                 </tr>
