@@ -126,6 +126,8 @@ export function buildSchema(p: SchemaInput): SchemaPlan {
     const c = compare(want, ev);
     blocks.push({ id, label: c.status === "partly" && c.existingType ? `${label}: add to your existing ${c.existingType} markup` : label, where, jsonld: c.jsonld, extends: c.status === "partly" ? c.id : null, liveIds: [c.id], status: c.status, missing: c.missing, existingType: c.existingType });
     if (c.status === "partly" && c.idless) notes.push(`Your ${c.existingType} markup has no @id. When you add the missing fields, give it "@id": "${c.id}" so everything joins up as one ${c.existingType}.`);
+    // Already there but with no @id: the other blocks point at ours, so it needs that @id to be the one they mean.
+    if (c.status === "already" && c.idless && id === "organization") notes.push(`Your ${c.existingType} markup is complete, but has no @id. Add "@id": "${c.id}" to it, so the other markup here points at it.`);
     return c.id;
   };
 
