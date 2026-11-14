@@ -27,7 +27,7 @@ export default function SchemaTabs({ developer, ai, gtm, platform }: { developer
       <p className="intro" style={{ margin: "10px 0 6px" }}>
         {tab === "dev" ? "Send this to whoever looks after your website. Each block says which page it goes on." : null}
         {tab === "ai" ? `Paste this into ChatGPT or Claude, or give it to an AI browser assistant such as Claude in Chrome while you're signed in to your website's admin${platform ? ` (your site looks like it runs on ${platform})` : ""}. It includes the code and asks the AI to check it with Google's Rich Results Test.` : null}
-        {tab === "gtm" ? "Only if you already use Google Tag Manager: make one Custom HTML tag for each block, with the trigger shown. AI crawlers such as GPTBot, ClaudeBot and PerplexityBot generally don't run JavaScript, so schema added this way mostly helps Google. If you can, use one of the other two ways instead." : null}
+        {tab === "gtm" ? "Only if you already use Google Tag Manager: make one Custom HTML tag for each block, with the trigger shown. Google and Gemini read schema added through Tag Manager. Other AI crawlers are less consistent at running JavaScript, though ChatGPT's are reported to be improving. Adding it to the page directly is the most reliable option." : null}
       </p>
       <pre style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", fontSize: 12, maxHeight: 420, overflow: "auto", background: "var(--chip)", borderRadius: 10, padding: 12, margin: 0 }}>{body}</pre>
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
