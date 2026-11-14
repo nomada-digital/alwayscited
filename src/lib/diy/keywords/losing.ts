@@ -12,14 +12,12 @@ import { urlKey } from "../../tracking/placements.ts";
  * the top 20", a finding - and a day with no row is not a reading at all, so
  * a partial day hides nothing and invents nothing.
  *
- * "Fell 5 or more places" when the keyword now sits outside the top 20: we
- * read Google to position 20, so a keyword that left it is somewhere from 21
- * down, and leaving the top 20 is a move but not a measurable one (spec 2.6
- * rule 7). The fall is therefore counted from its last place inside the top
- * 20 to UNRANKED_AS (21), the shallowest it can now be: a keyword that was
- * 16th or better has fallen at least 5. One that was 17th to 20th may have
- * fallen as far, but we cannot say so, and it is not listed. The copy says
- * where it was and that it is now outside the top 20 - never a number of
+ * "Fell 5 or more places" when the keyword now sits outside the top 100: we
+ * read Google to position 100 (TRACKING_SERP_DEPTH, from 14 Nov 2026; 20 before), so a keyword that left it is
+ * somewhere from 101 down, and leaving the read is a move but not a measurable one (spec 2.6 rule 7). The fall is
+ * therefore counted from its last place inside the read to UNRANKED_AS (101), the shallowest it can now be: a keyword
+ * that was 96th or better has fallen at least 5. One that was 97th to 100th may have fallen as far, but we cannot say
+ * so, and it is not listed. The copy says where it was and that it is now outside the top 100 - never a number of
  * places it fell.
  */
 

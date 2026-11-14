@@ -139,7 +139,7 @@ test("keywords leaving and entering page 1, held over their own readings", () =>
     ok(base(steady(), { serp })).lines.map((l) => [l.kind, l.text]),
     [
       ["left_page1", "'invoicing software' left page 1: 8th to 13th."],
-      ["entered_page1", "'accounting app for freelancers' entered page 1: outside the top 20 to 7th."],
+      ["entered_page1", "'accounting app for freelancers' entered page 1: outside the top 100 to 7th."],
     ],
   );
   // Two readings only: skipped. One flip back: not held.

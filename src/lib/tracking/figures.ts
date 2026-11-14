@@ -291,14 +291,12 @@ export function shareOfVoice(rows: AnswerRow[], r: Range, only?: Set<string>): R
 }
 
 /**
- * Where a keyword outside the top 20 counts in an average position (8 Oct
- * 2026, audit data-7): one place below the deepest read (SERP_DEPTH, 20 -
- * figures.test.mts holds the two together; not imported, as this file is in
- * the date picker's client bundle), so a keyword dropping out makes the
- * average worse. Averaging the ranked ones only made a drop from #13 to
- * unranked read as an improvement.
+ * Where a keyword outside the top 100 counts in an average position (8 Oct 2026, audit data-7): one place below the
+ * deepest read (TRACKING_SERP_DEPTH, 100 since 14 Nov 2026; it was 21 while the read stopped at 20 - figures.test.mts
+ * holds the two together; not imported, as this file is in the date picker's client bundle), so a keyword dropping
+ * out makes the average worse. Averaging the ranked ones only made a drop from #13 to unranked read as an improvement.
  */
-export const UNRANKED_AS = 21;
+export const UNRANKED_AS = 101;
 
 /** The average of keyword positions with an unranked one counted as UNRANKED_AS, to one decimal; null with none read. */
 export function averagePosition(positions: readonly (number | null)[]): number | null {
@@ -523,7 +521,7 @@ export function keywordRows(rows: SerpRow[], r: Range): Map<string, { position: 
  * scaled to that keyword's own best and worst, so a climb from #11 to #7
  * slopes across the cell rather than drawing flat on a 1-20 scale. Better
  * positions sit higher. Unchanged draws level through the middle; a week with
- * no reading in the top 20 is a gap (null y).
+ * no reading in the top 100 is a gap (null y).
  */
 export function sparkPoints(series: (number | null)[], w = 64, h = 20, pad = 2): { x: number; y: number | null }[] {
   const weeks: (number | null)[] = [];

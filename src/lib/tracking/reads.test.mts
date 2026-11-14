@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { firstTask, keywordRankRequest, SERP_DEPTH } from "../scan/dataforseo-request.ts";
+import { firstTask, keywordRankRequest, SERP_DEPTH, TRACKING_SERP_DEPTH } from "../scan/dataforseo-request.ts";
 import { parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb, unwrapByPlatform } from "../scan/engines.ts";
 
 import { billedCost, failureSummary, keywordOutcome, readFailureReason, readRetryDelay, runOutcome } from "./decide.ts";
@@ -141,7 +141,7 @@ test("the run's error line groups failures by engine and reason", () => {
   assert.equal(failureSummary(21, []), null);
 });
 
-test("keyword reads: null is outside the top 20, an empty SERP is a failed read with a reason", () => {
+test("keyword reads: null is outside the top read, an empty SERP is a failed read with a reason", () => {
   assert.deepEqual(keywordOutcome(null), { failed: false, rank: null });
   assert.deepEqual(keywordOutcome(7), { failed: false, rank: 7 });
   assert.deepEqual(keywordOutcome(undefined), { failed: true, reason: "empty SERP: no organic results came back" });
@@ -150,12 +150,17 @@ test("keyword reads: null is outside the top 20, an empty SERP is a failed read 
   assert.equal(rankOf(parseOrganic({ items: [{ type: "organic", rank_group: 1, domain: "example.com" }] }), "tallyroo.com"), null);
 });
 
-test("keyword reads ask for a full SERP at depth 20 in the client's market", () => {
-  const uk = (keywordRankRequest("bookkeeping services small business", "UK").body as Record<string, unknown>[])[0]!;
-  const us = (keywordRankRequest("bookkeeping services small business", "US").body as Record<string, unknown>[])[0]!;
+test("14 Nov 2026: the daily tracking reads each keyword to the top 100 in the client's market; the scan stays at 20", () => {
+  const uk = (keywordRankRequest("bookkeeping services small business", "UK", TRACKING_SERP_DEPTH).body as Record<string, unknown>[])[0]!;
+  const us = (keywordRankRequest("bookkeeping services small business", "US", TRACKING_SERP_DEPTH).body as Record<string, unknown>[])[0]!;
+  assert.equal(TRACKING_SERP_DEPTH, 100);
+  assert.deepEqual([uk.location_code, uk.language_code, uk.depth], [2826, "en", 100]);
+  assert.deepEqual([us.location_code, us.language_code, us.depth], [2840, "en", 100]);
   assert.equal(SERP_DEPTH, 20);
-  assert.deepEqual([uk.location_code, uk.language_code, uk.depth], [2826, "en", 20]);
-  assert.deepEqual([us.location_code, us.language_code, us.depth], [2840, "en", 20]);
+  assert.equal(((keywordRankRequest("x", "UK").body as Record<string, unknown>[])[0]!).depth, 20, "the scan's read is unchanged");
+  const dfs = readFileSync(new URL("../scan/dataforseo.ts", import.meta.url), "utf8");
+  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH\)/, "readKeywordPosition, the tracking read, asks for the top 100");
+  assert.match(dfs, /const top = organic\.filter\(\(o\) => o\.rank <= SERP_DEPTH\)/, "only the top 20 is kept as the day's results");
 });
 
 /** Where runner.ts marks a read failed, and whether it still collapses an empty SERP to null. */

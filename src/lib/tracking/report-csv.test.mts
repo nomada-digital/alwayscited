@@ -102,7 +102,7 @@ test("keywords: one row per keyword and day, the cluster it heads, a blank posit
     R,
   );
   assert.deepEqual(csv.trimEnd().split("\r\n"), [
-    "date,cluster,keyword,google position (blank: not in top 20)",
+    "date,cluster,keyword,google position (blank: not in top 100)",
     "2026-09-04,invoicing app,invoicing software,7",
     "2026-09-04,,loose keyword,3",
     "2026-09-05,invoicing app,invoicing software,",

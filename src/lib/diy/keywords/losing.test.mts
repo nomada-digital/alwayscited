@@ -16,17 +16,18 @@ test("held over 2 of the last 3 readings, the latest among them, from 16th or be
   assert.deepEqual(hit, { was: { position: 14, day: "2026-10-04", url: "https://tallyroo.com/invoicing" }, out: 2, latest: "2026-10-06" }, "from its last place inside the top 20");
 });
 
-test("the fall is counted to 21st, the shallowest it can now be: 16th is losing ground, 17th is not said", () => {
+test("the fall is counted to 101st, the shallowest it can now be (the read is 100 deep from 14 Nov 2026): 96th is losing ground, 97th is not said", () => {
   const from = (p: number) => losingFrom([r("2026-10-01", p), r("2026-10-02", null), r("2026-10-03", null)]);
-  assert.equal(from(16)?.was.position, 16);
-  assert.equal(from(17), null);
+  assert.equal(from(96)?.was.position, 96);
+  assert.equal(from(97), null);
+  assert.equal(from(17)?.was.position, 17, "out of the top 100 from #17 is losing ground (it was not said while the read stopped at 20)");
   assert.equal(from(3)?.out, 2);
 });
 
-test("not losing ground: back in the top 20 at the latest reading; only one of three out; never in the top 20; too few readings", () => {
-  assert.equal(losingFrom([r("a", 8), r("b", null), r("c", null), r("d", 19)]), null, "the latest reading is inside the top 20");
+test("not losing ground: back in the top 100 at the latest reading; only one of three out; never in the top 100; too few readings", () => {
+  assert.equal(losingFrom([r("a", 8), r("b", null), r("c", null), r("d", 19)]), null, "the latest reading is inside the top 100");
   assert.equal(losingFrom([r("a", 8), r("b", 9), r("c", 10), r("d", null)]), null, "one of the last three");
-  assert.equal(losingFrom([r("a", null), r("b", null), r("c", null)]), null, "a keyword never in the top 20 lost no ground");
+  assert.equal(losingFrom([r("a", null), r("b", null), r("c", null)]), null, "a keyword never in the top 100 lost no ground");
   assert.equal(losingFrom([r("a", 8), r("b", null)]), null);
 });
 

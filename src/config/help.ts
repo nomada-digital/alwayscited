@@ -7,7 +7,7 @@ import { listOf } from "@/config/scan-shape";
 import { SITE_URL } from "@/config/schema";
 import { PLAN_TERMS, TRIAL, TRIAL_TERMS, trialCharge, trialLine } from "@/config/trial";
 import { dashLink } from "@/lib/dash/host";
-import { SERP_DEPTH } from "@/lib/scan/dataforseo-request";
+import { TRACKING_SERP_DEPTH } from "@/lib/scan/dataforseo-request";
 import { ENGINE_SPECS } from "@/lib/scan/engines";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { ASKS_PER_MEMBER_PER_DAY } from "@/lib/tracking/ask";
@@ -308,11 +308,11 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
           id: "google",
           heading: "Google positions",
           blocks: [
-            `Each cluster keyword is checked in Google's organic results for your market, down to position ${SERP_DEPTH}. The position is where your site's best-ranking page sits, and the dashboard shows which page that is.`,
-            `Outside the top ${SERP_DEPTH} is a reading, not a gap: the Keywords CSV leaves the position blank, and an average position counts it as #${UNRANKED_AS}, so dropping out makes the average worse rather than better.`,
+            `Each cluster keyword is checked in Google's organic results for your market, down to position ${TRACKING_SERP_DEPTH}. The position is where your site's best-ranking page sits, and the dashboard shows which page that is.`,
+            `Outside the top ${TRACKING_SERP_DEPTH} is a reading, not a gap: the Keywords CSV leaves the position blank, and an average position counts it as #${UNRANKED_AS}, so dropping out makes the average worse rather than better.`,
             // 13 Oct 2026 (Danny: a keyword we read outside the top 20 showed 3rd in a signed-in browser). The
             // request, read in dataforseo-request.ts keywordRankRequest that day: Google organic results, location_code
-            // by the client's market, desktop, depth SERP_DEPTH, and nothing else - we send no account, cookie or
+            // by the client's market, desktop, depth TRACKING_SERP_DEPTH, and nothing else - we send no account, cookie or
             // history. Only what we send is claimed (review, 13 Oct 2026): how DataForSEO fetches is theirs, so the line
             // no longer says "not personalised". Only organic results count: engines.ts collectOrganic keeps
             // type "organic" alone, so a local pack or map place, an ad or an AI Overview link is never a position.
@@ -389,7 +389,7 @@ export function helpContent(trialOn: boolean = TRIAL.enabled): HelpContent {
             {
               list: [
                 `${ui("Answers CSV")}: one row per prompt, engine and day - the date, the cluster and its keyword, the angle, the prompt, the engine, whether it answered, whether it named you, the brands it named and the pages it cited. An answer whose other brands could not be read says ${BRANDS_NOT_READ} among its brands.`,
-                `${ui("Keywords CSV")}: each cluster keyword's Google position per day, blank where it was not in the top ${SERP_DEPTH}.`,
+                `${ui("Keywords CSV")}: each cluster keyword's Google position per day, blank where it was not in the top ${TRACKING_SERP_DEPTH}.`,
               ],
             },
             "A plan with placements gets a Placements CSV as well. Each month's card gives that month's figures beside its files, and anyone on the team can download, viewers included.",

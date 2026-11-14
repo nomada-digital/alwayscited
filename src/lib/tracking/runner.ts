@@ -397,7 +397,7 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       return { ...base, answered: false, named: false, response_text: null, cost, failed: true, reason };
     });
 
-    // A keyword read: null is "not in the top 20", a finding; an empty SERP or
+    // A keyword read: null is "not in the top 100" (TRACKING_SERP_DEPTH), a finding; an empty SERP or
     // an error is a failed read with its reason, never a silent null.
     const serp = await mapWithConcurrency(keywordJobs, CONCURRENCY, async (k) => {
       let cost = 0;

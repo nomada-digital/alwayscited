@@ -193,7 +193,7 @@ function promptLines(input: DiffInput, inWindow: readonly DiffAnswer[]): { lost:
 function keywordLines(input: DiffInput, from: Day): { left: ChangeLine[]; entered: ChangeLine[] } {
   const left: ChangeLine[] = [];
   const entered: ChangeLine[] = [];
-  const at = (p: number | null) => (p === null ? "outside the top 20" : ordinal(p));
+  const at = (p: number | null) => (p === null ? "outside the top 100" : ordinal(p));
   for (const k of input.keywords) {
     const byDay = new Map<Day, number | null>();
     for (const s of input.serp) if (s.keyword_id === k.id && s.run_date >= from && s.run_date <= input.today && !byDay.has(s.run_date)) byDay.set(s.run_date, s.position);

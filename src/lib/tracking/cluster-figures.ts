@@ -73,7 +73,7 @@ export type ClusterCard = {
   /** Prompts with at least one named answer in the range, of the cluster's prompts. */
   promptsNamed: Rate;
   position: number | null;
-  /** The keyword had a Google reading in the range - so a null position is "outside the top 20", not "not read". */
+  /** The keyword had a Google reading in the range - so a null position is "outside the top 100", not "not read". */
   positionRead: boolean;
   /** The day of that latest reading, null when it was not read in the range (13 Oct 2026: the slot's sentence dates it). */
   positionOn: Day | null;
@@ -87,7 +87,7 @@ export type ClusterCard = {
   /** Places gained: #7 to #4 is +3. */
   positionChange: number | null;
   /**
-   * 8 Oct 2026 (audit data-7): a live cluster's keyword that left the top 20
+   * 8 Oct 2026 (audit data-7): a live cluster's keyword that left the top 100
    * ("dropped": ranked in the comparison, read and unranked now) or came into
    * it ("entered"), or stayed out of it ("unranked"). positionChange is null
    * for all three, and they read "New" and "same as from #13" before.
@@ -100,7 +100,7 @@ export type ClusterCard = {
 
 const within = (d: Day, r: Range) => d >= r.from && d <= r.to;
 
-/** The keyword's latest Google reading in the range: its position (null outside the top 20) and its day, or no day when it was not read. */
+/** The keyword's latest Google reading in the range: its position (null outside the top 100) and its day, or no day when it was not read. */
 function latestReading(serp: SerpRow[], keywordId: string | null, r: Range | null): { at: Day | null; position: number | null } {
   if (!keywordId || !r) return { at: null, position: null };
   let at: Day | null = null;
@@ -150,7 +150,7 @@ export type ClusterSummary = {
   /**
    * Cluster keywords whose latest position is 1-10, of the keywords of
    * clusters with readings, and the average position of those read, one
-   * outside the top 20 counted as UNRANKED_AS (`unranked` of them; audit
+   * outside the top 100 counted as UNRANKED_AS (`unranked` of them; audit
    * data-7, 8 Oct 2026).
    */
   page1: Rate & { avg: number | null; ranked: number; unranked: number };
@@ -447,7 +447,7 @@ export function clusterDetail(input: ClusterInput, clusterId: string): ClusterDe
     .reduce<{ engine: string; rate: Rate } | null>((best, e) => (e.rate.num > 0 && (!best || e.rate.num > best.rate.num) ? e : best), null);
   const keywordId = input.clusters.find((c) => c.id === clusterId)?.keyword_id ?? null;
   let positionBeforeOn: Day | null = null;
-  // The day of the comparison's reading - a ranked one, or the unranked one a keyword entered the top 20 from (audit data-7).
+  // The day of the comparison's reading - a ranked one, or the unranked one a keyword entered the top 100 from (audit data-7).
   if ((card.positionBefore !== null || card.positionEvent === "entered") && keywordId && input.before) {
     for (const s of input.serp) if (s.keyword_id === keywordId && within(s.run_date, input.before) && (positionBeforeOn === null || s.run_date > positionBeforeOn)) positionBeforeOn = s.run_date;
   }
@@ -457,15 +457,15 @@ export function clusterDetail(input: ClusterInput, clusterId: string): ClusterDe
 /**
  * The one-cluster page's Google line after its position (8 Oct 2026, audit
  * data-7): ", up from #7 on 1 Sep", ", down from #13 on 1 Sep" for a keyword
- * that left the top 20, ", up from outside the top 20 on 1 Sep" for one that
+ * that left the top 100, ", up from outside the top 100 on 1 Sep" for one that
  * entered it. "" with no reading to compare. A null change fell through to
- * "same as" before, so a drop-out read "Not in the top 20, same as from #13".
+ * "same as" before, so a drop-out read "Not in the top 100, same as from #13".
  */
 export function positionMove(c: Pick<ClusterCard, "positionEvent" | "positionChange" | "positionBefore">, beforeOn: Day | null): string {
   if (!beforeOn) return "";
   const on = formatDay(beforeOn);
   if (c.positionEvent === "dropped") return `, down from #${c.positionBefore} on ${on}`;
-  if (c.positionEvent === "entered") return `, up from outside the top 20 on ${on}`;
+  if (c.positionEvent === "entered") return `, up from outside the top 100 on ${on}`;
   if (c.positionChange === null || c.positionBefore === null) return "";
   return `, ${c.positionChange > 0 ? "up from" : c.positionChange < 0 ? "down from" : "unchanged from"} #${c.positionBefore} on ${on}`;
 }

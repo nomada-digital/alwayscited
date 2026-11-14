@@ -1,4 +1,4 @@
-import { SERP_DEPTH } from "../scan/dataforseo-request.ts";
+import { TRACKING_SERP_DEPTH } from "../scan/dataforseo-request.ts";
 import { type Market, isMarket } from "../scan/domain.ts";
 import { type Day, type Range, formatDay } from "./figures.ts";
 
@@ -7,15 +7,15 @@ import { type Day, type Range, formatDay } from "./figures.ts";
  *
  * The Overview's cluster cards, the Clusters page and the one-cluster page
  * drew a bare "-" for every keyword with no position, so "read today and not
- * in the top 20" looked the same as "not read at all" - and Danny, seeing his
+ * in the top 100" looked the same as "not read at all" - and Danny, seeing his
  * own agency 3rd in his signed-in browser, read our "-" as a reading that had
  * gone missing. Trust rule 2 (spec 10 section 2.6): "Not measured" and
- * "measured, not in the top 20" are drawn differently and never mixed. So
+ * "measured, not in the top 100" are drawn differently and never mixed. So
  * each slot is one of five, each with a short form for the slot and a full
  * sentence for a screen reader and the hover:
  *
  * - **ranked**: "#3";
- * - **out**: read, and not in Google's top 20 - "Not in top 20 (UK)", with
+ * - **out**: read, and not in Google's top 100 - "Not in top 100 (UK)", with
  *   the market the reading was made for, because a reading is one market's;
  * - **pending**: the keyword's first check is still to come - "Not checked yet":
  *   the cluster's first check, or (review, 13 Oct 2026) a keyword a live cluster
@@ -26,7 +26,7 @@ import { type Day, type Range, formatDay } from "./figures.ts";
  *
  * The market is the client's (client_domains.market), read as the runner
  * reads it: the UK or the US (dataforseo-request.ts keywordRankRequest,
- * location by market, desktop, depth SERP_DEPTH).
+ * location by market, desktop, depth TRACKING_SERP_DEPTH).
  */
 
 export type SlotKind = "ranked" | "out" | "pending" | "unread" | "none";
@@ -52,7 +52,7 @@ export function positionSlot(
   if (kw === null) return { kind: "none", short: "No keyword", full: "This cluster has no Google keyword yet, so nothing is checked on Google." };
   const on = c.positionOn ? `, ${formatDay(c.positionOn)}` : "";
   if (c.position !== null) return { kind: "ranked", short: `#${c.position}`, full: `'${kw}' is ${ordinal(c.position)} on Google in the ${m} at its latest reading${on}.` };
-  if (c.positionRead) return { kind: "out", short: `Not in top ${SERP_DEPTH} (${m})`, full: `'${kw}' is not in Google's top ${SERP_DEPTH} in the ${m} at its latest reading${on}.` };
+  if (c.positionRead) return { kind: "out", short: `Not in top ${TRACKING_SERP_DEPTH} (${m})`, full: `'${kw}' is not in Google's top ${TRACKING_SERP_DEPTH} in the ${m} at its latest reading${on}.` };
   if (c.status === "pending" || c.keywordAhead) return { kind: "pending", short: "Not checked yet", full: `'${kw}' has not been checked on Google yet. Its first check is the next daily check.` };
   if (range && range.from === range.to) return { kind: "unread", short: "Not measured that day", full: `'${kw}' was not read on Google on ${formatDay(range.from)}.` };
   return { kind: "unread", short: "Not measured in this range", full: range ? `'${kw}' was not read on Google between ${formatDay(range.from)} and ${formatDay(range.to)}.` : `'${kw}' was not read on Google in this range.` };

@@ -52,6 +52,15 @@ export const RESPONSE_MODELS = {
 export const SERP_DEPTH = 20;
 
 /**
+ * How deep the daily tracking reads each customer's keywords (Danny, 14 Nov 2026: "read tracked keywords to the top
+ * 100, not the top 20"), so a position from 21 to 100 is a reading like any other and the week's change and history
+ * hold across the range. The free scan keeps SERP_DEPTH. DataForSEO bills each page of ten: $0.014 a read at 100
+ * against $0.0035 at 20 (read 14 Nov 2026), well inside tracking_daily_cost_cap_usd. Only the top SERP_DEPTH of each
+ * page is kept as the day's top results (dataforseo.ts readKeywordPosition), so the stored payload is unchanged.
+ */
+export const TRACKING_SERP_DEPTH = 100;
+
+/**
  * Per-answer output ceiling on the LLM Responses endpoints, which bill per
  * token. An unbounded answer is an unbounded bill.
  */
@@ -171,7 +180,7 @@ export function requestFor(engine: Engine, question: string, market: Market): En
  * reads one, and asking for it only slows the task. Not wired to a caller
  * until the R41 columns are applied - see target-keyword.ts.
  */
-export function keywordRankRequest(keyword: string, market: Market): EngineRequest {
+export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH): EngineRequest {
   return {
     path: "/v3/serp/google/organic/live/advanced",
     timeoutMs: 60_000,
@@ -181,7 +190,7 @@ export function keywordRankRequest(keyword: string, market: Market): EngineReque
         location_code: MARKETS[market].location_code,
         language_code: "en",
         device: "desktop",
-        depth: SERP_DEPTH,
+        depth,
       },
     ],
   };

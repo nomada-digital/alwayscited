@@ -160,8 +160,9 @@ test("the headline and four figures by cluster match dataset.py's summary (T4b p
   ]);
   assert.deepEqual([s.page1.num, s.page1.den, s.page1Before], [5, 9, 3], "5 of 9 on page 1, was 3");
   // The board averages 9.7 with c9 at #23; the fixture keeps #23 unranked. 8 Oct 2026 (audit data-7): unranked
-  // counts as #21, so 9.4 (it was the eight ranked alone, 8 - better for every keyword that dropped out).
-  assert.equal(s.page1.avg, 9.4);
+  // counts as one below the read: #101 since 14 Nov 2026 (the top 100), so 18.3; #21 (9.4) while the read stopped at 20.
+  // It was the eight ranked alone, 8 - better for every keyword that dropped out.
+  assert.equal(s.page1.avg, 18.3);
   assert.deepEqual([s.page1.ranked, s.page1.unranked], [8, 1]);
   assert.deepEqual(s.offPage1, ["invoicing software", "bookkeeping software", "cloud accounting software"]);
 });
@@ -346,7 +347,7 @@ test("8 Oct 2026 (audit data-7): a keyword leaving the top 20 is 'dropped', neve
   const base = clusterSummary(cards).page1.avg!;
   const worse = clusterSummary(dropped).page1.avg!;
   assert.ok(worse > base, `average ${base} -> ${worse} when #14 drops out`);
-  assert.equal(worse, 10.2);
+  assert.equal(worse, 28, "the dropped keyword counts as #101 (14 Nov 2026; 10.2 when it counted as #21)");
   // A keyword drop from #11 (k3) is worse too, not better.
   assert.ok(clusterSummary(clusterCards({ ...fx.data, serp: serpWith("k3", "2026-09-27", null), range, before, today: fx.today, engines: [] })).page1.avg! > base);
 });
@@ -356,7 +357,7 @@ test("8 Oct 2026 (audit data-7): a keyword entering the top 20 is 'entered'; one
   // k3, invoicing software, unranked through the previous period, ranked now.
   const entered = clusterDetail({ ...fx.data, serp: fx.data.serp.map((x) => (x.keyword_id === "k3" && x.run_date <= before.to ? { ...x, position: null } : x)), range, before, today: fx.today, engines: [] }, "c3")!;
   assert.deepEqual([entered.card.positionBefore, entered.card.positionEvent], [null, "entered"]);
-  assert.equal(positionMove(entered.card, entered.positionBeforeOn), ", up from outside the top 20 on 1 Sep");
+  assert.equal(positionMove(entered.card, entered.positionBeforeOn), ", up from outside the top 100 on 1 Sep");
   const out = clusterCards({ ...fx.data, serp: serpWith("k3", "2026-01-01", null), range, before, today: fx.today, engines: [] }).find((c) => c.id === "c3")!;
   assert.equal(out.positionEvent, "unranked");
   // Every card's line, and a null change of every kind: "unchanged from" only at 0, never "same as".

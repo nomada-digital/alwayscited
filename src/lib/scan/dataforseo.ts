@@ -53,6 +53,7 @@ import {
   renderedPageRequest,
   requestFor,
   SERP_DEPTH,
+  TRACKING_SERP_DEPTH,
   taskCost,
 } from "./dataforseo-request.ts";
 import { type MapsHit, parseMapsResult, rankOfCid } from "@/lib/local/grid";
@@ -251,7 +252,8 @@ export async function readKeywordPosition(
   market: Market,
   budgetMs?: number,
 ): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault> }> {
-  const { path, body, timeoutMs } = keywordRankRequest(keyword, market);
+  // 14 Nov 2026: the daily tracking reads to TRACKING_SERP_DEPTH (100); the scan's readKeywordRank stays at SERP_DEPTH.
+  const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH);
   const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
   const organic = parseOrganic(task.result?.[0]);
   const rank = rankOfRead(organic, domain, task.partial === true);

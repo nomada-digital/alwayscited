@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { SERP_DEPTH } from "../scan/dataforseo-request.ts";
+import { TRACKING_SERP_DEPTH } from "../scan/dataforseo-request.ts";
 import { compareText } from "./date-range.ts";
 import { expandFixture, fixtureState } from "./fixture-mode.ts";
 
@@ -194,9 +194,10 @@ test("questions named, share of voice with rank, keywords on page 1", () => {
     r,
     10,
   );
-  // 8 Oct 2026 (audit data-7): k3, read and outside the top 20, counts as #21 - it was left out, averaging 5.5.
-  assert.deepEqual([kw.num, kw.den, kw.avg, kw.ranked, kw.unranked], [2, 10, 10.7, 2, 1]);
-  assert.equal(UNRANKED_AS, SERP_DEPTH + 1, "one place below the deepest read");
+  // 8 Oct 2026 (audit data-7): k3, read and outside the top read, counts as one below it - it was left out, averaging 5.5.
+  // 14 Nov 2026: the read goes to the top 100, so it counts as #101 (37.3); while the read stopped at 20 it was #21 (10.7).
+  assert.deepEqual([kw.num, kw.den, kw.avg, kw.ranked, kw.unranked], [2, 10, 37.3, 2, 1]);
+  assert.equal(UNRANKED_AS, TRACKING_SERP_DEPTH + 1, "one place below the deepest read");
 });
 
 test("movers sort by the size of the change; the brand board counts the client as one brand among them", () => {

@@ -54,7 +54,7 @@ export function keywordsCsv(data: Pick<OverviewData, "serp" | "keywords" | "clus
     .filter((s) => within(s.run_date, range))
     .sort((a, b) => a.run_date.localeCompare(b.run_date) || a.keyword_id.localeCompare(b.keyword_id))
     .map((s) => line([s.run_date, cluster.get(s.keyword_id) ?? null, k.get(s.keyword_id) ?? null, s.position]));
-  return [line(["date", "cluster", "keyword", "google position (blank: not in top 20)"]), ...rows].join("\r\n") + "\r\n";
+  return [line(["date", "cluster", "keyword", "google position (blank: not in top 100)"]), ...rows].join("\r\n") + "\r\n";
 }
 
 /**
