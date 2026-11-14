@@ -223,7 +223,10 @@ export function buildSchema(p: SchemaInput): SchemaPlan {
   };
   const kept = rows.length ? blocks.filter((b) => !covered(b)) : blocks;
   const delivered = deliveredStatus(rows, [home, ...p.clusters.map((c) => c.page)]);
-  return { blocks: kept, notes: rows.length ? notes.filter((n) => !/markup (has no @id|is complete)/.test(n)) : notes, delivered };
+  // And no note second-guesses it: about the business node it delivered (logo, address, @id), or a service it delivered.
+  const delService = rows.some((r) => Object.values(r.expected).some((e) => e.types.includes("Service")));
+  const quiet = (n: string) => /markup (has no @id|is complete)/.test(n) || (delOrg && /logo|address/.test(n)) || (delService && /service markup is waiting/.test(n));
+  return { blocks: kept, notes: rows.length ? notes.filter((n) => !quiet(n)) : notes, delivered };
 }
 
 export const short = (u: string) => u.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/+$/, "") || u;
