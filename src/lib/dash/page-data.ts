@@ -13,6 +13,7 @@ import { loadUpgradeContext } from "@/lib/tracking/upgrade-context";
 
 import { buildWorkspace } from "./model";
 import { planShape } from "./plan";
+import { hubCustomerView, isStaffEmail } from "./staff";
 import type { Raw, Workspace } from "./types";
 
 /**
@@ -82,7 +83,12 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
     redirect("/login");
   }
   const raw = await dashRaw(email, slug);
-  if (!raw) notFound();
+  if (!raw) {
+    // 14 Nov 2026: a Nomada staff session on a customer's dashboard it is not on goes to the hub's read-only view of it.
+    const hub = isStaffEmail(email) ? hubCustomerView(slug) : null;
+    if (hub) redirect(hub);
+    notFound();
+  }
   const clients = await dashClients(email);
   // The trial, a failed payment or an ended plan, said the way /app says it (plan-banner.ts), with Billing on Plan.
   const c = clients.find((x) => x.slug === slug) as (Parameters<typeof planBanner>[0]["client"] & { slug: string }) | undefined;

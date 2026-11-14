@@ -160,7 +160,9 @@ test("every page is registered, and every registered page exists", () => {
 test("(b)+(c) pageData redirects no session to sign-in and 404s a slug that is not the session's", () => {
   const src = readFileSync(join(ROOT, "src", "lib", "dash", "page-data.ts"), "utf8");
   assert.match(src, /const email = await dashEmail\(\);\s*\/\/[^\n]*\n\s*if \(!email\) \{\s*if \(base\) notFound\(\);\s*redirect\("\/login"\);/, "no session must go to the sign-in page (a 404 off the dashboards host)");
-  assert.match(src, /const raw = await dashRaw\(email, slug\);\s*if \(!raw\) notFound\(\);/, "a slug not among the session's clients must 404");
+  // 14 Nov 2026: a slug not among the session's clients 404s, except that a Nomada staff session is sent to the hub's
+  // read-only view of that customer (staff.ts) - which grants nothing; the hub checks the staff member itself.
+  assert.match(src, /const raw = await dashRaw\(email, slug\);\s*if \(!raw\) \{[\s\S]{0,260}const hub = isStaffEmail\(email\) \? hubCustomerView\(slug\) : null;\s*if \(hub\) redirect\(hub\);\s*notFound\(\);\s*\}/, "a slug not among the session's clients must 404 (staff: the hub's view)");
 });
 
 for (const [route, src] of PAGES) {
