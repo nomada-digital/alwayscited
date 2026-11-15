@@ -186,7 +186,7 @@ export function requestFor(engine: Engine, question: string, market: Market): En
  */
 export const SE_DOMAIN: Record<Market, string> = { UK: "google.co.uk", US: "google.com", JM: "google.com.jm" };
 
-export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH, os?: "windows" | "macos"): EngineRequest {
+export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH, os?: "windows" | "macos", aio = false): EngineRequest {
   return {
     path: "/v3/serp/google/organic/live/advanced",
     timeoutMs: 60_000,
@@ -199,6 +199,10 @@ export function keywordRankRequest(keyword: string, market: Market, depth: numbe
         ...(os ? { os } : {}),
         se_domain: SE_DOMAIN[market],
         depth,
+        // 15 Nov 2026, the daily read only (the scan's read stays without it): as the hub's Google results tool asks
+        // (keyword-tool kw.ts serpTask), so an Overview Google loads after the page is read too, with its sources.
+        // No extra cost (measured 15 Nov).
+        ...(aio ? { load_async_ai_overview: true } : {}),
       },
     ],
   };
@@ -207,10 +211,11 @@ export function keywordRankRequest(keyword: string, market: Market, depth: numbe
 /**
  * A tracked keyword on Bing (Danny, 15 Nov 2026: Bing beside Google). As the hub's daily Bing read does it
  * (nomada-dashboards generators/bing_ranks.py): organic, mobile - DataForSEO's desktop Bing pages are often another
- * search's (15 Nov: "volunteer management software" came back as gov.uk volunteering, then Roblox) - to the same
- * depth as Google's. Live, as the daily run reads everything. $0.011 a read at depth 100 (15 Nov 2026).
+ * search's (15 Nov: "volunteer management software" came back as gov.uk volunteering, then Roblox) - to depth 20,
+ * the hub's depth (Danny, 15 Nov 2026: "using the hub's daily Bing read method"). Live, as the daily run reads
+ * everything. $0.0035 a read (15 Nov 2026; $0.011 at depth 100).
  */
-export function bingRankRequest(keyword: string, market: Market, depth: number = TRACKING_SERP_DEPTH): EngineRequest {
+export function bingRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH): EngineRequest {
   return {
     path: "/v3/serp/bing/organic/live/advanced",
     timeoutMs: 60_000,

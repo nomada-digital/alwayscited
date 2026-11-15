@@ -44,7 +44,8 @@ export default function Rankings({ keywords, rows, extras, domain, varies }: { k
   const bingCell = (r: RankRow | null) => {
     if (!extras || !r || r.bing_read == null) return <Faint>From the next daily check</Faint>;
     if (!r.bing_read) return <Faint>No clear reading</Faint>;
-    return <Pos pos={r.bing_position ?? null} />;
+    // Bing is read to the top 20, as the hub reads it (dataforseo-request.ts bingRankRequest).
+    return r.bing_position != null ? <Pos pos={r.bing_position} /> : <span className="pos none" style={{ fontSize: 12 }} title="Bing was read and your site is not in its top 20 for this search">Not in top 20</span>;
   };
 
   return (

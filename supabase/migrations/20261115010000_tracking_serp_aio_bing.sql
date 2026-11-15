@@ -2,7 +2,7 @@
 -- daily run beside the Google position (src/lib/tracking/runner.ts).
 -- aio_shown: an AI Overview showed on the Google page (null: not read for it); aio_sources: the sites it cites,
 -- from the same paid response, at no extra cost.
--- bing_*: Bing organic, mobile, depth 100, a page checked to be the search asked for (engines.ts bingPageMatches)
+-- bing_*: Bing organic, mobile, depth 20 (the hub's Bing read), a page checked to be the search asked for (engines.ts bingPageMatches)
 -- and read up to 3 times; bing_read false is a Bing read that never came right (no reading, not "not ranking").
 -- Additive; null on every row read before it.
 alter table public.tracking_serp

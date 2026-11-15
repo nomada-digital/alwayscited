@@ -159,7 +159,7 @@ test("14 Nov 2026: the daily tracking reads each keyword to the top 100 in the c
   assert.equal(SERP_DEPTH, 20);
   assert.equal(((keywordRankRequest("x", "UK").body as Record<string, unknown>[])[0]!).depth, 20, "the scan's read is unchanged");
   const dfs = readFileSync(new URL("../scan/dataforseo.ts", import.meta.url), "utf8");
-  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH, os\)/, "readKeywordPosition, the tracking read, asks for the top 100");
+  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH, os, true\)/, "readKeywordPosition, the tracking read, asks for the top 100");
   assert.deepEqual([uk.se_domain, us.se_domain], [SE_DOMAIN.UK, SE_DOMAIN.US], "15 Nov 2026: each market on its own Google");
   assert.ok(SE_DOMAIN.UK.endsWith(["", "co", "uk"].join(".")));
   assert.equal(uk.device, "desktop");

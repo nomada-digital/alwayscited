@@ -259,7 +259,7 @@ export async function readKeywordPosition(
   // thin or wrapped page), is read once more as another desktop; the second counts when it is a reading and the first
   // found nothing. A page that is no reading never becomes "not in the top 100" (rankOfRead, decide.ts keywordOutcome).
   const once = async (os?: "windows" | "macos") => {
-    const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os);
+    const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os, true);
     const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
     const organic = parseOrganic(task.result?.[0]);
     const rank = rankOfRead(organic, domain, task.partial === true, market);
@@ -284,7 +284,8 @@ export async function readKeywordPosition(
 }
 
 /**
- * A tracked keyword's Bing position (Danny, 15 Nov 2026), to the depth Google is read to. A page that is not the
+ * A tracked keyword's Bing position (Danny, 15 Nov 2026), the hub's way (generators/bing_ranks.py): mobile, depth 20
+ * (SERP_DEPTH), each page checked to be the search asked for. A page that is not the
  * search asked for (bingPageMatches), or a foreign or thin one (serpFault), is no reading and is read again, up to
  * BING_READS in all, as the hub's Bing run re-reads; none right is a failed read (rank undefined), never "not in the
  * top 100".
