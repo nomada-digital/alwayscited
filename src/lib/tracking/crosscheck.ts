@@ -35,20 +35,27 @@ export async function crossCheckRun(db: SupabaseClient, runId: string): Promise<
     if (!country) return `no Ahrefs country for ${client.market}`;
 
     let columns = true;
-    const read = (cols: string) => db.from("tracking_serp").select(cols).eq("run_id", runId).returns<(Row & { check_on?: string | null })[]>();
-    let { data: rows, error: rErr } = await read("keyword_id, position, url, run_date, check_on");
+    type Checked = Row & { check_on?: string | null; read_position?: number | null; check_position?: number | null };
+    const read = (cols: string) => db.from("tracking_serp").select(cols).eq("run_id", runId).returns<Checked[]>();
+    let { data: rows, error: rErr } = await read("keyword_id, position, url, run_date, check_on, read_position, check_position");
     if (rErr && missingColumn(rErr, "check_on")) {
       columns = false;
       ({ data: rows, error: rErr } = await read("keyword_id, position, url, run_date"));
     }
     if (rErr) return `could not read the run: ${rErr.message}`;
-    const logged = new Set<string>();
+    const logged = new Map<string, number | null>();
     if (!columns) {
-      const { data: lines, error: lErr } = await db.from("agency_edits").select("target").eq("client_domain_id", run.client_domain_id).eq("action", CROSSCHECK_ACTION).like("target", `${run.run_date}|%`);
+      const { data: lines, error: lErr } = await db.from("agency_edits").select("target, new_value").eq("client_domain_id", run.client_domain_id).eq("action", CROSSCHECK_ACTION).like("target", `${run.run_date}|%`).order("created_at");
       if (lErr) return `could not read the earlier cross-checks: ${lErr.message}`;
-      for (const l of lines ?? []) logged.add(l.target as string);
+      for (const l of lines ?? []) logged.set(l.target as string, ((l.new_value as { position?: number | null } | null)?.position ?? null));
     }
-    const fresh = (rows ?? []).filter((r) => (columns ? !r.check_on : !logged.has(`${r.run_date}|${r.keyword_id}`)));
+    // Checked already, unless a re-run of the day has since written a new reading over the checked one.
+    const stands = (r: Checked) => {
+      const k = `${r.run_date}|${r.keyword_id}`;
+      if (!columns) return logged.has(k) && logged.get(k) === r.position;
+      return !!r.check_on && (r.position === r.read_position || r.position === r.check_position) && !(r.position === null && r.check_position != null);
+    };
+    const fresh = (rows ?? []).filter((r) => !stands(r));
     if (!fresh.length) return "nothing to check";
 
     const { data: before, error: bErr } = await db
