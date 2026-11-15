@@ -301,10 +301,28 @@ function wrappedLink(url: string | null): boolean {
  * "thin": fewer than SERP_MIN_ORGANIC organic results, read like a partial -
  * found is a rank, not found is not measured.
  */
-export function serpFault(organic: OrganicHit[] | undefined): "wrapped" | "thin" | null {
+/**
+ * A results page for another country (15 Nov 2026: Volunteero's UK reads came back with volunteertoronto.ca,
+ * volunteeringvictoria.org.au and mobilize.us among the top 20, and Volunteero, #2 in the UK, absent). Country-code
+ * domains of other markets in the top 20: FOREIGN_MAX or more and the page is not this market's, so it is not ranked
+ * on. A .com is anyone's and never counts.
+ */
+export const FOREIGN_MAX = 3;
+const COUNTRY_TLDS = ["uk", "us", "ca", "au", "ie", "nz", "in", "za", "sg", "ph", "my", "de", "fr", "es", "it", "nl"];
+const OWN_TLDS: Record<string, readonly string[]> = { UK: ["uk"], US: ["us"], JM: ["jm"] };
+export function foreignCount(organic: readonly OrganicHit[], market: string): number {
+  const own = OWN_TLDS[market] ?? [];
+  return organic.filter((o) => o.rank <= 20).filter((o) => {
+    const tld = (o.domain ?? "").toLowerCase().split(".").pop() ?? "";
+    return COUNTRY_TLDS.includes(tld) && !own.includes(tld);
+  }).length;
+}
+
+export function serpFault(organic: OrganicHit[] | undefined, market?: string): "wrapped" | "thin" | "foreign" | null {
   if (!organic?.length) return null;
   if (organic.filter((o) => wrappedLink(o.url)).length >= 2) return "wrapped";
-  return organic.length < SERP_MIN_ORGANIC ? "thin" : null;
+  if (organic.length < SERP_MIN_ORGANIC) return "thin";
+  return market && foreignCount(organic, market) >= FOREIGN_MAX ? "foreign" : null;
 }
 
 /**
@@ -315,9 +333,9 @@ export function serpFault(organic: OrganicHit[] | undefined): "wrapped" | "thin"
  * A thin page reads the same way, and a wrapped one is not measured at all
  * (`serpFault`, 3 Nov 2026).
  */
-export function rankOfRead(organic: OrganicHit[] | undefined, subject: string, partial: boolean): number | null | undefined {
-  const fault = serpFault(organic);
-  if (fault === "wrapped") return undefined;
+export function rankOfRead(organic: OrganicHit[] | undefined, subject: string, partial: boolean, market?: string): number | null | undefined {
+  const fault = serpFault(organic, market);
+  if (fault === "wrapped" || fault === "foreign") return undefined;
   const rank = rankOf(organic, subject);
   return (partial || fault === "thin") && rank === null ? undefined : rank;
 }

@@ -78,7 +78,7 @@ test("the market is the runner's: UK or US, anything else read as the US, as the
 test("the keyword read the help describes: desktop, the market's location, the top 100, organic only, and no account or cookie", async () => {
   const { keywordRankRequest, TRACKING_SERP_DEPTH } = await import("../scan/dataforseo-request.ts");
   const uk = keywordRankRequest("b2b seo agency", "UK", TRACKING_SERP_DEPTH).body as Record<string, unknown>[];
-  assert.deepEqual(Object.keys(uk[0]!).sort(), ["depth", "device", "keyword", "language_code", "location_code"]);
+  assert.deepEqual(Object.keys(uk[0]!).sort(), ["depth", "device", "keyword", "language_code", "location_code", "se_domain"]);
   assert.equal(uk[0]!.device, "desktop");
   assert.equal(uk[0]!.depth, TRACKING_SERP_DEPTH);
   assert.equal(TRACKING_SERP_DEPTH, 100);
@@ -90,7 +90,7 @@ test("the keyword read the help describes: desktop, the market's location, the t
   const start = src.indexOf("export async function readKeywordPosition(");
   assert.ok(start > 0, "readKeywordPosition is in dataforseo.ts");
   const body = src.slice(start, src.indexOf("\n}\n", start));
-  assert.ok(body.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH);"), "the tracking read is keywordRankRequest's");
+  assert.ok(body.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os);"), "the tracking read is keywordRankRequest's");
   assert.ok(body.includes("post(path, body, "), "and posts that request as built");
   const runner = readFileSync(join(fileURLToPath(import.meta.url), "..", "runner.ts"), "utf8");
   assert.ok(runner.includes("await readKeywordPosition(k.keyword as string, domain, market, remainingMs())"), "the tracking runner reads each keyword through readKeywordPosition");

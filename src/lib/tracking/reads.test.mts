@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-import { firstTask, keywordRankRequest, SERP_DEPTH, TRACKING_SERP_DEPTH } from "../scan/dataforseo-request.ts";
-import { parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb, unwrapByPlatform } from "../scan/engines.ts";
+import { firstTask, keywordRankRequest, SE_DOMAIN, SERP_DEPTH, TRACKING_SERP_DEPTH } from "../scan/dataforseo-request.ts";
+import { FOREIGN_MAX, foreignCount, parseGoogleAio, parseOrganic, rankOf, rankOfRead, serpFault, unwrapByCrumb, unwrapByPlatform } from "../scan/engines.ts";
 
 import { billedCost, failureSummary, keywordOutcome, readFailureReason, readRetryDelay, runOutcome } from "./decide.ts";
 
@@ -159,8 +159,11 @@ test("14 Nov 2026: the daily tracking reads each keyword to the top 100 in the c
   assert.equal(SERP_DEPTH, 20);
   assert.equal(((keywordRankRequest("x", "UK").body as Record<string, unknown>[])[0]!).depth, 20, "the scan's read is unchanged");
   const dfs = readFileSync(new URL("../scan/dataforseo.ts", import.meta.url), "utf8");
-  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH\)/, "readKeywordPosition, the tracking read, asks for the top 100");
-  assert.match(dfs, /const top = organic\.filter\(\(o\) => o\.rank <= SERP_DEPTH\)/, "only the top 20 is kept as the day's results");
+  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH, os\)/, "readKeywordPosition, the tracking read, asks for the top 100");
+  assert.deepEqual([uk.se_domain, us.se_domain], [SE_DOMAIN.UK, SE_DOMAIN.US], "15 Nov 2026: each market on its own Google");
+  assert.ok(SE_DOMAIN.UK.endsWith(["", "co", "uk"].join(".")));
+  assert.equal(uk.device, "desktop");
+  assert.match(dfs, /const top = pick\.organic\.filter\(\(o\) => o\.rank <= SERP_DEPTH\)/, "only the top 20 is kept as the day's results");
 });
 
 /** Where runner.ts marks a read failed, and whether it still collapses an empty SERP to null. */
@@ -199,4 +202,22 @@ test("census probe: an extra failure mark, the old silent null and a zero-cost f
   assert.equal(runnerFaults(runner + "\nreturn { failed: true };").failedMarks, 3);
   assert.equal(runnerFaults("return { k, failed: false, rank: read.rank ?? null, url: read.url };").silentNull, true);
   assert.equal(runnerFaults("return { ...base, answered: false, response_text: null, cost: 0, failed: true };").zeroCostFailure, true);
+});
+
+test("15 Nov 2026: a UK read full of other countries' sites is no reading - never 'not in the top 100'", () => {
+  // Made-up hosts, each on the country code a real read carried: built from parts, as no real host is named here.
+  const UK = ["co", "uk"].join(".");
+  const host = (name: string, tld: string) => `${name}.${tld === "uk" ? UK : tld}`;
+  const page = (domains: string[]) => parseOrganic({ items: domains.map((d, i) => ({ type: "organic", rank_group: i + 1, domain: d, url: `https://${d}/` })) });
+  // The shape of Volunteero's UK read on 14 Nov: Canada, the US twice, Ireland among the top 20.
+  const foreign = page([host("v1", "uk"), host("v2", "ca"), host("v3", "com"), host("v4", "com"), host("v5", "uk"), host("v6", "uk"), host("v7", "com"), host("v8", "uk"), host("v9", "us"), host("v10", "com"), host("v11", "us"), host("v12", "com"), host("v13", "com"), host("v14", "ie"), host("v15", "com"), host("v16", "com"), host("v17", "com"), host("v18", "org"), host("v19", "uk")]);
+  assert.ok(foreignCount(foreign, "UK") >= FOREIGN_MAX);
+  assert.equal(serpFault(foreign, "UK"), "foreign");
+  assert.equal(rankOfRead(foreign, host("client", "org"), false, "UK"), undefined, "not measured");
+  assert.equal(keywordOutcome(undefined, "foreign").failed, true);
+  // One foreign site a day, as COMMON's UK page carries: a reading.
+  const uk = page([host("a", "uk"), host("b", "com"), host("c", "ie"), host("d", "uk"), host("e", "com"), host("f", "com"), host("g", "org"), host("h", "uk"), host("i", "com"), host("j", "com"), host("k", "com"), host("l", "uk")]);
+  assert.equal(serpFault(uk, "UK"), null);
+  assert.equal(rankOfRead(uk, host("client", "org"), false, "UK"), null, "a clean miss is still a miss");
+  assert.equal(serpFault(uk), null, "no market: the check is not run (the scan)");
 });

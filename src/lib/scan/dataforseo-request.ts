@@ -180,7 +180,13 @@ export function requestFor(engine: Engine, question: string, market: Market): En
  * reads one, and asking for it only slows the task. Not wired to a caller
  * until the R41 columns are applied - see target-keyword.ts.
  */
-export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH): EngineRequest {
+/**
+ * The Google a market is read on (Danny, 15 Nov 2026: UK reads must be google.co.uk, UK-wide, desktop, English).
+ * DataForSEO otherwise reads google.com with gl set from the location; naming the domain removes that doubt.
+ */
+export const SE_DOMAIN: Record<Market, string> = { UK: "google.co.uk", US: "google.com", JM: "google.com.jm" };
+
+export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH, os?: "windows" | "macos"): EngineRequest {
   return {
     path: "/v3/serp/google/organic/live/advanced",
     timeoutMs: 60_000,
@@ -190,6 +196,8 @@ export function keywordRankRequest(keyword: string, market: Market, depth: numbe
         location_code: MARKETS[market].location_code,
         language_code: "en",
         device: "desktop",
+        ...(os ? { os } : {}),
+        se_domain: SE_DOMAIN[market],
         depth,
       },
     ],

@@ -253,16 +253,33 @@ export async function readKeywordPosition(
   budgetMs?: number,
 ): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault> }> {
   // 14 Nov 2026: the daily tracking reads to TRACKING_SERP_DEPTH (100); the scan's readKeywordRank stays at SERP_DEPTH.
-  const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH);
-  const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
-  const organic = parseOrganic(task.result?.[0]);
-  const rank = rankOfRead(organic, domain, task.partial === true);
-  const url = typeof rank === "number" ? (organic.find((o) => o.rank === rank)?.url ?? null) : null;
+  // 15 Nov 2026 (Volunteero, #2 in the UK, read absent on four days of seven): Google serves DataForSEO varying pages
+  // for the same search at the same moment. A read that does not find the site, or that is no reading (a foreign,
+  // thin or wrapped page), is read once more as another desktop; the second counts when it is a reading and the first
+  // found nothing. A page that is no reading never becomes "not in the top 100" (rankOfRead, decide.ts keywordOutcome).
+  const once = async (os?: "windows" | "macos") => {
+    const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os);
+    const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
+    const organic = parseOrganic(task.result?.[0]);
+    const rank = rankOfRead(organic, domain, task.partial === true, market);
+    return { organic, rank, cost: taskCost(task), fault: serpFault(organic, market) };
+  };
+  const first = await once();
+  let pick = first;
+  let cost = first.cost;
+  if (typeof first.rank !== "number") {
+    const second = await once("macos").catch(() => null);
+    if (second) {
+      cost += second.cost;
+      if (typeof second.rank === "number" || (first.rank === undefined && second.rank === null)) pick = second;
+    }
+  }
+  const url = typeof pick.rank === "number" ? (pick.organic.find((o) => o.rank === pick.rank)?.url ?? null) : null;
   // MS-1 (12 Oct 2026): the page of results this read already paid for - rank, domain and
   // URL of each organic result to SERP_DEPTH - so who else ranks for the cluster keyword is
   // kept day by day rather than thrown away. No new request and no new cost.
-  const top = organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
-  return { rank, url, cost: taskCost(task), top, fault: serpFault(organic) };
+  const top = pick.organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
+  return { rank: pick.rank, url, cost, top, fault: pick.fault };
 }
 
 /**
