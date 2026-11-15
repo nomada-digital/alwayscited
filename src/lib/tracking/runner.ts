@@ -35,6 +35,7 @@ import { dashLink } from "@/lib/dash/host";
 import { TIER_PLAIN } from "@/lib/tier-text";
 import { upsellMode } from "./ask.ts";
 import { creditCompetitors } from "./brand-credit.ts";
+import { crossCheckRun } from "./crosscheck.ts";
 import { brandsByBatch, recordBrandBatch, sendBrandBatch } from "./brand-batches.ts";
 import { dispatchRun } from "./dispatch.ts";
 import { keywordsOnPage1, namedRate } from "./figures.ts";
@@ -558,6 +559,10 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
         throw new Error(`could not store the keyword positions: ${error.message}`);
       }
     }
+
+    // The second source (15 Nov 2026): an absent read, or a drop of 10 or more places, read again on Ahrefs.
+    // Never fatal; a reading it replaces is kept beside it (crosscheck.ts).
+    if (serpRows.length) console.log(`[track] ${runId} cross-check: ${await crossCheckRun(db, runId)}`);
 
     // BRIEF-2 T12 (R96): the Sunday link check of this client's live
     // placements. Never fatal - the reads are stored - and never changes

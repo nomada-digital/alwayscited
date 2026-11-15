@@ -126,6 +126,12 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   // A later read failing while an earlier one is awaited is still thrown below, not reported unhandled.
   for (const r of [verdictRead, citeRead]) r.catch(() => undefined);
   const serp = await serpRead;
+  // 15 Nov 2026 (20261115000000): the readings the Ahrefs cross-check found disagreeing, read apart so a database
+  // before the migration draws no note rather than failing the positions.
+  const { data: varyRows, error: varyErr } = await db.from("tracking_serp").select("run_date, keyword_id").eq("client_domain_id", cid).eq("check_varies", true).gte("run_date", addDays(today, -SERP_DAYS));
+  if (varyErr && !absent(varyErr) && !/check_varies/.test(varyErr.message)) console.warn(`[dash] cross-check read failed: ${varyErr.message}`);
+  const varies = new Set((varyErr ? [] : (varyRows ?? [])).map((v) => `${v.run_date}|${v.keyword_id}`));
+  for (const s of serp) if (varies.has(`${s.run_date}|${s.keyword_id}`)) s.varies = true;
   const verdicts = await verdictRead;
   const cites = await citeRead;
 

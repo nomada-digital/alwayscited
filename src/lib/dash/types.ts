@@ -72,7 +72,8 @@ export type RawPrompt = {
   allowance?: string | null;
 };
 export type RawRun = { run_date: Day; status: string; engines: string[] };
-export type RawSerp = { run_date: Day; keyword_id: string; position: number | null; url: string | null };
+// varies (15 Nov 2026, lib/tracking/crosscheck.ts): DataForSEO and Ahrefs read this keyword 10 or more places apart, or one had it and the other did not.
+export type RawSerp = { run_date: Day; keyword_id: string; position: number | null; url: string | null; varies?: boolean };
 export type Citation = { url: string; title?: string | null; source_domain?: string | null; position?: number | null };
 export type RawAnswer = {
   run_date: Day;

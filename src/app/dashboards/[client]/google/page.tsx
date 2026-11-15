@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Pos, longDay } from "@/components/dash/Figures";
 import GuideBox from "@/components/dash/GuideBox";
 import KeywordManager from "@/components/dash/KeywordManager";
+import { updateRolling } from "@/lib/tracking/google-updates";
 import Nudges from "@/components/dash/Nudges";
 import SerpChances from "@/components/dash/SerpChances";
 import { KEYWORD_GUIDES } from "@/config/guidance";
@@ -27,11 +28,13 @@ export default async function Google({ params }: { params: Promise<{ client: str
   const metrics = Object.fromEntries([...(await knownMetricsSafe(raw.client.market, raw.keywords.filter((k) => k.stopped_on === null).map((k) => k.keyword), raw.today))]);
   const rows = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c })));
   const situations = [...new Set(rows.filter((r) => r.src === "tracked").map((k) => keywordSituation(k)))];
+  const rolling = updateRolling(raw.today);
   const also = rows.filter((r) => r.src === "footprint").sort((a, b) => (b.volume ?? 0) - (a.volume ?? 0)).slice(0, 40);
   return (
     <>
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
       <Nudges ws={ws} base={base} ctx={nudge} only={["to-cited"]} />
+      {rolling ? <p className="muted" style={{ fontSize: 13, margin: "0 0 12px" }}><span className="pill warn">{longDay(rolling.from)} to {longDay(rolling.to)}</span> {rolling.note}.</p> : null}
       <KeywordManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} metrics={metrics} audience={defaultAudience(await orderSector(raw.client.id))} />
       <SerpChances slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} />
       {situations.length ? (

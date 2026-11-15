@@ -1,3 +1,4 @@
+import { crossCheckRun } from "@/lib/tracking/crosscheck";
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
@@ -29,7 +30,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -123,6 +124,12 @@ export async function POST(req: Request) {
         return changeKeyword(db, client, by, { clusterId: id("cluster_id"), keyword: str("keyword"), prompts: b.prompts, rerun: b.rerun === true });
       case "run_checks":
         return runChecksNow(db, client, by);
+      // The Ahrefs second reading of the latest run's keywords, now (15 Nov 2026, lib/tracking/crosscheck.ts).
+      case "crosscheck": {
+        const { data: run, error } = await db.from("tracking_runs").select("id").eq("client_domain_id", client.id).order("run_date", { ascending: false }).limit(1).maybeSingle();
+        if (error || !run) return { ok: false, message: `No run to check: ${error?.message ?? "none yet"}` };
+        return { ok: true, message: await crossCheckRun(db, run.id as string) };
+      }
       // A customer's team (10 Nov 2026, lib/agency/team.ts): team.ts's rules with the staff member as the actor.
       case "team_read":
         return teamRead(db, client);
