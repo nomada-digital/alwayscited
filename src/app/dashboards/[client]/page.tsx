@@ -3,12 +3,15 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Change, EngineHeads, GooglePos, Kpi, LimitsLine, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
+import GoogleTraffic from "@/components/dash/GoogleTraffic";
 import Nudges from "@/components/dash/Nudges";
 import PlanCard from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
 import { fullness } from "@/lib/dash/allowance";
 import { clusterKeywords } from "@/lib/dash/model";
+import { googleSummary } from "@/lib/dash/google-io";
 import { pageData } from "@/lib/dash/page-data";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { checkTime, nextCheckAt } from "@/lib/tracking/check-time";
 import { loadSetupConfirmed } from "@/lib/tracking/setup-data";
 import { setupOutstanding } from "@/lib/tracking/setup-landing";
@@ -36,6 +39,8 @@ export default async function Overview({ params }: { params: Promise<{ client: s
   // When the next reading lands, in the client's own zone - so an edit made now has a time it shows up by.
   const tracking = ws.clusters.some((c) => c.prompts > 0) || ws.loose.prompts.length > 0;
   const next = tracking ? nextCheckLabel(ws.client.market) : null;
+  // 15 Nov 2026: real clicks and visits from Search Console and GA4 connected direct, or a prompt to connect them.
+  const google = demo && !viewAs ? null : await googleSummary(supabaseAdmin(), ws.client.id, ws.today).catch(() => null);
   return (
     <>
       <PageHead
@@ -59,6 +64,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
         <Kpi href={`${base}/${slug}/clusters`} label="Clusters" value={ws.allowances.clusters.used} unit={`of ${ws.allowances.clusters.limit}`} sub={`${ws.allowances.prompts.used} of ${ws.allowances.prompts.limit} prompts · ${ws.clusters.reduce((n, c) => n + c.groups.length, 0)} keyword groups`} />
         <Kpi href={`${base}/${slug}/sources`} label="AI cites your site" value={cites ? cites.answers : 0} unit="answers" sub="Last 7 readings, any engine" />
       </div>
+      {google ? <GoogleTraffic s={google} gsc={ws.connections.gsc ?? null} ga4={ws.connections.ga4 ?? null} href={`${base}/${slug}/integrations`} canConnect={ws.canWrite || !!viewAs} /> : null}
       <div className="dash-grid side" style={{ marginTop: 16 }}>
         <div className="dash-card">
           <div className="dash-card-head">

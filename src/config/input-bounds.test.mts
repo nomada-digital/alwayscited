@@ -211,6 +211,16 @@ const EXEMPT: Record<string, Exemption> = {
       { file: "app/api/walkthrough/route.ts", needs: "readWalkthroughMarket(body.market)" },
     ],
   },
+  // 15 Nov 2026 (Danny): the Google connect card's property choice - radios, one per property the hub's service
+  // account lists for this client's domain. Nothing is typed; the route lists the properties again and connects only
+  // one of those (pickable), never a value from the browser alone.
+  "gc-prop-${provider}-${i}": {
+    why: "The Google connect card's property choice, a radio per listed property. type=radio, nothing typed; the google route slices the value to 300 and connects it only if pickable() finds it among the properties the service account lists for this domain.",
+    holds: [
+      { file: "app/api/dash/[client]/google/route.ts", needs: "pickable(provider, property, listed)" },
+      { file: "app/api/dash/[client]/google/route.ts", needs: "b.property.slice(0, 300)" },
+    ],
+  },
   "wt-back": {
     why: "The walkthrough ask's hidden way back, set by the coverage reading page. type=hidden, nobody types in it; walkthroughBack accepts only a /scan/ or /coverage-check/ path of at most 80 token characters, else the scan's own page.",
     holds: [{ file: "lib/scan/walkthrough-outcome.ts", needs: "/^\\/(scan|coverage-check)\\/[A-Za-z0-9_-]{1,80}$/.test(raw)" }],

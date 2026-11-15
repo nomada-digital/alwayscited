@@ -86,7 +86,10 @@ export async function pullConnectionsSafely(now: number = Date.now()): Promise<{
   try {
     if (!windsorReady()) return { pulled: 0, failed: ["WINDSOR_API_KEY is not set"] };
     const db = supabaseAdmin();
-    const { data, error } = await db.from("integration_connections").select("client_domain_id, provider, property").eq("status", "connected").not("property", "is", null);
+    // From 16 Nov 2026 a Search Console or GA4 property connected direct (via 'google') is pulled by google-io.ts.
+    // The column arrives with 20261116000000; before it every connection is Windsor's.
+    let { data, error } = await db.from("integration_connections").select("client_domain_id, provider, property").eq("status", "connected").neq("via", "google").not("property", "is", null);
+    if (error && /via/.test(error.message)) ({ data, error } = await db.from("integration_connections").select("client_domain_id, provider, property").eq("status", "connected").not("property", "is", null));
     if (error) return { error: error.message };
     const failed: string[] = [];
     let pulled = 0;
@@ -94,7 +97,8 @@ export async function pullConnectionsSafely(now: number = Date.now()): Promise<{
       const e = await pullConnection(db, c, now);
       if (e) {
         failed.push(e);
-        await db.from("integration_connections").update({ error: e.slice(0, 500) }).eq("client_domain_id", c.client_domain_id).eq("provider", c.provider);
+        const { error: markErr } = await db.from("integration_connections").update({ error: e.slice(0, 500) }).eq("client_domain_id", c.client_domain_id).eq("provider", c.provider);
+        if (markErr) console.warn(`[connect] could not record the error for ${c.provider}: ${markErr.message}`);
       } else pulled++;
     }
     if (failed.length) console.warn(`[connect] daily pull: ${failed.join("; ")}`);

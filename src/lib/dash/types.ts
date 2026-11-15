@@ -122,7 +122,20 @@ export type RawInProgress = { id: string; cluster_id: string | null; title: stri
 /** A placement's kind as a customer reads it (14 Nov 2026: "placements", never "guest posts"). */
 export const PLACEMENT_KIND_LABEL: Record<RawPlacement["kind"], string> = { guest_post: "Placement", link_insertion: "Link insertion", on_site: "On your site", coverage: "Coverage" };
 export type Provider = "ga4" | "gsc" | "bing";
-export type RawConnection = { provider: Provider; status: string; property: string | null; requested_at: string | null; connected_at: string | null; last_synced_at: string | null };
+export type RawConnection = {
+  provider: Provider;
+  status: string;
+  property: string | null;
+  requested_at: string | null;
+  connected_at: string | null;
+  last_synced_at: string | null;
+  /** 16 Nov 2026 (20261116000000): windsor or google (direct, google.ts); Search Console's access level; the property's name. */
+  via?: "windsor" | "google";
+  permission?: string | null;
+  property_name?: string | null;
+  backfilled_at?: string | null;
+  error?: string | null;
+};
 export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };
 
 export type Raw = {

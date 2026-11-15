@@ -309,7 +309,13 @@ test("the upsert sites are the ones we think they are", () => {
       // 6 Nov 2026, the CSM build (20261106000000, lib/csm): Fatgrid's listings cached by domain, the shortlist's items
       // on their four-column key, the per-client budget row, a month's override and the one settings row.
       "fatgrid_listings:domain",
+      // 15 Nov 2026: Search Console and GA4 connected direct (lib/dash/google-io.ts, google route), 20261116000000.
+      "ga4_channel_days:channel,client_domain_id,day",
       "ga4_daily:client_domain_id,day,medium,source",
+      "ga4_events:client_domain_id,event_name,period_end",
+      "ga4_pages:client_domain_id,page,period_end",
+      "gsc_daily:client_domain_id,day",
+      "gsc_inspections:client_domain_id,url",
       // 13 Oct 2026, DIY P6 (spec 10 sections 5.8 and 6.6): the footprint job
       // stores one pull per client per day on keyword_footprints' unique
       // (client_domain_id, pulled_on), so the worker's stale reclaim running
@@ -318,6 +324,7 @@ test("the upsert sites are the ones we think they are", () => {
       "integration_connections:client_domain_id,provider",
       // 2 Nov 2026, sg-37: Check connection replaces the request with a check, so it writes the same row twice
       // over: pending with the first try's time, or connected with the property (api/dash/[client]/integrations).
+      "integration_connections:client_domain_id,provider",
       "integration_connections:client_domain_id,provider",
       "integration_connections:client_domain_id,provider",
       "keyword_footprints:client_domain_id,pulled_on",
@@ -353,6 +360,7 @@ test("the upsert sites are the ones we think they are", () => {
       // primary key, both in 20261029000000_agency_edits_and_link_sheets.sql. A re-sync updates; it never duplicates.
       // 2 Nov 2026, sg-37: the data connections' pull, 28 days of Search Console or Bing queries per row on
       // search_console_queries' unique (20261017000000), first at Check connection, then every morning (lib/dash/connect-io.ts).
+      "search_console_queries:client_domain_id,page,period_end,provider,query",
       "search_console_queries:client_domain_id,page,period_end,provider,query",
       "sheet_links:client_domain_id,kind,url_key",
       "sheet_syncs:client_domain_id,kind",

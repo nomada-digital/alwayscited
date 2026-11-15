@@ -177,12 +177,27 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     opportunities: withPageBrands((oppsErr ? [] : (oppRows ?? [])) as RawOpportunity[], readsErr ? [] : (readRows ?? [])),
     placements: (placeErr ? [] : (placeRows ?? [])) as RawPlacement[],
     inProgress: (progErr ? [] : (progRows ?? [])) as RawInProgress[],
-    connections: (connErr ? [] : (connRows ?? [])) as RawConnection[],
+    connections: await withDirect(db, cid, (connErr ? [] : (connRows ?? [])) as RawConnection[]),
     consoleRows: (consoleErr ? [] : (consoleData ?? [])) as RawConsoleRow[],
     groupsReady,
     keyPages: (keyPageErr ? [] : (keyPageRows ?? [])) as KeyPageRow[],
     localGrids: gridErr ? 0 : (gridCount ?? 0),
   };
+}
+
+/**
+ * How each connection reads (16 Nov 2026, 20261116000000): via, permission and property name, read apart so a
+ * database before that migration still lists its connections, as Windsor ones.
+ */
+async function withDirect(db: SupabaseClient, cid: string, rows: RawConnection[]): Promise<RawConnection[]> {
+  if (!rows.length) return rows;
+  const { data, error } = await db.from("integration_connections").select("provider, via, permission, property_name, backfilled_at, error").eq("client_domain_id", cid);
+  if (error) {
+    if (!absent(error) && !/via|permission|property_name|backfilled_at/.test(error.message)) console.warn(`[dash] connection detail read failed: ${error.message}`);
+    return rows;
+  }
+  const by = new Map(((data ?? []) as Partial<RawConnection>[]).map((d) => [d.provider, d]));
+  return rows.map((r) => ({ ...r, ...(by.get(r.provider) ?? {}) }));
 }
 
 /**

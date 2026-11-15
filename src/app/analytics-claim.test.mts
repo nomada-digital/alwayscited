@@ -187,15 +187,28 @@ const GA_HOST_FILES: Record<string, string> = {
 
 const isGa = (host: string) => GA_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
 
+/**
+ * GA's console as a link a person clicks, never a script a page loads (15 Nov 2026, Danny: self-serve GA4 connect).
+ * The connect card sends the customer to their own Analytics Admin to add our address; nothing is fetched from it.
+ */
+const CONSOLE_LINK_FILES: Record<string, string> = {
+  "src/lib/dash/google.ts": "GA4_ADMIN_LINK, the href of the GA4 connect card's step 2, opened by the customer in a new tab to add our address as a Viewer; never loaded by the page",
+};
+
 test("no file loads an analytics, tag manager or pixel script, but the consent banner's GA4 and the webhook's purchase", () => {
   const hits: string[] = [];
   const gaSeen = new Set<string>();
+  const consoleSeen = new Set<string>();
   for (const { file, source } of FILES) {
     for (const m of code(source).matchAll(/https?:\/\/([a-z0-9.-]+)/gi)) {
       const host = m[1].toLowerCase();
       if (!ANALYTICS_HOSTS.some((h) => host === h || host.endsWith(`.${h}`))) continue;
       if (isGa(host) && file in GA_HOST_FILES) {
         gaSeen.add(file);
+        continue;
+      }
+      if (host === "analytics.google.com" && file in CONSOLE_LINK_FILES) {
+        consoleSeen.add(file);
         continue;
       }
       hits.push(`${file}  ${host}`);
@@ -209,6 +222,7 @@ test("no file loads an analytics, tag manager or pixel script, but the consent b
   // Each allowance is still used: a stale entry is a hole waiting for a file.
   assert.deepEqual([...gaSeen].sort(), Object.keys(GA_HOST_FILES).sort(), "an allowed GA file no longer names a GA host - take it off GA_HOST_FILES");
   for (const [file, why] of Object.entries(GA_HOST_FILES)) assert.ok(why.length > 40, `${file} is allowed to reach GA with no argument for it`);
+  assert.deepEqual([...consoleSeen].sort(), Object.keys(CONSOLE_LINK_FILES).sort(), "an allowed console link no longer names GA's console - take it off CONSOLE_LINK_FILES");
 });
 
 /**

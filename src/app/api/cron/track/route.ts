@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { constantTimeEqual } from "@/lib/constant-time";
 import { pullConnectionsSafely } from "@/lib/dash/connect-io";
+import { pullGoogleSafely } from "@/lib/dash/google-io";
 import { applyDueSwapsSafely } from "@/lib/dash/plan-requests";
 import { trackingDay } from "@/lib/tracking/decide";
 import { sweepLifecycleMailSafely } from "@/lib/email/lifecycle-cron";
@@ -81,7 +82,9 @@ export async function GET(req: Request) {
   const mail = await sweepLifecycleMailSafely();
   // 2 Nov 2026 (sg-37): the daily pull for every connected Search Console, GA4 and Bing property (lib/dash/connect-io.ts).
   const connections = await pullConnectionsSafely();
+  // 15 Nov 2026: Search Console and GA4 connected direct, through the hub's google-data (lib/dash/google-io.ts).
+  const google = await pullGoogleSafely();
   // 14 Nov 2026: keyword difficulty for any tracked keyword still without it, so no customer ever needs a lookup button.
   const difficulty = await backfillDifficulty(supabaseAdmin(), trackingDay()).catch((e: unknown) => { console.warn(`[track] difficulty backfill failed: ${e instanceof Error ? e.message : String(e)}`); return null; });
-  return NextResponse.json({ ...answer.body, swaps, health, mail, connections, difficulty }, { status: answer.status });
+  return NextResponse.json({ ...answer.body, swaps, health, mail, connections, google, difficulty }, { status: answer.status });
 }

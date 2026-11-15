@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import GoogleConnect from "@/components/dash/GoogleConnect";
 import { PageHead } from "@/components/dash/Shell";
 import TierName from "@/components/TierName";
 import { pageData } from "@/lib/dash/page-data";
@@ -23,7 +24,7 @@ const DONE: Record<string, string> = { invited: "Invited. They get an email with
 export default async function Settings({ params, searchParams }: { params: Promise<{ client: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const { client: slug } = await params;
   const sp = await searchParams;
-  const { raw, base, demo, viewAs, email } = await pageData(slug);
+  const { raw, ws, base, demo, viewAs, email } = await pageData(slug);
   const readOnly = demo || !!viewAs;
   // 10 Nov 2026 (Danny): owners and editors invite and remove editors and viewers; only owners touch owners, roles and
   // names. The same rules the member route runs (team.ts refuseActorOn); read-only views get none of them.
@@ -106,6 +107,14 @@ export default async function Settings({ params, searchParams }: { params: Promi
             <button className="btn primary">Invite</button>
           </form>
         ) : null}
+      </div>
+      {/* 15 Nov 2026: Connections - Search Console and GA4, direct. Bing and the rest stay on Integrations. */}
+      <div id="connections" style={{ margin: "0 0 16px" }}>
+        <h2 style={{ fontSize: 16, margin: "0 0 10px" }}>Connections</h2>
+        <div className="dash-grid k2">
+          {(["gsc", "ga4"] as const).map((p) => <GoogleConnect key={p} slug={slug} domain={raw.client.domain} provider={p} conn={raw.connections.find((c) => c.provider === p) ?? null} canWrite={!readOnly && ws.canWrite} demo={demo && !viewAs} staff={!!viewAs} />)}
+        </div>
+        <p className="faint" style={{ fontSize: 12.5, margin: "8px 0 0" }}>Bing Webmaster Tools is under <Link href={`${base}/${slug}/integrations`}>Integrations</Link>.</p>
       </div>
       <div className="dash-card" id="email">
         <h2>Email</h2>
