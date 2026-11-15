@@ -104,6 +104,9 @@ export function isDashHost(host: string | null | undefined, env?: { DASH_HOST?: 
   const h = (host ?? "").trim().toLowerCase();
   if (!h) return false;
   if (h === dashHost(env) || h === DASH_HOST_DEFAULT) return true;
+  // 15 Nov 2026: a branch's Vercel preview serves the dashboards, so a new view is reviewed on view-as links before it
+  // merges. Preview deployments only; production's hosts are the two above.
+  if (process.env.VERCEL_ENV === "preview" && h.endsWith(".vercel.app")) return true;
   return h.split(":")[0] === "dashboards.localhost";
 }
 

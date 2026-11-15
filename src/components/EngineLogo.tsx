@@ -90,3 +90,14 @@ export default function EngineLogo(p: { engine: string; size?: number; title?: s
     </svg>
   );
 }
+
+/**
+ * The search engines' marks beside their rankings (Danny, 15 Nov 2026): Google's "G" (the same mark as its AI
+ * Overview) and Bing's. Nominative use, as the engines' marks above: never recoloured, only beside that engine's own
+ * results. Always inline; a ranking table draws one per column head.
+ */
+const BING_MARK = "<path d=\"M10.1 8.6l1.7 4.3 2.8 1.3L9 17.5V3.4L5 2v17.8L9 22l10-5.8v-4.5z\" fill=\"#008373\"></path>";
+export function SearchLogo({ engine, size = 14, title }: { engine: "google" | "bing"; size?: number; title?: string }) {
+  const html = engine === "google" ? MARKS.google_aio : BING_MARK;
+  return <svg viewBox="0 0 24 24" width={size} height={size} role={title ? "img" : undefined} aria-label={title} aria-hidden={title ? undefined : true} style={{ flex: "none", verticalAlign: "-2px" }} dangerouslySetInnerHTML={{ __html: html }} />;
+}

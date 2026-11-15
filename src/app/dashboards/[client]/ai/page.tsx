@@ -5,11 +5,15 @@ import { engineLabel, longDay, pct } from "@/components/dash/Figures";
 import GuideBox from "@/components/dash/GuideBox";
 import Nudges from "@/components/dash/Nudges";
 import PromptManager from "@/components/dash/PromptManager";
+import ShareOfVoice from "@/components/dash/ShareOfVoice";
 import { PROMPTS_GUIDE } from "@/config/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { trimRaw } from "@/lib/dash/model";
 import { planShape } from "@/lib/dash/plan";
 import { pageData } from "@/lib/dash/page-data";
+import { shareOfVoice } from "@/lib/dash/share";
+import { sovAnswers } from "@/lib/dash/views-data";
+import { brandKey, subjectKeys } from "@/lib/scan/brand-name";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "AI visibility", robots: { index: false, follow: false } };
@@ -22,6 +26,15 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
   const byEngine = ws.engines.map((e) => {
     const cells = rows.map((r) => r.p.cells[e]).filter((v) => v === "named" || v === "missed");
     return { e, rate: cells.length ? cells.filter((v) => v === "named").length / cells.length : null, n: cells.length };
+  });
+  // Share of voice (15 Nov 2026, share.ts): the brands each answer already names, all clusters and each one.
+  const subject = subjectKeys(raw.client.brand ?? raw.client.domain, raw.client.domain);
+  for (const a of raw.client.brand_aliases ?? []) subject.add(brandKey(a));
+  const sov = shareOfVoice(await sovAnswers(raw.client.id, raw.today), {
+    clusters: ws.clusters.map((c) => ({ id: c.id, name: c.name, questionIds: [...c.groups, c.own].flatMap((g) => g.prompts.map((p) => p.id)) })),
+    subject,
+    you: raw.client.brand ?? raw.client.domain,
+    engines: ws.engines,
   });
   return (
     <>
@@ -36,23 +49,10 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
         ))}
       </div>
       <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-everywhere"]} />
+      <ShareOfVoice scopes={sov} engines={ws.engines} />
       <div className="dash-card" style={{ marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}><GuideBox guide={PROMPTS_GUIDE} /></div>
         <PromptManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} />
-      </div>
-      <div className="dash-card">
-        <h2>Who gets named</h2>
-        <p className="intro">Every brand the engines recommended across your prompts, last 7 readings, by how many answers named it.</p>
-        <div className="tbl-wrap" style={{ marginTop: 10 }}>
-          <table className="tbl">
-            <thead><tr><th>#</th><th>Brand</th><th className="r">Answers</th></tr></thead>
-            <tbody>
-              {ws.brands.map((b, i) => (
-                <tr key={b.name} className={b.you ? "you" : ""}><td className="faint num">{i + 1}</td><td style={{ fontWeight: b.you ? 700 : 500 }}>{b.name}{b.you ? " (you)" : ""}</td><td className="r num">{b.answers}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </>
   );

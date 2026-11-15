@@ -5,7 +5,7 @@ import { type TierKey } from "@/components/TierName";
 import { extractBrands } from "@/lib/scan/anthropic";
 import { brandKey, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
 import { runLocalGrids } from "@/lib/local/run";
-import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
+import { readBingPosition, readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
 import { type Market } from "@/lib/scan/domain";
 import { type Citation, type Engine, knownEngines } from "@/lib/scan/engines";
 import { recordModelCallDebit } from "@/lib/scan/spend";
@@ -414,7 +414,16 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
             reason = out.reason;
             break;
           }
-          return { k, failed: false as const, rank: out.rank, url: read.url, cost, top: read.top };
+          // Bing beside Google (15 Nov 2026): never fails the keyword; a Bing page that never came right is no Bing reading.
+          let bing: Awaited<ReturnType<typeof readBingPosition>> | null = null;
+          if (process.env.TRACK_BING !== "off" && remainingMs() > 20_000) {
+            bing = await readBingPosition(k.keyword as string, domain, market, remainingMs()).catch((err) => {
+              console.warn(`[track] ${runId} Bing read failed: ${message(err)}`);
+              return null;
+            });
+            if (bing) spend.dfs += bing.cost;
+          }
+          return { k, failed: false as const, rank: out.rank, url: read.url, cost, top: read.top, aio: read.aio, bing };
         } catch (err) {
           const billed = billedCost(err);
           spend.dfs += billed;
@@ -549,9 +558,29 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       // column. A deploy landing before that migration stores the positions without it rather
       // than losing them, as the brands_ok write does.
       const withTop = serpRows.map((r, i) => ({ ...r, top: serpRead[i]!.top }));
-      for (const rows of [withTop, serpRows]) {
+      // 15 Nov 2026 (20261115010000): the AI Overview on the page and the Bing reading ride along; before that
+      // migration the row goes without them, as `top` did.
+      const withAll = withTop.map((r, i) => {
+        const s = serpRead[i]!;
+        const b = s.bing && typeof s.bing.rank !== "undefined" ? s.bing : null;
+        return {
+          ...r,
+          aio_shown: s.aio !== undefined ? s.aio !== null : null,
+          aio_sources: s.aio ? s.aio.sources : null,
+          bing_position: b ? b.rank : null,
+          bing_url: b ? b.url : null,
+          bing_top: b ? b.top : null,
+          bing_read: s.bing ? b !== null : null,
+          bing_cost: s.bing ? Number(s.bing.cost.toFixed(4)) : null,
+        };
+      });
+      for (const rows of [withAll, withTop, serpRows]) {
         const { error } = await db.from("tracking_serp").upsert(rows, { onConflict: "run_id,keyword_id" });
         if (!error) break;
+        if (rows === withAll && (missingColumn(error, "aio_shown") || missingColumn(error, "bing_position") || missingColumn(error, "aio_sources") || missingColumn(error, "bing_url") || missingColumn(error, "bing_top") || missingColumn(error, "bing_read") || missingColumn(error, "bing_cost"))) {
+          console.warn(`[track] ${runId} tracking_serp has no AI Overview or Bing columns yet; positions stored without them`);
+          continue;
+        }
         if (rows === withTop && missingColumn(error, "top")) {
           console.warn(`[track] ${runId} tracking_serp has no top yet; positions stored without it`);
           continue;

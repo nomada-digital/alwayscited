@@ -71,6 +71,8 @@ export const RECOMMENDED: Requirement[] = [
  */
 export const NOT_REQUIRED: Record<string, string> = {
   NODE_ENV: "set by the runtime, never by us",
+  // 15 Nov 2026: the daily Bing read beside Google (lib/tracking/runner.ts); unset, Bing is read
+  TRACK_BING: "\"off\" stops the daily Bing keyword read; unset or anything else, Bing is read",
   // 10 Nov 2026, Danny: copied on customer update emails "for visibility, initially" (lib/email/visibility-cc.ts)
   AC_VISIBILITY_CC: "who is copied on customer update emails; unset or empty, nobody is",
   // 5 Nov 2026, the CSM build: Slack posts and the shortlist's Fatgrid caps. Unset, Slack posting logs "would post" and

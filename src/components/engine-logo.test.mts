@@ -41,6 +41,9 @@ const SPRITE_FILES = [
   "app/dashboards/[client]/ai/[prompt]/page.tsx",
   "app/dashboards/[client]/sources/[domain]/page.tsx",
   "components/dash/PromptManager.tsx",
+  // 15 Nov 2026: share of voice (AI visibility) and the rankings view (Search positions), both under app/dashboards/layout.tsx.
+  "components/dash/Rankings.tsx",
+  "components/dash/ShareOfVoice.tsx",
   // 7 Nov 2026: the AI tab's answer panel, opened from PromptManager, under app/dashboards/layout.tsx.
   "components/dash/AnswerPanel.tsx",
   "app/dashboards/[client]/sources/page.tsx",

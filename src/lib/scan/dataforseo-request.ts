@@ -205,6 +205,20 @@ export function keywordRankRequest(keyword: string, market: Market, depth: numbe
 }
 
 /**
+ * A tracked keyword on Bing (Danny, 15 Nov 2026: Bing beside Google). As the hub's daily Bing read does it
+ * (nomada-dashboards generators/bing_ranks.py): organic, mobile - DataForSEO's desktop Bing pages are often another
+ * search's (15 Nov: "volunteer management software" came back as gov.uk volunteering, then Roblox) - to the same
+ * depth as Google's. Live, as the daily run reads everything. $0.011 a read at depth 100 (15 Nov 2026).
+ */
+export function bingRankRequest(keyword: string, market: Market, depth: number = TRACKING_SERP_DEPTH): EngineRequest {
+  return {
+    path: "/v3/serp/bing/organic/live/advanced",
+    timeoutMs: 60_000,
+    body: [{ keyword, location_code: MARKETS[market].location_code, language_code: "en", device: "mobile", depth }],
+  };
+}
+
+/**
  * One point of a map pack geo-grid (22 Oct 2026, lib/local/grid.ts): Google
  * Maps read from a GPS point at a zoom, not from a location code, because the
  * pack changes street by street. `search_this_area: false` asks as a searcher

@@ -171,7 +171,7 @@ const RETIRED_WITH_APP = new Set([
   "Change keyword", "Check keyword", "Cited pages", "Cluster keywords on page 1", "Clusters in use", "Every check, day by day",
   "Every daily check, by cluster", "Keywords CSV", "Latest answers", "Make editor", "Make viewer", "Move", "Names we match",
   "Notes on this cluster", "Open cluster", "Other sites", "Pages the engines cite most", "Prompts you are named in",
-  "Reports", "Review and confirm", "Send invite", "Share of voice", "Sign out of every device", "Start tracking this cluster",
+  "Reports", "Review and confirm", "Send invite", "Sign out of every device", "Start tracking this cluster",
   "Stop", "Who is named", "Who is named instead", "Who they see", "Your clusters", "Your site",
 ]);
 

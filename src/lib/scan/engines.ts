@@ -221,6 +221,41 @@ export function parseOrganic(result: Record<string, unknown> | undefined | null)
 }
 
 /**
+ * The AI Overview on a keyword's results page (Danny, 15 Nov 2026), from the response the daily read already pays
+ * for: whether one showed, and the sites it cites. Null when none showed. An Overview Google loads afterwards
+ * (DataForSEO lists its type but sends no item) shows, with no sources read.
+ */
+export function aioOnPage(result: Record<string, unknown> | undefined | null): { sources: string[] } | null {
+  const items = (result?.items as AioItem[] | undefined) ?? [];
+  const aio = items.find((i) => i.type === "ai_overview");
+  if (!aio) return ((result?.item_types as string[] | undefined) ?? []).includes("ai_overview") ? { sources: [] } : null;
+  const refs = [...(aio.references ?? []), ...(aio.items ?? []).flatMap((e) => e.references ?? [])];
+  return { sources: [...new Set(refs.map((r) => normalizeDomain(r.domain || r.url || "")).filter(Boolean))] };
+}
+
+/**
+ * Whether a Bing page is the search asked for (15 Nov 2026), the hub's serp_matches (generators/bing_ranks.py, as
+ * kw.ts serpMatches): DataForSEO's Bing pages are sometimes another search's, with nothing in the reply to say so. At
+ * least 3 of the top 10 organic results carry the query's words (one of one or two, half of three or more) in the
+ * title, description, address or breadcrumb, one of them in the top 3. A page of fewer than 3 is never taken.
+ */
+const MATCH_STOP = new Set(["the", "and", "for", "with", "near", "best", "top", "what", "how", "who", "uk", "usa", "a", "an", "of", "in", "to", "on", "me", "my", "is", "are", "vs"]);
+export function bingPageMatches(keyword: string, result: Record<string, unknown> | undefined | null): boolean {
+  const stem = (w: string) => (w.length > 4 ? w.replace(/(ies|es|s|ing|ers|er)$/, "") : w);
+  const words = keyword.toLowerCase().replace(/[\u2018\u2019]/g, "'").replace(/-/g, " ").split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !MATCH_STOP.has(w)).map(stem).filter((w) => w.length >= 3);
+  if (!words.length) return true;
+  const org = ((result?.items as (OrganicItem & { title?: string; description?: string })[] | undefined) ?? []).filter((i) => i.type === "organic").slice(0, 10);
+  if (org.length < 3) return false;
+  const need = words.length <= 2 ? 1 : Math.ceil(words.length / 2);
+  const rx = words.map((w) => new RegExp(`\\b${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:s|es|ies|ing|ings|er|ers|ed|y)?\\b`));
+  const hit = org.map((i) => {
+    const text = `${i.title ?? ""} ${i.description ?? ""} ${i.url ?? ""} ${i.breadcrumb ?? ""}`.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+    return rx.filter((r) => r.test(text)).length >= need;
+  });
+  return hit.filter(Boolean).length >= Math.min(3, org.length) && hit.slice(0, 3).some(Boolean);
+}
+
+/**
  * Where the subject sits in Google's organic results: null outside the depth
  * read, undefined when there were no results to read at all. Subdomains
  * count as the subject. Moved here from pipeline.ts on 27 Sep 2026 so the

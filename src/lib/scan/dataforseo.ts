@@ -46,6 +46,7 @@ import {
   type RelevantPage,
   keywordIntentRequest,
   keywordIntents,
+  bingRankRequest,
   keywordRankRequest,
   keywordVolumeRequest,
   keywordVolumes,
@@ -59,7 +60,7 @@ import {
 import { type MapsHit, parseMapsResult, rankOfCid } from "@/lib/local/grid";
 
 import { type Market } from "./domain";
-import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead, serpFault } from "./engines";
+import { aioOnPage, bingPageMatches, type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOf, rankOfRead, serpFault } from "./engines";
 
 /**
  * The HTTP half. Everything that can be decided without a credential or a
@@ -251,7 +252,7 @@ export async function readKeywordPosition(
   domain: string,
   market: Market,
   budgetMs?: number,
-): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault> }> {
+): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault>; aio: { sources: string[] } | null }> {
   // 14 Nov 2026: the daily tracking reads to TRACKING_SERP_DEPTH (100); the scan's readKeywordRank stays at SERP_DEPTH.
   // 15 Nov 2026 (Volunteero, #2 in the UK, read absent on four days of seven): Google serves DataForSEO varying pages
   // for the same search at the same moment. A read that does not find the site, or that is no reading (a foreign,
@@ -262,7 +263,7 @@ export async function readKeywordPosition(
     const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
     const organic = parseOrganic(task.result?.[0]);
     const rank = rankOfRead(organic, domain, task.partial === true, market);
-    return { organic, rank, cost: taskCost(task), fault: serpFault(organic, market) };
+    return { organic, rank, cost: taskCost(task), fault: serpFault(organic, market), aio: aioOnPage(task.result?.[0]) };
   };
   const first = await once();
   let pick = first;
@@ -279,7 +280,36 @@ export async function readKeywordPosition(
   // URL of each organic result to SERP_DEPTH - so who else ranks for the cluster keyword is
   // kept day by day rather than thrown away. No new request and no new cost.
   const top = pick.organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
-  return { rank: pick.rank, url, cost, top, fault: pick.fault };
+  return { rank: pick.rank, url, cost, top, fault: pick.fault, aio: pick.aio };
+}
+
+/**
+ * A tracked keyword's Bing position (Danny, 15 Nov 2026), to the depth Google is read to. A page that is not the
+ * search asked for (bingPageMatches), or a foreign or thin one (serpFault), is no reading and is read again, up to
+ * BING_READS in all, as the hub's Bing run re-reads; none right is a failed read (rank undefined), never "not in the
+ * top 100".
+ */
+export const BING_READS = 3;
+export async function readBingPosition(
+  keyword: string,
+  domain: string,
+  market: Market,
+  budgetMs?: number,
+): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; reads: number }> {
+  let cost = 0;
+  for (let reads = 1; reads <= BING_READS; reads++) {
+    if (budgetMs !== undefined && budgetMs < 10_000) return { rank: undefined, url: null, cost, top: [], reads: reads - 1 };
+    const { path, body, timeoutMs } = bingRankRequest(keyword, market);
+    const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
+    cost += taskCost(task);
+    const result = task.result?.[0];
+    const organic = parseOrganic(result);
+    if (!bingPageMatches(keyword, result) || serpFault(organic, market)) continue;
+    const rank = rankOf(organic, domain) ?? null;
+    const url = typeof rank === "number" ? (organic.find((o) => o.rank === rank)?.url ?? null) : null;
+    return { rank, url, cost, top: organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url })), reads };
+  }
+  return { rank: undefined, url: null, cost, top: [], reads: BING_READS };
 }
 
 /**
