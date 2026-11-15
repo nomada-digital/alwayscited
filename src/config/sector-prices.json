@@ -259,6 +259,19 @@
       "cited": 3595
     }
   },
+  "funeral": {
+    "label": "Funeral and end-of-life",
+    "us": {
+      "currency": "USD",
+      "mentioned": 1595,
+      "cited": 3695
+    },
+    "uk": {
+      "currency": "GBP",
+      "mentioned": 1295,
+      "cited": 2895
+    }
+  },
   "other": {
     "label": "Other",
     "us": "call",

@@ -10,9 +10,11 @@ const raw = JSON.parse(readFileSync(new URL("./sector-prices.json", import.meta.
 
 // 21 sectors, not 19: "Business, marketing and legal" split into business,
 // marketing and legal when Danny regenerated the file (28 Sep 2026, R80).
-test("the file carries 20 priced sectors and other, which is a call", () => {
-  assert.equal(SECTORS.length, 21);
-  assert.equal(SECTORS.filter((s) => s.prices).length, 20);
+// 22 from 15 Nov 2026: "Funeral and end-of-life" added for the Dignity proposal
+// (sector-pricing-source.ts says how it was priced). Pending Danny's yes.
+test("the file carries 21 priced sectors and other, which is a call", () => {
+  assert.equal(SECTORS.length, 22);
+  assert.equal(SECTORS.filter((s) => s.prices).length, 21);
   const other = SECTORS.find((s) => s.id === "other");
   assert.ok(other && other.prices === null && other.label === "Other");
 });
@@ -29,7 +31,7 @@ test("every priced figure is whole, positive and ends in 95; currencies match ma
       n++;
     }
   }
-  assert.equal(n, 80);
+  assert.equal(n, 84);
 });
 
 test("US leads: the first market is us, in the module and in every entry of the file", () => {
