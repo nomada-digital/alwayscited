@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Change, EngineHeads, Kpi, LimitsLine, Pos, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
+import { Change, EngineHeads, GooglePos, Kpi, LimitsLine, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
 import Nudges from "@/components/dash/Nudges";
 import PlanCard from "@/components/dash/PlanCard";
 import { PageHead } from "@/components/dash/Shell";
@@ -73,7 +73,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
                   {ws.clusters.map((c) => (
                     <tr key={c.id}>
                       <td><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link><div className="sub">{c.groups.length ? `${c.groups.length} groups · ` : ""}{c.trackedKeywords} keywords · {c.prompts} prompts</div></td>
-                      <td className="r"><Pos pos={c.headPos} /></td>
+                      <td className="r">{c.headKeyword ? <GooglePos pos={c.headPos} read={c.headRead} varies={c.headVaries} /> : <span className="faint" style={{ fontSize: 12 }}>No keyword</span>}</td>
                       <td className="r"><Change n={c.headChange} /></td>
                       <td><Rate r={c.rate} /></td>
                       <td><Spark values={c.rateTrend} width={72} height={22} /></td>

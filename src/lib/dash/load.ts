@@ -131,6 +131,10 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   const { data: varyRows, error: varyErr } = await db.from("tracking_serp").select("run_date, keyword_id").eq("client_domain_id", cid).eq("check_varies", true).gte("run_date", addDays(today, -SERP_DAYS));
   if (varyErr && !absent(varyErr) && !/check_varies/.test(varyErr.message)) console.warn(`[dash] cross-check read failed: ${varyErr.message}`);
   const varies = new Set((varyErr ? [] : (varyRows ?? [])).map((v) => `${v.run_date}|${v.keyword_id}`));
+  // Before that migration the cross-check records its readings as agency_edits lines (crosscheck.ts), target "<day>|<keyword id>".
+  const { data: lines, error: lineErr } = await db.from("agency_edits").select("target, new_value").eq("client_domain_id", cid).eq("action", "rank_crosscheck").gte("created_at", addDays(today, -SERP_DAYS));
+  if (lineErr) console.warn(`[dash] cross-check lines read failed: ${lineErr.message}`);
+  for (const l of lineErr ? [] : (lines ?? [])) if ((l.new_value as { check_varies?: boolean } | null)?.check_varies) varies.add(l.target as string);
   for (const s of serp) if (varies.has(`${s.run_date}|${s.keyword_id}`)) s.varies = true;
   const verdicts = await verdictRead;
   const cites = await citeRead;

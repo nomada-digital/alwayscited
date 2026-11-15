@@ -18,8 +18,22 @@ export function pct(r: number | null): string {
 }
 
 export function Pos({ pos }: { pos: number | null }) {
-  if (pos === null) return <span className="pos none" title="Not in the top 100">-</span>;
+  // Never a bare "-" (Danny, 15 Nov 2026): a missing position says what it means.
+  if (pos === null) return <span className="pos none" style={{ fontSize: 12 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span>;
   return <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>;
+}
+
+/** The note under a position our two ranking sources read differently (lib/tracking/crosscheck.ts). */
+export const VARIES_NOTE = "Google results vary by day";
+export function VariesNote() {
+  return <div className="faint" style={{ fontSize: 11.5 }} title="Our two ranking sources read this search differently. This is the position the evidence supports best.">{VARIES_NOTE}</div>;
+}
+
+/** A tracked keyword's Google slot: its position (with the note when the sources disagreed), else what is known. */
+export function GooglePos({ pos, read, varies }: { pos: number | null; read: boolean; varies?: boolean }) {
+  if (pos !== null) return <><Pos pos={pos} />{varies ? <VariesNote /> : null}</>;
+  if (read) return <Pos pos={null} />;
+  return <span className="faint" style={{ fontSize: 12 }}>Not read yet</span>;
 }
 
 /** A cluster's target page (target.ts): the page placements point at, or a plain "not chosen yet". */

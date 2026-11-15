@@ -172,7 +172,9 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
 
   // Keywords: daily positions.
   const serpBy = new Map<string, [Day, number | null, string | null][]>();
+  const variesOn = new Set<string>();
   for (const s of [...raw.serp].sort((a, b) => a.run_date.localeCompare(b.run_date))) {
+    if (s.varies) variesOn.add(`${s.run_date}|${s.keyword_id}`);
     const l = serpBy.get(s.keyword_id) ?? [];
     l.push([s.run_date, s.position, s.url]);
     serpBy.set(s.keyword_id, l);
@@ -212,6 +214,8 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       volume: k.search_volume,
       src: "tracked",
       pos: curPos,
+      read: !!cur,
+      varies: !!cur && variesOn.has(`${cur[0]}|${k.id}`),
       change,
       url: cur?.[2] ?? null,
       hist: hist.slice(-30).map(([d, p]) => [d, p]),
@@ -305,6 +309,8 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       target: chosenTarget(raw.keyPages ?? [], c.id),
       headVolume: head?.search_volume ?? null,
       headPos: headView?.pos ?? null,
+      headRead: headView?.read ?? false,
+      headVaries: headView?.varies ?? false,
       headChange: headView?.change ?? null,
       rate: latest ? rateOf(answersOn(ids, latest)) : null,
       rateTrend: strip.map((d) => rateOf(answersOn(ids, d))),

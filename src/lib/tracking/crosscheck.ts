@@ -14,8 +14,11 @@ import { ahrefsRank, decideCheck, needsCheck } from "./crosscheck-decide.ts";
  *
  * A changed reading replaces tracking_serp's position and url, so every page and email that reads positions shows it;
  * DataForSEO's own reading stays in read_position, Ahrefs' in check_position (20261115000000's columns). Before that
- * migration nothing is written: a position is never replaced without a record of what it replaced. Never throws.
+ * migration (Danny, 15 Nov 2026: Volunteero still showed "-") the two readings are recorded as an agency_edits line,
+ * action CROSSCHECK_ACTION, target "<run date>|<keyword id>" - a position is never replaced without a record of what
+ * it replaced - and the dashboard reads its note from there. Never throws.
  */
+export const CROSSCHECK_ACTION = "rank_crosscheck";
 const AHREFS_SERP = HUB_SUGGEST.replace(/ac-suggest$/, "ahrefs-serp");
 const AHREFS_MAX = 25;
 const COUNTRY: Record<string, string> = { UK: "gb", US: "us" };
@@ -31,9 +34,21 @@ export async function crossCheckRun(db: SupabaseClient, runId: string): Promise<
     const country = COUNTRY[client.market as string];
     if (!country) return `no Ahrefs country for ${client.market}`;
 
-    const { data: rows, error: rErr } = await db.from("tracking_serp").select("keyword_id, position, url, run_date, check_on").eq("run_id", runId);
-    if (rErr) return missingColumn(rErr, "check_on") ? "tracking_serp has no check columns yet" : `could not read the run: ${rErr.message}`;
-    const fresh = ((rows ?? []) as (Row & { check_on: string | null })[]).filter((r) => !r.check_on);
+    let columns = true;
+    const read = (cols: string) => db.from("tracking_serp").select(cols).eq("run_id", runId).returns<(Row & { check_on?: string | null })[]>();
+    let { data: rows, error: rErr } = await read("keyword_id, position, url, run_date, check_on");
+    if (rErr && missingColumn(rErr, "check_on")) {
+      columns = false;
+      ({ data: rows, error: rErr } = await read("keyword_id, position, url, run_date"));
+    }
+    if (rErr) return `could not read the run: ${rErr.message}`;
+    const logged = new Set<string>();
+    if (!columns) {
+      const { data: lines, error: lErr } = await db.from("agency_edits").select("target").eq("client_domain_id", run.client_domain_id).eq("action", CROSSCHECK_ACTION).like("target", `${run.run_date}|%`);
+      if (lErr) return `could not read the earlier cross-checks: ${lErr.message}`;
+      for (const l of lines ?? []) logged.add(l.target as string);
+    }
+    const fresh = (rows ?? []).filter((r) => (columns ? !r.check_on : !logged.has(`${r.run_date}|${r.keyword_id}`)));
     if (!fresh.length) return "nothing to check";
 
     const { data: before, error: bErr } = await db
@@ -72,12 +87,17 @@ export async function crossCheckRun(db: SupabaseClient, runId: string): Promise<
       if (!positions) continue;
       const ahrefs = ahrefsRank(positions, client.domain as string);
       const out = decideCheck(r, previous.get(r.keyword_id), ahrefs);
+      const check = { read_position: r.position, check_position: ahrefs?.rank ?? null, check_source: "ahrefs", check_on: today, check_varies: out.varies };
       const { error: uErr } = await db
         .from("tracking_serp")
-        .update({ position: out.position, url: out.url, read_position: r.position, check_position: ahrefs?.rank ?? null, check_source: "ahrefs", check_on: today, check_varies: out.varies })
+        .update({ position: out.position, url: out.url, ...(columns ? check : {}) })
         .eq("run_id", runId)
         .eq("keyword_id", r.keyword_id);
       if (uErr) return `could not store the second reading: ${uErr.message}`;
+      if (!columns) {
+        const { error: aErr } = await db.from("agency_edits").insert({ client_domain_id: run.client_domain_id, actor_email: "crosscheck@alwayscited", action: CROSSCHECK_ACTION, target: `${r.run_date}|${r.keyword_id}`, old_value: { position: r.position, url: r.url, source: "dataforseo" }, new_value: { position: out.position, url: out.url, ...check } });
+        if (aErr) console.error(`[crosscheck] ${runId} reading replaced but not recorded: ${aErr.message}`);
+      }
       if (out.position !== r.position) changed++;
     }
     return `checked ${due.length} on Ahrefs (${body.units?.total ?? "?"} units), ${changed} reading${changed === 1 ? "" : "s"} replaced`;

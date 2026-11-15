@@ -12,7 +12,7 @@ import type { ResearchedKeyword } from "@/lib/scan/dataforseo-request";
 import type { Audience } from "@/config/keyword-audience";
 
 import { Menu } from "./ClusterEditor";
-import { Change, Pos, Spark, longDay } from "./Figures";
+import { Change, Pos, Spark, VariesNote, longDay } from "./Figures";
 import Icon from "./Icon";
 import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
@@ -42,12 +42,6 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
   const allTracked = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c }))).filter((k) => k.src === "tracked");
   const heads = allTracked.filter((k) => !k.pairOf || !allTracked.some((p) => p.id === k.pairOf)).sort((a, b) => (a.pos ?? 999) - (b.pos ?? 999));
   const tracked = heads.flatMap((k) => [k, ...allTracked.filter((p) => p.pairOf === k.id)]);
-  // The latest reading of each keyword, where our two sources disagreed on it (lib/tracking/crosscheck.ts).
-  const varies = useMemo(() => {
-    const last = new Map<string, { run_date: string; varies?: boolean }>();
-    for (const s of shown.serp) if (!last.has(s.keyword_id) || last.get(s.keyword_id)!.run_date < s.run_date) last.set(s.keyword_id, s);
-    return new Set([...last].filter(([, s]) => s.varies).map(([id]) => id));
-  }, [shown.serp]);
   const trackedKeys = new Set(tracked.map((k) => keywordKey(k.keyword)));
   const a = ws.allowances.keywords;
   const full = a.used >= a.limit;
@@ -105,7 +99,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                       })()}</td>
                       <td className="r num">{(k.volume ?? m?.volume)?.toLocaleString("en-GB") ?? "-"}</td>
                       <td><Kd kd={m?.kd} /></td>
-                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : k.pos !== null ? <><Pos pos={k.pos} />{k.id && varies.has(k.id) ? <div className="faint" style={{ fontSize: 11.5 }} title="Our two ranking sources read this search differently today. This is the position the evidence supports best.">Readings vary</div> : null}</> : k.hist.length ? <span className="muted" style={{ fontSize: 12.5 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span> : <span className="faint" style={{ fontSize: 12.5 }}>Not read yet</span>}</td>
+                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : k.pos !== null ? <><Pos pos={k.pos} />{k.varies ? <VariesNote /> : null}</> : k.hist.length ? <span className="muted" style={{ fontSize: 12.5 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span> : <span className="faint" style={{ fontSize: 12.5 }}>Not read yet</span>}</td>
                       <td className="r"><Change n={k.change} /></td>
                       <td><Spark values={k.hist.map(([, p]) => p)} invert width={80} height={22} /></td>
                       <td className="muted" style={{ fontSize: 12.5, maxWidth: 240, overflowWrap: "anywhere" }}>{pathOf(k.url) ?? "-"}{k.pageChange ? <div className="sub"><span className="pill warn">Page changed {longDay(k.pageChange.on)}</span></div> : null}</td>

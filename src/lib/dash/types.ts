@@ -182,6 +182,9 @@ export type KeywordView = {
   /** tracked: checked daily, counts against the plan. footprint: from the monthly ranking snapshot, free. */
   src: "tracked" | "footprint";
   pos: number | null;
+  /** Tracked keywords: read at least once in the window, and the latest reading's sources disagreed (crosscheck.ts). */
+  read?: boolean;
+  varies?: boolean;
   change: number | null;
   url: string | null;
   hist: [Day, number | null][];
@@ -233,6 +236,9 @@ export type ClusterView = {
   target: string | null;
   headVolume: number | null;
   headPos: number | null;
+  /** Whether the head keyword has a reading, and whether our two sources disagreed on it (lib/tracking/crosscheck.ts). */
+  headRead: boolean;
+  headVaries: boolean;
   headChange: number | null;
   rate: number | null;
   rateTrend: (number | null)[];
