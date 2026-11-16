@@ -204,6 +204,20 @@ function allCalls(): Call[] {
  */
 const NO_CALLER: { route: string; method: string; why: string; earns: () => boolean }[] = [
   {
+    route: "/api/google/connect",
+    method: "GET",
+    // 16 Nov 2026: one-click Search Console (lib/dash/gsc-oauth.ts).
+    why: "A top-level navigation from the Search Console card's Connect button (location.href, or a new tab inside the hub's frame), never a fetch: it answers with a redirect to Google's consent page.",
+    earns: () => readFileSync(join(ROOT, "src/components/dash/GoogleConnect.tsx"), "utf8").includes("const href = `/api/google/connect?${new URLSearchParams({ client: slug, back: location.pathname })}`;"),
+  },
+  {
+    route: "/api/google/callback",
+    method: "GET",
+    // 16 Nov 2026: Google's redirect after the consent page; the Web client "GSC connect - alwayscited and hub" registers it.
+    why: "Called by Google, not the app: the browser arrives here from Google's consent page, at the redirect URI the OAuth client registers (REDIRECT_URI).",
+    earns: () => readFileSync(join(ROOT, "src/lib/dash/gsc-oauth.ts"), "utf8").includes('export const REDIRECT_URI = "https://dashboards.alwayscited.com/api/google/callback";'),
+  },
+  {
     route: "/api/unsubscribe/[token]",
     method: "POST",
     // 3 Nov 2026: unsubscribe from report emails and follow-ups (lib/scan/unsubscribe.ts).

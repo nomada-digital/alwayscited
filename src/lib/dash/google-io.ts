@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { queryRows } from "@/lib/dash/connect";
 import { GA4_REQUESTS, type GoogleProvider, backfillStart, ga4Day, ga4Rows, gscDailyRows, gscQueryPageRows, lastFinalDay, monthWindows, type Ga4Report } from "@/lib/dash/google";
+import { accessToken, oauthEnv, queryAs } from "@/lib/dash/gsc-oauth-io";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /**
@@ -48,15 +49,37 @@ const iso = (d: Date) => d.toISOString().slice(0, 10);
 const chunks = <T,>(rows: T[]): T[][] => Array.from({ length: Math.ceil(rows.length / 1000) }, (_, i) => rows.slice(i * 1000, i * 1000 + 1000));
 const why = (table: string, e: { code?: string; message: string }) => (absent(e) ? `${table} is not created yet (migration 20261116000000)` : `${table}: ${e.message}`);
 
+type GscQuery = (b: { start: string; end: string; dimensions: string[]; rowLimit: number }) => Promise<{ rows?: unknown[]; error?: string }>;
+
+/**
+ * How a property is read (16 Nov 2026): with the customer's own Google grant when they connected by signing in
+ * (auth 'oauth', gsc-oauth-io.ts), else through the hub's service account (google-data).
+ */
+async function gscQuerier(db: SupabaseClient, c: { client_domain_id: string; property: string; auth?: string | null }): Promise<GscQuery | { error: string }> {
+  if (c.auth === "oauth") {
+    const env = oauthEnv();
+    if ("missing" in env) return { error: `not configured: ${env.missing.join(", ")}` };
+    const t = await accessToken(db, env, c.client_domain_id);
+    if ("error" in t) return { error: t.error };
+    return (b) => queryAs(t.token, c.property, b);
+  }
+  return async (b) => {
+    const a = await hubGoogle("gsc_query", { site: c.property, ...b });
+    return a.error ? { error: a.error } : { rows: (a.rows ?? []) as unknown[] };
+  };
+}
+
 /** One property's pull: 16 months on the first (no backfilled_at yet), then the last two months each morning. */
-export async function pullGoogle(db: SupabaseClient, c: { client_domain_id: string; provider: GoogleProvider; property: string; backfilled_at: string | null }, now: number = Date.now()): Promise<string | null> {
+export async function pullGoogle(db: SupabaseClient, c: { client_domain_id: string; provider: GoogleProvider; property: string; backfilled_at: string | null; auth?: string | null }, now: number = Date.now()): Promise<string | null> {
   const end = lastFinalDay(now);
   const months = monthWindows(end, c.backfilled_at ? 2 : 16);
   const start = c.backfilled_at ? months[0].start : backfillStart(end);
   const id = c.client_domain_id;
   const errors: string[] = [];
   if (c.provider === "gsc") {
-    const daily = await hubGoogle("gsc_query", { site: c.property, start, end, dimensions: ["date"], rowLimit: 25000 });
+    const q = await gscQuerier(db, c);
+    if ("error" in q) return `gsc ${c.property}: ${q.error}`;
+    const daily = await q({ start, end, dimensions: ["date"], rowLimit: 25000 });
     if (daily.error) return `gsc ${c.property}: ${daily.error}`;
     for (const r of chunks(gscDailyRows(id, (daily.rows ?? []) as unknown[]))) {
       const { error } = await db.from("gsc_daily").upsert(r, { onConflict: "client_domain_id,day" });
@@ -67,9 +90,9 @@ export async function pullGoogle(db: SupabaseClient, c: { client_domain_id: stri
     // Four windows at a time: a 16-month first pull has to fit the route's 60 seconds.
     for (let i = 0; i < windows.length; i += 4) {
       await Promise.all(windows.slice(i, i + 4).map(async (w) => {
-        const q = await hubGoogle("gsc_query", { site: c.property, start: w.start, end: w.end, dimensions: ["query", "page"], rowLimit: 5000 });
-        if (q.error) { errors.push(`gsc ${w.start}: ${q.error}`); return; }
-        const rows = queryRows({ clientId: id, provider: "gsc", from: w.start, to: w.end, rows: gscQueryPageRows((q.rows ?? []) as unknown[]) });
+        const got = await q({ start: w.start, end: w.end, dimensions: ["query", "page"], rowLimit: 5000 });
+        if (got.error) { errors.push(`gsc ${w.start}: ${got.error}`); return; }
+        const rows = queryRows({ clientId: id, provider: "gsc", from: w.start, to: w.end, rows: gscQueryPageRows((got.rows ?? []) as unknown[]) });
         for (const r of chunks(rows)) {
           const { error } = await db.from("search_console_queries").upsert(r, { onConflict: "client_domain_id,provider,period_end,query,page" });
           if (error) { errors.push(why("search_console_queries", error)); break; }
@@ -116,11 +139,12 @@ export async function pullGoogle(db: SupabaseClient, c: { client_domain_id: stri
 export async function pullGoogleSafely(now: number = Date.now()): Promise<{ pulled: number; failed: string[] } | { error: string }> {
   try {
     const db = supabaseAdmin();
-    const { data, error } = await db.from("integration_connections").select("client_domain_id, provider, property, backfilled_at").eq("status", "connected").eq("via", "google").not("property", "is", null);
-    if (error) return absent(error) || /via|backfilled_at/.test(error.message) ? { pulled: 0, failed: [] } : { error: error.message };
+    // GA4 is not connected direct for now (Danny, 16 Nov 2026: by hand until the OAuth app carries Analytics).
+    const { data, error } = await db.from("integration_connections").select("client_domain_id, provider, property, backfilled_at, auth").eq("status", "connected").eq("via", "google").eq("provider", "gsc").not("property", "is", null);
+    if (error) return absent(error) || /via|backfilled_at|auth/.test(error.message) ? { pulled: 0, failed: [] } : { error: error.message };
     const failed: string[] = [];
     let pulled = 0;
-    for (const c of (data ?? []) as { client_domain_id: string; provider: GoogleProvider; property: string; backfilled_at: string | null }[]) {
+    for (const c of (data ?? []) as { client_domain_id: string; provider: GoogleProvider; property: string; backfilled_at: string | null; auth: string | null }[]) {
       const e = await pullGoogle(db, c, now).catch((err: unknown) => (err instanceof Error ? err.message : String(err)));
       if (e) failed.push(e.slice(0, 300));
       else pulled++;

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { Pos, longDay } from "@/components/dash/Figures";
+import { GooglePos, Pos, longDay } from "@/components/dash/Figures";
 import GuideBox from "@/components/dash/GuideBox";
 import KeywordManager from "@/components/dash/KeywordManager";
 import { updateRolling } from "@/lib/tracking/google-updates";
@@ -52,7 +52,7 @@ export default async function Google({ params }: { params: Promise<{ client: str
               <thead><tr><th>Keyword</th><th>Group</th><th className="r">Volume</th><th className="r">Position</th></tr></thead>
               <tbody>
                 {also.map((k) => (
-                  <tr key={`${k.cluster.id}-${k.keyword}`}><td>{k.keyword}</td><td className="muted"><Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.group || k.cluster.name}</Link></td><td className="r num">{k.volume?.toLocaleString("en-GB") ?? "-"}</td><td className="r"><Pos pos={k.pos} /></td></tr>
+                  <tr key={`${k.cluster.id}-${k.keyword}`}><td>{k.keyword}</td><td className="muted"><Link href={`${base}/${slug}/clusters/${k.cluster.id}`}>{k.group || k.cluster.name}</Link></td><td className="r num">{k.volume?.toLocaleString("en-GB") ?? "-"}</td><td className="r"><GooglePos pos={k.pos} read={k.read ?? true} varies={k.varies} gsc={k.console.gsc} /></td></tr>
                 ))}
               </tbody>
             </table>

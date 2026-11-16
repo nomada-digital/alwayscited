@@ -29,8 +29,29 @@ export function VariesNote() {
   return <div className="faint" style={{ fontSize: 11.5 }} title="Our two ranking sources read this search differently. This is the position the evidence supports best.">{VARIES_NOTE}</div>;
 }
 
+/**
+ * Search Console as the rankings fallback (Danny, 16 Nov 2026: DataForSEO reads are unreliable). When the live read
+ * failed, found nothing or disagreed with the cross-check, and Search Console has an average position for the search
+ * and page, that is shown instead, labelled. Null when the live read stands.
+ */
+export function consoleFallback(p: { pos: number | null; read?: boolean; varies?: boolean; gsc?: { pos: number | null; impr: number } | null }): number | null {
+  const doubtful = p.read === false || p.pos === null || !!p.varies;
+  return doubtful && p.gsc && p.gsc.pos != null && p.gsc.impr > 0 ? Math.round(p.gsc.pos) : null;
+}
+
+export function ConsolePos({ pos }: { pos: number }) {
+  return (
+    <>
+      <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>
+      <div className="faint" style={{ fontSize: 11.5 }} title="Google's average position for this search and page over the last 28 days, from your Search Console. Shown because today's live reading failed or disagreed.">Search Console</div>
+    </>
+  );
+}
+
 /** A tracked keyword's Google slot: its position (with the note when the sources disagreed), else what is known. */
-export function GooglePos({ pos, read, varies }: { pos: number | null; read: boolean; varies?: boolean }) {
+export function GooglePos({ pos, read, varies, gsc }: { pos: number | null; read: boolean; varies?: boolean; gsc?: { pos: number | null; impr: number } | null }) {
+  const fb = consoleFallback({ pos, read, varies, gsc });
+  if (fb !== null) return <ConsolePos pos={fb} />;
   if (pos !== null) return <><Pos pos={pos} />{varies ? <VariesNote /> : null}</>;
   if (read) return <Pos pos={null} />;
   return <span className="faint" style={{ fontSize: 12 }}>Not read yet</span>;

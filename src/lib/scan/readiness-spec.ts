@@ -77,6 +77,11 @@ export const NOT_REQUIRED: Record<string, string> = {
   // sends nothing (lib/slack.ts), and each cap falls back to its low default (config/csm.ts) - never to no cap.
   SLACK_BOT_TOKEN: "Slack posts to #alwayscited; unset, each post is logged as 'would post' and nothing is sent",
   FATGRID_UNIT_CAP: "the shortlist's Fatgrid units per run; unset, the low default in config/csm.ts",
+  // 16 Nov 2026, one-click Search Console (lib/dash/gsc-oauth.ts): Danny's, set in Vercel. Unset, the card's Connect
+  // answers "isn't switched on yet" and the daily pull skips OAuth connections with the names of what is missing.
+  GSC_OAUTH_CLIENT_ID: "the OAuth Web client for one-click Search Console; unset, connecting says it is not switched on yet",
+  GSC_OAUTH_CLIENT_SECRET: "the OAuth Web client's secret; unset, as GSC_OAUTH_CLIENT_ID",
+  GSC_TOKEN_KEY: "32 random bytes, base64, sealing Search Console refresh tokens; unset or the wrong length, as GSC_OAUTH_CLIENT_ID",
   FATGRID_MONTHLY_UNIT_CAP: "Fatgrid units per calendar month across the shortlist and the scan; unset, the low default in config/csm.ts",
   // 22 Oct 2026: the agency hub's subscription offer (api/hub/offer). Unset, that one server-to-server door answers 503
   // and the hub says it is not connected; nothing a visitor or customer uses depends on it.

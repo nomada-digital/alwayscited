@@ -145,6 +145,30 @@ const SECTIONS: Section[] = [
       </>
     ),
   },
+  // Google's Limited Use requirement for the Search Console connection (Danny, 16 Nov 2026; lib/dash/gsc-oauth.ts).
+  {
+    id: "google",
+    title: "Google Search Console data",
+    body: (
+      <>
+        If you connect Google Search Console to your dashboard, alwayscited (operated by Nomada Digital) asks Google for
+        your email address and read-only access to your Search Console data. We use it only to show you your own search
+        performance - searches, pages, clicks, impressions and average position - in your dashboard and reports, and to
+        check that the positions we report are right. We never use Google user data for advertising, never sell it, and
+        never use it to train general-purpose AI or machine-learning models. People at alwayscited read it only with your
+        permission, for security or to meet the law, or as part of aggregated, anonymised internal operations, and we share
+        it with no one except as needed to provide this service to you, to meet the law, or as part of a merger or
+        acquisition with notice to you. Your access token is stored encrypted on our servers. You can disconnect at any
+        time from your dashboard, or at myaccount.google.com/permissions; we delete the token straight away and the Search
+        Console data we hold within 30 days, or sooner if you ask. Our use and transfer of information received from Google
+        APIs to any other app will adhere to the{" "}
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" style={{ fontWeight: 600, color: T.accent }}>
+          Google API Services User Data Policy
+        </a>
+        , including the Limited Use requirements.
+      </>
+    ),
+  },
   {
     id: "cookies",
     title: "Cookies and tracking",
@@ -165,7 +189,9 @@ const SECTIONS: Section[] = [
         dashboard, we set one login cookie so they stay signed in. It holds a random key and nothing else, lasts 30
         days, is cleared when they log out, and is never set on any other visit. Our own team&apos;s browsers also carry
         one cookie, set from our admin page, that skips the email step on their own test scans; no visitor is ever given
-        it. The dashboard&apos;s feature counts, described above, are our own and go to no third party.
+        it. While a client connects Google Search Console, one more cookie, holding a random value, ties Google&apos;s reply to
+        their browser; it lasts 15 minutes and is deleted as soon as Google answers. The dashboard&apos;s feature counts,
+        described above, are our own and go to no third party.
       </>
     ),
   },

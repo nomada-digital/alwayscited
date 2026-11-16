@@ -135,6 +135,21 @@ export function pairsBeside<T extends { id: string | null; pairOf?: string | nul
   return out;
 }
 
+/** Clicks and impressions summed, position impression-weighted, across a query's rows. */
+function figOf(rs: readonly RawConsoleRow[]): ConsoleFig {
+  const clicks = rs.reduce((n, r) => n + r.clicks, 0);
+  const impr = rs.reduce((n, r) => n + r.impressions, 0);
+  const pi = rs.reduce((n, r) => n + (r.position == null ? 0 : r.impressions), 0);
+  const pw = rs.reduce((n, r) => n + (r.position == null ? 0 : Number(r.position) * r.impressions), 0);
+  return { clicks, impr, ctr: impr ? clicks / impr : 0, pos: pi ? Math.round((pw / pi) * 10) / 10 : (rs.find((r) => r.position != null)?.position ?? null) };
+}
+
+/** The same page, give or take scheme, www and a trailing slash. */
+function samePage(a: string, b: string): boolean {
+  const n = (u: string) => u.toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/[?#].*$/, "").replace(/\/$/, "");
+  return !!a && !!b && n(a) === n(b);
+}
+
 export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const dates = [...new Set(raw.answers.map((a) => a.run_date))].sort();
   const strip = dates.slice(-STRIP_DAYS);
@@ -180,26 +195,33 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     serpBy.set(s.keyword_id, l);
   }
 
-  // Console rows: the latest period per provider, by query.
+  // Console rows: the latest period per provider, by query. 16 Nov 2026: each query keeps its rows by page, so a
+  // tracked keyword's figure is the one for the page that ranks for it (Search Console as the rankings fallback);
+  // before, the query's position was whichever page's row came last.
   const consoleBy = { gsc: new Map<string, ConsoleFig>(), bing: new Map<string, ConsoleFig>() };
+  const consolePages = { gsc: new Map<string, RawConsoleRow[]>(), bing: new Map<string, RawConsoleRow[]>() };
   const consoleRows: Record<"gsc" | "bing", RawConsoleRow[]> = { gsc: [], bing: [] };
   for (const prov of ["gsc", "bing"] as const) {
     const rows = raw.consoleRows.filter((r) => r.provider === prov);
     const end = rows.reduce<Day | null>((m, r) => (m === null || r.period_end > m ? r.period_end : m), null);
-    for (const r of rows.filter((x) => x.period_end === end)) {
+    const latest = rows.filter((x) => x.period_end === end);
+    for (const r of latest) {
       const k = lc(r.query);
-      const had = consoleBy[prov].get(k);
-      const clicks = (had?.clicks ?? 0) + r.clicks;
-      const impr = (had?.impr ?? 0) + r.impressions;
-      consoleBy[prov].set(k, { clicks, impr, ctr: impr ? clicks / impr : 0, pos: r.position ?? had?.pos ?? null });
+      consolePages[prov].set(k, [...(consolePages[prov].get(k) ?? []), r]);
       consoleRows[prov].push(r);
     }
+    for (const [k, rs] of consolePages[prov]) consoleBy[prov].set(k, figOf(rs));
   }
   const consoleLive = { gsc: consoleBy.gsc.size > 0, bing: consoleBy.bing.size > 0 };
   const sample = !!opts.sample && !consoleLive.gsc && !consoleLive.bing;
-  const consoleFor = (k: string, vol: number | null, pos: number | null): KeywordView["console"] => {
+  const consoleFor = (k: string, vol: number | null, pos: number | null, url: string | null = null): KeywordView["console"] => {
     if (sample) return { gsc: sampleConsole(k, vol, pos, "gsc"), bing: sampleConsole(k, vol, pos, "bing") };
-    return { gsc: consoleBy.gsc.get(lc(k)) ?? null, bing: consoleBy.bing.get(lc(k)) ?? null };
+    const onPage = (prov: "gsc" | "bing") => {
+      const rs = consolePages[prov].get(lc(k)) ?? [];
+      const mine = url ? rs.filter((r) => samePage(r.page ?? "", url)) : [];
+      return mine.length ? figOf(mine) : (consoleBy[prov].get(lc(k)) ?? null);
+    };
+    return { gsc: onPage("gsc"), bing: onPage("bing") };
   };
 
   const trackedView = (k: RawKeyword): KeywordView => {
@@ -219,7 +241,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       change,
       url: cur?.[2] ?? null,
       hist: hist.slice(-30).map(([d, p]) => [d, p]),
-      console: consoleFor(k.keyword, k.search_volume, curPos),
+      console: consoleFor(k.keyword, k.search_volume, curPos, cur?.[2] ?? null),
       addedOn: k.added_on,
       pageChange: pageChangeOf(hist),
       homepage: pathOf(cur?.[2] ?? null) === "/",
@@ -311,6 +333,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       headPos: headView?.pos ?? null,
       headRead: headView?.read ?? false,
       headVaries: headView?.varies ?? false,
+      headGsc: headView?.console.gsc ?? null,
       headChange: headView?.change ?? null,
       rate: latest ? rateOf(answersOn(ids, latest)) : null,
       rateTrend: strip.map((d) => rateOf(answersOn(ids, d))),

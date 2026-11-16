@@ -211,13 +211,13 @@ const EXEMPT: Record<string, Exemption> = {
       { file: "app/api/walkthrough/route.ts", needs: "readWalkthroughMarket(body.market)" },
     ],
   },
-  // 15 Nov 2026 (Danny): the Google connect card's property choice - radios, one per property the hub's service
+  // 15-16 Nov 2026 (Danny): the Search Console card's property choice - radios, one per property the signed-in Google
   // account lists for this client's domain. Nothing is typed; the route lists the properties again and connects only
   // one of those (pickable), never a value from the browser alone.
-  "gc-prop-${provider}-${i}": {
-    why: "The Google connect card's property choice, a radio per listed property. type=radio, nothing typed; the google route slices the value to 300 and connects it only if pickable() finds it among the properties the service account lists for this domain.",
+  "gc-prop-gsc-${i}": {
+    why: "The Search Console card's property choice, a radio per listed property. type=radio, nothing typed; the google route slices the value to 300 and connects it only if it is among the properties the signed-in Google account lists for this domain.",
     holds: [
-      { file: "app/api/dash/[client]/google/route.ts", needs: "pickable(provider, property, listed)" },
+      { file: "app/api/dash/[client]/google/route.ts", needs: "listed.find((p) => p.id === property)" },
       { file: "app/api/dash/[client]/google/route.ts", needs: "b.property.slice(0, 300)" },
     ],
   },

@@ -316,6 +316,7 @@ test("the upsert sites are the ones we think they are", () => {
       "ga4_pages:client_domain_id,page,period_end",
       "gsc_daily:client_domain_id,day",
       "gsc_inspections:client_domain_id,url",
+      "gsc_tokens:client_domain_id",
       // 13 Oct 2026, DIY P6 (spec 10 sections 5.8 and 6.6): the footprint job
       // stores one pull per client per day on keyword_footprints' unique
       // (client_domain_id, pulled_on), so the worker's stale reclaim running

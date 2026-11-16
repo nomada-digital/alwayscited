@@ -39,7 +39,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
   // When the next reading lands, in the client's own zone - so an edit made now has a time it shows up by.
   const tracking = ws.clusters.some((c) => c.prompts > 0) || ws.loose.prompts.length > 0;
   const next = tracking ? nextCheckLabel(ws.client.market) : null;
-  // 15 Nov 2026: real clicks and visits from Search Console and GA4 connected direct, or a prompt to connect them.
+  // 16 Nov 2026: real clicks and impressions from Search Console connected direct, or a prompt to connect it.
   const google = demo && !viewAs ? null : await googleSummary(supabaseAdmin(), ws.client.id, ws.today).catch(() => null);
   return (
     <>
@@ -64,7 +64,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
         <Kpi href={`${base}/${slug}/clusters`} label="Clusters" value={ws.allowances.clusters.used} unit={`of ${ws.allowances.clusters.limit}`} sub={`${ws.allowances.prompts.used} of ${ws.allowances.prompts.limit} prompts · ${ws.clusters.reduce((n, c) => n + c.groups.length, 0)} keyword groups`} />
         <Kpi href={`${base}/${slug}/sources`} label="AI cites your site" value={cites ? cites.answers : 0} unit="answers" sub="Last 7 readings, any engine" />
       </div>
-      {google ? <GoogleTraffic s={google} gsc={ws.connections.gsc ?? null} ga4={ws.connections.ga4 ?? null} href={`${base}/${slug}/integrations`} canConnect={ws.canWrite || !!viewAs} /> : null}
+      {google ? <GoogleTraffic s={google} gsc={ws.connections.gsc ?? null} href={`${base}/${slug}/integrations`} canConnect={ws.canWrite || !!viewAs} /> : null}
       <div className="dash-grid side" style={{ marginTop: 16 }}>
         <div className="dash-card">
           <div className="dash-card-head">
@@ -79,7 +79,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
                   {ws.clusters.map((c) => (
                     <tr key={c.id}>
                       <td><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link><div className="sub">{c.groups.length ? `${c.groups.length} groups · ` : ""}{c.trackedKeywords} keywords · {c.prompts} prompts</div></td>
-                      <td className="r">{c.headKeyword ? <GooglePos pos={c.headPos} read={c.headRead} varies={c.headVaries} /> : <span className="faint" style={{ fontSize: 12 }}>No keyword</span>}</td>
+                      <td className="r">{c.headKeyword ? <GooglePos pos={c.headPos} read={c.headRead} varies={c.headVaries} gsc={c.headGsc} /> : <span className="faint" style={{ fontSize: 12 }}>No keyword</span>}</td>
                       <td className="r"><Change n={c.headChange} /></td>
                       <td><Rate r={c.rate} /></td>
                       <td><Spark values={c.rateTrend} width={72} height={22} /></td>

@@ -22,12 +22,6 @@ export function gscUsersLink(property: string | null): string {
   return property ? `https://search.google.com/search-console/users?resource_id=${encodeURIComponent(property)}` : "https://search.google.com/search-console/users";
 }
 
-/**
- * GA4's Admin. Property access management's own address needs the account id as well as the property's, which we
- * only learn once connected, so the card links Admin and names the page.
- */
-export const GA4_ADMIN_LINK = "https://analytics.google.com/analytics/web/#/admin";
-
 /** Search Console permission levels as sites.list names them, in plain words. */
 export const PERMISSION: Record<string, string> = {
   siteOwner: "Owner",

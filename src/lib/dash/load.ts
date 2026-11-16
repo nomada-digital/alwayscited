@@ -93,7 +93,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
     db.from("opportunities").select("id, cluster_id, lens, url, url_key, domain, title, route, status, evidence").eq("client_domain_id", cid).eq("live", true).limit(200),
     db.from("placements").select("id, cluster_id, kind, url, domain, status, scheduled_on, live_on, anchor_text").eq("client_domain_id", cid).neq("status", "removed"),
     db.from("integration_connections").select("provider, status, property, requested_at, connected_at, last_synced_at").eq("client_domain_id", cid),
-    db.from("search_console_queries").select("provider, query, clicks, impressions, ctr, position, period_end").eq("client_domain_id", cid).gte("period_end", addDays(today, -60)).limit(5000),
+    db.from("search_console_queries").select("provider, query, page, clicks, impressions, ctr, position, period_end").eq("client_domain_id", cid).gte("period_end", addDays(today, -60)).limit(5000),
     db.from("key_pages").select("url, origin, cluster_ids, added_on, removed_on").eq("client_domain_id", cid).is("removed_on", null).limit(50),
     // Map pack grids (22 Oct 2026, lib/local): only whether there are any, for the nav. The page reads them itself.
     db.from("local_grids").select("id", { count: "exact", head: true }).eq("client_domain_id", cid).eq("active", true),
@@ -191,13 +191,17 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
  */
 async function withDirect(db: SupabaseClient, cid: string, rows: RawConnection[]): Promise<RawConnection[]> {
   if (!rows.length) return rows;
-  const { data, error } = await db.from("integration_connections").select("provider, via, permission, property_name, backfilled_at, error").eq("client_domain_id", cid);
-  if (error) {
-    if (!absent(error) && !/via|permission|property_name|backfilled_at/.test(error.message)) console.warn(`[dash] connection detail read failed: ${error.message}`);
-    return rows;
+  // Newest columns first (20261117000000), then 20261116000000's alone, then nothing: each migration adds detail.
+  for (const cols of ["provider, via, permission, property_name, backfilled_at, error, auth, google_email", "provider, via, permission, property_name, backfilled_at, error"]) {
+    const { data, error } = await db.from("integration_connections").select(cols).eq("client_domain_id", cid);
+    if (error) {
+      if (!absent(error) && !/via|permission|property_name|backfilled_at|auth|google_email/.test(error.message)) console.warn(`[dash] connection detail read failed: ${error.message}`);
+      continue;
+    }
+    const by = new Map(((data ?? []) as unknown as Partial<RawConnection>[]).map((d) => [d.provider, d]));
+    return rows.map((r) => ({ ...r, ...(by.get(r.provider) ?? {}) }));
   }
-  const by = new Map(((data ?? []) as Partial<RawConnection>[]).map((d) => [d.provider, d]));
-  return rows.map((r) => ({ ...r, ...(by.get(r.provider) ?? {}) }));
+  return rows;
 }
 
 /**

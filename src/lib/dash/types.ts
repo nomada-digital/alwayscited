@@ -135,8 +135,11 @@ export type RawConnection = {
   property_name?: string | null;
   backfilled_at?: string | null;
   error?: string | null;
+  /** 17 Nov 2026 (20261117000000): oauth (the customer signed in with Google) or service_account, and who granted it. */
+  auth?: "oauth" | "service_account" | null;
+  google_email?: string | null;
 };
-export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };
+export type RawConsoleRow = { provider: "gsc" | "bing"; query: string; page?: string; clicks: number; impressions: number; ctr: number | null; position: number | null; period_end: Day };
 
 export type Raw = {
   client: RawClient;
@@ -252,6 +255,8 @@ export type ClusterView = {
   /** Whether the head keyword has a reading, and whether our two sources disagreed on it (lib/tracking/crosscheck.ts). */
   headRead: boolean;
   headVaries: boolean;
+  /** Search Console's figure for the head keyword (16 Nov 2026): the fallback when its live read fails or disagrees. */
+  headGsc: ConsoleFig | null;
   headChange: number | null;
   rate: number | null;
   rateTrend: (number | null)[];

@@ -108,11 +108,11 @@ export default async function Settings({ params, searchParams }: { params: Promi
           </form>
         ) : null}
       </div>
-      {/* 15 Nov 2026: Connections - Search Console and GA4, direct. Bing and the rest stay on Integrations. */}
+      {/* 16 Nov 2026: Connections - Search Console by signing in with Google. Bing stays on Integrations. */}
       <div id="connections" style={{ margin: "0 0 16px" }}>
         <h2 style={{ fontSize: 16, margin: "0 0 10px" }}>Connections</h2>
         <div className="dash-grid k2">
-          {(["gsc", "ga4"] as const).map((p) => <GoogleConnect key={p} slug={slug} domain={raw.client.domain} provider={p} conn={raw.connections.find((c) => c.provider === p) ?? null} canWrite={!readOnly && ws.canWrite} demo={demo && !viewAs} staff={!!viewAs} />)}
+          <GoogleConnect slug={slug} domain={raw.client.domain} conn={raw.connections.find((c) => c.provider === "gsc") ?? null} canWrite={!readOnly && ws.canWrite} demo={demo && !viewAs} staff={!!viewAs} />
         </div>
         <p className="faint" style={{ fontSize: 12.5, margin: "8px 0 0" }}>Bing Webmaster Tools is under <Link href={`${base}/${slug}/integrations`}>Integrations</Link>.</p>
       </div>

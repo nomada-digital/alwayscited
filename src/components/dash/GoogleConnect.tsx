@@ -1,30 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { CONTACT_EMAIL } from "@/config/contact";
-import { GA4_ADMIN_LINK, GOOGLE_ACCESS_EMAIL, PERMISSION, READ_ONLY_NOTE, canSubmit, gscUsersLink, type GoogleProvider } from "@/lib/dash/google";
+import { PERMISSION, READ_ONLY_NOTE } from "@/lib/dash/google";
 import type { RawConnection } from "@/lib/dash/types";
 
 type Listed = { id: string; name: string; permission: string | null };
 type Inspection = { url: string; verdict: string | null; coverage: string | null; last_crawl: string | null; inspected_at: string };
 
-const NAME: Record<GoogleProvider, string> = { gsc: "Google Search Console", ga4: "Google Analytics 4" };
-const WHAT: Record<GoogleProvider, string> = {
-  gsc: "Clicks, impressions and average position for every search you appear in, straight from Google.",
-  ga4: "Your visits by channel, the pages people land on from search, and the key events they lead to.",
+/** What came back from Google, as /api/google/callback reports it (?gsc=<word>). */
+const BACK: Record<string, { text: string; bad?: boolean }> = {
+  cancelled: { text: "You cancelled the Google sign-in. Nothing was connected." },
+  failed: { text: "Google didn't complete the sign-in. Try again.", bad: true },
+  noscope: { text: "Search Console access wasn't ticked on Google's screen. Connect again and leave it ticked.", bad: true },
+  refused: { text: "Only an owner or editor can connect this.", bad: true },
+  unavailable: { text: "Connecting Search Console isn't switched on yet. Try again later today.", bad: true },
 };
 
 /**
- * Connect Search Console or GA4 direct (15 Nov 2026, lib/dash/google.ts): our address to copy, a link to the
- * right page in Google, then Check connection lists the properties we can see for this site and the customer
- * picks one (api/dash/[client]/google). On a view-as link, agency staff can do it for the customer, and the Search
- * Console card adds the indexing helpers - sitemap submit and URL Inspection - which are staff only at first.
+ * Connect Google Search Console in one click (16 Nov 2026, lib/dash/gsc-oauth.ts): sign in with Google, allow
+ * read-only access, pick the property for this site. Connected, it says who connected it, which property and when
+ * it last read, with Disconnect. On a view-as link, Nomada staff connect it on the client's behalf - signing in with
+ * a Google account that can see the client's property - and get URL Inspection for key pages (staff only at first).
  */
-export default function GoogleConnect({ slug, domain, provider, conn, canWrite, demo, staff, keyPages = [], inspections = [] }: {
+export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staff, keyPages = [], inspections = [] }: {
   slug: string;
   domain: string;
-  provider: GoogleProvider;
   conn: RawConnection | null;
   canWrite: boolean;
   demo: boolean;
@@ -32,153 +34,134 @@ export default function GoogleConnect({ slug, domain, provider, conn, canWrite, 
   keyPages?: string[];
   inspections?: Inspection[];
 }) {
-  const direct = conn?.via === "google" && conn.status === "connected";
-  const [connected, setConnected] = useState<{ property: string; name: string; permission: string | null } | null>(direct && conn?.property ? { property: conn.property, name: conn.property_name ?? conn.property, permission: conn.permission ?? null } : null);
+  const oauth = conn?.via === "google" && conn.auth === "oauth";
+  const [state, setState] = useState<"none" | "pick" | "connected">(oauth && conn?.status === "connected" && conn.property ? "connected" : oauth && conn?.status === "pending" ? "pick" : "none");
+  const [shown, setShown] = useState<{ property: string; email: string | null; permission: string | null } | null>(oauth && conn?.property ? { property: conn.property, email: conn.google_email ?? null, permission: conn.permission ?? null } : null);
   const [listed, setListed] = useState<Listed[] | null>(null);
-  const [choice, setChoice] = useState<string>("");
+  const [email, setEmail] = useState<string | null>(conn?.google_email ?? null);
+  const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [changing, setChanging] = useState(false);
   const may = (canWrite && !demo) || staff;
 
   const call = async (body: Record<string, unknown>) => {
-    const r = await fetch(`/api/dash/${slug}/google`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider, path: location.pathname, ...body }) }).catch(() => null);
-    return ((await r?.json().catch(() => null)) ?? { ok: false, message: "We could not check just now. Try again in a minute." }) as Record<string, unknown> & { ok?: boolean; message?: string };
+    const r = await fetch(`/api/dash/${slug}/google`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: location.pathname, ...body }) }).catch(() => null);
+    return ((await r?.json().catch(() => null)) ?? { ok: false, message: "We couldn't reach the server. Try again in a minute." }) as Record<string, unknown> & { ok?: boolean; message?: string };
   };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(GOOGLE_ACCESS_EMAIL);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      /* the address is on screen to copy by hand */
-    }
-  };
-  const check = async () => {
+  const list = async () => {
     setBusy(true);
-    setNote(null);
     const j = await call({ op: "list" });
+    if (j.email) setEmail(String(j.email));
     const l = (j.listed as Listed[] | undefined) ?? [];
-    if (j.ok && l.length) {
-      setListed(l);
-      setChoice(l[0].id);
-    } else setNote({ text: j.message ?? "Not visible yet: it can take a few minutes.", bad: !j.ok });
+    if (j.ok && l.length) { setListed(l); setChoice(l[0].id); setNote(null); } else setNote({ text: j.message ?? "We couldn't list your properties.", bad: true });
     setBusy(false);
+  };
+  useEffect(() => {
+    const word = new URLSearchParams(location.search).get("gsc");
+    if (word && BACK[word]) setNote(BACK[word]);
+    if (word) history.replaceState(null, "", location.pathname);
+    if ((word === "pick" || state === "pick") && may) { setState("pick"); void list(); }
+    // Once, on arrival: the sign-in's outcome and, when waiting for a property, the list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const connect = () => {
+    const href = `/api/google/connect?${new URLSearchParams({ client: slug, back: location.pathname })}`;
+    // Inside the hub's frame Google refuses to show its sign-in, so it opens in a tab of its own.
+    if (window.top !== window.self) window.open(href, "_blank", "noopener");
+    else location.href = href;
   };
   const pick = async () => {
     setBusy(true);
-    setNote(null);
     const j = await call({ op: "pick", property: choice });
     if (j.ok) {
-      setConnected({ property: String(j.property), name: String(j.name ?? j.property), permission: (j.permission as string | null) ?? null });
+      setShown({ property: String(j.property), email: (j.email as string | null) ?? email, permission: (j.permission as string | null) ?? null });
+      setState("connected");
       setListed(null);
-      setChanging(false);
-      setNote({ text: "Connected. Your first numbers are on their way (up to 16 months of history) and refresh every morning." });
-    } else setNote({ text: j.message ?? "That did not save. Try again in a minute.", bad: true });
+      setNote({ text: "Connected. Up to 16 months of history is on its way, then it refreshes every morning." });
+    } else setNote({ text: j.message ?? "That did not save.", bad: true });
     setBusy(false);
   };
-
-  const steps = provider === "gsc"
-    ? { link: gscUsersLink(connected?.property ?? null), linkText: "Open Search Console, Users and permissions", how: "Press Add user, paste the address, set Permission to Restricted and press Add." }
-    : { link: GA4_ADMIN_LINK, linkText: "Open Google Analytics, Admin", how: "Go to Property access management, press the plus, choose Add users, paste the address, pick the Viewer role and press Add." };
-  const help = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Help connecting ${NAME[provider]} for ${domain}`)}`;
-  const showSteps = !connected || changing;
+  const disconnect = async () => {
+    setBusy(true);
+    const j = await call({ op: "disconnect" });
+    if (j.ok) { setState("none"); setShown(null); }
+    setNote({ text: j.message ?? (j.ok ? "Disconnected." : "That didn't disconnect."), bad: !j.ok });
+    setBusy(false);
+  };
+  const help = `mailto:${CONTACT_EMAIL}?subject=${encodeURIComponent(`Help connecting Search Console for ${domain}`)}`;
+  const synced = conn?.last_synced_at ? new Date(conn.last_synced_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
 
   return (
     <div className="dash-card" style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h2 style={{ flex: 1 }}>{`Connect ${NAME[provider]}`}</h2>
-        {connected ? <span className="pill good">Connected</span> : <span className="pill">Not connected</span>}
+        <h2 style={{ flex: 1 }}>Google Search Console</h2>
+        {state === "connected" ? <span className="pill good">Connected</span> : state === "pick" ? <span className="pill warn">Pick a property</span> : <span className="pill">Not connected</span>}
       </div>
-      <p className="intro">{WHAT[provider]}</p>
+      <p className="intro">Clicks, impressions and average position for every search you appear in, straight from Google.</p>
 
-      {connected && !changing ? (
-        <div style={{ marginTop: 12, fontSize: 13.5 }}>
-          <b style={{ wordBreak: "break-all" }}>{connected.name}</b>
-          <div className="muted" style={{ fontSize: 12.5, marginTop: 3 }}>
-            {provider === "gsc" && connected.permission ? `Our access: ${PERMISSION[connected.permission] ?? connected.permission}. ` : ""}
-            {conn?.last_synced_at ? `Last read ${conn.last_synced_at.slice(0, 10)}.` : "First read on its way."}
-          </div>
-          {may ? <button className="btn ghost sm" onClick={() => { setChanging(true); setNote(null); }} style={{ marginTop: 8, paddingLeft: 0 }}>Use a different property</button> : null}
+      {state === "connected" && shown ? (
+        <div style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.5 }}>
+          <div>Connected as <b>{shown.email ?? "your Google account"}</b></div>
+          <div style={{ wordBreak: "break-all" }}>{shown.property}{shown.permission ? <span className="faint"> · {PERMISSION[shown.permission] ?? shown.permission}</span> : null}</div>
+          <div className="muted" style={{ fontSize: 12.5 }}>{synced ? `Last sync ${synced}` : "First sync on its way"}</div>
+          {may ? <button className="btn ghost sm" onClick={disconnect} disabled={busy} style={{ marginTop: 8, paddingLeft: 0 }}>{busy ? "Disconnecting..." : "Disconnect"}</button> : null}
         </div>
       ) : null}
 
-      {showSteps && !may ? <p className="faint" style={{ fontSize: 12.5, margin: "14px 0 0" }}>An owner or editor can connect this.</p> : null}
-      {showSteps && may ? (
-        <ol style={{ margin: "14px 0 0", paddingLeft: 20, listStyle: "decimal", display: "flex", flexDirection: "column", gap: 12, fontSize: 13.5, lineHeight: 1.45 }}>
-          <li>
-            Copy our address.
-            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "8px 10px", borderRadius: 10, background: "var(--wash)", marginTop: 6 }}>
-              <b style={{ fontSize: 12.5, wordBreak: "break-all", flex: "1 1 200px" }}>{GOOGLE_ACCESS_EMAIL}</b>
-              <button className="btn sm" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+      {state === "pick" && may ? (
+        <div style={{ marginTop: 12, fontSize: 13.5 }}>
+          <div>Signed in as <b>{email ?? "your Google account"}</b>. Pick the property for {domain}:</div>
+          {listed ? (
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              {listed.map((p, i) => (
+                <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13 }}>
+                  <input type="radio" id={`gc-prop-gsc-${i}`} name="prop-gsc" checked={choice === p.id} onChange={() => setChoice(p.id)} style={{ marginTop: 3 }} />
+                  <span style={{ wordBreak: "break-all" }}>{p.name}{p.permission ? <span className="faint"> · {PERMISSION[p.permission] ?? p.permission}</span> : null}</span>
+                </label>
+              ))}
+              <button className="btn primary" onClick={pick} disabled={busy || !choice} style={{ marginTop: 4, width: "100%", padding: "10px 13px" }}>{busy ? "Saving..." : "Use this property"}</button>
             </div>
-          </li>
-          <li>
-            <a href={steps.link} target="_blank" rel="noopener noreferrer" style={{ color: "var(--accent)", fontWeight: 600 }}>{steps.linkText}</a>
-            {provider === "gsc" && !connected ? ", and pick the property for your site." : "."} {steps.how}
-          </li>
-          <li>
-            Come back and check.
-            {listed ? (
-              <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-                <span className="muted" style={{ fontSize: 12.5 }}>{listed.length === 1 ? "We can see this property:" : "We can see these properties. Pick the one for your site:"}</span>
-                {listed.map((p, i) => (
-                  <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13 }}>
-                    <input type="radio" id={`gc-prop-${provider}-${i}`} name={`prop-${provider}`} checked={choice === p.id} onChange={() => setChoice(p.id)} style={{ marginTop: 3 }} />
-                    <span style={{ wordBreak: "break-all" }}>{p.name}{p.permission ? <span className="faint"> · {PERMISSION[p.permission] ?? p.permission}</span> : null}</span>
-                  </label>
-                ))}
-                <button className="btn primary" onClick={pick} disabled={busy || !choice} style={{ marginTop: 4, width: "100%", padding: "10px 13px" }}>{busy ? "Saving..." : "Use this property"}</button>
-              </div>
-            ) : (
-              <button className="btn primary" onClick={check} disabled={busy} style={{ marginTop: 8, width: "100%", padding: "10px 13px" }}>{busy ? "Checking..." : "Check connection"}</button>
-            )}
-          </li>
-        </ol>
+          ) : busy ? <p className="muted" style={{ fontSize: 13 }}>Reading your properties...</p> : null}
+          <button className="btn ghost sm" onClick={connect} style={{ marginTop: 6, paddingLeft: 0 }}>Use a different Google account</button>
+        </div>
+      ) : null}
+
+      {state === "none" ? (
+        may ? (
+          <button className="btn primary" onClick={connect} style={{ marginTop: 14, width: "100%", padding: "10px 13px" }}>Connect Google Search Console</button>
+        ) : (
+          <p className="faint" style={{ fontSize: 12.5, margin: "14px 0 0" }}>An owner or editor can connect this.</p>
+        )
       ) : null}
 
       {note ? <p role="status" style={{ fontSize: 13, margin: "10px 0 0", fontWeight: 600, color: note.bad ? "var(--bad-fg)" : "var(--ink)" }}>{note.text}</p> : null}
       <p className="faint" style={{ fontSize: 12, margin: "14px 0 0", lineHeight: 1.45 }}>{READ_ONLY_NOTE}</p>
       <p style={{ fontSize: 12.5, margin: "6px 0 0" }}><a href={help} style={{ color: "var(--accent)", fontWeight: 600 }}>Need help? We&apos;ll do it on a call</a></p>
 
-      {staff && provider === "gsc" && connected ? <IndexingHelpers slug={slug} permission={connected.permission} keyPages={keyPages} inspections={inspections} /> : null}
+      {staff && state === "connected" ? <Inspect slug={slug} keyPages={keyPages} inspections={inspections} /> : null}
     </div>
   );
 }
 
-/** Staff only at first (Danny, 15 Nov 2026): sitemap submit, which needs Full user, and URL Inspection for key pages. */
-function IndexingHelpers({ slug, permission, keyPages, inspections }: { slug: string; permission: string | null; keyPages: string[]; inspections: Inspection[] }) {
+/** Staff only at first (Danny, 15 Nov 2026): URL Inspection for key pages - read-only, so a one-click grant is enough. */
+function Inspect({ slug, keyPages, inspections }: { slug: string; keyPages: string[]; inspections: Inspection[] }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [rows, setRows] = useState<Record<string, Inspection>>(Object.fromEntries(inspections.map((i) => [i.url, i])));
-  const post = async (body: Record<string, unknown>) => {
-    const r = await fetch(`/api/dash/${slug}/google`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider: "gsc", path: location.pathname, ...body }) }).catch(() => null);
-    return ((await r?.json().catch(() => null)) ?? { ok: false, message: "No answer." }) as Record<string, unknown> & { ok?: boolean; message?: string };
-  };
-  const submit = async () => {
-    setBusy("submit");
-    const j = await post({ op: "submit" });
-    setMsg(j.message ?? (j.ok ? "Submitted." : "Not submitted."));
-    setBusy(null);
-  };
   const inspect = async (url: string) => {
     setBusy(url);
-    const j = await post({ op: "inspect", url });
-    if (j.ok) setRows((r) => ({ ...r, [url]: j as unknown as Inspection }));
+    const r = await fetch(`/api/dash/${slug}/google`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ op: "inspect", url, path: location.pathname }) }).catch(() => null);
+    const j = ((await r?.json().catch(() => null)) ?? { ok: false, message: "No answer." }) as Record<string, unknown> & { ok?: boolean; message?: string };
+    if (j.ok) setRows((x) => ({ ...x, [url]: j as unknown as Inspection }));
     else setMsg(j.message ?? "Not inspected.");
     setBusy(null);
   };
-  const full = canSubmit(permission);
   return (
     <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
       <h3 style={{ fontSize: 13.5, margin: 0 }}>Indexing <span className="pill" style={{ marginLeft: 6 }}>Staff only</span></h3>
-      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
-        <button className="btn sm" onClick={submit} disabled={!full || busy === "submit"}>{busy === "submit" ? "Submitting..." : "Submit sitemap"}</button>
-        <span className="muted" style={{ fontSize: 12.5 }}>{full ? "Our access is Full, so Google accepts a sitemap from us." : "Needs Full access: submitting a sitemap is a change, and Restricted is read-only. Ask the customer to set our access to Full in Users and permissions."}</span>
-      </div>
-      {msg ? <p role="status" style={{ fontSize: 12.5, margin: "8px 0 0", fontWeight: 600 }}>{msg}</p> : null}
-      <p className="muted" style={{ fontSize: 12.5, margin: "12px 0 6px" }}>URL Inspection (read-only, works on Restricted): whether Google has indexed each key page.</p>
+      <p className="muted" style={{ fontSize: 12.5, margin: "8px 0 6px" }}>Whether Google has indexed each key page (URL Inspection). Submit sitemaps in Search Console itself: this connection is read-only.</p>
+      {msg ? <p role="status" style={{ fontSize: 12.5, margin: "0 0 6px", fontWeight: 600 }}>{msg}</p> : null}
       {keyPages.length ? (
         <table style={{ width: "100%", fontSize: 12.5 }}>
           <tbody>
