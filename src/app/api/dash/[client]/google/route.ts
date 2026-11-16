@@ -17,6 +17,7 @@ export const maxDuration = 60;
  *   list                 the properties the signed-in Google account can see for this client's domain
  *   pick   {property}    connect one of them; the 16-month first pull runs after the answer
  *   disconnect           revoke the grant at Google and delete it; reading stops
+ *   setup / help         no property for the site: the steps to set one up, and a task for the account owner in the hub
  *   inspect {url}        staff only: URL Inspection for a key page (read-only scope is enough)
  *   submit               staff only: a sitemap submit, which needs write access - only through the hub's service
  *                        account on a property that gave it Full, never through a one-click grant (read-only)
@@ -24,6 +25,16 @@ export const maxDuration = 60;
  * Who may: google-who.ts. GA4 is not connected here for now (Danny, 16 Nov 2026: by hand until the OAuth app
  * carries Analytics).
  */
+/** The hub's google-oauth, server to server with this project's service key (as google-io.ts reaches google-data). */
+async function hubOAuth(action: string, body: Record<string, unknown>): Promise<Record<string, unknown> & { error?: string }> {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return { error: "not connected to the hub" };
+  const r = await fetch("https://qpsrvmnmtozvailsyqqz.supabase.co/functions/v1/google-oauth", { method: "POST", headers: { "content-type": "application/json", "x-ac-key": key }, body: JSON.stringify({ ...body, action }), cache: "no-store", signal: AbortSignal.timeout(20_000) }).catch((e: unknown) => String(e));
+  if (typeof r === "string") return { error: r.slice(0, 160) };
+  const j = (await r.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+  return r.ok ? j : { error: j.error ?? `hub answered ${r.status}` };
+}
+
 const bare = (s: string) => s.toLowerCase().replace(/^sc-domain:/, "").replace(/^[a-z]+:\/\//, "").replace(/^www\./, "").split(/[/?#:]/)[0];
 const forDomain = (site: string, domain: string) => { const p = bare(site), d = bare(domain); return !!d && (p === d || p.endsWith(`.${d}`)); };
 
@@ -75,6 +86,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
       if (e) console.warn(`[gsc-oauth] first pull ${slug}: ${e}`);
     });
     return Response.json({ ok: true, connected: true, property, name: hit.name, permission: hit.permission, email: t.email });
+  }
+
+  // Signed in, but the account has no property for the site (16 Nov 2026): the steps to set one up, read for the site's
+  // platform by the hub's google-oauth, and "Stuck? We'll do it for you", a task for the account owner in the hub.
+  if (op === "setup" || op === "help") {
+    const a = await hubOAuth(op === "setup" ? "ac_setup_hint" : "ac_help", { domain: w.domain, ac_slug: slug, by: w.by });
+    if (a.error) {
+      console.warn(`[gsc-oauth] ${slug}: ${op} failed: ${a.error}`);
+      return Response.json({ ok: false, message: op === "help" ? "That didn't go through. Try again in a minute." : "We couldn't load the steps just now." }, { status: 502 });
+    }
+    return Response.json({ ok: true, ...a });
   }
 
   if (op === "disconnect") {

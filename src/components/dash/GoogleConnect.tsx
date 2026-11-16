@@ -42,6 +42,8 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
   const [choice, setChoice] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ text: string; bad?: boolean } | null>(null);
+  const [setup, setSetup] = useState<{ platform: string | null; steps: string[] } | null>(null);
+  const [helped, setHelped] = useState<string | null>(null);
   const may = (canWrite && !demo) || staff;
 
   const call = async (body: Record<string, unknown>) => {
@@ -53,7 +55,14 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
     const j = await call({ op: "list" });
     if (j.email) setEmail(String(j.email));
     const l = (j.listed as Listed[] | undefined) ?? [];
-    if (j.ok && l.length) { setListed(l); setChoice(l[0].id); setNote(null); } else setNote({ text: j.message ?? "We couldn't list your properties.", bad: true });
+    if (j.ok && l.length) { setListed(l); setChoice(l[0].id); setNote(null); setSetup(null); }
+    else if (j.ok) {
+      // Signed in, no property for this site: set one up, guided (16 Nov 2026). Our link never reaches a Search Console sign-up.
+      setListed([]);
+      setNote(null);
+      const h = await call({ op: "setup" });
+      setSetup({ platform: (h.platform as string | null) ?? null, steps: (h.steps as string[] | undefined) ?? [] });
+    } else setNote({ text: j.message ?? "We couldn't list your properties.", bad: true });
     setBusy(false);
   };
   useEffect(() => {
@@ -111,8 +120,23 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
 
       {state === "pick" && may ? (
         <div style={{ marginTop: 12, fontSize: 13.5 }}>
-          <div>Signed in as <b>{email ?? "your Google account"}</b>. Pick the property for {domain}:</div>
-          {listed ? (
+          <div>Signed in as <b>{email ?? "your Google account"}</b>.{listed && !listed.length ? "" : ` Pick the property for ${domain}:`}</div>
+          {listed && !listed.length ? (
+            <div style={{ marginTop: 8 }}>
+              <p style={{ margin: 0 }}>That account has no Search Console property for {domain} yet. Set one up, about ten minutes{setup?.platform ? ` on ${setup.platform}` : ""}:</p>
+              {setup ? (
+                <ol style={{ margin: "8px 0 0", paddingLeft: 20, listStyle: "decimal", display: "flex", flexDirection: "column", gap: 6, fontSize: 13, lineHeight: 1.45 }}>
+                  {setup.steps.map((t) => <li key={t}>{t}</li>)}
+                </ol>
+              ) : <p className="muted" style={{ fontSize: 13 }}>Loading the steps...</p>}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                <button className="btn primary sm" onClick={list} disabled={busy}>{busy ? "Checking..." : "Refresh"}</button>
+                {setup ? <button className="btn sm" onClick={async () => { try { await navigator.clipboard.writeText(setup.steps.map((t, i) => `${i + 1}. ${t}`).join("\n")); setHelped("Steps copied."); } catch { /* the steps are on screen */ } }}>Copy the steps</button> : null}
+                <button className="btn sm" disabled={helped === "sent"} onClick={async () => { const j = await call({ op: "help" }); setHelped(j.ok ? "sent" : "failed"); }}>Stuck? We&apos;ll do it for you</button>
+              </div>
+              {helped === "sent" ? <p role="status" style={{ fontSize: 13, margin: "8px 0 0", fontWeight: 600 }}>Thanks - we&apos;ll set it up and connect it for you.</p> : helped === "failed" ? <p role="status" style={{ fontSize: 13, margin: "8px 0 0", color: "var(--bad-fg)" }}>That didn&apos;t go through. Try again in a minute.</p> : helped ? <p role="status" style={{ fontSize: 13, margin: "8px 0 0" }}>{helped}</p> : null}
+            </div>
+          ) : listed ? (
             <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
               {listed.map((p, i) => (
                 <label key={p.id} style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13 }}>
