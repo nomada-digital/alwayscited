@@ -537,7 +537,7 @@ const DERIVED = new Set(["rgba(124,58,237,0.28)"]);
  * MarketFlag.tsx (29 Oct 2026) draws the US, UK and Jamaican flags on the market buttons, at their own colours, and
  * is excused for the same reason.
  */
-const MARKS = new Set(["src/components/EngineLogo.tsx", "src/components/scan/MarketFlag.tsx"]);
+const MARKS = new Set(["src/components/EngineLogo.tsx", "src/components/scan/MarketFlag.tsx", "src/components/dash/GoogleButton.tsx"]);
 
 test("an excused mark file still carries marks", () => {
   for (const file of MARKS) {

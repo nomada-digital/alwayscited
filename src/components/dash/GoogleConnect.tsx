@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import GoogleButton from "@/components/dash/GoogleButton";
 import { CONTACT_EMAIL } from "@/config/contact";
 import { PERMISSION, READ_ONLY_NOTE } from "@/lib/dash/google";
 import type { RawConnection } from "@/lib/dash/types";
@@ -104,7 +105,7 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
   return (
     <div className="dash-card" style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <h2 style={{ flex: 1 }}>Google Search Console</h2>
+        <h2 style={{ flex: 1, margin: 0 }}>Google Search Console</h2>
         {state === "connected" ? <span className="pill good">Connected</span> : state === "pick" ? <span className="pill warn">Pick a property</span> : <span className="pill">Not connected</span>}
       </div>
       <p className="intro">Clicks, impressions and average position for every search you appear in, straight from Google.</p>
@@ -153,7 +154,7 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
 
       {state === "none" ? (
         may ? (
-          <button className="btn primary" onClick={connect} style={{ marginTop: 14, width: "100%", padding: "10px 13px" }}>Connect Google Search Console</button>
+          <div style={{ marginTop: 14 }}><GoogleButton onClick={connect} /></div>
         ) : (
           <p className="faint" style={{ fontSize: 12.5, margin: "14px 0 0" }}>An owner or editor can connect this.</p>
         )
