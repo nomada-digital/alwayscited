@@ -31,6 +31,8 @@ export type SheetLink = {
   authority: number | null;
   authority_label: "DR" | "DA" | null;
   page_traffic: number | null;
+  /** The linking site's whole traffic (WLDM's "Total Traffic"; 17 Nov 2026, Danny). */
+  domain_traffic: number | null;
   status: string | null;
   live_on: string | null;
   live_month: string | null;
@@ -60,6 +62,7 @@ const FIELDS: Record<string, readonly string[]> = {
   dr: ["dr", "domain rating", "ahrefs dr"],
   da: ["da", "domain authority", "moz da"],
   page_traffic: ["page traffic", "traffic to page", "page organic traffic"],
+  domain_traffic: ["total traffic", "domain traffic", "site traffic", "website traffic", "domain organic traffic"],
   status: ["status", "link status"],
   live_on: ["date it went live", "date live", "live date", "date went live", "went live", "published", "date published", "publish date", "live on"],
   month: ["month"],
@@ -187,6 +190,7 @@ export function parseLinkSheet(cells: readonly (readonly unknown[])[], subject: 
     seen.add(key);
     const authority = authorityLabel === "DR" ? sheetNumber(cell("dr")) : authorityLabel === "DA" ? sheetNumber(cell("da")) : null;
     const traffic = sheetNumber(cell("page_traffic"));
+    const siteTraffic = sheetNumber(cell("domain_traffic"));
     rows.push({
       url_key: key,
       live_url: url,
@@ -197,6 +201,7 @@ export function parseLinkSheet(cells: readonly (readonly unknown[])[], subject: 
       authority,
       authority_label: authority === null ? null : authorityLabel,
       page_traffic: traffic === null ? null : Math.round(traffic),
+      domain_traffic: siteTraffic === null ? null : Math.round(siteTraffic),
       status: cell("status") || null,
       live_on: sheetDate(cell("live_on")),
       live_month: h.col.has("month") && month ? month : null,

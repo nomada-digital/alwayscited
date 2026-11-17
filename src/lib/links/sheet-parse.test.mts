@@ -92,3 +92,18 @@ test("the small readers", () => {
   assert.deepEqual(sheetRef("https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit#gid=42"), { id: "1AbCdEfGhIjKlMnOpQrStUvWxYz", gid: 42 });
   assert.equal(sheetRef("https://example.com/sheet"), null);
 });
+
+test("WLDM's tracker: Total Traffic is the domain's traffic, beside Page Traffic and DR (17 Nov 2026)", () => {
+  const cells = [["", "", "[ Client logo ]"], ["Common Agency · Backlink"], [], [],
+    ["Month", "#", "Page URL", "DR", "Page Traffic", "Total Traffic ", "Cosine Similarity", "Status", "Anchor", "Target Link", "NOTE"],
+    ["November", "1", "https://outlet.example/post", "57", "11", "1.3k", "0.62", "In progress", "seo agency", "https://common.agency/", ""],
+    ["", "2", "https://other.example/a", "72", "4", "27.9k", "0.61", "Live", "seo", "https://common.agency/x", ""]];
+  const p = parseLinkSheet(cells, { domain: "common.agency", brand: "Common Agency" });
+  assert.equal(p.error, null);
+  assert.equal(p.rows.length, 2);
+  assert.equal(p.rows[0]!.domain_traffic, 1300);
+  assert.equal(p.rows[0]!.page_traffic, 11);
+  assert.equal(p.rows[0]!.authority, 57);
+  assert.equal(p.rows[1]!.domain_traffic, 27900);
+  assert.equal(p.columns.domain_traffic, "Total Traffic");
+});

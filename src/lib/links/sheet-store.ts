@@ -66,7 +66,7 @@ export async function readLinks(db: SupabaseClient, clientId: string): Promise<{
   const [{ data, error }, { data: syncs, error: sErr }] = await Promise.all([
     db
       .from("sheet_links")
-      .select("kind, url_key, live_url, linking_domain, target_keyword, anchor_text, target_page, authority, authority_label, page_traffic, status, live_on, live_month, sheet_row")
+      .select("kind, url_key, live_url, linking_domain, target_keyword, anchor_text, target_page, authority, authority_label, page_traffic, domain_traffic, status, live_on, live_month, sheet_row")
       .eq("client_domain_id", clientId)
       .eq("on_sheet", true)
       .order("live_on", { ascending: false, nullsFirst: false })

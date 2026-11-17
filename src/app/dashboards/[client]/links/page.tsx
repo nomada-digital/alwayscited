@@ -51,7 +51,7 @@ export default async function Links({ params }: { params: Promise<{ client: stri
       if (onSheet.has(key)) return [];
       onSheet.add(key);
       const c = clusterOf.get(p.cluster_id);
-      return [{ kind: p.kind === "link_insertion" ? "insertion" : "placement", url_key: key, live_url: p.url, linking_domain: p.domain, target_keyword: c?.headKeyword ?? null, anchor_text: p.anchor_text, target_page: c?.target ?? null, authority: null, authority_label: null, page_traffic: null, status: "Live", live_on: p.live_on, live_month: null, sheet_row: 100000 + i } satisfies LinkRow];
+      return [{ kind: p.kind === "link_insertion" ? "insertion" : "placement", url_key: key, live_url: p.url, linking_domain: p.domain, target_keyword: c?.headKeyword ?? null, anchor_text: p.anchor_text, target_page: c?.target ?? null, authority: null, authority_label: null, page_traffic: null, domain_traffic: null, status: "Live", live_on: p.live_on, live_month: null, sheet_row: 100000 + i } satisfies LinkRow];
     });
   const all = [...read.rows, ...own].sort((a, b) => (b.live_on ?? "").localeCompare(a.live_on ?? ""));
   const insertions = all.filter((r) => r.kind === "insertion");
@@ -93,8 +93,32 @@ function liveCount(rows: LinkRow[]): string {
   if (!rows.length) return "None yet";
   const withStatus = rows.filter((r) => r.status);
   if (!withStatus.length) return `${rows.length} published`;
-  const live = withStatus.filter((r) => /^live\b/i.test(r.status!)).length;
-  return `${live} live`;
+  const live = withStatus.filter((r) => stageOf(r.status) === "live").length;
+  const going = withStatus.filter((r) => stageOf(r.status) === "progress").length;
+  return `${live} live${going ? ` · ${going} in progress` : ""}`;
+}
+
+/** The sheet's own status, in three plain stages (17 Nov 2026, Danny: in-progress statuses must be clear): live, not
+ *  live (lost, removed, declined, cancelled) or in progress (anything else the tracker writes: pending, writing,
+ *  outreach, submitted, approved...). The pill names the stage; the sheet's wording sits under it when it says more. */
+type Stage = "live" | "progress" | "off";
+function stageOf(status: string | null): Stage {
+  const s = (status ?? "").trim();
+  if (/^(live|published|indexed|done|complete[d]?)\b/i.test(s)) return "live";
+  if (/\b(lost|removed|deleted|declined|rejected|cancel(l)?ed|dropped|dead|not live)\b/i.test(s)) return "off";
+  return "progress";
+}
+function StatusPill({ status }: { status: string | null }) {
+  if (!status) return null;
+  const st = stageOf(status);
+  const label = st === "live" ? "Live" : st === "off" ? "Not live" : "In progress";
+  const more = status.trim().toLowerCase() !== label.toLowerCase();
+  return (
+    <>
+      <span className={`pill${st === "live" ? " good" : st === "progress" ? " warn" : ""}`}>{label}</span>
+      {more ? <div className="sub">{status}</div> : null}
+    </>
+  );
 }
 
 /** DR, DA, or both when the sheet mixes them: the label is always the source column's own. */
@@ -140,6 +164,8 @@ function InProgress({ rows, target }: { rows: RawInProgress[]; target: (clusterI
 function LinkTable({ title, intro, rows, syncedAt, waiting = false }: { title: string; intro: string; rows: LinkRow[]; syncedAt: string | null; waiting?: boolean }) {
   const head = authorityHead(rows);
   const mixed = head === "DR / DA";
+  // Domain traffic shows only when the sheet carries it (WLDM's Total Traffic), so other trackers keep their columns
+  const siteCol = rows.some((r) => r.domain_traffic != null);
   return (
     <section className="dash-card" aria-label={title}>
       <div className="dash-card-head">
@@ -160,6 +186,7 @@ function LinkTable({ title, intro, rows, syncedAt, waiting = false }: { title: s
                 <th>Target page</th>
                 <th className="r">{head}</th>
                 <th className="r">Page traffic</th>
+                {siteCol ? <th className="r">Domain traffic</th> : null}
                 <th>Status</th>
                 <th className="r">Date live</th>
               </tr>
@@ -176,7 +203,8 @@ function LinkTable({ title, intro, rows, syncedAt, waiting = false }: { title: s
                   <td>{r.target_page ? <a href={r.target_page} target="_blank" rel="noopener noreferrer">{shortPath(r.target_page, true)}</a> : ""}</td>
                   <td className="r num">{r.authority === null ? "" : `${fmt(r.authority)}${mixed && r.authority_label ? ` ${r.authority_label}` : ""}`}</td>
                   <td className="r num">{r.page_traffic === null ? "" : fmt(r.page_traffic)}</td>
-                  <td>{r.status ? <span className={`pill${/^live\b/i.test(r.status) ? " good" : ""}`}>{r.status}</span> : ""}</td>
+                  {siteCol ? <td className="r num">{r.domain_traffic == null ? "" : fmt(r.domain_traffic)}</td> : null}
+                  <td><StatusPill status={r.status} /></td>
                   <td className="r num">{r.live_on ? fullDay(r.live_on) : (r.live_month ?? "")}</td>
                 </tr>
               ))}
