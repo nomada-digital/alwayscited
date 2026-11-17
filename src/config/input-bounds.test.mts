@@ -225,6 +225,12 @@ const EXEMPT: Record<string, Exemption> = {
     why: "The walkthrough ask's hidden way back, set by the coverage reading page. type=hidden, nobody types in it; walkthroughBack accepts only a /scan/ or /coverage-check/ path of at most 80 token characters, else the scan's own page.",
     holds: [{ file: "lib/scan/walkthrough-outcome.ts", needs: "/^\\/(scan|coverage-check)\\/[A-Za-z0-9_-]{1,80}$/.test(raw)" }],
   },
+  // 17 Nov 2026: Local listings' ticks. A checkbox per item; the listings route takes only an item on the customer's
+  // own list and a done that is exactly true or false.
+  "listing-${i.key}": {
+    why: "Local listings' tick. type=checkbox, nothing typed; the listings route refuses an item not on the customer's list and a done that is not a boolean.",
+    holds: [{ file: "app/api/dash/[client]/listings/route.ts", needs: 'typeof body?.done !== "boolean"' }],
+  },
   // 22 Oct 2026, the cut-over: Plan's Cancel trial confirm. A checkbox with a fixed value; the trial route acts
   // only on confirm exactly "1" and reads nothing else from the form.
   "trial-confirm": {

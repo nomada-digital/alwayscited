@@ -1,4 +1,5 @@
 import BrandMark from "@/components/BrandMark";
+import { localListingsFor } from "@/config/local-listings";
 import TierName, { TIER_PLAIN } from "@/components/TierName";
 import { SITE_ORIGIN } from "@/lib/app-host";
 import { CONTACT_EMAIL } from "@/config/contact";
@@ -30,6 +31,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: `${root}/google`, label: "Search positions", icon: "google" },
     // Map pack geo-grids (22 Oct 2026): only for a client with a grid set up.
     ...(ws.localGrids ? [{ href: `${root}/local`, label: "Map pack", icon: "local" }] : []),
+    // Local listings (17 Nov 2026): only for a customer with a list (config/local-listings.ts).
+    ...(localListingsFor(ws.client.slug) ? [{ href: `${root}/listings`, label: "Local listings", icon: "local" }] : []),
     { href: `${root}/sources`, label: "Sources", icon: "sources" },
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },

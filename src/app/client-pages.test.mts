@@ -75,6 +75,8 @@ const KEYS: Record<string, Record<string, string>> = {
     vs: 'typeof sp.vs === "string" && DAY.test(sp.vs) && dates.includes(sp.vs) && sp.vs !== date',
   },
   "/integrations": {},
+  // 17 Nov 2026: Local listings, for a customer with a list (config/local-listings.ts).
+  "/listings": {},
   // 14 Nov 2026: Schema for your site; reads no query (Check again re-renders the page).
   "/schema": {},
   // 29 Oct 2026: placements and link insertions from the link team's sheets. No query keys.
@@ -116,6 +118,8 @@ const ROLE_READS: Record<string, string[]> = {
   // 10 Nov 2026 (Danny): owners and editors see Invite, and Remove on editors and viewers; only owners edit names.
   // teamPowers asks team.ts refuseActorOn, the rule the member route runs; a demo or view-as reads as a viewer.
   "/settings": ['const can = teamPowers(readOnly ? "viewer" : raw.role);'],
+  // 17 Nov 2026: owners and editors tick Local listings off; a viewer, a demo and a view-as see the ticks. The listings route refuses a viewer too.
+  "/listings": ['canTick={!demo && (raw.role === "owner" || raw.role === "editor")}'],
   // Only an owner sees Open billing and Track more; the billing and pack routes refuse anyone else too.
   // 22 Oct 2026: the invoice history is read for the owner only, never in a demo or a view-as (lib/dash/invoices.ts).
   // 7 Nov 2026: only an owner sees the swap and add-to-plan forms; the plan route refuses anyone else too.
