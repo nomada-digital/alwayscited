@@ -8,7 +8,7 @@ import type { PlanShape } from "@/lib/dash/allowance";
 import { ownNames } from "@/lib/dash/highlight";
 import { buildWorkspace } from "@/lib/dash/model";
 import { refusePromptText } from "@/lib/dash/ops";
-import type { ClusterView, Engine, GroupView, PromptView, Raw } from "@/lib/dash/types";
+import type { ClusterView, Engine, GroupView, PromptView, Raw, Workspace } from "@/lib/dash/types";
 import { PROMPT_MAX } from "@/lib/tracking/prompt-text";
 
 import AnswerPanel from "./AnswerPanel";
@@ -68,7 +68,7 @@ export default function PromptManager({ slug, base, initial, plan, demo = false 
                     ) : (
                       <Link href={detail(p.id)} style={{ fontWeight: 500 }}>{p.text}</Link>
                     )}
-                    <div className="sub"><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link>{g.id ? ` · ${g.name}` : ""}{p.tier > 1 ? " · Growth prompt" : ""}</div>
+                    <div className="sub"><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link>{g.id ? ` · ${g.name}` : ""}{p.tier > 1 ? " · Growth prompt" : ""}{placeText(p, brandOf(ws))}</div>
                   </td>
                   <td data-l="Latest answer, by engine">{p.measured ? <EngineButtons engines={ws.engines} p={p} onOpen={(e) => setOpen({ p, e })} /> : <span className="pill accent">{p.addedOn > ws.today ? "First reading tomorrow" : "Not read yet"}</span>}</td>
                   <td data-l={p.measured ? "Named you" : undefined}>{p.measured ? <Rate r={p.rate} /> : null}</td>
@@ -166,3 +166,16 @@ function AddPrompt({ ws, run, onDone }: { ws: ReturnType<typeof buildWorkspace>;
     </form>
   );
 }
+
+/** Where the client sits for one prompt on its latest reading (18 Nov 2026): a list's best place, a comparison's winner. */
+function placeText(p: PromptView, brand: string): string {
+  if (p.ptype === "comparison" && p.verdicts) {
+    const v = p.verdicts;
+    if (v.client) return ` · Recommended on ${v.client} of ${v.client + v.neutral + v.rival} engines`;
+    if (v.rival) return ` · ${v.rivalName ?? "A rival"} recommended over ${brand}`;
+    return " · No winner named";
+  }
+  if (p.place) return ` · #${p.place.best} of ${p.place.of}${p.place.placed > 1 ? `, first on ${p.place.first} of ${p.place.placed}` : ""}`;
+  return "";
+}
+const brandOf = (ws: Workspace) => ws.client.brand ?? ws.client.domain;

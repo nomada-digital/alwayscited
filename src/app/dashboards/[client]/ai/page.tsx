@@ -37,6 +37,13 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
           </div>
         ))}
       </div>
+      {ws.place.answered ? (
+        <p className="intro" style={{ marginTop: 12 }}>
+          {/* 18 Nov 2026 (Danny): named is not the same as recommended first */}
+          <b>Named in {pct(ws.rate)} · first in {pct(ws.place.firstRate)}</b> of the answers on the latest reading.{" "}
+          {ws.place.top3} of {ws.place.answered} put you in the top three{ws.place.avg !== null ? <>, and where you are named in a ranked list your average place is #{ws.place.avg}</> : null}.
+        </p>
+      ) : null}
       {growth.length ? (
         <div className="dash-card" style={{ marginTop: 16 }}>
           <h2>Growth prompts</h2>

@@ -18,6 +18,7 @@
 
 import { otherForm } from "../tracking/plural.ts";
 import { isGrowthTier, promptTierOf } from "../tracking/prompt-tiers.ts";
+import { effectiveType } from "../tracking/prompt-type.ts";
 import { brandKey, subjectKeys } from "../scan/brand-name.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
@@ -183,7 +184,18 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
         return r ? verdictOf(r) : null;
       });
     }
-    return { id: p.id, text: p.text, angle: p.angle, addedOn: p.added_on, tier: promptTierOf(p.prompt_tier) ?? 1, measured: rows.length > 0, rate: rateOf(onLast), cells, days };
+    const ptype = effectiveType(p);
+    const placed = onLast.filter((a) => a.answered && a.named && a.list_pos);
+    const place = placed.length
+      ? { best: Math.min(...placed.map((a) => a.list_pos!)), of: Math.max(...placed.map((a) => a.list_of ?? a.list_pos!)), first: placed.filter((a) => a.list_pos === 1).length, placed: placed.length }
+      : null;
+    const read = onLast.filter((a) => a.verdict);
+    const rivalCount = new Map<string, number>();
+    for (const a of read) if (a.verdict === "rival" && a.verdict_rival) rivalCount.set(a.verdict_rival, (rivalCount.get(a.verdict_rival) ?? 0) + 1);
+    const verdicts = ptype === "comparison" && read.length
+      ? { client: read.filter((a) => a.verdict === "client").length, neutral: read.filter((a) => a.verdict === "neutral").length, rival: read.filter((a) => a.verdict === "rival").length, rivalName: [...rivalCount].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null }
+      : null;
+    return { id: p.id, text: p.text, angle: p.angle, addedOn: p.added_on, tier: promptTierOf(p.prompt_tier) ?? 1, ptype, place, verdicts, measured: rows.length > 0, rate: rateOf(onLast), cells, days };
   };
 
   // Keywords: daily positions.
@@ -362,6 +374,16 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const allIds = new Set(corePrompts.map((p) => p.id));
   const growthIds = new Set(growthPrompts.map((p) => p.id));
   const growthWindow = raw.answers.filter((a) => recent.has(a.run_date) && growthIds.has(a.question_id) && a.answered);
+  // where the client sits on the latest reading, over the core prompts: first, top 3, average place
+  const onLatest = latest ? raw.answers.filter((a) => a.run_date === latest && allIds.has(a.question_id) && a.answered) : [];
+  const ranked = onLatest.filter((a) => a.named && a.list_pos);
+  const place = {
+    answered: onLatest.length,
+    first: ranked.filter((a) => a.list_pos === 1).length,
+    top3: ranked.filter((a) => a.list_pos! <= 3).length,
+    avg: ranked.length ? Math.round((ranked.reduce((s, a) => s + a.list_pos!, 0) / ranked.length) * 10) / 10 : null,
+    firstRate: onLatest.length ? ranked.filter((a) => a.list_pos === 1).length / onLatest.length : null,
+  };
 
   // Brands and sources over the last 7 readings.
   const window = raw.answers.filter((a) => recent.has(a.run_date) && allIds.has(a.question_id));
@@ -422,6 +444,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       cited: window.filter((a) => (a.citations ?? []).some((c) => { const h = hostOf(c.url); return !!h && (h === own || h.endsWith(`.${own}`)); })).length,
     },
     rateTrend: strip.map((d) => rateOf(answersOn(allIds, d))),
+    place,
     growth: {
       prompts: growthPrompts.map(promptView),
       rate: latest && growthIds.size ? rateOf(answersOn(growthIds, latest)) : null,
@@ -460,7 +483,7 @@ export function trimRaw(raw: Raw): Raw {
   const serpFrom = dates[0] ?? raw.today;
   return {
     ...raw,
-    answers: raw.answers.filter((a) => keep.has(a.run_date)).map((a) => ({ run_date: a.run_date, question_id: a.question_id, engine: a.engine, answered: a.answered, named: a.named })),
+    answers: raw.answers.filter((a) => keep.has(a.run_date)).map((a) => ({ run_date: a.run_date, question_id: a.question_id, engine: a.engine, answered: a.answered, named: a.named, list_pos: a.list_pos ?? null, list_of: a.list_of ?? null, verdict: a.verdict ?? null, verdict_rival: a.verdict_rival ?? null })),
     serp: raw.serp.filter((s) => s.run_date >= addDaysIso(serpFrom, -16)),
     footprint: raw.footprint ? { pulled_on: raw.footprint.pulled_on, rows: [...raw.footprint.rows].sort((a, b) => (b.v ?? 0) - (a.v ?? 0)).slice(0, CLIENT_FOOTPRINT_ROWS) } : null,
     opportunities: [],
