@@ -57,7 +57,11 @@ export default async function Overview({ params }: { params: Promise<{ client: s
       ) : null}
       {/* 7 Nov 2026: each tile opens the page behind its figure. */}
       <div className="dash-grid k4">
-        <Kpi href={`${base}/${slug}/ai`} label="AI names you" value={pct(ws.rate)} sub={delta !== null && ws.dates.length > 1 ? <span className={delta > 0 ? "up" : delta < 0 ? "down" : ""}>{delta > 0 ? "+" : ""}{delta} pts over {ws.dates.length} readings</span> : "Answers naming you, latest reading"}>
+        <Kpi href={`${base}/${slug}/ai`} label="AI names you" value={pct(ws.rate)} sub={<>
+          {delta !== null && ws.dates.length > 1 ? <span className={delta > 0 ? "up" : delta < 0 ? "down" : ""}>{delta > 0 ? "+" : ""}{delta} pts over {ws.dates.length} readings</span> : "Answers naming you, latest reading"}
+          {/* 18 Nov 2026: the headline is the core prompts; the broader Growth prompts are reported apart (model.ts growth) */}
+          {ws.growth.prompts.length ? <><br />Core prompts. Growth prompts: {ws.growth.rate !== null ? pct(ws.growth.rate) : "first reading next"}</> : null}
+        </>}>
           <Spark values={ws.rateTrend} width={120} />
         </Kpi>
         <Kpi href={`${base}/${slug}/google`} label="Keywords on page 1" value={top10} unit={`of ${tracked.length}`} sub={ranked.length ? `${ranked.length} ranking in the top 100` : "Tracked keywords, Google, today"} />

@@ -69,6 +69,11 @@ type ClusterSpec = {
   head: { keyword: string; volume: number; pos: [number, number] };
   keywords: { keyword: string; volume: number; pos: [number, number] }[];
   prompts: string[];
+  /**
+   * Growth prompts (18 Nov 2026, tracking/prompt-tiers.ts): broader tiers added once the core is won, `from` days
+   * before today, reported apart from the headline. Each starts low.
+   */
+  growth?: { text: string; tier: 2 | 3 | 4; from: number; rate: [number, number] }[];
   theme: string;
 };
 
@@ -89,6 +94,11 @@ const CLUSTERS: ClusterSpec[] = [
       "Recommend a quiet boutique hotel in Negril for couples",
       "Where should I stay in Jamaica for a relaxed, upscale trip away from big resorts?",
       "Best adults-only boutique stays in Jamaica",
+    ],
+    growth: [
+      { text: "What are the best hotels in Jamaica?", tier: 2, from: 20, rate: [0.0, 0.14] },
+      { text: "Best hotels in Jamaica for couples travelling from the UK", tier: 3, from: 20, rate: [0.02, 0.18] },
+      { text: "How much does a week in Jamaica cost for two?", tier: 4, from: 12, rate: [0.0, 0.08] },
     ],
     theme: "a boutique stay in Jamaica",
   },
@@ -230,15 +240,19 @@ export function sampleRaw(today: Day): Raw {
       }
     });
 
-    c.prompts.forEach((text, i) => {
+    const asked = [
+      ...c.prompts.map((text) => ({ text, tier: 1, began, span, rate: c.rate })),
+      ...(c.growth ?? []).map((g) => ({ text: g.text, tier: g.tier, began: addDays(today, -g.from), span: g.from, rate: g.rate })),
+    ];
+    asked.forEach(({ text, tier, began, span, rate }, i) => {
       const id = promptId(c, i);
-      prompts.push({ id, text, cluster_id: clusterId(c), group_id: null, angle: null, added_on: began, stopped_on: null, origin_kind: null, allowance: null });
+      prompts.push({ id, text, cluster_id: clusterId(c), group_id: null, angle: null, added_on: began, stopped_on: null, origin_kind: null, allowance: null, prompt_tier: tier });
       const lean = 0.65 + rand(`${id}|lean`) * 0.7;
       for (let d = 0; d <= span; d++) {
         const day = addDays(began, d);
         // Each placement live by now lifts the rate a little on top of the curve.
         const liveNow = placed.filter((p) => p.live_on && p.live_on <= day);
-        const base = c.rate[0] + (c.rate[1] - c.rate[0]) * ease(d / span);
+        const base = rate[0] + (rate[1] - rate[0]) * ease(d / span);
         for (const engine of ENGINES) {
           const r = (what: string) => rand(`${id}|${engine}|${day}|${what}`);
           const answered = r("answered") < ENGINE_LEAN[engine].answered;
