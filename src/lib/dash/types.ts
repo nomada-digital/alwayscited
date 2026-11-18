@@ -70,6 +70,8 @@ export type RawPrompt = {
   origin_kind?: string | null;
   /** 'placement' for a prompt in the placement allowance (limits.ts), counted apart from the plan's. */
   allowance?: string | null;
+  /** 1 exact service, 2 category, 3 category + market, 4 adjacent (18 Nov 2026, tracking/prompt-tiers.ts). Absent is 1. */
+  prompt_tier?: number | null;
 };
 export type RawRun = { run_date: Day; status: string; engines: string[] };
 // varies (15 Nov 2026, lib/tracking/crosscheck.ts): DataForSEO and Ahrefs read this keyword 10 or more places apart, or one had it and the other did not.
@@ -221,6 +223,8 @@ export type PromptView = {
   text: string;
   angle: string | null;
   addedOn: Day;
+  /** The prompt's tier (tracking/prompt-tiers.ts): 2 to 4 are Growth prompts, reported apart from the core. */
+  tier: number;
   measured: boolean;
   /** Named / answered across engines on the latest reading, 0..1, or null before the first. */
   rate: number | null;
@@ -293,6 +297,12 @@ export type Workspace = {
   rateTrend: (number | null)[];
   /** The last 7 readings, across live prompts: answers given, answers naming the client, answers citing its site. */
   window: { readings: number; answers: number; named: number; cited: number };
+  /**
+   * Growth prompts (18 Nov 2026, playbook rule 5): the broader tiers 2 to 4, added once the narrow prompts are won.
+   * They start low, so `rate`, `rateTrend`, `window` and every cluster's rate are worked out over the core (tier 1)
+   * prompts only, and these are reported apart: month 2 reads as expansion, not a drop.
+   */
+  growth: { prompts: PromptView[]; rate: number | null; rateTrend: (number | null)[]; answers: number; named: number };
   brands: { name: string; answers: number; you: boolean }[];
   sources: { domain: string; answers: number; urls: number; you: boolean; engines: Engine[] }[];
   opportunities: RawOpportunity[];

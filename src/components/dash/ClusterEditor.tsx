@@ -328,6 +328,7 @@ function PromptRow({ p, g, ctx }: { p: PromptView; g: GroupView; ctx: Ctx }) {
       <div className="t">
         {canWrite ? <button className="txt" onClick={() => setEditing(true)} title="Edit">{p.text}</button> : <span>{p.text}</span>}
         <div className="meta">
+          {p.tier > 1 ? <span className="pill" style={{ padding: "0 7px", marginRight: 6 }} title="A broader prompt, reported in Growth prompts and kept out of your headline figures while it builds">Growth</span> : null}
           {p.measured ? <Cells engines={ctx.engines} cells={p.cells} /> : <span className="pill accent" style={{ padding: "0 7px" }}>{p.addedOn > ctx.ws.today ? "First reading tomorrow" : "Not read yet"}</span>}
         </div>
       </div>

@@ -17,6 +17,7 @@
  */
 
 import { otherForm } from "../tracking/plural.ts";
+import { isGrowthTier, promptTierOf } from "../tracking/prompt-tiers.ts";
 import { brandKey, subjectKeys } from "../scan/brand-name.ts";
 
 import { allowances, type PlanShape } from "./allowance.ts";
@@ -182,7 +183,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
         return r ? verdictOf(r) : null;
       });
     }
-    return { id: p.id, text: p.text, angle: p.angle, addedOn: p.added_on, measured: rows.length > 0, rate: rateOf(onLast), cells, days };
+    return { id: p.id, text: p.text, angle: p.angle, addedOn: p.added_on, tier: promptTierOf(p.prompt_tier) ?? 1, measured: rows.length > 0, rate: rateOf(onLast), cells, days };
   };
 
   // Keywords: daily positions.
@@ -253,6 +254,9 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
 
   const liveKeywords = raw.keywords.filter(live);
   const livePrompts = raw.prompts.filter((p) => live(p) && p.allowance !== "placement");
+  // Growth prompts (tiers 2-4) are reported apart; every headline and cluster figure is over the core prompts.
+  const growthPrompts = livePrompts.filter((p) => isGrowthTier(p.prompt_tier));
+  const corePrompts = livePrompts.filter((p) => !isGrowthTier(p.prompt_tier));
   const trackedKeys = new Set(liveKeywords.map((k) => lc(k.keyword)));
 
   // Footprint keywords: the first group whose terms match, across clusters in order.
@@ -314,7 +318,8 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       prompts: ps.filter((p) => !p.group_id || !groupIds.has(p.group_id)).map(promptView),
       discovered: { gsc: [], bing: [] },
     };
-    const ids = new Set(ps.map((p) => p.id));
+    // the cluster's rate is over its core prompts; its growth prompts are listed with it and reported apart
+    const ids = new Set(ps.filter((p) => !isGrowthTier(p.prompt_tier)).map((p) => p.id));
     const headHist = head ? (serpBy.get(head.id) ?? []) : [];
     const firstRate = dates.map((d) => rateOf(answersOn(ids, d))).find((r) => r !== null) ?? null;
     const placed = raw.placements.filter((p) => p.cluster_id === c.id && p.status === "live").map((p) => pathKey(p.url)).filter((k): k is string => !!k);
@@ -354,14 +359,18 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   const clusterKw = new Set(clusters.flatMap((c) => [...c.groups.flatMap((g) => g.keywords), ...c.own.keywords]).map((k) => k.id));
   const looseK = liveKeywords.filter((k) => !clusterKw.has(k.id)).map(trackedView);
 
-  const allIds = new Set(livePrompts.map((p) => p.id));
+  const allIds = new Set(corePrompts.map((p) => p.id));
+  const growthIds = new Set(growthPrompts.map((p) => p.id));
+  const growthWindow = raw.answers.filter((a) => recent.has(a.run_date) && growthIds.has(a.question_id) && a.answered);
 
   // Brands and sources over the last 7 readings.
   const window = raw.answers.filter((a) => recent.has(a.run_date) && allIds.has(a.question_id));
+  // Who is named and who is cited read every live prompt, growth ones included: they are not a figure about the client.
+  const windowAll = raw.answers.filter((a) => recent.has(a.run_date) && (allIds.has(a.question_id) || growthIds.has(a.question_id)));
   const subject = subjectKeys(raw.client.brand ?? raw.client.domain, raw.client.domain);
   for (const a of raw.client.brand_aliases ?? []) subject.add(brandKey(a));
   const brandCount = new Map<string, { name: string; answers: number }>();
-  for (const a of window) {
+  for (const a of windowAll) {
     for (const b of new Set((a.brands ?? []).map((x) => String(x)))) {
       const key = brandKey(b);
       if (!key) continue;
@@ -374,7 +383,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     .sort((a, b) => b.answers - a.answers || a.name.localeCompare(b.name))
     .slice(0, 15);
   const srcCount = new Map<string, { answers: Set<string>; urls: Set<string>; engines: Set<Engine> }>();
-  for (const a of window) {
+  for (const a of windowAll) {
     const key = `${a.run_date} ${a.question_id} ${a.engine}`;
     for (const c of a.citations ?? []) {
       const d = (c.source_domain ?? hostOf(c.url) ?? "").replace(/^www\./, "").toLowerCase();
@@ -413,6 +422,13 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       cited: window.filter((a) => (a.citations ?? []).some((c) => { const h = hostOf(c.url); return !!h && (h === own || h.endsWith(`.${own}`)); })).length,
     },
     rateTrend: strip.map((d) => rateOf(answersOn(allIds, d))),
+    growth: {
+      prompts: growthPrompts.map(promptView),
+      rate: latest && growthIds.size ? rateOf(answersOn(growthIds, latest)) : null,
+      rateTrend: strip.map((d) => (growthIds.size ? rateOf(answersOn(growthIds, d)) : null)),
+      answers: growthWindow.length,
+      named: growthWindow.filter((a) => a.named).length,
+    },
     brands,
     sources,
     opportunities: raw.opportunities,
