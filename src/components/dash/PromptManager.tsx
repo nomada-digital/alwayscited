@@ -68,7 +68,7 @@ export default function PromptManager({ slug, base, initial, plan, demo = false 
                     ) : (
                       <Link href={detail(p.id)} style={{ fontWeight: 500 }}>{p.text}</Link>
                     )}
-                    <div className="sub"><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link>{g.id ? ` · ${g.name}` : ""}</div>
+                    <div className="sub"><Link href={`${base}/${slug}/clusters/${c.id}`}>{c.name}</Link>{g.id ? ` · ${g.name}` : ""}{p.tier > 1 ? " · Growth prompt" : ""}</div>
                   </td>
                   <td data-l="Latest answer, by engine">{p.measured ? <EngineButtons engines={ws.engines} p={p} onOpen={(e) => setOpen({ p, e })} /> : <span className="pill accent">{p.addedOn > ws.today ? "First reading tomorrow" : "Not read yet"}</span>}</td>
                   <td data-l={p.measured ? "Named you" : undefined}>{p.measured ? <Rate r={p.rate} /> : null}</td>
