@@ -562,6 +562,10 @@ const SQL_READERS: Record<string, string> = {
   apply_plan_swaps:
     "Applies due plan swaps. service_role only (20261108010000). Reads client_domains for the tier and " +
     "returns an integer count; no column reaches the caller.",
+  // 18 Nov 2026, prompt tiers (20261118000000).
+  prompt_broaden:
+    "Ready to broaden, per customer. service_role only. Reads client_domains for slug, domain, brand, plan and " +
+    "cluster_limit by name and returns jsonb built key by key; account_id is never selected.",
 };
 
 test("the SQL walk can see the functions it is sweeping", () => {

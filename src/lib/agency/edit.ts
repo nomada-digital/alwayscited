@@ -14,6 +14,7 @@ import { adminEdit, adminStop } from "@/lib/tracking/admin-edit";
 import { dayAfter, liveOn, trackingDay } from "@/lib/tracking/decide";
 import { ANGLES, type Angle, KEYWORDS_PER_CLUSTER, PROMPTS_PER_CLUSTER, insertCluster, insertKeyword, insertPrompts, readingsFor } from "@/lib/tracking/limits";
 import { refuseSlotText } from "@/lib/tracking/prompt-text";
+import { PROMPT_TIER_LABEL, PROMPT_TIERS, promptTierOf, readBroaden } from "@/lib/tracking/prompt-tiers";
 import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { marketDrafts } from "@/lib/tracking/starter-pick";
 
@@ -64,13 +65,15 @@ export async function readAgency(db: SupabaseClient, client: Client): Promise<Do
   const [{ data: clRows, error: e1 }, { data: kwRows, error: e2 }, { data: qRows, error: e3 }, { data: syncRows, error: e4 }, { data: linkRows, error: e5 }, { data: editRows, error: e6 }] = await Promise.all([
     db.from("tracked_clusters").select("id, name, tier, keyword_id, started_on, stopped_on, superseded_by, superseded_on, created_at").eq("client_domain_id", client.id).order("created_at", { ascending: true }),
     db.from("tracked_keywords").select("id, keyword, search_volume, intent, cluster_id, added_on, stopped_on").eq("client_domain_id", client.id),
-    db.from("tracked_questions").select("id, cluster_id, text, angle, added_on, stopped_on, allowance").eq("client_domain_id", client.id).order("created_at", { ascending: true }),
+    db.from("tracked_questions").select("id, cluster_id, text, angle, prompt_tier, added_on, stopped_on, allowance").eq("client_domain_id", client.id).order("created_at", { ascending: true }),
     db.from("sheet_syncs").select("kind, sheet_url, attempted_at, synced_at, source, read_on, rows_kept, rows_skipped, columns, error").eq("client_domain_id", client.id),
     db.from("sheet_links").select("kind, on_sheet").eq("client_domain_id", client.id),
     db.from("agency_edits").select("id, actor_email, action, target, old_value, new_value, created_at").eq("client_domain_id", client.id).order("created_at", { ascending: false }).limit(60),
   ]);
   const failed = e1 ?? e2 ?? e3 ?? e4 ?? e5 ?? e6;
   if (failed) return { ok: false, message: `Could not read the customer's setup: ${failed.message}` };
+  // Ready to broaden (18 Nov 2026, prompt-tiers.ts): never fatal to the panel, which says it could not be read
+  const broaden = await readBroaden(db, client.slug);
   const today = trackingDay();
   const keywords = (kwRows ?? []) as Row[];
   const kwText = new Map(keywords.map((k) => [k.id as string, k]));
@@ -97,6 +100,8 @@ export async function readAgency(db: SupabaseClient, client: Client): Promise<Do
       syncs: syncRows ?? [],
       links: { insertion: count("insertion"), placement: count("placement") },
       edits: editRows ?? [],
+      prompt_tiers: PROMPT_TIERS.map((t) => ({ tier: t, label: PROMPT_TIER_LABEL[t] })),
+      broaden: typeof broaden === "string" ? { error: broaden } : (broaden[0] ?? null),
     },
   };
 }
@@ -236,7 +241,9 @@ async function liveCluster(db: SupabaseClient, client: Client, clusterId: string
 
 const angleOf = (a: unknown): Angle | null => ((ANGLES as readonly string[]).includes(String(a)) ? (String(a) as Angle) : null);
 
-export async function addPrompt(db: SupabaseClient, client: Client, by: string, p: { clusterId: string; text: string; angle?: unknown }): Promise<Done> {
+export async function addPrompt(db: SupabaseClient, client: Client, by: string, p: { clusterId: string; text: string; angle?: unknown; tier?: unknown }): Promise<Done> {
+  const tier = p.tier === undefined || p.tier === null || p.tier === "" ? 1 : promptTierOf(p.tier);
+  if (tier === null) return { ok: false, message: "A prompt tier is 1 to 4." };
   const c = await liveCluster(db, client, p.clusterId);
   if (typeof c === "string") return { ok: false, message: c };
   const live = await liveTexts(db, client.id);
@@ -247,12 +254,19 @@ export async function addPrompt(db: SupabaseClient, client: Client, by: string, 
   const startOn = dayAfter(trackingDay());
   const w = await insertPrompts(db, client.id, p.clusterId, [{ text, angle: angleOf(p.angle), source: BY, origin_kind: "nomada", added_on: startOn, added_by: BY }], { pooled: true });
   if (!w.ok) return { ok: false, message: w.message };
-  await audit(db, client.id, by, "add_prompt", w.ids[0]!, null, { cluster_id: p.clusterId, text, angle: angleOf(p.angle) });
-  return { ok: true, message: `Added; first read at the ${startOn} daily check.` };
+  // insertPrompts writes every prompt at tier 1 (the column default); a broader one is set straight after
+  let tErr: { message: string } | null = null;
+  if (tier !== 1) {
+    const { error } = await db.from("tracked_questions").update({ prompt_tier: tier }).eq("id", w.ids[0]!);
+    tErr = error;
+  }
+  await audit(db, client.id, by, "add_prompt", w.ids[0]!, null, { cluster_id: p.clusterId, text, angle: angleOf(p.angle), prompt_tier: tier });
+  if (tErr) return { ok: true, message: `Added; first read at the ${startOn} daily check. Its tier was not set (${tErr.message}): it is tier 1 until set.` };
+  return { ok: true, message: `Added at tier ${tier}; first read at the ${startOn} daily check.` };
 }
 
 export async function editPrompt(db: SupabaseClient, client: Client, by: string, p: { id: string; text: string }): Promise<Done> {
-  const { data: q, error } = await db.from("tracked_questions").select("id, cluster_id, text, angle, stopped_on").eq("id", p.id).eq("client_domain_id", client.id).maybeSingle();
+  const { data: q, error } = await db.from("tracked_questions").select("id, cluster_id, text, angle, prompt_tier, stopped_on").eq("id", p.id).eq("client_domain_id", client.id).maybeSingle();
   if (error) return { ok: false, message: `Could not read the prompt: ${error.message}` };
   if (!q || q.stopped_on !== null) return { ok: false, message: "That prompt is not live on this customer." };
   const text = p.text.trim();
@@ -277,6 +291,11 @@ export async function editPrompt(db: SupabaseClient, client: Client, by: string,
     const { error: uErr } = await db.from("tracked_questions").update({ stopped_on: null, stopped_by: null }).eq("id", p.id);
     return { ok: false, message: `Not changed: ${w.message}${uErr ? `. The old prompt is stopped from tomorrow and could not be put back (${uErr.message})` : ""}` };
   }
+  // the new text keeps the prompt's tier
+  if ((q.prompt_tier ?? 1) !== 1) {
+    const { error: tErr } = await db.from("tracked_questions").update({ prompt_tier: q.prompt_tier }).eq("id", w.ids[0]!);
+    if (tErr) console.error(`[agency] tier ${q.prompt_tier} not carried to the edited prompt ${w.ids[0]}: ${tErr.message}`);
+  }
   await audit(db, client.id, by, "edit_prompt", p.id, q.text, { text, replaced_by: w.ids[0], readings_kept: n });
   return { ok: true, message: `It had ${n} reading${n === 1 ? "" : "s"}, so those stay on the old prompt and the new text starts tomorrow.` };
 }
@@ -288,6 +307,24 @@ export async function removePrompt(db: SupabaseClient, client: Client, by: strin
   const done = await adminStop(db, { kind: "prompt", clientId: client.id, id, today: trackingDay() });
   if (done.ok) await audit(db, client.id, by, "remove_prompt", id, q.text, null);
   return done;
+}
+
+/**
+ * A prompt's tier (18 Nov 2026, prompt-tiers.ts): 1 exact service, 2 category, 3 category + market, 4 adjacent. Set in
+ * place - the question does not change, so its readings stay with it - and logged. It moves the prompt between the
+ * customer's core and Growth prompts, and decides which tier "ready to broaden" judges.
+ */
+export async function setPromptTier(db: SupabaseClient, client: Client, by: string, p: { id: string; tier: unknown }): Promise<Done> {
+  const tier = promptTierOf(p.tier);
+  if (tier === null) return { ok: false, message: "A prompt tier is 1 to 4." };
+  const { data: q, error } = await db.from("tracked_questions").select("text, prompt_tier, stopped_on").eq("id", p.id).eq("client_domain_id", client.id).maybeSingle();
+  if (error) return { ok: false, message: `Could not read the prompt: ${error.message}` };
+  if (!q) return { ok: false, message: "That prompt is not on this customer." };
+  if (q.prompt_tier === tier) return { ok: true, message: "Nothing changed." };
+  const { error: uErr } = await db.from("tracked_questions").update({ prompt_tier: tier }).eq("id", p.id).eq("client_domain_id", client.id);
+  if (uErr) return { ok: false, message: `Could not set the tier: ${uErr.message}` };
+  await audit(db, client.id, by, "set_prompt_tier", p.id, { text: q.text, prompt_tier: q.prompt_tier }, { prompt_tier: tier });
+  return { ok: true, message: `Tier ${tier} (${PROMPT_TIER_LABEL[tier]}).` };
 }
 
 /** Five buying prompts for a keyword, from the customer's site. Nothing is saved: staff read and edit them first. */
