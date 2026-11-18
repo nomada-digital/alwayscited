@@ -104,6 +104,9 @@ export function isDashHost(host: string | null | undefined, env?: { DASH_HOST?: 
   const h = (host ?? "").trim().toLowerCase();
   if (!h) return false;
   if (h === dashHost(env) || h === DASH_HOST_DEFAULT) return true;
+  // PREVIEW ONLY (18 Nov 2026): this branch's Vercel preview serves the dashboards tree, so the Growth prompts change can
+  // be seen on the sample link before it is merged. Drop this commit before merging.
+  if (process.env.VERCEL_ENV === "preview" && /^alwayscited-git-prompt-tiers-growth-[a-z0-9-]+\.vercel\.app$/.test(h.split(":")[0]!)) return true;
   return h.split(":")[0] === "dashboards.localhost";
 }
 
