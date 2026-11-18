@@ -72,6 +72,9 @@ export type RawPrompt = {
   allowance?: string | null;
   /** 1 exact service, 2 category, 3 category + market, 4 adjacent (18 Nov 2026, tracking/prompt-tiers.ts). Absent is 1. */
   prompt_tier?: number | null;
+  /** list, comparison or other: staff's (prompt_type) or the wording's (prompt_type_auto); tracking/prompt-type.ts. */
+  prompt_type?: string | null;
+  prompt_type_auto?: string | null;
 };
 export type RawRun = { run_date: Day; status: string; engines: string[] };
 // varies (15 Nov 2026, lib/tracking/crosscheck.ts): DataForSEO and Ahrefs read this keyword 10 or more places apart, or one had it and the other did not.
@@ -85,6 +88,12 @@ export type RawAnswer = {
   named: boolean;
   brands?: string[] | null;
   citations?: Citation[] | null;
+  /** Where the answer puts the client (18 Nov 2026, migration 20261118010000): its place, of how many named. */
+  list_pos?: number | null;
+  list_of?: number | null;
+  /** A comparison answer's verdict: who it recommends, and the rival's name when it is not the client. */
+  verdict?: "client" | "neutral" | "rival" | null;
+  verdict_rival?: string | null;
 };
 /** keyword_footprints.rows: k keyword, p position, u url, v volume, i intent. */
 export type FootRow = { k: string; p: number | null; u: string | null; v: number | null; i?: string | null };
@@ -225,6 +234,12 @@ export type PromptView = {
   addedOn: Day;
   /** The prompt's tier (tracking/prompt-tiers.ts): 2 to 4 are Growth prompts, reported apart from the core. */
   tier: number;
+  /** list, comparison or other (tracking/prompt-type.ts). */
+  ptype: "list" | "comparison" | "other";
+  /** On the latest reading: the client's best place across engines and of how many, and on how many engines first. */
+  place: { best: number; of: number; first: number; placed: number } | null;
+  /** A comparison prompt's latest verdicts across engines, with the rival named most. */
+  verdicts: { client: number; neutral: number; rival: number; rivalName: string | null } | null;
   measured: boolean;
   /** Named / answered across engines on the latest reading, 0..1, or null before the first. */
   rate: number | null;
@@ -303,6 +318,12 @@ export type Workspace = {
    * prompts only, and these are reported apart: month 2 reads as expansion, not a drop.
    */
   growth: { prompts: PromptView[]; rate: number | null; rateTrend: (number | null)[]; answers: number; named: number };
+  /**
+   * Where the client sits on the latest reading, over the core prompts (18 Nov 2026, Danny: "make it clear whether the
+   * client is being recognised as the best or not"): of the answers given, how many put it first and in the top 3, and
+   * its average place where it is named in a ranked list.
+   */
+  place: { answered: number; first: number; top3: number; avg: number | null; firstRate: number | null };
   brands: { name: string; answers: number; you: boolean }[];
   sources: { domain: string; answers: number; urls: number; you: boolean; engines: Engine[] }[];
   opportunities: RawOpportunity[];

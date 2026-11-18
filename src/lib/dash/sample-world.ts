@@ -246,7 +246,9 @@ export function sampleRaw(today: Day): Raw {
     ];
     asked.forEach(({ text, tier, began, span, rate }, i) => {
       const id = promptId(c, i);
-      prompts.push({ id, text, cluster_id: clusterId(c), group_id: null, angle: null, added_on: began, stopped_on: null, origin_kind: null, allowance: null, prompt_tier: tier });
+      // the sample's fixed prompts typed by hand (the database derives a real prompt's: prompt_type_of())
+      const ptype = /\b(vs|better|compare|alternative)/i.test(text) ? "comparison" : /^(what|which|who|where|recommend|best|most)\b/i.test(text) ? "list" : "other";
+      prompts.push({ id, text, cluster_id: clusterId(c), group_id: null, angle: null, added_on: began, stopped_on: null, origin_kind: null, allowance: null, prompt_tier: tier, prompt_type_auto: ptype });
       const lean = 0.65 + rand(`${id}|lean`) * 0.7;
       for (let d = 0; d <= span; d++) {
         const day = addDays(began, d);
@@ -272,7 +274,11 @@ export function sampleRaw(today: Day): Raw {
             for (const p of liveNow) if (p.domain !== SAMPLE_DOMAIN && r(p.id) < 0.3) citations.push({ url: p.url, title: `${c.name}: where to stay`, source_domain: p.domain, position: citations.length + 1 });
             if (named && r("own") < 0.45) citations.push({ url: `https://${SAMPLE_DOMAIN}${c.page}`, title: SAMPLE_BRAND, source_domain: SAMPLE_DOMAIN, position: citations.length + 1 });
           }
-          answers.push({ run_date: day, question_id: id, engine, answered, named, brands, citations });
+          // where the answer puts the brand (18 Nov 2026): its place among the brands named; a comparison's verdict
+          const at = named ? brands.indexOf(SAMPLE_BRAND) + 1 : 0;
+          const verdict = ptype !== "comparison" || !answered ? null : named && r("wins") < 0.55 ? "client" : r("rival") < 0.5 ? "rival" : "neutral";
+          answers.push({ run_date: day, question_id: id, engine, answered, named, brands, citations,
+            list_pos: at || null, list_of: at ? brands.length : null, verdict, verdict_rival: verdict === "rival" ? (brands.find((b) => b !== SAMPLE_BRAND) ?? null) : null });
         }
       }
     });

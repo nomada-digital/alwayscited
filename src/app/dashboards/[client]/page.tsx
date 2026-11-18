@@ -57,7 +57,8 @@ export default async function Overview({ params }: { params: Promise<{ client: s
       ) : null}
       {/* 7 Nov 2026: each tile opens the page behind its figure. */}
       <div className="dash-grid k4">
-        <Kpi href={`${base}/${slug}/ai`} label="AI names you" value={pct(ws.rate)} sub={<>
+        {/* 18 Nov 2026 (Danny): "Named in 36% · first in 4%", so a mention low in a list does not read as a win */}
+        <Kpi href={`${base}/${slug}/ai`} label="AI names you" value={pct(ws.rate)} unit={ws.place.firstRate !== null ? `· first in ${pct(ws.place.firstRate)}` : undefined} sub={<>
           {delta !== null && ws.dates.length > 1 ? <span className={delta > 0 ? "up" : delta < 0 ? "down" : ""}>{delta > 0 ? "+" : ""}{delta} pts over {ws.dates.length} readings</span> : "Answers naming you, latest reading"}
           {/* 18 Nov 2026: the headline is the core prompts; the broader Growth prompts are reported apart (model.ts growth) */}
           {ws.growth.prompts.length ? <><br />Core prompts. Growth prompts: {ws.growth.rate !== null ? pct(ws.growth.rate) : "first reading next"}</> : null}

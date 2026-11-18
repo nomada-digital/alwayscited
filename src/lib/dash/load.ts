@@ -67,7 +67,7 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   const extra = extraErr ? null : (extraRow as { brand_aliases?: string[]; payment_status?: string | null } | null);
 
   const kwCols = (groupsReady ? "id, keyword, search_volume, intent, added_on, stopped_on, added_by, cluster_id, group_id" : "id, keyword, search_volume, intent, added_on, stopped_on, added_by") + (formsReady ? ", form, pair_of" : "");
-  const pCols = groupsReady ? "id, text, cluster_id, group_id, angle, added_on, stopped_on, origin_kind, allowance, prompt_tier" : "id, text, cluster_id, angle, added_on, stopped_on";
+  const pCols = groupsReady ? "id, text, cluster_id, group_id, angle, added_on, stopped_on, origin_kind, allowance, prompt_tier, prompt_type, prompt_type_auto" : "id, text, cluster_id, angle, added_on, stopped_on";
 
   const [
     { data: clusterRows, error: clustersErr },
@@ -121,8 +121,8 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
 
   // Started together, awaited one by one: paged() throws on any page's error, so nothing here is held unchecked.
   const serpRead = paged<RawSerp>(() => db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
-  const verdictRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named").eq("client_domain_id", cid).gte("run_date", since).lt("run_date", sourcesSince).order("run_date").order("id"), "answers");
-  const citeRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named, brands, citations").eq("client_domain_id", cid).gte("run_date", sourcesSince).order("run_date").order("id"), "recent answers");
+  const verdictRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named, list_pos, list_of, verdict, verdict_rival").eq("client_domain_id", cid).gte("run_date", since).lt("run_date", sourcesSince).order("run_date").order("id"), "answers");
+  const citeRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named, brands, citations, list_pos, list_of, verdict, verdict_rival").eq("client_domain_id", cid).gte("run_date", sourcesSince).order("run_date").order("id"), "recent answers");
   // A later read failing while an earlier one is awaited is still thrown below, not reported unhandled.
   for (const r of [verdictRead, citeRead]) r.catch(() => undefined);
   const serp = await serpRead;
