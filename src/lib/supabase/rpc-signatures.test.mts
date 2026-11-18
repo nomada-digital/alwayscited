@@ -300,5 +300,8 @@ test("the six call sites are the ones we think they are", () => {
     // 18 Nov 2026, prompt tiers: ready to broaden, read-only, for the agency view and /admin/tracking
     // (lib/tracking/prompt-tiers.ts readBroaden).
     prompt_broaden: 1,
+    // 18 Nov 2026, prompt positions: each live prompt's type, position and verdict figures, read-only, for the agency
+    // view (lib/tracking/prompt-type.ts readPositions).
+    prompt_positions: 1,
   });
 });

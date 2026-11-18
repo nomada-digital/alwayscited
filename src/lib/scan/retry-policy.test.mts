@@ -96,7 +96,13 @@ test("rule 1: the walk finds the model calls it is written about", () => {
   // TOPIC_CHECKS_PER_RUN (64) fresh hosts a run in batches of 8, so eight calls a run at most, and a host read is kept
   // 30 days. `messages.parse` on `anthropic(billed)`, so the method set and rules 2-4 stand unchanged. A thirteenth
   // needs its own.
-  assert.equal(calls.length, 12, "anthropic.ts makes twelve model calls; a thirteenth needs a decision, not a default");
+  // Thirteen since 18 Nov 2026: readVerdicts, comparison verdicts - Danny's brief that day ("it should make it clear
+  // whether the client is being recognised as the best or not"; "Have Haiku classify the stored answer text once per
+  // new answer (cheap; cache it)"). Reached only from src/lib/tracking/verdicts.ts on the ten-minute brand-batches
+  // cron: at most PER_RUN (120) unread comparison answers a run, ten to a call, each answer read once and kept, so
+  // twelve calls a run at most and none once the backlog is read. `messages.parse` on `anthropic(billed)`, so the
+  // method set and rules 2-4 stand unchanged. A fourteenth needs its own.
+  assert.equal(calls.length, 13, "anthropic.ts makes thirteen model calls; a fourteenth needs a decision, not a default");
   assert.deepEqual(
     [...new Set(calls.map((c) => c.method))],
     ["parse"],

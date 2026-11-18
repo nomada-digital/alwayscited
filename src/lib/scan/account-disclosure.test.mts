@@ -566,6 +566,16 @@ const SQL_READERS: Record<string, string> = {
   prompt_broaden:
     "Ready to broaden, per customer. service_role only. Reads client_domains for slug, domain, brand, plan and " +
     "cluster_limit by name and returns jsonb built key by key; account_id is never selected.",
+  // 18 Nov 2026, prompt positions (20261118010000). All three service_role only.
+  client_names:
+    "The client's names for matching an answer: brand_name, domain and brand_aliases by name, returned as text[]; " +
+    "account_id is never selected.",
+  prompt_positions:
+    "Each live prompt's type, position and verdict figures. Reads client_domains for the id only and returns jsonb " +
+    "built key by key from tracked_questions and tracking_answers.",
+  tracking_answers_position:
+    "The trigger that sets an answer's list_pos and list_of. Reads client_domains.brand_case_sensitive by name and " +
+    "returns the row it was given; nothing reaches a caller.",
 };
 
 test("the SQL walk can see the functions it is sweeping", () => {

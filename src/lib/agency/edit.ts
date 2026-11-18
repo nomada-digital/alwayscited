@@ -15,6 +15,7 @@ import { dayAfter, liveOn, trackingDay } from "@/lib/tracking/decide";
 import { ANGLES, type Angle, KEYWORDS_PER_CLUSTER, PROMPTS_PER_CLUSTER, insertCluster, insertKeyword, insertPrompts, readingsFor } from "@/lib/tracking/limits";
 import { refuseSlotText } from "@/lib/tracking/prompt-text";
 import { PROMPT_TIER_LABEL, PROMPT_TIERS, promptTierOf, readBroaden } from "@/lib/tracking/prompt-tiers";
+import { PROMPT_TYPE_LABEL, PROMPT_TYPES, promptTypeOf, readPositions } from "@/lib/tracking/prompt-type";
 import { dispatchTrackingRun, requestRerun } from "@/lib/tracking/runner";
 import { marketDrafts } from "@/lib/tracking/starter-pick";
 
@@ -74,6 +75,8 @@ export async function readAgency(db: SupabaseClient, client: Client): Promise<Do
   if (failed) return { ok: false, message: `Could not read the customer's setup: ${failed.message}` };
   // Ready to broaden (18 Nov 2026, prompt-tiers.ts): never fatal to the panel, which says it could not be read
   const broaden = await readBroaden(db, client.slug);
+  // Where the client sits in each prompt's answers (18 Nov 2026, prompt-type.ts): never fatal either
+  const positions = await readPositions(db, client.slug);
   const today = trackingDay();
   const keywords = (kwRows ?? []) as Row[];
   const kwText = new Map(keywords.map((k) => [k.id as string, k]));
@@ -102,6 +105,8 @@ export async function readAgency(db: SupabaseClient, client: Client): Promise<Do
       edits: editRows ?? [],
       prompt_tiers: PROMPT_TIERS.map((t) => ({ tier: t, label: PROMPT_TIER_LABEL[t] })),
       broaden: typeof broaden === "string" ? { error: broaden } : (broaden[0] ?? null),
+      prompt_types: PROMPT_TYPES.map((t) => ({ type: t, label: PROMPT_TYPE_LABEL[t] })),
+      positions: typeof positions === "string" ? { error: positions } : positions,
     },
   };
 }
@@ -325,6 +330,24 @@ export async function setPromptTier(db: SupabaseClient, client: Client, by: stri
   if (uErr) return { ok: false, message: `Could not set the tier: ${uErr.message}` };
   await audit(db, client.id, by, "set_prompt_tier", p.id, { text: q.text, prompt_tier: q.prompt_tier }, { prompt_tier: tier });
   return { ok: true, message: `Tier ${tier} (${PROMPT_TIER_LABEL[tier]}).` };
+}
+
+/**
+ * A prompt's type (18 Nov 2026, prompt-type.ts): list, comparison or other, or "auto" for the wording's own. Set in place
+ * and logged; it decides whether the prompt is read for its position in a list or for who the answer recommends.
+ */
+export async function setPromptType(db: SupabaseClient, client: Client, by: string, p: { id: string; type: unknown }): Promise<Done> {
+  const type = p.type === "auto" || p.type === null || p.type === "" ? null : promptTypeOf(p.type);
+  if (type === null && !(p.type === "auto" || p.type === null || p.type === "")) return { ok: false, message: "A prompt type is list, comparison, other or auto." };
+  const { data: q, error } = await db.from("tracked_questions").select("text, prompt_type, prompt_type_auto").eq("id", p.id).eq("client_domain_id", client.id).maybeSingle();
+  if (error) return { ok: false, message: `Could not read the prompt: ${error.message}` };
+  if (!q) return { ok: false, message: "That prompt is not on this customer." };
+  if ((q.prompt_type ?? null) === type) return { ok: true, message: "Nothing changed." };
+  const { error: uErr } = await db.from("tracked_questions").update({ prompt_type: type }).eq("id", p.id).eq("client_domain_id", client.id);
+  if (uErr) return { ok: false, message: `Could not set the type: ${uErr.message}` };
+  await audit(db, client.id, by, "set_prompt_type", p.id, { text: q.text, prompt_type: q.prompt_type }, { prompt_type: type });
+  const shown = type ?? (promptTypeOf(q.prompt_type_auto) ?? "other");
+  return { ok: true, message: type ? `Type set: ${PROMPT_TYPE_LABEL[type]}.` : `Back to the wording's own type (${PROMPT_TYPE_LABEL[shown]}).` };
 }
 
 /** Five buying prompts for a keyword, from the customer's site. Nothing is saved: staff read and edit them first. */

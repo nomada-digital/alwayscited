@@ -1304,3 +1304,45 @@ async function batchMessages(id: string, label: string, billed: { calls: number 
 export async function cancelBatch(id: string, billed: { calls: number }): Promise<void> {
   await withRetry(() => anthropic(billed).messages.batches.cancel(id));
 }
+
+// ------------------------------------------------------- comparison verdicts
+
+/**
+ * A comparison prompt's answer, read for who it recommends (Danny, 18 Nov 2026: "it should make it clear whether the
+ * client is being recognised as the best or not"). One verdict per answer, read once and kept on the answer
+ * (tracking/verdicts.ts): client (the answer recommends the client over the others), neutral (no winner, "it
+ * depends", or the client is only listed), rival (another brand is recommended over the client, named in `rival`).
+ * The small model: a three-way label and a name. nomada-daily generators/ai_positions.py asks the same question of the
+ * hub's answers in the same words.
+ */
+export const VERDICT_MODEL = "claude-haiku-5-5";
+
+const Verdicts = z.object({
+  answers: z.array(z.object({ n: z.number().int(), verdict: z.enum(["client", "neutral", "rival"]), rival: z.string().nullable() })),
+});
+
+export const VERDICT_SYSTEM = [
+  "You read answers an AI assistant gave to comparison questions (X vs Y, is X better than Y, alternatives to X).",
+  "For each answer, say who it recommends, from the point of view of the client brand named in the request:",
+  '- "client": the answer recommends the client brand, or puts it first, over the alternatives.',
+  '- "rival": the answer recommends another brand over the client brand (or recommends another and does not name the',
+  '  client as the better choice). Put that brand\'s name in "rival", as the answer writes it.',
+  '- "neutral": no winner - "it depends", a balanced comparison, or the client is only listed among others.',
+  'rival is null unless the verdict is "rival". Answer for every numbered answer, by its number.',
+].join("\n");
+
+export async function readVerdicts(
+  brand: string,
+  answers: readonly { n: number; question: string; text: string }[],
+  billed: { calls: number } = { calls: 0 },
+): Promise<z.infer<typeof Verdicts>["answers"]> {
+  if (!answers.length) return [];
+  const res = await labelled("verdicts", () => withRetry(() => anthropic(billed).messages.parse({
+    model: VERDICT_MODEL,
+    max_tokens: 1500,
+    output_config: { format: zodOutputFormat(Verdicts) },
+    system: VERDICT_SYSTEM,
+    messages: [{ role: "user", content: [`Client brand: ${brand}`, ...answers.map((a) => `## Answer ${a.n}\nQuestion: ${a.question}\n\n${a.text.slice(0, 6000)}`)].join("\n\n") }],
+  })));
+  return res.parsed_output?.answers ?? [];
+}

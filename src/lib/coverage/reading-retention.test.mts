@@ -314,7 +314,9 @@ const RETENTION_CLAIMS: {
  */
 // 8 Nov 2026: and the Message Batch collector's (tracking/brand-batches.ts), which credits the brands a batch read
 // onto the row the run stored brands_ok=false - brands and brands_ok only, never response_text.
-const BRANDS_ONLY = new Set([".update(hasBrandsOk(kept!) ? { brands, brands_ok: true } : { brands })", ".update({ brands, brands_ok: true })"]);
+// 18 Nov 2026: and the comparison verdicts (tracking/verdicts.ts), which write verdict, verdict_rival and verdict_at onto
+// an answer read once by the small model - never response_text.
+const BRANDS_ONLY = new Set([".update(hasBrandsOk(kept!) ? { brands, brands_ok: true } : { brands })", ".update({ brands, brands_ok: true })", ".update(verdictOnly)"]);
 
 function trackedAnswerRemovers(): string[] {
   const out: string[] = [];
