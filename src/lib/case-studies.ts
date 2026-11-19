@@ -41,6 +41,13 @@ const Pair = z.object({ l: z.string(), then: z.number(), now: z.number() });
 const Engine = z.object({ e: z.string(), then: z.number(), now: z.number(), of: z.number() });
 const Keyword = z.object({ k: z.string(), vol: z.number().nullish(), then: z.number().nullish(), now: z.number().nullish() });
 
+// the hero image (19 Nov 2026): the results image drawn on the hub, served from its public storage bucket
+const heroUrl = z.string().regex(/^https:\/\/qpsrvmnmtozvailsyqqz\.supabase\.co\/storage\/v1\/object\/public\/case-study-heroes\/[a-z0-9-]+\.(webp|png)$/);
+const Hero = z.object({
+  src: heroUrl, alt: z.string().min(1), width: z.number().int().positive(), height: z.number().int().positive(),
+  og: z.object({ wide: heroUrl, square: heroUrl.optional(), fourThree: heroUrl.optional() }).optional(),
+});
+
 const CaseStudy = z.object({
   id: z.string().regex(/^[a-z0-9-]+$/),
   site: z.literal("alwayscited.com"),
@@ -73,6 +80,7 @@ const CaseStudy = z.object({
     section: z.enum(["google", "ai", "prompts"]), alt: z.string(), w: z.number(), h: z.number(),
     src: z.string().regex(/^data:image\/(webp|png|jpeg);base64,/),
   })).optional(),
+  hero: Hero.optional(),
   method: z.string().optional(),
 });
 export type CaseStudy = z.infer<typeof CaseStudy>;

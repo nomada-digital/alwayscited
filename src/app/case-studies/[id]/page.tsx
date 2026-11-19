@@ -121,6 +121,13 @@ export default async function PublishedCaseStudy({ params }: { params: Promise<{
           {w && <p className="ac-row" style={{ margin: "8px 0 0", fontSize: "13.5px", color: T.soft }}>Measured {w}.</p>}
         </div>
 
+        {s.hero && (
+          // the results image drawn on the hub: width and height set so the page does not shift
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={s.hero.src} alt={s.hero.alt} width={s.hero.width} height={s.hero.height} fetchPriority="high" decoding="async"
+            style={{ display: "block", width: "100%", maxWidth: "520px", height: "auto", borderRadius: "14px", border: "1px solid " + T.line }} />
+        )}
+
         {!!s.kpis?.length && (
           <div className="ac-row" style={{ display: "flex", flexWrap: "wrap", background: T.bg, border: "1px solid " + T.line, borderRadius: "14px", overflow: "hidden" }}>
             {s.kpis.map((k, i) => (
