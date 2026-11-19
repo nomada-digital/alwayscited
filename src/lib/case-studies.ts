@@ -44,7 +44,7 @@ const Keyword = z.object({ k: z.string(), vol: z.number().nullish(), then: z.num
 // the hero image (19 Nov 2026): the results image drawn on the hub, served from its public storage bucket
 const heroUrl = z.string().regex(/^https:\/\/qpsrvmnmtozvailsyqqz\.supabase\.co\/storage\/v1\/object\/public\/case-study-heroes\/[a-z0-9-]+\.(webp|png)$/);
 const Hero = z.object({
-  src: heroUrl, alt: z.string().min(1), width: z.number().int().positive(), height: z.number().int().positive(),
+  src: z.union([heroUrl, z.string().regex(/^data:image\/webp;base64,/)]),  // alwayscited's CSP allows img-src data:, not the storage host alt: z.string().min(1), width: z.number().int().positive(), height: z.number().int().positive(),
   og: z.object({ wide: heroUrl, square: heroUrl.optional(), fourThree: heroUrl.optional() }).optional(),
 });
 
