@@ -6,8 +6,10 @@ import { describeAnthropicError, QUESTION_COUNT, readBrand, TOPIC_VARIANT_COUNT 
 import { checkCeilings } from "@/lib/scan/ceilings";
 import { type ReadFailure, readSite, UnreachableDomain } from "@/lib/scan/crawl";
 import type { ThinReason } from "@/lib/scan/page-read";
+import { headlineFromSiteText } from "@/lib/scan/page-read";
 import { isPlausibleDomain, isScanMarket, normalizeDomain } from "@/lib/scan/domain";
 import { readRankingFootprint } from "@/lib/scan/dataforseo";
+import { keywordForm } from "@/lib/scan/dataforseo-request";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
 import { clientIp, hashIp } from "@/lib/scan/ip";
 import { needsRankings, pickMarket } from "@/lib/scan/market-pick";
@@ -98,7 +100,7 @@ const THIN_CAUSE: Record<ThinReason, string> = {
 };
 
 export async function POST(req: Request) {
-  let body: { domain?: string; turnstileToken?: string; market?: string; ref?: string; utm?: unknown };
+  let body: { domain?: string; turnstileToken?: string; market?: string; ref?: string; utm?: unknown; keyword?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -233,21 +235,24 @@ export async function POST(req: Request) {
   }
   const cacheExempt = partnerFresh || settings.scan_cache_exempt_domains.includes(domain);
   if (cacheExempt) console.log(`[scan] ${domain} ${partnerFresh ? `is a ${ref} check` : "is cache-exempt"}, so this runs fresh`);
+  // A keyword asked for narrows the cache to a report read for that keyword (20 Nov 2026). Luke's servefirst.ai scan came
+  // back as the one whose keyword was wrong, and a different keyword for the same domain was a different scan he could
+  // not start. The same domain and the same keyword inside the window still reuse; no keyword asked is as it was.
+  const askedKeyword = typeof body.keyword === "string" ? keywordForm(body.keyword.slice(0, SCAN_LIMITS.topic)) : "";
+  let cacheQuery = db
+    .from("scans")
+    .select("public_token, brand_name, topic, topic_variants, market, status, engines")
+    .eq("domain", domain)
+    .eq("market", market)
+    .eq("status", "complete")
+    .eq("is_tracking_run", false)
+    .is("campaign_id", null)
+    .is("unlocked_at", null)
+    .gte("completed_at", cacheSince);
+  if (askedKeyword) cacheQuery = cacheQuery.eq("cluster_keyword", askedKeyword);
   const { data: cached, error: cacheErr } = cacheExempt
     ? { data: null, error: null }
-    : await db
-        .from("scans")
-        .select("public_token, brand_name, topic, topic_variants, market, status, engines")
-        .eq("domain", domain)
-        .eq("market", market)
-        .eq("status", "complete")
-        .eq("is_tracking_run", false)
-        .is("campaign_id", null)
-        .is("unlocked_at", null)
-        .gte("completed_at", cacheSince)
-        .order("completed_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+    : await cacheQuery.order("completed_at", { ascending: false }).limit(1).maybeSingle();
 
   if (cacheErr) {
     console.warn(
@@ -292,8 +297,10 @@ export async function POST(req: Request) {
   const billed = { calls: 0 };
   // 4 and 5. Read the site, then one language model call to name the brand.
   let read;
+  let headline = { title: "", h1: "", description: "" };
   try {
     const siteText = await readSite(domain);
+    headline = headlineFromSiteText(siteText);
     read = await readBrand(siteText, billed);
     // 3 Nov 2026: our own brand came back as two words - a name the domain runs together keeps the site's own spelling.
     read = { ...read, brand_name: siteSpelling(read.brand_name, domain, siteText) };
@@ -355,6 +362,8 @@ export async function POST(req: Request) {
       site_facts: {
         services: (read.services ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 5),
         industries: (read.industries ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 4),
+        // The homepage's own title, H1 and description (20 Nov 2026): the keyword candidates are held to them.
+        headline,
       },
       topic: confident ? read.suggested_topic : null,
       /**

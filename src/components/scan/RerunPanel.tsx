@@ -41,10 +41,10 @@ export default function RerunPanel(p: { token: string; domain: string }) {
 
   return (
     <section style={{ margin: "40px 0 0", padding: "20px 22px", border: "1px solid " + T.line, borderRadius: "18px" }}>
-      <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: T.ink }}>Want to try a different category or other prompts?</h2>
+      <h2 style={{ fontSize: "16px", fontWeight: 700, margin: 0, color: T.ink }}>Want to try a different category, keyword or other prompts?</h2>
       <p style={{ fontSize: "14px", color: T.soft, margin: "6px 0 14px", lineHeight: 1.6 }}>
-        Start a new check of {p.domain}. You can change the category and edit, add or remove prompts before it runs. This
-        report stays at its own link.
+        Start a new check of {p.domain}. The category, market and Google keyword are shown first and you can change any of
+        them, then edit, add or remove prompts before it runs. This report stays at its own link.
       </p>
       <button type="button" className="btn-primary" onClick={onRerun} disabled={busy}>
         {busy ? "Starting..." : "Run a new check"}

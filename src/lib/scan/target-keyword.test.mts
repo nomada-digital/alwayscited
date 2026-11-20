@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import type { Intent } from "./dataforseo-request.ts";
-import { clusterGoogleTrio, clusterKeywordFits, KEYWORD_FALLBACK, normaliseCandidate, pickAcrossMarkets, pickClusterKeyword, pickKeyword, stripFiller, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword.ts";
+import { anchorCandidates, clusterGoogleTrio, clusterKeywordFits, contentWords, KEYWORD_FALLBACK, normaliseCandidate, pickAcrossMarkets, pickClusterKeyword, pickKeyword, stripFiller, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword.ts";
 
 const CAT = "business cash flow finance";
 const NOUN = "providers";
@@ -149,4 +149,42 @@ test("3 Nov 2026: a keyword check that found none or failed takes the confirmed 
   const chosen = { keyword: "b2b seo agencies", volume: 880, intent: "commercial", status: "chosen" as const, market: "UK" as const };
   assert.equal(topicFallback(chosen, "seo agency"), chosen, "a real pick is kept");
   assert.equal(topicFallback(none, " "), none, "no topic: nothing to fall back to");
+});
+
+// 20 Nov 2026: servefirst.ai's title and H1 say customer experience management software, its body names mystery shopping
+// twenty-two times, and the highest-volume candidate - "mystery shopping companies" - was picked for it (and for servefirst.co.uk).
+const SERVEFIRST = { title: "Customer experience management software | Serve First", h1: "Customer experience management software for multi-location businesses" };
+const SF_TOPIC = "customer experience management software";
+
+test("anchorCandidates: a side line with the bigger market is not a candidate", () => {
+  const got = anchorCandidates(
+    ["mystery shopping companies", "customer experience software", "multi-location cx software", "retail audit software", "customer feedback software"],
+    SF_TOPIC,
+    SERVEFIRST,
+  );
+  assert.deepEqual(got, ["customer experience software", "customer feedback software"]);
+  // And the pick over what is left cannot be the side line, however many searches it has.
+  const v = new Map([["mystery shopping companies", 5400], ["customer experience software", 720], ["customer feedback software", 590]]);
+  assert.equal(pickKeyword(got, SF_TOPIC, "software", v), "customer experience software");
+});
+
+test("anchorCandidates: the title's brand half is not an anchor", () => {
+  // "Serve First" is the brand; "first aid training providers" must not stand on its word.
+  assert.deepEqual(anchorCandidates(["first aid training providers"], SF_TOPIC, SERVEFIRST), []);
+});
+
+test("anchorCandidates: plurals fold, and the category alone anchors a scan with no headline", () => {
+  assert.deepEqual(anchorCandidates(["b2b seo agencies", "ppc agencies"], "b2b seo agency", null), ["b2b seo agencies"]);
+  assert.deepEqual(anchorCandidates(["customer experience platforms"], SF_TOPIC, { title: "", h1: "" }), ["customer experience platforms"]);
+});
+
+test("anchorCandidates: nothing standing is an empty list, which the topic fallback then fills", () => {
+  const none = anchorCandidates(["mystery shopping companies"], SF_TOPIC, SERVEFIRST);
+  assert.deepEqual(none, []);
+  const out = { keyword: null, volume: null, intent: null, status: "none_qualified", market: "UK" as const };
+  assert.equal(topicFallback(out, SF_TOPIC).keyword, SF_TOPIC);
+});
+
+test("contentWords: filler, supplier nouns and short words are not what a phrase is about", () => {
+  assert.deepEqual([...contentWords("best customer experience management software in the UK")].sort(), ["customer", "experience", "management"]);
 });

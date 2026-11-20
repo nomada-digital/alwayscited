@@ -109,3 +109,25 @@ test("a page that gave us nothing says why, and is never treated as readable", (
   assert.equal(thinReason(jsShell, 200), null);
   assert.equal(thinReason(jsShell, 199), "js_only");
 });
+
+// 20 Nov 2026: the homepage's own title, H1 and description lead the site text the brand read gets.
+import { headlineFromSiteText, headlineLines, pageH1, pageHeadline } from "./page-read.ts";
+
+const HOME = `<html><head><title>Customer experience management software | Serve First</title>
+<meta name="description" content="Connect feedback, audits, mystery shopping and reviews across every site."/></head>
+<body><h1>Customer  experience <span>management</span> software for multi-location businesses</h1><p>Mystery shopping, mystery shopping.</p></body></html>`;
+
+test("pageHeadline reads the title, the H1 without its tags, and the description", () => {
+  assert.equal(pageH1(HOME), "Customer experience management software for multi-location businesses");
+  assert.deepEqual(pageHeadline(HOME), {
+    title: "Customer experience management software | Serve First",
+    h1: "Customer experience management software for multi-location businesses",
+    description: "Connect feedback, audits, mystery shopping and reviews across every site.",
+  });
+});
+
+test("headline lines go into the site text and come back out of it", () => {
+  const text = "Page: https://servefirst.ai/\n" + headlineLines(pageHeadline(HOME)) + "\n\nMystery shopping, mystery shopping.";
+  assert.deepEqual(headlineFromSiteText(text), pageHeadline(HOME));
+  assert.deepEqual(headlineFromSiteText("Page: https://x.com/\nJust prose."), { title: "", h1: "", description: "" });
+});

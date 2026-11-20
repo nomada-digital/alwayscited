@@ -168,6 +168,39 @@ export function metaDescription(html: string): string {
   return "";
 }
 
+/** The first `<h1>`'s text, tags out, decoded and collapsed; "" when there is none. */
+export function pageH1(html: string): string {
+  const m = /<h1\b[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
+  return m ? toProse(m[1]!).slice(0, 300) : "";
+}
+
+/**
+ * What a homepage says it is, in the three places a company says so on purpose (20 Nov 2026). The title, the H1 and the
+ * meta description are one deliberate sentence each; the body is everything the site sells, side lines included.
+ * servefirst.ai's title and H1 both read "Customer experience management software" and its body names mystery shopping
+ * twenty-two times, so a read of the body alone made the side line the category. The brand read and the keyword
+ * candidates are handed these ahead of the prose, labelled, so they can be told which is which.
+ */
+export type Headline = { title: string; h1: string; description: string };
+
+export function pageHeadline(html: string): Headline {
+  return { title: pageTitle(html), h1: pageH1(html), description: metaDescription(html) };
+}
+
+/** The labelled lines `readSite` puts at the head of the homepage block; "" for a part the page lacks. */
+export function headlineLines(h: Headline): string {
+  return [h.title && "Title: " + h.title, h.h1 && "H1: " + h.h1, h.description && "Description: " + h.description].filter(Boolean).join("\n");
+}
+
+/** The headline back out of site text `readSite` produced. All empty for text with none (an older read, a rendered page). */
+export function headlineFromSiteText(text: string): Headline {
+  const line = (label: string) => {
+    const m = new RegExp("^" + label + ": (.+)$", "m").exec(text);
+    return m ? m[1]!.trim().slice(0, 500) : "";
+  };
+  return { title: line("Title"), h1: line("H1"), description: line("Description") };
+}
+
 /**
  * The prose inside `<body>`, which is what a visitor reads - the whole page's
  * prose where there is no body tag, because a fragment is all body. toProse on

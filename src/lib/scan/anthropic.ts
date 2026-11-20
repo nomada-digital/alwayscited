@@ -261,6 +261,11 @@ export async function readBrand(siteText: string, billed?: { calls: number }): P
       "Every variant is lower case, two to six words, no brand names, and must",
       "stand on its own as a search someone would actually run.",
       "",
+      "The homepage block opens with its Title and H1 where the page has them.",
+      "They are the company's own statement of what it is, and they outrank the",
+      "body: a side line the body mentions often is not the category if the title",
+      "and H1 lead with something else.",
+      "",
       "Set confidence to low when the site does not make the category clear.",
     ].join("\n")),
     messages: [{ role: "user", content: `Website text:\n\n${siteText}` }],
@@ -632,7 +637,7 @@ const ClusterKeywordCandidates = z.object({
  * has. Not yet called: C1's route change wires it.
  */
 export async function clusterKeywordCandidates(
-  input: { topic: string; market: Market; positioning: string | null; services?: string[]; industries?: string[] },
+  input: { topic: string; market: Market; positioning: string | null; services?: string[]; industries?: string[]; headline?: { title: string; h1: string; description: string } },
   billed: { calls: number } = { calls: 0 },
 ): Promise<string[]> {
   const marketName = marketPlace(input.market);
@@ -647,6 +652,9 @@ export async function clusterKeywordCandidates(
       "Every keyword keeps a supplier noun - providers, companies, lenders, software, agencies.",
       "The bare category alone is never a keyword. Never a brand name. Lower case, no punctuation.",
       "Most likely first. Also give the one plural supplier noun a buyer uses for this category.",
+      // 20 Nov 2026: servefirst.ai sells customer experience software and also does mystery shopping; the side line has
+      // the bigger market and was picked. Every keyword is a way of naming the Category, which the homepage title and H1 confirm.
+      "Every keyword must name the Category itself - a buyer's other words for it. A service on the site that is not the Category, or that the page title and H1 do not lead with, is a side line: never a keyword, however many searches it has.",
       // 3 Nov 2026: a thin market's keyword is also read in its buyers' markets (target-keyword.ts KEYWORD_FALLBACK),
       // where a visitor from abroad types the place: "all inclusive resorts jamaica", not "all inclusive resorts".
       ...(KEYWORD_FALLBACK[input.market]
@@ -658,6 +666,12 @@ export async function clusterKeywordCandidates(
         role: "user",
         content: [
           `Category: ${input.topic}`,
+          ...(input.headline && (input.headline.title || input.headline.h1)
+            ? [
+                `Homepage title: ${input.headline.title || "not read"}`,
+                `Homepage H1: ${input.headline.h1 || "not read"}`,
+              ]
+            : []),
           `Market: ${marketName}`,
           `How the brand positions itself: ${input.positioning ?? "not stated"}`,
           `Services it sells: ${(input.services ?? []).join("; ") || "not read"}`,
@@ -1044,6 +1058,14 @@ async function classifyBatch(
  * The column is jsonb and null on every row written before it existed, so
  * anything that is not a list of strings reads as nothing.
  */
+/** The homepage's title, H1 and description stored with the brand read (20 Nov 2026); all empty for a scan from before. */
+export function siteHeadline(raw: unknown): { title: string; h1: string; description: string } {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const h = o.headline && typeof o.headline === "object" ? (o.headline as Record<string, unknown>) : {};
+  const text = (v: unknown) => (typeof v === "string" ? v.trim().slice(0, 500) : "");
+  return { title: text(h.title), h1: text(h.h1), description: text(h.description) };
+}
+
 export function siteFacts(raw: unknown): { services: string[]; industries: string[] } {
   const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const list = (v: unknown) =>

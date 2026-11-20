@@ -3,11 +3,12 @@ import "server-only";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { missingColumn } from "@/lib/tracking/limits";
 
-import { clusterKeywordCandidates, siteFacts } from "./anthropic";
+import { clusterKeywordCandidates, siteFacts, siteHeadline } from "./anthropic";
 import { readClusterRank, storeClusterRank } from "./cluster-rank";
+import { keywordForm } from "./dataforseo-request";
 import { readKeywordIntents, readKeywordVolumes } from "./dataforseo";
 import { isScanMarket, type Market } from "./domain";
-import { KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword";
+import { anchorCandidates, KEYWORD_FALLBACK, pickAcrossMarkets, pickClusterKeyword, THIN_KEYWORD_VOLUME, topicFallback } from "./target-keyword";
 
 export { topicFallback };
 
@@ -46,7 +47,11 @@ export async function chooseClusterKeyword(input: {
   let dfsCalls = 0;
   let out: ClusterKeyword;
   try {
-    const candidates = await clusterKeywordCandidates({ topic, market, positioning: input.positioning, ...siteFacts(input.siteFacts) }, modelBilled);
+    const headline = siteHeadline(input.siteFacts);
+    const proposed = await clusterKeywordCandidates({ topic, market, positioning: input.positioning, ...siteFacts(input.siteFacts), headline }, modelBilled);
+    // Only what is about the category or the page's own title and H1 (anchorCandidates, 20 Nov 2026); before the volume reads, so a side line is not paid for either.
+    const candidates = anchorCandidates(proposed, topic, headline);
+    if (proposed.length !== candidates.length) console.log(`[scan] keyword candidates off the category dropped for ${input.scanId}: ${proposed.filter((c) => !candidates.includes(c)).join(", ")}`);
     if (!candidates.length) {
       out = { keyword: null, volume: null, intent: null, status: "none_qualified", market };
     } else {
@@ -71,6 +76,36 @@ export async function chooseClusterKeyword(input: {
     out = { keyword: null, volume: null, intent: null, status: "read_failed", market };
   }
   return { out, dfsCalls, dfsCost, modelCalls: modelBilled.calls };
+}
+
+/**
+ * A keyword the person chose themselves on the confirm step (20 Nov 2026: Luke could not change the one the scan picked
+ * for servefirst.ai, and "Run a new check" gave it back every time). It stands as typed, in the form it would be looked
+ * up (`keywordForm`); its Google volume and intent are read for the report, and a read that fails leaves them empty
+ * - the same "volume not read" a topic fallback reads as - rather than refusing the keyword. Never throws.
+ */
+export async function chooseGivenKeyword(input: {
+  scanId: string;
+  keyword: string;
+  market: Market;
+}): Promise<{ out: ClusterKeyword; dfsCalls: number; dfsCost: number } | null> {
+  const keyword = keywordForm(input.keyword);
+  if (keyword.length < 2) return null;
+  let volume: number | null = null;
+  let intent: string | null = null;
+  let dfsCalls = 0;
+  let dfsCost = 0;
+  try {
+    const [v, i] = await Promise.all([readKeywordVolumes([keyword], input.market, 20_000), readKeywordIntents([keyword], 20_000)]);
+    dfsCalls = 2;
+    dfsCost = v.cost + i.cost;
+    const read = v.volumes.get(keyword);
+    volume = typeof read === "number" && Number.isFinite(read) && read > 0 ? read : null;
+    intent = i.intents.get(keyword) ?? null;
+  } catch (err) {
+    console.warn(`[scan] volume read for the given keyword failed for ${input.scanId}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return { out: { keyword, volume, intent, status: "chosen", market: input.market }, dfsCalls, dfsCost };
 }
 
 /**

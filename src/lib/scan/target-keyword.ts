@@ -98,6 +98,43 @@ export function pickKeyword(
 }
 
 /**
+ * The words that say what a phrase is about: lower case, filler, years and supplier nouns out, and a plural folded to its
+ * singular so "agencies" and "agency" are one word. A word under three letters is not one ("ai" aside, which is kept).
+ */
+export function contentWords(phrase: string): Set<string> {
+  const fold = (w: string) => (w.endsWith("ies") && w.length > 4 ? w.slice(0, -3) + "y" : w.endsWith("s") && !w.endsWith("ss") && w.length > 3 ? w.slice(0, -1) : w);
+  const supplier = new Set(SUPPLIER_NOUNS.map(fold));
+  return new Set(
+    stripFiller(phrase)
+      .split(/[\s-]+/)
+      .map(fold)
+      .filter((w) => (w.length >= 3 || w === "ai") && !supplier.has(w)),
+  );
+}
+
+/**
+ * The candidates that are about what the site says it is (Danny, 20 Nov 2026). The model proposes head keywords from
+ * everything the site sells, and the pick below takes the one with the most searches - so a side line with a bigger
+ * market than the business won: servefirst.ai's title and H1 say "Customer experience management software", its body
+ * names mystery shopping twenty-two times, and "mystery shopping companies" was chosen for it, and again for
+ * servefirst.co.uk. A candidate stands only if it shares a content word with the confirmed category or with the page's
+ * title or H1, which are the two lines a company writes on purpose about what it is. The meta description is not an
+ * anchor: it lists features ("feedback, audits, mystery shopping and reviews"), which is the body in a shorter form.
+ *
+ * Nothing standing returns an empty list, and the caller's own fallback - the confirmed category as the keyword -
+ * stands in. That is a worse keyword than a good candidate and a better one than a wrong one.
+ */
+export function anchorCandidates(candidates: readonly string[], topic: string, headline: { title?: string; h1?: string } | null): string[] {
+  // A title is "what it is | Brand": the brand half is not a word the buyer searches, so only the first part is read
+  // (a title with no separator is read whole).
+  const title = (headline?.title ?? "").split(/\s[|\u2013\u2014-]\s/)[0] ?? "";
+  // And only up to its first "for", "to", "with" - "software for multi-location businesses" names the buyer, not the thing.
+  const head = (line: string) => line.split(/\s(?:for|to|that|with|from|in|by|of)\s/i)[0] ?? "";
+  const anchor = contentWords([topic, head(title), head(headline?.h1 ?? "")].join(" "));
+  return candidates.filter((c) => [...contentWords(c)].some((w) => anchor.has(w)));
+}
+
+/**
  * The cluster keyword - C1 of docs/tracked-dashboard-2026-09-29/BRIEF-3-clusters.md
  * (Danny, 29 Sep 2026). It is the term placements link on, so it must have a
  * measured Google volume above zero (null is not measured and never qualifies,

@@ -4,7 +4,7 @@ import { outboundLinks } from "../coverage/draft";
 
 import { checkHost } from "./address";
 import { readRenderedPage } from "./dataforseo";
-import { bodyText, metaDescription, type ReadStop, readPage, type ThinReason, thinReason, whyThin } from "./page-read";
+import { bodyText, headlineLines, pageHeadline, type ReadStop, readPage, type ThinReason, thinReason, whyThin } from "./page-read";
 import { decodeEntities, toProse } from "./prose";
 
 /** Paths worth reading beyond the homepage, in the order we prefer them. */
@@ -541,9 +541,12 @@ export async function readSite(domain: string): Promise<string> {
     // is a tag, so toProse drops it - and on a thin homepage it is often the one
     // sentence that says what the firm does (15 Oct 2026: a Wix agency homepage
     // whose copy was a slogan, and whose description named the business).
-    const description = metaDescription(html);
+    //
+    // The title and the H1 go ahead of it, labelled (20 Nov 2026): the homepage's own two lines about what it is, which
+    // the prose below ran into everything else it sells. The first line of the labelled block stays "Page: <url>".
+    const head = headlineLines(pageHeadline(html));
     const home = labelled(base, html);
-    const parts = [description && home ? home.replace("\n", "\nDescription: " + description + "\n") : home];
+    const parts = [head && home ? home.replace("\n", "\n" + head + "\n\n") : home];
     const links = sameHostLinks(html, domain, base, toProse(html).length < THIN_HOMEPAGE);
 
     // Remaining pages share whatever is left of the budget, in parallel.

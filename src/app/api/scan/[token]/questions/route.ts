@@ -7,7 +7,7 @@ import {
   QUESTION_COUNT,
   TOPIC_VARIANT_COUNT,
 } from "@/lib/scan/anthropic";
-import { chooseClusterKeyword, type ClusterKeyword, topicFallback } from "@/lib/scan/cluster-keyword";
+import { chooseClusterKeyword, chooseGivenKeyword, type ClusterKeyword, topicFallback } from "@/lib/scan/cluster-keyword";
 import { isScanMarket, type Market } from "@/lib/scan/domain";
 import { partnerMayUse } from "@/lib/scan/handoff";
 import { clusterKeywordFits } from "@/lib/scan/target-keyword";
@@ -65,7 +65,7 @@ const CALL_CEILING = 5;
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
 
-  let body: { topic?: string; market?: string; topic_variants?: string[] };
+  let body: { topic?: string; market?: string; topic_variants?: string[]; keyword?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -201,7 +201,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     }
   };
 
-  const cluster = await clusterKeywordFor(db, scan, topic, market);
+  // A keyword the visitor typed over the picked one (20 Nov 2026); bounded like the topic, and ignored when blank.
+  const given = typeof body.keyword === "string" ? body.keyword.trim().slice(0, SCAN_LIMITS.topic) : "";
+  const cluster = await clusterKeywordFor(db, scan, topic, market, given);
 
   // Annotated rather than left to evolve, because the assignment below is a
   // destructuring one and an inferred `any` here would take the type off
@@ -267,10 +269,11 @@ async function clusterKeywordFor(
   scan: Record<string, unknown>,
   topic: string,
   market: Market,
+  given = "",
 ): Promise<ClusterKeyword> {
   // Reused only for the topic and market it was read for (18 Oct 2026): scans.market and .topic are written by /confirm,
   // not here, so comparing against them let a keyword read in one market come back after the market was switched twice.
-  if (clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)) {
+  if (!given && clusterKeywordFits({ status: scan.cluster_keyword_status, topic: scan.cluster_keyword_topic, market: scan.cluster_keyword_market }, topic, market)) {
     const stored: ClusterKeyword = {
       keyword: (scan.cluster_keyword as string | null) ?? null,
       volume: (scan.cluster_keyword_volume as number | null) ?? null,
@@ -288,13 +291,17 @@ async function clusterKeywordFor(
     if (fErr) console.warn(`[scan] topic keyword not stored for ${String(scan.id)}: ${fErr.message}`);
     return fell;
   }
-  const chose = await chooseClusterKeyword({
-    scanId: String(scan.id),
-    topic,
-    market,
-    positioning: (scan.positioning as string | null) ?? null,
-    siteFacts: scan.site_facts,
-  });
+  // A keyword the visitor typed stands as typed and skips the pick; any other topic or market is picked afresh.
+  const mine = given ? await chooseGivenKeyword({ scanId: String(scan.id), keyword: given, market }) : null;
+  const chose = mine
+    ? { ...mine, modelCalls: 0 }
+    : await chooseClusterKeyword({
+        scanId: String(scan.id),
+        topic,
+        market,
+        positioning: (scan.positioning as string | null) ?? null,
+        siteFacts: scan.site_facts,
+      });
   const { dfsCalls, dfsCost, modelCalls } = chose;
   const out = topicFallback(chose.out, topic);
   const { error: wErr } = await db

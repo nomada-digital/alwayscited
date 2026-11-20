@@ -163,8 +163,11 @@ test("a thin homepage always gets an about page (Danny, 15 Oct 2026)", () => {
 test("the homepage's meta description reaches the brand read (15 Oct 2026)", () => {
   // A tag, so toProse drops it; on a thin homepage it is often the one
   // sentence that says what the firm does.
-  assert.match(SRC, /const description = metaDescription\(html\);/);
-  assert.match(SRC, /"\\nDescription: " \+ description/);
+  // 20 Nov 2026: it rides in the labelled headline block with the title and H1 (headlineLines), still ahead of the prose.
+  assert.match(SRC, /const head = headlineLines\(pageHeadline\(html\)\);/);
+  assert.match(SRC, /home\.replace\("\\n", "\\n" \+ head \+ "\\n\\n"\)/);
+  const PRH = read("src/lib/scan/page-read.ts");
+  assert.match(PRH.slice(PRH.indexOf("export function pageHeadline"), PRH.indexOf("export function headlineFromSiteText")), /"Description: " \+ h\.description/);
   // metaDescription moved to page-read.ts on 16 Oct 2026; page-read.test.mts runs it.
   const PR = read("src/lib/scan/page-read.ts");
   const fn = PR.slice(PR.indexOf("export function metaDescription"), PR.indexOf("export function bodyText"));

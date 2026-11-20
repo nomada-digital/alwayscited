@@ -85,6 +85,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
     );
   }
 
+  // The cluster keyword is deliberately not copied (20 Nov 2026): the new scan picks its own on the confirm step, where it is
+  // shown and can be typed over. Copying the report's keyword carried a wrong one into every new check of a domain.
   const { data: scan, error } = await db
     .from("scans")
     .insert({

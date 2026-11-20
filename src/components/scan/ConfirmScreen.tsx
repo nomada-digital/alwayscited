@@ -210,6 +210,9 @@ export default function ConfirmScreen(p: {
 
   const [questions, setQuestions] = useState<PreviewQuestion[]>([]);
   const [keyword, setKeyword] = useState<ClusterKeyword | null>(null);
+  // The keyword typed over the picked one (20 Nov 2026): what is in the box, and whether the box is open.
+  const [keywordDraft, setKeywordDraft] = useState("");
+  const [editingKeyword, setEditingKeyword] = useState(false);
 
   /**
    * True from the first paint when there is a category to work from, because
@@ -226,7 +229,7 @@ export default function ConfirmScreen(p: {
   const focusLast = useRef(false);
 
   const write = useCallback(
-    async (forTopic: string, forMarket: Market) => {
+    async (forTopic: string, forMarket: Market, forKeyword = "") => {
       setWriting(true);
       setError("");
       try {
@@ -235,7 +238,7 @@ export default function ConfirmScreen(p: {
         const res = await fetch("/api/scan/" + p.token + "/questions", {
           method: "POST",
           headers,
-          body: JSON.stringify({ topic: forTopic, market: forMarket, topic_variants: p.variants }),
+          body: JSON.stringify({ topic: forTopic, market: forMarket, topic_variants: p.variants, ...(forKeyword ? { keyword: forKeyword } : {}) }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -250,6 +253,7 @@ export default function ConfirmScreen(p: {
           })),
         );
         setKeyword((data.cluster_keyword as ClusterKeyword | undefined) ?? null);
+        setEditingKeyword(false);
         setWrittenFor({ topic: forTopic, market: forMarket });
       } catch {
         setError("We could not reach the checker. Try again.");
@@ -740,6 +744,49 @@ export default function ConfirmScreen(p: {
               {keyword.intent ? <div style={MICRO}>{KEYWORD_INTENT[keyword.intent] ?? keyword.intent} intent</div> : null}
             </div>
           ) : null}
+          {/* The picked keyword is a suggestion, not a verdict (20 Nov 2026): it can be typed over, and the prompts are written again on it. */}
+          <div style={{ marginTop: "10px" }}>
+            {editingKeyword ? (
+              <form
+                style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (keywordDraft.trim().length >= 2 && !writing) void write(topic.trim(), market, keywordDraft.trim());
+                }}
+              >
+                <label htmlFor="keyword-edit" className="sr-only">
+                  Google keyword
+                </label>
+                <input
+                  id="keyword-edit"
+                  type="text"
+                  value={keywordDraft}
+                  maxLength={SCAN_LIMITS.topic}
+                  onChange={(e) => setKeywordDraft(e.target.value)}
+                  placeholder="e.g. customer experience software"
+                  style={{ flex: "1 1 260px", minWidth: 0, fontFamily: "inherit", fontSize: "14px", color: T.ink, background: T.surface, border: "1px solid " + T.line, borderRadius: "10px", padding: "9px 12px" }}
+                />
+                <button type="submit" className="btn-primary" disabled={writing || keywordDraft.trim().length < 2}>
+                  Use this keyword
+                </button>
+                <button type="button" onClick={() => setEditingKeyword(false)} style={{ fontFamily: "inherit", fontSize: "13.5px", color: T.soft, background: "none", border: 0, cursor: "pointer", textDecoration: "underline" }}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <button
+                type="button"
+                disabled={writing}
+                onClick={() => {
+                  setKeywordDraft(keyword.status === "chosen" ? (keyword.keyword ?? "") : "");
+                  setEditingKeyword(true);
+                }}
+                style={{ fontFamily: "inherit", fontSize: "13.5px", color: T.soft, background: "none", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline" }}
+              >
+                {keyword.status === "chosen" && keyword.keyword ? "Change the keyword" : "Set a keyword"}
+              </button>
+            )}
+          </div>
         </section>
       ) : null}
 
