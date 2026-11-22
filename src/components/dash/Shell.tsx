@@ -17,7 +17,7 @@ import ViewAsSuggest from "./ViewAsSuggest";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, recommendations = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; /** New recommendations waiting (22 Nov 2026); null when none or unreadable. */ recommendations?: number | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -35,6 +35,7 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     ...(localListingsFor(ws.client.slug) ? [{ href: `${root}/listings`, label: "Local listings", icon: "local" }] : []),
     { href: `${root}/sources`, label: "Sources", icon: "sources" },
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
+    { href: `${root}/recommendations`, label: "Recommendations", icon: "check", n: recommendations || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },
     { href: `${root}/schema`, label: "Schema", icon: "edit" },
     { href: `${root}/plan`, label: "Plan", icon: "plan" },

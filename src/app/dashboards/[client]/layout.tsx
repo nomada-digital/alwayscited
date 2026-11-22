@@ -1,6 +1,8 @@
 import Shell from "@/components/dash/Shell";
 import { firstCheckLine } from "@/lib/dash/first-check";
 import { pageData } from "@/lib/dash/page-data";
+import { newCount } from "@/lib/dash/recommendations";
+import { readRecommendations } from "@/lib/dash/recommendations-read";
 import type { Workspace } from "@/lib/dash/types";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +16,7 @@ function waitingLine(ws: Workspace): string | null {
 export default async function ClientLayout({ children, params }: { children: React.ReactNode; params: Promise<{ client: string }> }) {
   const { client } = await params;
   const { ws, others, base, demo, viewAs, banner } = await pageData(client);
-  return <Shell ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)}>{children}</Shell>;
+  // The nav's count of new recommendations; an unreadable section shows no count (the page itself says so).
+  const recs = await readRecommendations(ws.client.id, ws.today);
+  return <Shell recommendations={recs.ok ? newCount(recs.items) : null} ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)}>{children}</Shell>;
 }

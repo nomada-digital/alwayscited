@@ -92,6 +92,8 @@ const KEYS: Record<string, Record<string, string>> = {
     addKeyword: "one(sp.addKeyword)",
   },
   "/opportunities": {},
+  // 22 Nov 2026: the weekly recommendations. No query keys; nothing is written from the page.
+  "/recommendations": {},
   // The billing and pack routes' 303 codes, drawn only through each table's own fixed words; nothing is echoed.
   "/plan": {
     billing: 'typeof sp.billing === "string" ? (BILLING_WHY[sp.billing] ?? null) : null',

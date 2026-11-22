@@ -75,6 +75,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/[client]/local": "one client's map pack grids (22 Oct 2026); private, same membership 404",
   "/dashboards/[client]/managed": "one client's managed clusters and this month's delivery on them (paid plans, 17 Oct 2026); private, same membership 404",
   "/dashboards/[client]/opportunities": "one client's opportunities; private, same membership 404",
+  "/dashboards/[client]/recommendations": "one client's weekly recommendations (22 Nov 2026); private, same membership 404",
   "/dashboards/[client]/plan": "one client's plan and allowances; private, same membership 404",
   // 18 Oct 2026 (brief 2d / 2g).
   "/dashboards/[client]/setup": "one client's setup (keywords, target pages, prompts); private, same membership 404",

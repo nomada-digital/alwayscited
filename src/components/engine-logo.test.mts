@@ -47,6 +47,8 @@ const SPRITE_FILES = [
   "components/dash/Figures.tsx",
   // 18 Oct 2026 (brief 2g): the alwaystracked view's engine row, under app/dashboards/layout.tsx.
   "app/dashboards/[client]/alwaystracked/page.tsx",
+  // 22 Nov 2026: the Recommendations page's evidence engines, under app/dashboards/layout.tsx.
+  "app/dashboards/[client]/recommendations/page.tsx",
 ];
 /**
  * 18 Oct 2026, brief 2d: the floors as measured on the dashboards host the day /app was retired - 9 sprite logos
