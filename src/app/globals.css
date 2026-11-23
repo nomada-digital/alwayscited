@@ -300,19 +300,23 @@ html[data-motion="on"] .btn-primary[data-busy="1"] { animation: btnPulse 1.6s ea
 
 /* Packages staircase and table (Packages.dc.html, 25 Sep 2026). The board's
    1132x250 stair, in percentages so it scales: steps at 0/280/560/840 across
-   and 164/104/44/-16 down. Below 860px the line goes and the steps are a
+   and 164/104/44/-16 down. Below 1000px the line goes and the steps are a
    plain two-up list. The table keeps its columns and scrolls sideways inside
    its card on a phone rather than squeezing four prices into 390px. */
 .stair { position: relative; height: 250px; }
 .stair-line { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-/* 26px above the board's 164 so the engine-logo row (R50, pricing spec
-   section 4) sits over the tread rather than on it. */
-.stair-step { position: absolute; left: calc(var(--stair-i) * 24.735%); top: calc(138px - var(--stair-i) * 60px); }
-@media (max-width: 860px) {
+/* Each step hangs from its own tread, not from the top: the bottom of its
+   content (the engine-logo row) is 24px above the line on all four, however
+   many lines the text above it wraps to. The tread is 232 - 60i down a 250px
+   box, so it is 18 + 60i up from the bottom. Width stops at the step's riser
+   (22.08% of the stair) less a gutter, so no text runs under the vertical
+   (Danny, 23 Nov 2026: the trial line crossed it). */
+.stair-step { position: absolute; left: calc(var(--stair-i) * 24.735%); bottom: calc(42px + var(--stair-i) * 60px); width: calc(22.08% - 14px); }
+@media (max-width: 1000px) {
   .stair { height: auto; }
   .stair-line { display: none; }
   .stair > ol { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 16px; }
-  .stair-step { position: static; }
+  .stair-step { position: static; width: auto; }
 }
 /* "alwayseverywhere" at 20px is 161px and never breaks; two-up columns are
    narrower than that below 390, so the page scrolled 9px at 320 (1.4.10,
