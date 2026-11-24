@@ -52,12 +52,13 @@ test("the team cookie verifies only when signed with this salt and inside its li
 test("4 Nov 2026: an outside partner's scan confirms with no email; any other ref is still gated", () => {
   const scan = (ref: string | null, extra: Partial<{ team: boolean; domain: string }> = {}) => ({ team: false, domain: "prospect.example", ref, ...extra });
   assert.equal(gateApplies(scan("thelab")), false, "The LAB's page: no gate");
+  assert.equal(gateApplies(scan("thelane")), false, "The Lane Agency's page: no gate");
   for (const ref of [null, "x", "thelab-x", "THELAB", "nomada", "nomada-blog-post", "blog-some-post"]) {
     assert.equal(gateApplies(scan(ref)), true, `ref ${ref} is not an outside partner, so the gate stands`);
   }
   assert.equal(gateApplies(scan(null, { team: true })), false, "a team browser");
   assert.equal(gateApplies(scan(null, { domain: "nomadadigital.co.uk" })), false, "our own domain");
-  assert.deepEqual([...EXTERNAL_PARTNERS], ["thelab"]);
+  assert.deepEqual([...EXTERNAL_PARTNERS], ["thelab", "thelane"]);
   // The route enforces with the same rule the screen shows, and the confirm route refuses only when it applies.
   const read = (f: string) => readFileSync(new URL(f, import.meta.url), "utf8");
   const route = read("../../app/api/scan/[token]/confirm/route.ts");
