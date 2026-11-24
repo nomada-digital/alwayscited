@@ -60,6 +60,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards": "the dashboards host's root, which only redirects - to the member's first site, or to sign in",
   // 29 Oct 2026: an agency's own landing page, linked to by that agency (The LAB) and never by this site.
   "/partners/the-lab": "The LAB's landing page for its own clients' free checks, tagged ref thelab; shared by the agency, not meant to be found",
+  "/partners/the-lane-agency": "The Lane Agency's landing page for its own clients' free checks (UK or US), tagged ref thelane; shared by the agency, not meant to be found",
   "/dashboards/[client]": "one client's overview on the dashboards host; private, behind its sign-in, a 404 for a client outside the member's list",
   "/dashboards/[client]/ai": "one client's AI answers; private, same membership 404",
   "/dashboards/[client]/ai/[prompt]": "one prompt's every answer, its words and sources (17 Oct 2026); private, same membership 404",

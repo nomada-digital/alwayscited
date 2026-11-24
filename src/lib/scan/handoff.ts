@@ -38,7 +38,7 @@ export const PARTNER_MARKETS: ReadonlyMap<string, readonly ("JM")[]> = new Map([
  * scans.partner so the hub leaves it out of new business. Not HANDOFF_PARTNERS: `nomada` and `blog` are our own
  * entry points, and their scans are ours. A new partner (Cliff's planned link) is one entry here and its page.
  */
-export const EXTERNAL_PARTNERS: ReadonlySet<string> = new Set(["thelab"]);
+export const EXTERNAL_PARTNERS: ReadonlySet<string> = new Set(["thelab", "thelane"]);
 
 /** The partner a ref names, or null. Exact match only: an arbitrary ?ref= never skips the gate. */
 export function externalPartner(ref: string | null | undefined): string | null {

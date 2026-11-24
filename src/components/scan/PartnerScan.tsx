@@ -8,8 +8,8 @@ import LiveScanChecker from "./LiveScanChecker";
 import MarketFlag from "./MarketFlag";
 import ScanBox, { type ScanBoxCopy } from "./ScanBox";
 
-type PartnerMarket = "US" | "JM";
-const LABEL: Record<PartnerMarket, string> = { US: "United States", JM: "Jamaica" };
+type PartnerMarket = "UK" | "US" | "JM";
+const LABEL: Record<PartnerMarket, string> = { UK: "United Kingdom", US: "United States", JM: "Jamaica" };
 
 /**
  * A partner page's scan card with its own market toggle (29 Oct 2026, /partners/the-lab): the visitor picks where the
