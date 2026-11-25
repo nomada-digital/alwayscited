@@ -118,6 +118,15 @@ export const WAITLIST_LIMITS = { domain: 253, topic: 200, email: 254, website: 2
 export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200, website: 200 };
 
 /**
+ * Deliverables (25 Nov 2026): on-site changes alwayscited recommends and the customer or we make. The same numbers the
+ * migration's checks carry (20261125000000_deliverables.sql), read by lib/deliverables/core.ts on the server and by
+ * the customer's tick and the admin forms as their maxLength.
+ * `by`: the staff address the admin form records on the trail; `slug` and `filename`: the admin form's customer
+ * and pasted-file name. `files`: how many files one version takes.
+ */
+export const DELIVERABLE_LIMITS = { title: 200, findings: 20000, url: 1000, note: 1000, fileBody: 400_000, filesTotal: 600_000, files: 8, by: 254, slug: 80, filename: 110 };
+
+/**
  * Connect your data (2 Nov 2026, sg-37): `gaProperty` is the GA4 property ID a customer pastes, digits only,
  * read by lib/dash/connect.ts gaPropertyId (6 to 12 digits, with "properties/" allowed in front).
  */

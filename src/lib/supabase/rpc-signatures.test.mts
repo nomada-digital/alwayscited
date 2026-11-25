@@ -297,6 +297,9 @@ test("the six call sites are the ones we think they are", () => {
     // 7 Nov 2026, customer controls: the plan swaps due today, applied by the daily check and before a dashboard
     // read (lib/dash/plan-requests.ts applyDueSwaps).
     apply_plan_swaps: 1,
+    // 25 Nov 2026: a deliverable's create and edit, each one statement so the version and its files land together or not at all.
+    deliverable_create: 1,
+    deliverable_edit: 1,
     // 18 Nov 2026, prompt tiers: ready to broaden, read-only, for the agency view and /admin/tracking
     // (lib/tracking/prompt-tiers.ts readBroaden).
     prompt_broaden: 1,

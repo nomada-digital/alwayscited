@@ -17,11 +17,13 @@ import ViewAsSuggest from "./ViewAsSuggest";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, deliverables = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; deliverables?: { total: number; open: number } | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
     { href: root, label: "Overview", icon: "overview" },
+    // 25 Nov 2026: changes to the customer's own site we cannot make ourselves; only once something has been shared with them. n is what is theirs to do.
+    ...(deliverables && deliverables.total > 0 ? [{ href: `${root}/deliverables`, label: "Deliverables", icon: "check", n: deliverables.open || null }] : []),
     // Paid plans: the clusters we work on, under the plan's own name (Danny, 17 Oct 2026). Plain text - a tier lockup never sits in a link.
     ...(ws.client.tier !== "tracked" ? [{ href: `${root}/managed`, label: TIER_PLAIN[ws.client.tier], icon: "plan", n: ws.clusters.filter((c) => c.managed).length || null }] : []),
     // 29 Oct 2026: placements (alwaysmentioned and up) and link insertions (the alwayscited plan and up), from the link team's sheets.

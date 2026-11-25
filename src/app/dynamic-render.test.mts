@@ -181,6 +181,9 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
   // and its draft preview /blog-preview/[slug]/[key], which needs a preview
   // key only the hub holds.
   assert.deepEqual(blocked, [
+    // 25 Nov 2026: the deliverables list and its draft preview, same /admin Basic auth.
+    "/admin/deliverables",
+    "/admin/deliverables/preview/[id]",
     "/admin/emails",
     "/admin/funnel",
     "/admin/scans",
@@ -201,6 +204,8 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
     "/dashboards/[client]/alwaystracked",
     "/dashboards/[client]/clusters",
     "/dashboards/[client]/clusters/[cluster]",
+    // 25 Nov 2026: Deliverables, behind the same sign-in.
+    "/dashboards/[client]/deliverables",
     "/dashboards/[client]/google",
     "/dashboards/[client]/google/[keyword]",
     "/dashboards/[client]/integrations",

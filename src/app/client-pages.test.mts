@@ -68,6 +68,8 @@ const KEYS: Record<string, Record<string, string>> = {
   "/alwaystracked": {},
   "/clusters": {},
   "/clusters/[cluster]": {},
+  // 25 Nov 2026: Deliverables, the changes we recommend for the customer's own site; reads no query. The tick is a POST to its own route.
+  "/deliverables": {},
   "/google": {},
   // As /ai/[prompt]: a day the keyword has readings on.
   "/google/[keyword]": {

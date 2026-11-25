@@ -121,6 +121,10 @@ existed.
 in two places - the homepage and the scan waiting screen - because there were
 two and they did not agree about what $99 buys.
 
+## Deliverables
+
+On-site changes we recommend and the customer (or we) make, with a Markdown file to copy, a tick, and a permanent paper trail: see [docs/deliverables.md](docs/deliverables.md). Customers see them under Deliverables in the dashboard; staff create and publish them at `/admin/deliverables` or through the `deliverable_*` actions on `/api/hub/agency`.
+
 ## What may not be published
 
 AGENTS.md has the full list. The two that catch people:

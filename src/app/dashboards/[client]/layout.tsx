@@ -1,6 +1,7 @@
 import Shell from "@/components/dash/Shell";
 import { firstCheckLine } from "@/lib/dash/first-check";
 import { pageData } from "@/lib/dash/page-data";
+import { countCustomerDeliverables } from "@/lib/deliverables/store";
 import type { Workspace } from "@/lib/dash/types";
 
 export const dynamic = "force-dynamic";
@@ -14,5 +15,7 @@ function waitingLine(ws: Workspace): string | null {
 export default async function ClientLayout({ children, params }: { children: React.ReactNode; params: Promise<{ client: string }> }) {
   const { client } = await params;
   const { ws, others, base, demo, viewAs, banner } = await pageData(client);
-  return <Shell ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)}>{children}</Shell>;
+  // The sidebar's Deliverables item: zero on any failure, so a missing table never breaks a page.
+  const deliverables = await countCustomerDeliverables(ws.client.id).catch(() => null);
+  return <Shell ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)} deliverables={deliverables}>{children}</Shell>;
 }

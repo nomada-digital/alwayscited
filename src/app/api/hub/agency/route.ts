@@ -5,6 +5,7 @@ import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-del
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
 import { teamChange, teamRead } from "@/lib/agency/team";
+import { DELIVERABLE_ACTIONS, deliverableAction, isDeliverableAction } from "@/lib/deliverables/agency";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { budgetCap, budgetRead, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -28,9 +29,12 @@ export const maxDuration = 240;
  * team_read, team_invite, team_role and team_remove (10 Nov 2026, lib/agency/team.ts) are a customer's team: team.ts's
  * rules with the staff member as the actor, the same writers and invite email as Settings, and an agency_edits line each.
  *
+ * deliverable_* (25 Nov 2026, lib/deliverables/agency.ts): create, edit as a new version, publish to the customer, hand
+ * over and complete a deliverable - the on-site changes we recommend and cannot make ourselves.
+ *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", ...DELIVERABLE_ACTIONS]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -56,6 +60,8 @@ export async function POST(req: Request) {
   const id = (k: string) => (/^[0-9a-f-]{36}$/.test(str(k)) ? str(k) : "");
 
   const done = await (async () => {
+    // Deliverables (25 Nov 2026, lib/deliverables/agency.ts): changes to the customer's own site, written by Dispatch, Noma and the hub.
+    if (isDeliverableAction(action)) return deliverableAction(db, client, by, action, b);
     switch (action) {
       case "read":
         return readAgency(db, client);

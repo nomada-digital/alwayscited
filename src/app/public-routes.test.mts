@@ -48,6 +48,8 @@ const NEEDS_BUILD = "no build to read - run `npm run build` then `npm run captur
 const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/admin/scans": "the ops page; 401s to everyone and has no public reader at all",
   "/admin/funnel": "funnel counts by day and market (R152, 1 Oct 2026); behind the same /admin Basic auth, no public reader",
+  "/admin/deliverables": "create, publish and complete deliverables (25 Nov 2026); behind the same /admin Basic auth, no public reader",
+  "/admin/deliverables/preview/[id]": "a deliverable, draft or not, as its customer will see it (25 Nov 2026); behind the same /admin Basic auth",
   "/admin/emails": "lifecycle email previews on fixture data for Danny to approve (R159, 1 Oct 2026); behind the same /admin Basic auth, no public reader",
   "/admin/tracking": "tracked-client operations (T2, 29 Sep 2026); behind the same /admin Basic auth, no public reader",
   // 30 Sep 2026, R96 part 3 (BRIEF-2 T12).
@@ -77,6 +79,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/[client]/managed": "one client's managed clusters and this month's delivery on them (paid plans, 17 Oct 2026); private, same membership 404",
   "/dashboards/[client]/opportunities": "one client's opportunities; private, same membership 404",
   "/dashboards/[client]/plan": "one client's plan and allowances; private, same membership 404",
+  "/dashboards/[client]/deliverables": "one client's deliverables - changes to their own site (25 Nov 2026); private, same membership 404",
   // 18 Oct 2026 (brief 2d / 2g).
   "/dashboards/[client]/setup": "one client's setup (keywords, target pages, prompts); private, same membership 404",
   "/dashboards/[client]/settings": "one client's team and settings; private, same membership 404",

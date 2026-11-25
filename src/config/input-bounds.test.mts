@@ -245,6 +245,22 @@ const EXEMPT: Record<string, Exemption> = {
     why: "Step 2's coverage tick. type=checkbox, nothing typed; tickedRows caps the posted urls at MAX_COVERAGE_URLS and the run route caps them again.",
     holds: [{ file: "app/api/coverage-check/route.ts", needs: "parsed.rows.slice(0, MAX_COVERAGE_URLS)" }],
   },
+  // 25 Nov 2026: the deliverables admin form's file pickers. type=file, so maxLength does not apply; each file is cut
+  // by bytes in cleanFile against DELIVERABLE_LIMITS.fileBody, and the admin action refuses one over it before reading it.
+  "dlv-create-files": {
+    why: "the admin deliverable form's file picker. type=file, which maxLength does not apply to. The admin action refuses a file over DELIVERABLE_LIMITS.fileBody before it reads it, and cleanFile bounds every file again.",
+    holds: [
+      { file: "app/admin/deliverables/actions.ts", needs: "f.size > DELIVERABLE_LIMITS.fileBody" },
+      { file: "lib/deliverables/core.ts", needs: "body.length > LIMITS.fileBody" },
+    ],
+  },
+  "dlv-edit-files-${d.id}": {
+    why: "the admin deliverable form's new-version file picker, one per deliverable. type=file, which maxLength does not apply to. The admin action refuses a file over DELIVERABLE_LIMITS.fileBody before it reads it, and cleanFile bounds every file again.",
+    holds: [
+      { file: "app/admin/deliverables/actions.ts", needs: "f.size > DELIVERABLE_LIMITS.fileBody" },
+      { file: "lib/deliverables/core.ts", needs: "body.length > LIMITS.fileBody" },
+    ],
+  },
   "cc-coverage": {
     why: [
       "type=file, which maxLength does not apply to at all. It is bounded by bytes",

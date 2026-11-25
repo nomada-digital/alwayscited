@@ -200,6 +200,8 @@ export const STATES: Record<string, State> = {
   "/dashboards/[client]/google/[keyword]": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/sources/[domain]": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/opportunities": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
+  // 25 Nov 2026: Deliverables, behind the same sign-in (the card is drawn from the generated sample on the demo link).
+  "/dashboards/[client]/deliverables": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   "/dashboards/[client]/plan": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
   // 18 Oct 2026 (brief 2d / 2g): setup, Settings and the alwaystracked view, behind the same sign-in.
   "/dashboards/[client]/setup": { urls: [], blocked: "behind the dashboards host's sign-in - with no session it redirects to /login on that host, which is swept under /dashboards/login; the signed-in states need a member session and the database" },
@@ -238,6 +240,15 @@ export const STATES: Record<string, State> = {
   },
   // 1 Oct 2026, R152: the funnel counts, same /admin Basic auth.
   "/admin/funnel": {
+    urls: [],
+    blocked: "behind auth - answers 401 with 24 bytes and no HTML at all, and a credential is not ours to hold",
+  },
+  // 25 Nov 2026: the deliverables list and the draft preview, same /admin Basic auth.
+  "/admin/deliverables": {
+    urls: [],
+    blocked: "behind auth - answers 401 with 24 bytes and no HTML at all, and a credential is not ours to hold",
+  },
+  "/admin/deliverables/preview/[id]": {
     urls: [],
     blocked: "behind auth - answers 401 with 24 bytes and no HTML at all, and a credential is not ours to hold",
   },
