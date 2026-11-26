@@ -9,6 +9,7 @@ import { showsPlacements } from "@/lib/links/gate";
 import type { PlanBanner } from "@/lib/tracking/plan-banner";
 
 import { Meter } from "./Figures";
+import ClientLogo from "./ClientLogo";
 import { ClientSwitch, Nav } from "./Nav";
 import ViewAsSuggest from "./ViewAsSuggest";
 
@@ -17,7 +18,7 @@ import ViewAsSuggest from "./ViewAsSuggest";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, prompts = 0, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; prompts?: number; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, prompts = 0, logo = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; prompts?: number; logo?: string | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -54,8 +55,13 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
           <small>dashboard</small>
         </div>
         <div className="dash-client">
-          <b title={ws.client.domain}>{ws.client.brand ?? ws.client.domain}</b>
-          <span><TierName tier={ws.client.tier} />{ws.client.trial_ends_at && !ws.client.payment_status ? " · trial" : ""}</span>
+          <div className="dash-client-id">
+            <ClientLogo slug={ws.client.slug} name={ws.client.brand ?? ws.client.domain} src={logo} size={32} />
+            <div>
+              <b title={ws.client.domain}>{ws.client.brand ?? ws.client.domain}</b>
+              <span><TierName tier={ws.client.tier} />{ws.client.trial_ends_at && !ws.client.payment_status ? " · trial" : ""}</span>
+            </div>
+          </div>
           <ClientSwitch current={ws.client.slug} others={others} base={base} />
         </div>
         <Nav items={items} root={root} />

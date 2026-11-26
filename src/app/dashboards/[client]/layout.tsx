@@ -2,6 +2,7 @@ import Shell from "@/components/dash/Shell";
 import { firstCheckLine } from "@/lib/dash/first-check";
 import { pageData } from "@/lib/dash/page-data";
 import { isSampleClient } from "@/lib/dash/host";
+import { clientLogo } from "@/lib/dash/logo";
 import { countPublishedPrompts } from "@/lib/dash/prompts";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { Workspace } from "@/lib/dash/types";
@@ -18,6 +19,7 @@ export default async function ClientLayout({ children, params }: { children: Rea
   const { client } = await params;
   const { ws, others, base, demo, viewAs, banner, raw } = await pageData(client);
   // Sample and demo clients are generated, never read: the database is asked only for a real client (as demoRaw does).
+  const logo = isSampleClient(raw.client.id) ? null : await clientLogo(supabaseAdmin(), raw.client.id);
   const prompts = isSampleClient(raw.client.id) ? 0 : await countPublishedPrompts(supabaseAdmin(), raw.client.id).catch(() => 0);
-  return <Shell ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)} prompts={prompts}>{children}</Shell>;
+  return <Shell ws={ws} others={others} base={base} demo={demo} viewAs={viewAs} banner={banner} waiting={waitingLine(ws)} prompts={prompts} logo={logo}>{children}</Shell>;
 }
