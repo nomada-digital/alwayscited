@@ -8,6 +8,7 @@ import { dashFixturePath } from "@/lib/dash/fixture";
 import { pageData } from "@/lib/dash/page-data";
 import { showsInsertions, showsPlacements } from "@/lib/links/gate";
 import { type LinkRow, readLinks } from "@/lib/links/sheet-store";
+import { stageOf } from "@/lib/links/stage";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { RawInProgress } from "@/lib/dash/types";
 import { urlKey } from "@/lib/tracking/placements";
@@ -91,32 +92,24 @@ export default async function Links({ params }: { params: Promise<{ client: stri
 
 function liveCount(rows: LinkRow[]): string {
   if (!rows.length) return "None yet";
-  const withStatus = rows.filter((r) => r.status);
-  if (!withStatus.length) return `${rows.length} published`;
-  const live = withStatus.filter((r) => stageOf(r.status) === "live").length;
-  const going = withStatus.filter((r) => stageOf(r.status) === "progress").length;
+  const staged = rows.map(stageOf).filter((s) => s !== null);
+  if (!staged.length) return `${rows.length} published`;
+  const live = staged.filter((s) => s === "live").length;
+  const going = staged.filter((s) => s === "progress").length;
   return `${live} live${going ? ` · ${going} in progress` : ""}`;
 }
 
-/** The sheet's own status, in three plain stages (17 Nov 2026, Danny: in-progress statuses must be clear): live, not
- *  live (lost, removed, declined, cancelled) or in progress (anything else the tracker writes: pending, writing,
- *  outreach, submitted, approved...). The pill names the stage; the sheet's wording sits under it when it says more. */
-type Stage = "live" | "progress" | "off";
-function stageOf(status: string | null): Stage {
-  const s = (status ?? "").trim();
-  if (/^(live|published|indexed|done|complete[d]?)\b/i.test(s)) return "live";
-  if (/\b(lost|removed|deleted|declined|rejected|cancel(l)?ed|dropped|dead|not live)\b/i.test(s)) return "off";
-  return "progress";
-}
-function StatusPill({ status }: { status: string | null }) {
-  if (!status) return null;
-  const st = stageOf(status);
+/** The stage pill: ours (state) wins over the sheet's status; the sheet's wording sits under it when it says more. */
+function StatusPill({ row }: { row: LinkRow }) {
+  const st = stageOf(row);
+  if (!st) return null;
   const label = st === "live" ? "Live" : st === "off" ? "Not live" : "In progress";
-  const more = status.trim().toLowerCase() !== label.toLowerCase();
+  // Where staff or the audit have set the state, the sheet's own wording would only contradict it.
+  const more = row.state == null && !!row.status && row.status.trim().toLowerCase() !== label.toLowerCase();
   return (
     <>
       <span className={`pill${st === "live" ? " good" : st === "progress" ? " warn" : ""}`}>{label}</span>
-      {more ? <div className="sub">{status}</div> : null}
+      {more ? <div className="sub">{row.status}</div> : null}
     </>
   );
 }
@@ -204,7 +197,7 @@ function LinkTable({ title, intro, rows, syncedAt, waiting = false }: { title: s
                   <td className="r num">{r.authority === null ? "" : `${fmt(r.authority)}${mixed && r.authority_label ? ` ${r.authority_label}` : ""}`}</td>
                   <td className="r num">{r.page_traffic === null ? "" : fmt(r.page_traffic)}</td>
                   {siteCol ? <td className="r num">{r.domain_traffic == null ? "" : fmt(r.domain_traffic)}</td> : null}
-                  <td><StatusPill status={r.status} /></td>
+                  <td><StatusPill row={r} /></td>
                   <td className="r num">{r.live_on ? fullDay(r.live_on) : (r.live_month ?? "")}</td>
                 </tr>
               ))}

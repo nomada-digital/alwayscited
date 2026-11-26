@@ -1,6 +1,7 @@
 import { crossCheckRun } from "@/lib/tracking/crosscheck";
 import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setPromptTier, setPromptType, setSheets, setStatus, setTier } from "@/lib/agency/edit";
+import { linksRead, markLive } from "@/lib/agency/mark-live";
 import { promptsPublish, promptsRead, promptsUnpublish } from "@/lib/agency/prompts";
 import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
@@ -31,7 +32,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish", "links_read", "mark_live"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -93,6 +94,11 @@ export async function POST(req: Request) {
         return schemaDeliveredRead(db, client);
       case "schema_delivered_set":
         return schemaDeliveredSet(db, client, by, { key: str("block_key"), label: str("label"), where: str("where_url"), how: str("how"), suppliedOn: str("supplied_on"), suppliedBy: str("supplied_by"), jsonld: str("jsonld") });
+      // "Mark as live" (26 Nov 2026, lib/agency/mark-live.ts): a placement or a sheet link staff say is live; links_read lists them.
+      case "links_read":
+        return linksRead(db, client);
+      case "mark_live":
+        return markLive(db, client, by, { target: str("target"), id: str("id"), liveOn: str("live_on") });
       // Prompts for your site (26 Nov 2026, lib/agency/prompts.ts): ready-to-paste prompts published to the customer's dashboard.
       case "prompts_read":
         return promptsRead(db, client);

@@ -59,14 +59,14 @@ export async function storeSheet(
   return { ok: true, message: `${rows.length} ${kind === "insertion" ? "insertion" : "placement"} row${rows.length === 1 ? "" : "s"} synced${skipped ? `, ${skipped} skipped (other clients, repeats or no URL)` : ""}.` };
 }
 
-export type LinkRow = SheetLink & { kind: LinkKind };
+export type LinkRow = SheetLink & { kind: LinkKind; /** Ours (stage.ts): staff and the audit set it; it wins over the sheet's status. */ state?: string | null };
 
 /** What the client's dashboard shows: the rows on the sheet now, newest live first. No cost column exists to read. */
 export async function readLinks(db: SupabaseClient, clientId: string): Promise<{ rows: LinkRow[]; syncedAt: Record<LinkKind, string | null> }> {
   const [{ data, error }, { data: syncs, error: sErr }] = await Promise.all([
     db
       .from("sheet_links")
-      .select("kind, url_key, live_url, linking_domain, target_keyword, anchor_text, target_page, authority, authority_label, page_traffic, domain_traffic, status, live_on, live_month, sheet_row")
+      .select("kind, url_key, live_url, linking_domain, target_keyword, anchor_text, target_page, authority, authority_label, page_traffic, domain_traffic, status, state, live_on, live_month, sheet_row")
       .eq("client_domain_id", clientId)
       .eq("on_sheet", true)
       .order("live_on", { ascending: false, nullsFirst: false })
