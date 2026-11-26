@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { SCAN_LIMITS, WALKTHROUGH_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
@@ -16,6 +16,7 @@ import {
   WALKTHROUGH_REFUSAL,
   type WalkthroughField,
 } from "@/lib/scan/walkthrough-fields";
+import { HONEYPOT_FIELD } from "@/lib/scan/walkthrough-guard";
 import type { WalkthroughOutcome } from "@/lib/scan/walkthrough-outcome";
 import { isWorkEmail, WORK_EMAIL_REFUSAL } from "@/lib/work-email";
 
@@ -110,6 +111,13 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
     return scanMarket && readWalkthroughMarket(scanMarket).ok ? scanMarket : "";
   });
   const [busy, setBusy] = useState(false);
+  // The invisible bot check (26 Nov 2026, walkthrough-guard.ts): the hidden field a person never fills, and the moment
+  // the form appeared, so a post a second after it was drawn is known for what it is.
+  const [trap, setTrap] = useState("");
+  const shownAt = useRef<number | null>(null);
+  useEffect(() => {
+    shownAt.current = Date.now();
+  }, []);
   const [errors, setErrors] = useState<Errors>((outcome && OUTCOME_ERRORS[outcome]) ?? {});
   /** The latest refusal: `n` counts them, so the same field refused twice still moves focus and is announced. */
   const [refusal, setRefusal] = useState<{ n: number; first: WalkthroughField } | null>(null);
@@ -179,12 +187,12 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
         ? await fetch("/api/scan/" + token + "/walkthrough", {
             method: "POST",
             headers,
-            body: JSON.stringify({ name, email, category, market, kind }),
+            body: JSON.stringify({ name, email, category, market, kind, [HONEYPOT_FIELD]: trap, t: shownAt.current ?? undefined }),
           })
         : await fetch("/api/walkthrough", {
             method: "POST",
             headers,
-            body: JSON.stringify({ name, email, category, market, kind, from: "from" in p ? p.from : "" }),
+            body: JSON.stringify({ name, email, category, market, kind, from: "from" in p ? p.from : "", [HONEYPOT_FIELD]: trap, t: shownAt.current ?? undefined }),
           });
       const data = await res.json();
       if (!res.ok && res.status !== 429) {
@@ -247,6 +255,11 @@ export default function WalkthroughForm(p: { token: string; back?: string; outco
   return (
     <form id="walkthrough" action={token ? "/api/scan/" + token + "/walkthrough" : undefined} method="post" onSubmit={submit} noValidate={hydrated}>
       <input type="hidden" id="wt-kind" name="kind" value={kind} />
+      {/* The honeypot: out of sight and out of the tab order, so only a script filling every field reaches it. */}
+      <div aria-hidden="true" style={{ position: "absolute", left: "-10000px", top: "auto", width: "1px", height: "1px", overflow: "hidden" }}>
+        <label htmlFor="wt-company-site">Leave this empty</label>
+        <input id="wt-company-site" type="text" name={HONEYPOT_FIELD} maxLength={WALKTHROUGH_LIMITS.name} tabIndex={-1} autoComplete="off" value={trap} onChange={(e) => setTrap(e.target.value)} />
+      </div>
       {"token" in p && p.back ? <input type="hidden" id="wt-back" name="back" value={p.back} /> : null}
       <div role="radiogroup" aria-label="How would you like to see it" className="wt-toggle">
         {options.map((o) => (

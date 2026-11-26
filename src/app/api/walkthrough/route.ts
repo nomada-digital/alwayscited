@@ -2,6 +2,7 @@ import { SCAN_LIMITS } from "@/config/contact";
 import { TIERS } from "@/config/pricing";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { clientIp, hashIp } from "@/lib/scan/ip";
+import { botCheck, HONEYPOT_FIELD } from "@/lib/scan/walkthrough-guard";
 import { readWalkthroughCategory, readWalkthroughMarket, readWalkthroughName } from "@/lib/scan/walkthrough-fields";
 import { sendWalkthroughAlert } from "@/lib/scan/walkthrough-mail";
 import { writeAsk } from "@/lib/scan/walkthrough-store";
@@ -33,7 +34,7 @@ const PER_IP_PER_DAY = 5;
  * form's order after `from`, as in the scan route beside this one.
  */
 export async function POST(req: Request) {
-  let body: { email?: string; kind?: string; from?: string; name?: unknown; category?: unknown; market?: unknown };
+  let body: { email?: string; kind?: string; from?: string; name?: unknown; category?: unknown; market?: unknown; t?: unknown; [HONEYPOT_FIELD]?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -45,6 +46,14 @@ export async function POST(req: Request) {
 
   const from = TIERS.find((t) => t.href === body.from)?.href;
   if (!from) return Response.json({ error: "bad_from" }, { status: 400 });
+
+  // The invisible bot check (26 Nov 2026, walkthrough-guard.ts): a caught post is answered as a real one and kept nowhere.
+  const verdict = botCheck({ honeypot: body[HONEYPOT_FIELD], t: body.t }, { json: true });
+  if (verdict === "reload") return Response.json({ error: "reload", message: "Please reload the page and try again." }, { status: 400 });
+  if (verdict === "bot") {
+    console.warn("[walkthrough] dropped a post that failed the bot check");
+    return Response.json({ ok: true, message: kind === "video" ? "Thanks. Luke will send your Loom." : "Thanks. Danny will be in touch." });
+  }
 
   const name = readWalkthroughName(body.name);
   if (!name.ok) return Response.json({ error: name.error, message: name.message }, { status: 400 });
