@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import CopilotCard from "@/components/dash/CopilotCard";
 import EngineLogo from "@/components/EngineLogo";
 import { Cells, Rate, engineLabel, longDay, pct } from "@/components/dash/Figures";
 import GuideBox from "@/components/dash/GuideBox";
@@ -9,7 +10,9 @@ import { PROMPTS_GUIDE } from "@/config/guidance";
 import { PageHead } from "@/components/dash/Shell";
 import { trimRaw } from "@/lib/dash/model";
 import { planShape } from "@/lib/dash/plan";
+import { readCopilot } from "@/lib/dash/copilot";
 import { pageData } from "@/lib/dash/page-data";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "AI visibility", robots: { index: false, follow: false } };
@@ -20,6 +23,7 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
   // Growth prompts (tiers 2-4, 18 Nov 2026) are reported in their own card below, so the figures up top are the core's.
   const rows = ws.clusters.flatMap((c) => [...c.groups, c.own].flatMap((g) => g.prompts.map((p) => ({ p })))).filter((r) => r.p.tier === 1);
   const growth = ws.growth.prompts;
+  const copilot = await readCopilot(supabaseAdmin(), raw.client.id);
   // Per engine: named / answered on each prompt's latest reading.
   const byEngine = ws.engines.map((e) => {
     const cells = rows.map((r) => r.p.cells[e]).filter((v) => v === "named" || v === "missed");
@@ -67,6 +71,7 @@ export default async function Ai({ params }: { params: Promise<{ client: string 
           </div>
         </div>
       ) : null}
+      <CopilotCard view={copilot} />
       <Nudges ws={ws} base={base} ctx={nudge} only={["to-mentioned", "to-everywhere"]} />
       <div className="dash-card" style={{ marginTop: 16 }}>
         <div style={{ marginBottom: 12 }}><GuideBox guide={PROMPTS_GUIDE} /></div>

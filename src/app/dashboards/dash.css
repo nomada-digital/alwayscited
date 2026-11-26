@@ -377,3 +377,14 @@ button.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Client logo beside the name (26 Nov 2026). */
 .dash-client-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .dash-client-id > div { min-width: 0; }
+
+/* Copilot card (26 Nov 2026) */
+.copilot-empty { margin: 14px 0 0; padding: 18px; border: 1px dashed var(--line); border-radius: 12px; color: var(--soft); font-size: 14px; text-align: center; }
+.copilot-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 16px; flex-wrap: wrap; margin-top: 14px; }
+.copilot-total { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+.copilot-unit { color: var(--soft); font-size: 13.5px; }
+.copilot-delta { font-size: 13px; font-weight: 600; }
+.copilot-delta.down { color: var(--soft); }
+.copilot-delta.up { color: var(--accent); }
+.copilot-chart { margin-top: 10px; }
+.copilot-axis { display: flex; justify-content: space-between; margin-top: 4px; font-size: 11.5px; color: var(--soft); }
