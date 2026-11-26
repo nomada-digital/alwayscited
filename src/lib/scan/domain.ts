@@ -42,6 +42,51 @@ export function normalizeDomain(input: string): string {
   return d.replace(/\.$/, "");
 }
 
+/**
+ * The homepage address as the visitor typed it (Danny, 26 Nov 2026), for the first fetch. normalizeDomain strips "www."
+ * because the domain is the scan's identity, but the read must go where the visitor pointed: sandburnhall.co.uk's bare
+ * apex hangs and its www answers, so a scan of what they typed has to start at www. Scheme, host and path are kept;
+ * credentials, port, query and fragment are not. Parsed by URL, so the host is the one a browser would go to ("\" cuts
+ * the authority as "/" does). Null when it does not parse or is not on `domain` (with or without www).
+ */
+export function enteredUrl(input: string, domain: string): string | null {
+  const t = input.trim();
+  if (!t) return null;
+  let u: URL;
+  try {
+    u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : `https://${t}`);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const host = u.hostname.toLowerCase().replace(/\.$/, "");
+  if (host !== domain && host !== `www.${domain}`) return null;
+  // A plain path only: anything odder than letters, digits and . _ ~ % / - is the homepage.
+  const path = u.pathname.length > 1 && u.pathname.length <= 200 && /^\/[A-Za-z0-9._~%/-]*$/.test(u.pathname) ? u.pathname : "/";
+  return `${u.protocol}//${host}${path}`;
+}
+
+/**
+ * The homepage addresses to try, in order: as entered (its scheme, host and path), the same path on the counterpart
+ * host (www added or removed), then the other scheme on the entered host and on the counterpart. Never a host outside
+ * `domain` and its www. Without an entered address: https apex, https www, http apex, http www.
+ */
+export function homepageCandidates(domain: string, entered?: string | null): string[] {
+  let first: URL | null = null;
+  try {
+    first = entered ? new URL(entered) : null;
+  } catch {
+    first = null;
+  }
+  const scheme = first?.protocol === "http:" ? "http" : "https";
+  const other = scheme === "https" ? "http" : "https";
+  const host = first?.hostname ?? domain;
+  const counter = host.startsWith("www.") ? host.slice(4) : `www.${host}`;
+  const path = first && first.pathname.length > 1 ? first.pathname : "/";
+  const list = [`${scheme}://${host}${path}`, `${scheme}://${counter}${path === "/" ? "/" : path}`, `${other}://${host}/`, `${other}://${counter}/`];
+  return [...new Set(list)];
+}
+
 /** A conservative hostname check: at least one dot, valid labels, plausible TLD. */
 export function isPlausibleDomain(domain: string): boolean {
   if (!domain || domain.length > 253) return false;
