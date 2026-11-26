@@ -269,6 +269,8 @@ test("the upsert sites are the ones we think they are", () => {
       // signup (checkout/signup.ts), the client and its owner on T2's keys.
       // 5 Nov 2026, CSM batch A: one commercial-context note per client (lib/csm/agency.ts contextSave).
       "client_commercial_context:client_domain_id",
+      // 26 Nov 2026: one Copilot snapshot per client, pushed by the hub (lib/agency/copilot.ts copilotPublish).
+      "client_copilot:client_domain_id",
       "client_domains:account_id,domain,market,topic",
       "client_domains:account_id,domain,market,topic",
       // 13 Oct 2026, DIY P10 (spec 10 section 6.3): the month's comparison set,
