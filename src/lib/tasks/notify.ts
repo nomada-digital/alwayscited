@@ -39,7 +39,7 @@ export async function taskDailyPass(db: SupabaseClient): Promise<{ checked: numb
   for (const c of clients ?? []) {
     if (c.archived_at || c.status === "ended") continue;
     try {
-      const { data: fresh, error: fErr } = await db.from("client_tasks").select("id").eq("client_domain_id", c.id).is("archived_at", null).eq("status", "todo").is("notified_at", null);
+      const { data: fresh, error: fErr } = await db.from("client_tasks").select("id, kind").eq("client_domain_id", c.id).is("archived_at", null).eq("status", "todo").is("notified_at", null);
       if (fErr) { out.failed += 1; console.warn(`[tasks] could not read ${c.slug}'s new tasks: ${fErr.message}`); continue; }
       const plan = await emailPlan(db, c.id as string, (fresh ?? []).length);
       if (plan === "failed") { out.failed += 1; continue; }
@@ -48,7 +48,10 @@ export async function taskDailyPass(db: SupabaseClient): Promise<{ checked: numb
       const owners = people.map((m) => m.email.toLowerCase());
       if (!owners.length) continue;
       const firstName = people.length === 1 ? people[0]!.firstName : null;
-      const mail = taskEmail({ n: plan.n, slug: c.slug as string, firstName, lead: (c.account_lead as string | null) ?? null, missing: plan.missing });
+      // A connection that is one of the new tasks is already in the email as a task, so the reminder does not list it twice.
+      const asTask = new Set((fresh ?? []).map((t) => String(t.kind).replace("connect_", "")));
+      const missing = plan.missing.filter((m) => !asTask.has(m));
+      const mail = taskEmail({ n: plan.n, slug: c.slug as string, firstName, lead: (c.account_lead as string | null) ?? null, missing });
       const ids2 = (fresh ?? []).map((t) => t.id as string);
       const auto = c.task_email_mode === "auto";
       let status: "draft" | "sent" | "failed" = "draft", err: string | null = null;
@@ -66,7 +69,7 @@ export async function taskDailyPass(db: SupabaseClient): Promise<{ checked: numb
           if (r.error) { status = "failed"; err = r.error.message; } else status = "sent";
         }
       }
-      const { error: insErr } = await db.from("client_task_emails").insert({ client_domain_id: c.id, status, subject: mail.subject, html: mail.html, body_text: mail.text, to_emails: owners, from_name: mail.fromName, task_ids: ids2, error: err, sent_at: status === "sent" ? new Date().toISOString() : null, includes_reminder: plan.missing.length > 0, reminder_for: plan.missing });
+      const { error: insErr } = await db.from("client_task_emails").insert({ client_domain_id: c.id, status, subject: mail.subject, html: mail.html, body_text: mail.text, to_emails: owners, from_name: mail.fromName, task_ids: ids2, error: err, sent_at: status === "sent" ? new Date().toISOString() : null, includes_reminder: missing.length > 0, reminder_for: missing });
       if (insErr) { out.failed += 1; console.warn(`[tasks] could not record the email for ${c.slug}: ${insErr.message}`); continue; }
       if (status === "failed") { out.failed += 1; continue; }
       if (ids2.length) await db.from("client_tasks").update({ notified_at: new Date().toISOString() }).in("id", ids2);
