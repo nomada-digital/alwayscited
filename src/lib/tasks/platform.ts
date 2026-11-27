@@ -4,12 +4,12 @@
  * correct. Pure module: no imports, so node --test loads it. Access is only ever an invitation the customer sends from their own
  * account: no password or key is asked for or stored.
  */
-export type Platform = "shopify" | "wordpress" | "webflow" | "squarespace" | "wix" | "framer" | "custom";
-export const PLATFORMS: Platform[] = ["shopify", "wordpress", "webflow", "squarespace", "wix", "framer", "custom"];
+export type Platform = "shopify" | "wordpress" | "webflow" | "squarespace" | "wix" | "framer" | "netlify" | "seecms" | "custom";
+export const PLATFORMS: Platform[] = ["shopify", "wordpress", "webflow", "squarespace", "wix", "framer", "netlify", "seecms", "custom"];
 export const DATA_EMAIL = "data@nomadadigital.co.uk";
 
 export const PLATFORM_NAME: Record<Platform, string> = {
-  shopify: "Shopify", wordpress: "WordPress", webflow: "Webflow", squarespace: "Squarespace", wix: "Wix", framer: "Framer", custom: "A custom site (Vercel, GitHub or similar)",
+  shopify: "Shopify", wordpress: "WordPress", webflow: "Webflow", squarespace: "Squarespace", wix: "Wix", framer: "Framer", netlify: "Netlify (Gatsby or similar)", seecms: "SeeCMS", custom: "A custom site (Vercel, GitHub or similar)",
 };
 
 export const isPlatform = (v: unknown): v is Platform => typeof v === "string" && (PLATFORMS as string[]).includes(v);
@@ -24,6 +24,8 @@ export function detectPlatform(html: string, headers: Record<string, string> = {
   if (h.includes("static1.squarespace.com") || h.includes("squarespace-cdn.com") || /<meta[^>]+generator[^>]+squarespace/.test(h) || h.includes("this is squarespace")) return "squarespace";
   if (h.includes("wixstatic.com") || h.includes("parastorage.com") || Object.keys(hdr).some((k) => k.startsWith("x-wix-")) || /<meta[^>]+generator[^>]+wix\.com/.test(h)) return "wix";
   if (h.includes("framerusercontent.com") || /<meta[^>]+generator[^>]+framer/.test(h) || h.includes("data-framer-")) return "framer";
+  if (/<meta[^>]+generator[^>]+seecms/.test(h) || "x-powered-by" in hdr && hdr["x-powered-by"]!.includes("seecms")) return "seecms";
+  if (/<meta[^>]+generator[^>]+gatsby/.test(h) || hdr["server"] === "netlify" || "x-nf-request-id" in hdr) return "netlify";
   return "custom";
 }
 
@@ -79,6 +81,24 @@ export const ACCESS: Record<Platform, AccessGuide> = {
       "Open your Framer project and press Share.",
       `Invite ${DATA_EMAIL} as an editor.`,
       "Press the button below once it is sent.",
+    ],
+  },
+  netlify: {
+    label: "Netlify (Gatsby or similar): a team invite and a repo invite",
+    steps: [
+      `In Netlify open Team settings, then Members, and invite ${DATA_EMAIL} with a role that can deploy and edit the site.`,
+      `Your site is built from a code repository: invite ${DATA_EMAIL} to it on GitHub (or GitLab) with write access. Reply to our email if the invite should go to someone else.`,
+      "Press the button below once both are sent.",
+    ],
+    note: "We work on a branch and send you a pull request, and Netlify gives you a preview of it, so nothing goes live without your say.",
+  },
+  seecms: {
+    label: "SeeCMS: a user in your site's admin",
+    steps: [
+      "Log in to your site's SeeCMS admin and open Users.",
+      `Add a new user with the email ${DATA_EMAIL} and a role that can edit pages.`,
+      "Don't manage the admin yourself? Forward this to whoever looks after your website and ask them to do the same. Reply to our email and we'll write to them for you.",
+      "Press the button below once it is done.",
     ],
   },
   custom: {

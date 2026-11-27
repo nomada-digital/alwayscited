@@ -34,10 +34,11 @@ const INFO: Record<Provider, { name: string; what: string; steps: (d: string) =>
     name: "Bing Webmaster Tools",
     what: "Clicks and impressions on Bing, straight from Bing.",
     steps: (d) => [
-      `Open Bing Webmaster Tools and sign in. If ${d} is not listed yet, choose Import and pick Google Search Console: sign in with Google and select ${d}, and Bing adds it already verified.`,
-      `Open ${d} in Bing Webmaster Tools, then go to Settings, then User management.`,
-      `Press Add user, enter ${ACCESS_EMAIL} and choose Read only.`,
-      "Press Add, then come back here and press Check connection.",
+      "Open Bing Webmaster Tools and sign in.",
+      `Not listed yet? Either choose Import and pick Google Search Console (sign in with Google and select ${d}, and Bing adds it already verified), or add the site by hand.`,
+      `Open ${d}, then go to Settings, then User management.`,
+      `Press Add user, enter ${ACCESS_EMAIL} and choose Read only. Then press Add.`,
+      "Come back here and press Check connection.",
     ],
   },
 };

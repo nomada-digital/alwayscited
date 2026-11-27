@@ -5,7 +5,7 @@ import { extractTarget, norm, verdict } from "./check.ts";
 import { taskEmail } from "./email.ts";
 import { TEMPLATES, buildCustom, buildFromTemplate, ownPageUrl, readSteps } from "./templates.ts";
 
-const ctx = { slug: "mortalentboutique-com", domain: "mortalentboutique.com", dashboard: "https://dashboards.alwayscited.com/mortalentboutique-com", accessEmail: "team@nomadadigital.co.uk" };
+const ctx = { slug: "mortalentboutique-com", domain: "mortalentboutique.com", dashboard: "https://dashboards.alwayscited.com/mortalentboutique-com", accessEmail: "data@nomadadigital.co.uk" };
 
 test("page checks only fetch the customer's own https pages", () => {
   assert.ok(ownPageUrl("https://www.mortalentboutique.com/", "mortalentboutique.com"));

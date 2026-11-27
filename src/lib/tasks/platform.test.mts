@@ -25,3 +25,12 @@ test("every platform has a way to give access, and it names our address where an
   assert.equal(isPlatform("shopify"), true);
   assert.equal(isPlatform("drupal"), false);
 });
+
+test("Netlify/Gatsby and SeeCMS are recognised, and SeeCMS wins over a generic server", () => {
+  assert.equal(detectPlatform('<meta name="generator" content="Gatsby 5.14.3"/>', { server: "Netlify" }), "netlify");
+  assert.equal(detectPlatform("<html></html>", { server: "Netlify" }), "netlify");
+  assert.equal(detectPlatform('<meta name="generator" content="SeeCMS - seecms.net" />', { server: "Apache", "x-powered-by": "SeeCMS" }), "seecms");
+  assert.equal(detectPlatform("<html></html>", { "x-powered-by": "SeeCMS" }), "seecms");
+  assert.equal(detectPlatform("<html></html>", { server: "Apache" }), "custom");
+  for (const p of ["netlify", "seecms"] as const) assert.ok(ACCESS[p].steps.join(" ").includes(DATA_EMAIL));
+});

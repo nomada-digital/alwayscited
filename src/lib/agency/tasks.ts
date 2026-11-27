@@ -110,3 +110,24 @@ export async function accessSet(db: SupabaseClient, client: Client, by: string, 
   await audit(db, client.id, by, "access_set", p.kind, null, { status: p.status, platform: p.platform || null });
   return { ok: true, message: p.status === "granted" ? "Recorded as granted. The customer's on-site tasks now say we'll handle them; link the site in the hub's CMS connections to make the changes through Noma." : p.status === "revoked" ? "Recorded as revoked." : "Recorded as requested." };
 }
+
+/**
+ * The drafted "we've added tasks" emails the hub has not taken into Ready to send yet (27 Nov 2026), for the hub's ac-task-mail
+ * (server to server, on its own schedule). Read-only: the hub marks each one with task_email_mark once it has made the draft. The hub,
+ * not this app, applies a client's comms pause and start date.
+ */
+export async function taskEmailsPending(db: SupabaseClient): Promise<Done> {
+  const { data, error } = await db.from("client_task_emails").select("id, client_domain_id, subject, html, body_text, to_emails, from_name, includes_reminder, reminder_for, task_ids, created_at").eq("status", "draft").is("hub_draft_id", null).order("created_at").limit(100);
+  if (missing(error)) return { ok: true, message: WAITING, data: { drafts: [] } };
+  if (error) return { ok: false, message: `Could not read the drafts: ${error.message}` };
+  const ids = [...new Set((data ?? []).map((r) => r.client_domain_id as string))];
+  if (!ids.length) return { ok: true, message: "No drafts waiting.", data: { drafts: [] } };
+  const { data: cs, error: cErr } = await db.from("client_domains").select("id, slug, account_lead, domain").in("id", ids);
+  if (cErr) return { ok: false, message: `Could not read the customers: ${cErr.message}` };
+  const by = new Map((cs ?? []).map((c) => [c.id as string, c]));
+  const drafts = (data ?? []).flatMap((r) => {
+    const c = by.get(r.client_domain_id as string);
+    return c ? [{ id: r.id, ac_slug: c.slug, domain: c.domain, lead: c.account_lead ?? null, subject: r.subject, html: r.html, text: r.body_text, to: r.to_emails, from_name: r.from_name, reminder: r.includes_reminder === true, reminder_for: r.reminder_for ?? [], tasks: (r.task_ids as string[] | null)?.length ?? 0, created_at: r.created_at }] : [];
+  });
+  return { ok: true, message: `${drafts.length} draft${drafts.length === 1 ? "" : "s"} waiting.`, data: { drafts } };
+}

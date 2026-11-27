@@ -97,7 +97,8 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
       title: "Connect Bing Webmaster Tools",
       why: "Bing is where Microsoft Copilot looks, so its numbers show how you appear there.",
       steps: [
-        { text: `Open Bing Webmaster Tools and sign in. If ${ctx.domain} is not listed yet, choose Import and pick Google Search Console: sign in with Google and select ${ctx.domain}.`, href: "https://www.bing.com/webmasters" },
+        { text: "Open Bing Webmaster Tools and sign in.", href: "https://www.bing.com/webmasters" },
+        { text: `Not listed yet? Either choose Import and pick Google Search Console (sign in with Google and select ${ctx.domain}), or add the site by hand.` },
         { text: "Open your site, then go to Settings, then User management." },
         { text: `Press Add user, enter ${ctx.accessEmail} and choose Read only.` },
         { text: "Open Integrations in your dashboard and press Check connection on the Bing Webmaster Tools card.", href: `${ctx.dashboard}/integrations#connect-bing` },

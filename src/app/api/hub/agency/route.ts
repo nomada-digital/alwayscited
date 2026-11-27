@@ -3,7 +3,7 @@ import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setPromptTier, setPromptType, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { linksRead, markLive } from "@/lib/agency/mark-live";
 import { promptsPublish, promptsRead, promptsUnpublish } from "@/lib/agency/prompts";
-import { accessSet, taskEmailMark, tasksAdd, tasksRead, tasksSettings, tasksUpdate } from "@/lib/agency/tasks";
+import { accessSet, taskEmailsPending, taskEmailMark, tasksAdd, tasksRead, tasksSettings, tasksUpdate } from "@/lib/agency/tasks";
 import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
@@ -45,6 +45,8 @@ export async function POST(req: Request) {
     return Response.json({ error: "bad_request" }, { status: 400 });
   }
   const action = typeof b.action === "string" ? b.action : "";
+  // The one read that is not about a single customer: the drafted task emails the hub's ac-task-mail has yet to take (27 Nov 2026).
+  if (action === "task_emails_pending") return Response.json(await taskEmailsPending(supabaseAdmin()), { status: 200 });
   const slug = typeof b.slug === "string" && /^[a-z0-9-]{1,80}$/.test(b.slug) ? b.slug : null;
   const by = typeof b.by === "string" ? b.by.trim().toLowerCase() : "";
   if (!ACTIONS.has(action) || !slug) return Response.json({ error: "bad_request" }, { status: 400 });
