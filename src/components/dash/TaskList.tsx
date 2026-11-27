@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { TaskRow } from "@/lib/tasks/store";
 
 const LABEL = { todo: "To do", done: "Done", checked: "Checked by us" } as const;
-const AUTO = new Set(["connect_gsc", "connect_ga4", "page_check"]);
+const AUTO = new Set(["connect_gsc", "connect_ga4", "connect_bing", "page_check"]);
 
 /** Your tasks (27 Nov 2026): each with why it matters, plain steps, and a status. Ticking is the customer's; "Checked by us" is ours. */
 export default function TaskList({ slug, initial, canWrite }: { slug: string; initial: TaskRow[]; canWrite: boolean }) {

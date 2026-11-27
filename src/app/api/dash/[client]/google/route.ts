@@ -1,3 +1,4 @@
+import { readTasks, syncTasks } from "@/lib/tasks/store";
 import { after } from "next/server";
 
 import { canSubmit, sitemapFor } from "@/lib/dash/google";
@@ -85,6 +86,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
       const e = await pullGoogle(db, { client_domain_id: w.id, provider: "gsc", property, backfilled_at: null, auth: "oauth" }).catch((err: unknown) => String(err));
       if (e) console.warn(`[gsc-oauth] first pull ${slug}: ${e}`);
     });
+    // 27 Nov 2026 (Your tasks): the "Connect Search Console" task completes now. Never fatal.
+    await readTasks(db, w.id).then((rows) => syncTasks(db, { id: w.id, domain: w.domain }, rows)).catch((e: unknown) => console.warn(`[gsc-oauth] tasks not settled for ${slug}: ${e instanceof Error ? e.message : e}`));
     return Response.json({ ok: true, connected: true, property, name: hit.name, permission: hit.permission, email: t.email });
   }
 

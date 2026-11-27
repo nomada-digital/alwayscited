@@ -30,13 +30,15 @@ test("heading task carries the exact before and after, and checks itself", () =>
 });
 
 test("every template builds without input that is not needed", () => {
-  for (const id of ["connect_gsc", "connect_ga4", "chatgpt_listing", "internal_links"]) {
+  for (const id of ["connect_gsc", "connect_ga4", "connect_bing", "chatgpt_listing", "internal_links"]) {
     const t = buildFromTemplate(id, {}, ctx);
     assert.ok(typeof t !== "string", id);
     if (typeof t !== "string") { assert.ok(t.steps.length >= 3); assert.ok(t.why.length > 10); }
   }
-  assert.equal(TEMPLATES.length, 5);
+  assert.equal(TEMPLATES.length, 6);
   assert.equal(typeof buildFromTemplate("nope", {}, ctx), "string");
+  const bing = buildFromTemplate("connect_bing", {}, ctx);
+  assert.ok(typeof bing !== "string" && bing.kind === "connect_bing" && bing.steps.some((s) => /Import/.test(s.text)));
   const gsc = buildFromTemplate("connect_gsc", {}, ctx);
   assert.ok(typeof gsc !== "string" && gsc.kind === "connect_gsc" && gsc.steps[0]?.href?.endsWith("/integrations"));
   const links = buildFromTemplate("internal_links", {}, ctx);

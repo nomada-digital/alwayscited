@@ -6,6 +6,7 @@ import { CONNECT_LIMITS } from "@/config/contact";
 import { ACCESS_EMAIL, gaPropertyId } from "@/lib/dash/connect";
 import { findProperty, pullConnection } from "@/lib/dash/connect-io";
 import { dashFixturePath, fixtureClient } from "@/lib/dash/fixture";
+import { readTasks, syncTasks } from "@/lib/tasks/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,5 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ client:
   }
   const pull = await pullConnection(db, { client_domain_id: c.id, provider, property: found });
   if (pull) console.warn(`[connect] first pull for ${c.domain}: ${pull}`);
+  // 27 Nov 2026 (Your tasks): the matching "Connect ..." task completes now, not at the next morning run. Never fatal.
+  await readTasks(db, c.id).then((rows) => syncTasks(db, { id: c.id, domain: c.domain }, rows)).catch((e: unknown) => console.warn(`[connect] tasks not settled for ${c.domain}: ${e instanceof Error ? e.message : e}`));
   return Response.json({ ok: true, connected: true, property: found, synced: !pull });
 }

@@ -16,7 +16,7 @@ export type TaskRow = {
 
 const COLS = "id, kind, title, why, steps, check_spec, status, done_at, checked_at, check_note, last_check_at, created_at";
 const missing = (e: { code?: string; message?: string } | null) => !!e && (e.code === "PGRST205" || e.code === "42P01" || /client_tasks/.test(e.message ?? ""));
-const KINDS = new Set(["manual", "connect_gsc", "connect_ga4", "page_check"]);
+const KINDS = new Set(["manual", "connect_gsc", "connect_ga4", "connect_bing", "page_check"]);
 
 function shape(r: Record<string, unknown>): TaskRow {
   const c = r.check_spec as Record<string, unknown> | null;
@@ -74,13 +74,13 @@ export async function syncTasks(db: SupabaseClient, client: Client, rows: TaskRo
   const stamp = now.toISOString();
   const changed = new Map<string, Partial<TaskRow>>();
 
-  if (open.some((t) => t.kind === "connect_gsc" || t.kind === "connect_ga4")) {
-    const { data, error } = await db.from("integration_connections").select("provider, status").eq("client_domain_id", client.id).in("provider", ["gsc", "ga4"]);
+  if (open.some((t) => t.kind === "connect_gsc" || t.kind === "connect_ga4" || t.kind === "connect_bing")) {
+    const { data, error } = await db.from("integration_connections").select("provider, status").eq("client_domain_id", client.id).in("provider", ["gsc", "ga4", "bing"]);
     if (error) console.warn(`[tasks] could not read connections: ${error.message}`);
     const on = new Set((data ?? []).filter((c) => c.status === "connected").map((c) => c.provider as string));
     for (const t of open) {
-      const p = t.kind === "connect_gsc" ? "gsc" : t.kind === "connect_ga4" ? "ga4" : null;
-      if (p && on.has(p)) changed.set(t.id, { status: "checked", checkedAt: stamp, checkNote: p === "gsc" ? "Search Console is connected." : "Google Analytics is connected." });
+      const p = t.kind === "connect_gsc" ? "gsc" : t.kind === "connect_ga4" ? "ga4" : t.kind === "connect_bing" ? "bing" : null;
+      if (p && on.has(p)) changed.set(t.id, { status: "checked", checkedAt: stamp, checkNote: p === "gsc" ? "Search Console is connected." : p === "ga4" ? "Google Analytics is connected." : "Bing Webmaster Tools is connected." });
     }
   }
   for (const t of open) {

@@ -7,7 +7,7 @@
  * Pure module: no imports of server code, so node --test loads it.
  */
 export type Step = { text: string; href?: string; img?: string };
-export type TaskKind = "manual" | "connect_gsc" | "connect_ga4" | "page_check";
+export type TaskKind = "manual" | "connect_gsc" | "connect_ga4" | "connect_bing" | "page_check";
 export type PageCheck = { url: string; target: "h1" | "title"; before: string; after: string };
 export type TaskDraft = { template: string | null; kind: TaskKind; title: string; why: string; steps: Step[]; check: PageCheck | null };
 /** accessEmail is the address customers add in Google (connect.ts ACCESS_EMAIL), passed in so this module stays dependency-free. */
@@ -65,6 +65,22 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
         { text: `Press the plus, choose Add users, enter ${ctx.accessEmail} and give it the Viewer role.` },
         { text: "Still in Admin, open Property details and copy the property ID (numbers only)." },
         { text: "Open Integrations in your dashboard, paste the ID on the Google Analytics 4 card and press Check connection.", href: `${ctx.dashboard}/integrations` },
+      ],
+    }),
+  },
+  {
+    id: "connect_bing",
+    label: "Connect Bing Webmaster Tools",
+    fields: [],
+    build: (_p, ctx) => ({
+      template: "connect_bing", kind: "connect_bing", check: null,
+      title: "Connect Bing Webmaster Tools",
+      why: "Bing is where Microsoft Copilot looks, so its numbers show how you appear there.",
+      steps: [
+        { text: `Open Bing Webmaster Tools and sign in. If ${ctx.domain} is not listed yet, choose Import and pick Google Search Console: sign in with Google and select ${ctx.domain}.`, href: "https://www.bing.com/webmasters" },
+        { text: "Open your site, then go to Settings, then User management." },
+        { text: `Press Add user, enter ${ctx.accessEmail} and choose Read only.` },
+        { text: "Open Integrations in your dashboard and press Check connection on the Bing Webmaster Tools card.", href: `${ctx.dashboard}/integrations` },
       ],
     }),
   },
