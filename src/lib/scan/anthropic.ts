@@ -1368,3 +1368,36 @@ export async function readVerdicts(
   })));
   return res.parsed_output?.answers ?? [];
 }
+
+
+// ------------------------------------------------------- Find keywords' example
+
+/** The cheap model that proposes an example search for Find keywords' box (27 Nov 2026): a few words, checked for volume afterwards. */
+const PLACEHOLDER_MODEL = "claude-haiku-5-5";
+const PlaceholderTerms = z.object({ terms: z.array(z.string()).describe("6 Google searches, lower case, 2 to 4 words each, most likely first") });
+
+/**
+ * Candidate example searches for one client's Find keywords box, from the site's own facts. Nothing here is trusted as the example: the caller
+ * drops brand names and places and keeps the one with real search volume (placeholder-io.ts).
+ */
+export async function placeholderTerms(
+  input: { audience: "all" | "b2b" | "b2c"; domain: string; market: Market; facts: string },
+  billed: { calls: number } = { calls: 0 },
+): Promise<string[]> {
+  const side = input.audience === "b2b" ? "a business buyer looking for a supplier (words like agency, software, services, provider)" : input.audience === "b2c" ? "a consumer looking for something to buy or book (plain consumer phrasing)" : "anyone looking for what this business offers (its head term)";
+  const res = await labelled("placeholder_terms", () => withRetry(() => anthropic(billed).messages.parse({
+    model: PLACEHOLDER_MODEL,
+    max_tokens: 400,
+    output_config: { format: zodOutputFormat(PlaceholderTerms) },
+    system: [
+      `You suggest Google searches a person in ${marketPlace(input.market)} would type, for the example text in a keyword research box.`,
+      `Suggest 6 searches that ${side} would type about what this business does.`,
+      "Each is 2 to 4 words, lower case, no punctuation, no brand names, no place names, no year. Real, commonly searched head terms, not long questions.",
+      ...(input.audience === "b2b" ? ["Include a business-buyer word in each: agency, software, services, provider, company, solutions, consultancy."] : input.audience === "b2c" ? ["Phrase each the way a private person searches, with a word like best, cheap, buy, reviews, deals, how to, affordable or gift."] : []),
+    ].join("\n"),
+    messages: [{ role: "user", content: `Site: ${input.domain}\n${input.facts}` }],
+  })));
+  const out = res.parsed_output;
+  if (!out) throw new Error("could not read the example searches");
+  return out.terms.map((t) => t.trim().toLowerCase()).filter(Boolean).slice(0, 8);
+}
