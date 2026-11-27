@@ -391,3 +391,5 @@ button.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .task__way { margin-top: 6px; }
 .task__plat { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--soft); margin: 8px 0 10px; max-width: 320px; }
 .task__plat-note { margin: 0 0 4px; font-size: 14px; }
+.connect-wrap { display: flex; flex-direction: column; }
+.connect-wrap > .dash-card { flex: 1; }
