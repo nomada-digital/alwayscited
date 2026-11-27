@@ -23,6 +23,25 @@ export function isPreviewDeploy(env?: { VERCEL_ENV?: string }): boolean {
   return (env ? env.VERCEL_ENV : ENV_VERCEL_ENV) === "preview";
 }
 
+const ENV_BRANCH_URL = process.env.VERCEL_BRANCH_URL;
+const ENV_DEPLOY_URL = process.env.VERCEL_URL;
+
+/**
+ * A preview's own origin, for an email link that cannot be relative (27 Nov 2026): the branch's stable address when
+ * Vercel gives one, else this deployment's. Null off a preview, so production mail never carries it. Both variables are
+ * set by the platform (host names, no scheme), never by a request.
+ */
+export function previewOrigin(env?: { VERCEL_ENV?: string; VERCEL_BRANCH_URL?: string; VERCEL_URL?: string }): string | null {
+  if (!isPreviewDeploy(env)) return null;
+  const host = ((env ? env.VERCEL_BRANCH_URL : ENV_BRANCH_URL) || (env ? env.VERCEL_URL : ENV_DEPLOY_URL) || "").trim().toLowerCase();
+  return /^[a-z0-9.-]+\.vercel\.app$/.test(host) ? `https://${host}` : null;
+}
+
+/** A path in the dashboards tree as this deployment serves it: under /dashboards on a preview, bare on the dashboards host. */
+export function dashHere(path: string, env?: { VERCEL_ENV?: string }): string {
+  return isPreviewDeploy(env) ? `${DASH_PREFIX}${path === "/" ? "" : path}` : path;
+}
+
 /** The dashboards sign-in page: relative on a preview (the tree is at /dashboards there), the dashboards host elsewhere. */
 export function loginHref(env?: { DASH_HOST?: string; VERCEL_ENV?: string }): string {
   return isPreviewDeploy(env) ? `${DASH_PREFIX}/login` : `${dashOrigin(env)}/login`;
