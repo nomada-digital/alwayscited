@@ -73,7 +73,9 @@ test("no email sender builds a dashboard link with appUrl or /app", () => {
 
 test("the header's Log in and the help page's sign-in go to the dashboards host", () => {
   const layout = fs.readFileSync(path.join(ROOT, "src/app/layout.tsx"), "utf8");
-  assert.match(layout, /loginHref=\{`\$\{dashOrigin\(\)\}\/login`\}/);
+  // 27 Nov 2026: loginHref() is dashOrigin()/login, relative only on a preview (app-host.test.mts holds both).
+  assert.match(layout, /loginHref=\{loginHref\(\)\}/);
+  assert.match(fs.readFileSync(path.join(ROOT, "src/lib/dash/host.ts"), "utf8"), /`\$\{dashOrigin\(env\)\}\/login`/);
   assert.match(fs.readFileSync(path.join(ROOT, "src/config/help.ts"), "utf8"), /const SIGN_IN = dashLink\("\/login"\);/);
 });
 

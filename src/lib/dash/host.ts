@@ -14,6 +14,21 @@
 const ENV_DASH_HOST = process.env.DASH_HOST;
 
 /**
+ * A Vercel preview deployment (27 Nov 2026): its links stay on its own address instead of leaving for production, so a
+ * reviewer who signs in on a preview is still on that preview a click later. Literal access for the reason above.
+ * Never true in production, where VERCEL_ENV is "production", and never true locally, where it is unset.
+ */
+const ENV_VERCEL_ENV = process.env.VERCEL_ENV;
+export function isPreviewDeploy(env?: { VERCEL_ENV?: string }): boolean {
+  return (env ? env.VERCEL_ENV : ENV_VERCEL_ENV) === "preview";
+}
+
+/** The dashboards sign-in page: relative on a preview (the tree is at /dashboards there), the dashboards host elsewhere. */
+export function loginHref(env?: { DASH_HOST?: string; VERCEL_ENV?: string }): string {
+  return isPreviewDeploy(env) ? `${DASH_PREFIX}/login` : `${dashOrigin(env)}/login`;
+}
+
+/**
  * Shareable read-only demo links (17 Oct 2026): `token:slug` pairs, comma
  * separated, set in Vercel and never committed - the token is the only thing
  * that opens a demo, and this repository is public. Literal access for the
