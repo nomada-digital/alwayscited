@@ -102,7 +102,12 @@ test("rule 1: the walk finds the model calls it is written about", () => {
   // cron: at most PER_RUN (120) unread comparison answers a run, ten to a call, each answer read once and kept, so
   // twelve calls a run at most and none once the backlog is read. `messages.parse` on `anthropic(billed)`, so the
   // method set and rules 2-4 stand unchanged. A fourteenth needs its own.
-  assert.equal(calls.length, 13, "anthropic.ts makes thirteen model calls; a fourteenth needs a decision, not a default");
+  // Fourteen since 27 Nov 2026: placeholderTerms - Danny's brief that day (Find keywords' example text from the client's own space; "generate one
+  // once from their domain, site description and clusters with a cheap model, sanity-check it against DataForSEO volume"). Haiku, six short
+  // terms a call, reached only from src/lib/dash/placeholder-io.ts after a page has been sent, once per toggle state a client's own keywords
+  // cannot fill, and not asked again for 30 days when it found nothing. `messages.parse` on `anthropic(billed)`, so the method set and rules 2-4
+  // stand unchanged. A fifteenth needs its own.
+  assert.equal(calls.length, 14, "anthropic.ts makes fourteen model calls; a fifteenth needs a decision, not a default");
   assert.deepEqual(
     [...new Set(calls.map((c) => c.method))],
     ["parse"],

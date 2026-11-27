@@ -10,6 +10,7 @@ import { RESEARCH_SEED_MAX } from "@/lib/scan/dataforseo-request";
 import type { Raw } from "@/lib/dash/types";
 import type { ResearchedKeyword } from "@/lib/scan/dataforseo-request";
 import type { Audience } from "@/config/keyword-audience";
+import { type Placeholders, placeholderFor } from "@/lib/dash/placeholder";
 
 import { Menu } from "./ClusterEditor";
 import { Change, PositionCell, Spark, longDay } from "./Figures";
@@ -34,7 +35,7 @@ function Kd({ kd }: { kd: number | null | undefined }) {
  * one click to track any of them into a chosen cluster and group. Research
  * goes through /api/dash/[client]/keywords, capped per client per day.
  */
-export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known, audience: startAudience = "all" }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics; audience?: Audience }) {
+export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known, audience: startAudience = "all", placeholders }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics; audience?: Audience; placeholders?: Placeholders }) {
   const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
   const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
   const [metrics, setMetrics] = useState<Metrics>(known);
@@ -137,7 +138,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
         {ws.canWrite ? (
           <>
             <form onSubmit={(e) => { e.preventDefault(); void ask(); }} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              <input className={`field${err ? " err" : ""}`} style={{ flex: "1 1 240px" }} value={seed} maxLength={RESEARCH_SEED_MAX} onChange={(e) => { setSeed(e.target.value); setErr(null); }} placeholder="e.g. life sciences recruitment" aria-label="Seed keyword" />
+              <input className={`field${err ? " err" : ""}`} style={{ flex: "1 1 240px" }} value={seed} maxLength={RESEARCH_SEED_MAX} onChange={(e) => { setSeed(e.target.value); setErr(null); }} placeholder={`e.g. ${placeholderFor(placeholders, audience)}`} aria-label="Seed keyword" />
               <div className="seg" role="group" aria-label="Kind of search">
                 <button type="button" aria-pressed={kind === "suggestions"} onClick={() => { setKind("suggestions"); if (rows) void ask("suggestions"); }}>Matching terms</button>
                 <button type="button" aria-pressed={kind === "related"} onClick={() => { setKind("related"); if (rows) void ask("related"); }}>Related</button>
