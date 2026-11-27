@@ -46,7 +46,9 @@ export async function taskDailyPass(db: SupabaseClient): Promise<{ checked: numb
       if (!plan) continue;
       const people = await weekRecipientsNamed(db, c.account_id as string, c.id as string);
       const owners = people.map((m) => m.email.toLowerCase());
-      if (!owners.length) continue;
+      // No owner or editor on the dashboard (Laver and Propelo have only Kev as a viewer): a draft for the hub with no To, to be
+      // given the client's contact there. Never sent automatically, since there is nobody to send it to.
+      if (!owners.length && c.task_email_mode === "auto") { console.warn(`[tasks] ${c.slug}: nobody to email (auto mode), skipped`); continue; }
       const firstName = people.length === 1 ? people[0]!.firstName : null;
       // A connection that is one of the new tasks is already in the email as a task, so the reminder does not list it twice.
       const asTask = new Set((fresh ?? []).map((t) => String(t.kind).replace("connect_", "")));
