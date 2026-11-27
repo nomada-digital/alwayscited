@@ -59,7 +59,13 @@
 
 /* ---- main ---- */
 .dash-main { flex: 1 1 auto; min-width: 0; padding: 32px 40px 72px; }
-.dash-inner { max-width: 1120px; margin: 0 auto; }
+.dash { --card-gap: 16px; }
+/* One gap between every card and section on every dashboard page (Danny, 27 Nov 2026). The page content is a column with a single gap, so a
+   card never depends on being the adjacent sibling of another (a toast container or a note between two cards used to break the old
+   ".dash-card + .dash-card" rule and leave them touching). Per-card margins on direct children are neutralised; spacing inside a card is its own. */
+.dash-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--card-gap); }
+.dash-inner > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+.dash-inner > .dash-head { padding-bottom: 8px; }
 .dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 24px; }
 .dash-head h1 { margin: 6px 0 0; font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.03em; }
 .dash-head p { margin: 8px 0 0; color: var(--soft); max-width: 640px; }
@@ -68,7 +74,7 @@
 .dash-micro a:hover { color: var(--accent); }
 
 .dash-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px 22px; }
-.dash-card + .dash-card, .dash-stack > * + * { margin-top: 16px; }
+.dash-card + .dash-card, .dash-stack > * + * { margin-top: var(--card-gap, 16px); }
 .dash-card h2, .dash-h2 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
 .dash-card .intro { margin: 4px 0 0; color: var(--soft); font-size: 13.5px; }
 .dash-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
