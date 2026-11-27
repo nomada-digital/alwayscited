@@ -190,7 +190,7 @@ function collectCitations(
 type AioRef = { source?: string; domain?: string; url?: string; title?: string };
 type AioElement = { text?: string; references?: AioRef[] };
 type AioItem = { type: string; markdown?: string; items?: AioElement[]; references?: AioRef[] };
-type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string; breadcrumb?: string; website_name?: string };
+type OrganicItem = { type?: string; rank_group?: number; rank_absolute?: number; domain?: string; url?: string; breadcrumb?: string; website_name?: string; title?: string; description?: string };
 
 /**
  * The organic results, from the same response as the Overview. The request is
@@ -211,6 +211,33 @@ function collectOrganic(items: OrganicItem[]): OrganicHit[] {
     const rank = typeof i.rank_group === "number" ? i.rank_group : i.rank_absolute;
     if (!domain || typeof rank !== "number") continue;
     out.push({ domain, url: i.url ?? null, rank });
+  }
+  return out;
+}
+
+/**
+ * The organic results as they came, for the keyword read (27 Nov 2026). Only items of type "organic" with a rank are results.
+ * A result behind a google.com/goto link has its site read off the breadcrumb, but NO url: the breadcrumb is page titles
+ * ("Blog"), so a url built from it was a guess ("expression37.co.uk/Blog", the site's home page for a cut one). `goto` keeps the
+ * redirect so the page can be resolved (goto.ts) where it matters; until then it is unknown.
+ */
+export type OrganicDetail = OrganicHit & { goto: string | null; title: string | null; description: string | null; wrapped: boolean };
+export function parseOrganicDetailed(result: Record<string, unknown> | undefined | null): OrganicDetail[] {
+  const out: OrganicDetail[] = [];
+  for (const i of ((result?.items as OrganicItem[] | undefined) ?? [])) {
+    if (i.type !== "organic") continue;
+    const rank = typeof i.rank_group === "number" ? i.rank_group : i.rank_absolute;
+    if (typeof rank !== "number") continue;
+    const base = { rank, title: i.title ?? null, description: i.description ?? null };
+    if (wrappedLink(i.url ?? null)) {
+      const shown = unwrapByCrumb(i.breadcrumb) ?? unwrapByPlatform(i.website_name);
+      if (!shown) continue;
+      out.push({ ...base, domain: shown.domain, url: null, goto: i.url ?? null, wrapped: true });
+      continue;
+    }
+    const domain = normalizeDomain(i.domain || i.url || "");
+    if (!domain) continue;
+    out.push({ ...base, domain, url: i.url ?? null, goto: null, wrapped: false });
   }
   return out;
 }

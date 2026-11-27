@@ -186,19 +186,28 @@ export function requestFor(engine: Engine, question: string, market: Market): En
  */
 export const SE_DOMAIN: Record<Market, string> = { UK: "google.co.uk", US: "google.com", JM: "google.com.jm" };
 
-export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH, os?: "windows" | "macos"): EngineRequest {
+/**
+ * 27 Nov 2026 (Danny, Common's York keywords): `location` reads the keyword for a place instead of the country - a DataForSEO
+ * city location (lib/scan/locations.ts decides which); `aio` asks for the AI Overview on the same response, so "named in the AI
+ * Overview" is read for a tracked keyword (the hub's rank pull does the same); `poison` is the hub's resolve_poisoned_results
+ * (Danny, 17 Nov), set only on the second opinion of a read that found nothing or came back wrong.
+ */
+export type KeywordReadOpts = { location?: number; aio?: boolean; poison?: boolean };
+export function keywordRankRequest(keyword: string, market: Market, depth: number = SERP_DEPTH, os?: "windows" | "macos", opts: KeywordReadOpts = {}): EngineRequest {
   return {
     path: "/v3/serp/google/organic/live/advanced",
     timeoutMs: 60_000,
     body: [
       {
         keyword,
-        location_code: MARKETS[market].location_code,
+        location_code: opts.location ?? MARKETS[market].location_code,
         language_code: "en",
         device: "desktop",
         ...(os ? { os } : {}),
         se_domain: SE_DOMAIN[market],
         depth,
+        ...(opts.aio ? { load_async_ai_overview: true } : {}),
+        ...(opts.poison ? { resolve_poisoned_results: true } : {}),
       },
     ],
   };

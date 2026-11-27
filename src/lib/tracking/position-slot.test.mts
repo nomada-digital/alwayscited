@@ -90,10 +90,10 @@ test("the keyword read the help describes: desktop, the market's location, the t
   const start = src.indexOf("export async function readKeywordPosition(");
   assert.ok(start > 0, "readKeywordPosition is in dataforseo.ts");
   const body = src.slice(start, src.indexOf("\n}\n", start));
-  assert.ok(body.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os);"), "the tracking read is keywordRankRequest's");
+  assert.ok(body.includes("const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os, { location, poison: os !== undefined });"), "the tracking read is keywordRankRequest's");
   assert.ok(body.includes("post(path, body, "), "and posts that request as built");
   const runner = readFileSync(join(fileURLToPath(import.meta.url), "..", "runner.ts"), "utf8");
-  assert.ok(runner.includes("await readKeywordPosition(k.keyword as string, domain, market, remainingMs())"), "the tracking runner reads each keyword through readKeywordPosition");
+  assert.ok(runner.includes("await readKeywordPosition(k.keyword as string, domain, market, remainingMs(), { location: where.code, names, resolve, aioOf })"), "the tracking runner reads each keyword through readKeywordPosition");
   // Only organic results count: a map place, an ad or an AI Overview link is not a position (help.ts says so).
   const engines = readFileSync(join(fileURLToPath(import.meta.url), "..", "..", "scan", "engines.ts"), "utf8");
   assert.ok(engines.includes('if (i.type !== "organic") continue;'), "collectOrganic keeps organic results only");

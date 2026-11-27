@@ -328,7 +328,7 @@ test("census: the cron's pass is claimed and closed as before; a re-run is the s
   assert.match(body, /const askAgain = kept \? retryAnswers\(kept\) : null;/);
   assert.match(body, /const jobs = askAgain \? every\.filter\(\(\{ q, engine \}\) => askAgain\(q\.id as string, engine\)\) : every;/);
   assert.match(body, /mapWithConcurrency\(jobs, CONCURRENCY/);
-  assert.match(body, /mapWithConcurrency\(keywordJobs, CONCURRENCY/);
+  assert.match(body, /mapWithConcurrency\(keywordJobs, KEYWORD_CONCURRENCY/);
   // A brand gap is read again from the text stored, in the same one extraction per engine, and only brands written.
   assert.match(body, /const read = \[\.\.\.answers, \.\.\.stored\]\.filter\(/);
   assert.match(body, /\.update\(hasBrandsOk\(kept!\) \? \{ brands, brands_ok: true \} : \{ brands \}\)/);

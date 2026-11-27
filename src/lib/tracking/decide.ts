@@ -369,7 +369,12 @@ export const TRACKING_STALL_MS = 15 * 60 * 1000;
 export type ReadError = { status?: number; taskStatus?: number; cost?: number; name?: string; message?: string };
 
 /** Retries after the first attempt, and the wait before each. */
-export const READ_RETRY_DELAYS_MS = [1_000, 3_000] as const;
+/**
+ * 27 Nov 2026 (Danny, Common): 11 of 70 reads on 27 Nov failed with DataForSEO 40101 after two quick retries. The search engine's errors
+ * come and go over seconds, so four retries with a longer back-off (1, 3, 8 and 15 seconds, as long as the run has the time), and the
+ * runner reads whatever still failed once more at the end of the run (runner.ts SECOND_PASSES).
+ */
+export const READ_RETRY_DELAYS_MS = [1_000, 3_000, 8_000, 15_000] as const;
 
 /**
  * The wait before retrying a failed read, or null for no retry. Retried: HTTP

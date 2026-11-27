@@ -78,7 +78,12 @@ export type RawPrompt = {
 };
 export type RawRun = { run_date: Day; status: string; engines: string[] };
 // varies (15 Nov 2026, lib/tracking/crosscheck.ts): DataForSEO and Ahrefs read this keyword 10 or more places apart, or one had it and the other did not.
-export type RawSerp = { run_date: Day; keyword_id: string; position: number | null; url: string | null; varies?: boolean };
+export type ListedHit = { rank: number; domain: string; url: string | null; title: string | null };
+export type RawSerp = {
+  run_date: Day; keyword_id: string; position: number | null; url: string | null; varies?: boolean;
+  /** 27 Nov 2026 (20261127040000): the place the page was read for (null: the country), whether an AI Overview showed and named the client, and third-party pages in the top 10 that name it. */
+  location_name?: string | null; aio_shown?: boolean | null; aio_named?: boolean | null; listed?: ListedHit[] | null;
+};
 export type Citation = { url: string; title?: string | null; source_domain?: string | null; position?: number | null };
 export type RawAnswer = {
   run_date: Day;
@@ -200,7 +205,8 @@ export type PlanRequests = { swap: PlanSwap | null; upgrades: PlanUpgrade[] };
 export type Allowance = { used: number; limit: number };
 export type Allowances = { clusters: Allowance; prompts: Allowance; keywords: Allowance };
 
-export type ConsoleFig = { clicks: number; impr: number; ctr: number; pos: number | null };
+/** `from`/`to`: the days the figure covers (a 28-day window ending at the console's latest period), so a position shown from Search Console says which days it averages. */
+export type ConsoleFig = { clicks: number; impr: number; ctr: number; pos: number | null; from?: Day; to?: Day };
 
 export type KeywordView = {
   id: string | null;
@@ -212,6 +218,15 @@ export type KeywordView = {
   /** Tracked keywords: read at least once in the window, and the latest reading's sources disagreed (crosscheck.ts). */
   read?: boolean;
   varies?: boolean;
+  /** 27 Nov 2026: the keyword was read on an earlier day but not on the client's latest run, so today's read failed. `readOn` is the day it was last read. */
+  stale?: boolean;
+  readOn?: Day | null;
+  /** The place its latest reading was made for ("York"), null for the whole country. */
+  place?: string | null;
+  /** Its latest reading's AI Overview: shown, and naming the client. Null before the column existed. */
+  aio?: { shown: boolean; named: boolean } | null;
+  /** Third-party pages in the top 10 that name the client (a directory listing): visibility that is not the client's own position. */
+  listed?: ListedHit[];
   change: number | null;
   url: string | null;
   hist: [Day, number | null][];
@@ -273,6 +288,9 @@ export type ClusterView = {
   headPos: number | null;
   /** Whether the head keyword has a reading, and whether our two sources disagreed on it (lib/tracking/crosscheck.ts). */
   headRead: boolean;
+  /** 27 Nov 2026: the head keyword was last read before the latest run (today's read failed), and on which day. */
+  headStale: boolean;
+  headReadOn: Day | null;
   headVaries: boolean;
   /** Search Console's figure for the head keyword (16 Nov 2026): the fallback when its live read fails or disagrees. */
   headGsc: ConsoleFig | null;

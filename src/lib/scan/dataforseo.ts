@@ -58,8 +58,9 @@ import {
 } from "./dataforseo-request.ts";
 import { type MapsHit, parseMapsResult, rankOfCid } from "@/lib/local/grid";
 
-import { type Market } from "./domain";
+import { MARKETS, type Market } from "./domain";
 import { type Engine, type EngineRead, type OrganicHit, PARSERS, parseOrganic, rankOfRead, serpFault } from "./engines";
+import { analyseKeywordResult, type Listed } from "./keyword-read";
 
 /**
  * The HTTP half. Everything that can be decided without a credential or a
@@ -246,23 +247,48 @@ export async function readKeywordRank(
  * best-ranking page as well - the daily tracking runner stores both (T1,
  * 29 Sep 2026). One request shape, one ranker; only what is kept differs.
  */
+export type KeywordRead = {
+  rank: number | null | undefined;
+  url: string | null;
+  cost: number;
+  top: { rank: number; domain: string; url: string | null }[];
+  fault: ReturnType<typeof serpFault>;
+  /** The DataForSEO location the page was read for: a city for a place-named keyword, else the country. */
+  location: number;
+  /** An AI Overview showed for the search, and whether it names the client (its text, or the client's site among its sources). */
+  aio: { shown: boolean; named: boolean | null };
+  /** Third-party pages in the top 10 whose title or snippet names the client (a directory or partner page), kept apart from the client's own position. */
+  listed: Listed[];
+};
+
 export async function readKeywordPosition(
   keyword: string,
   domain: string,
   market: Market,
   budgetMs?: number,
-): Promise<{ rank: number | null | undefined; url: string | null; cost: number; top: OrganicHit[]; fault: ReturnType<typeof serpFault> }> {
+  ctx: {
+    location?: number;
+    names?: (text: string) => boolean;
+    resolve?: (url: string) => Promise<string | null>;
+    /** The AI Overview for the search, read apart from the SERP (see below). Null from it means "not read", never "not named". */
+    aioOf?: (keyword: string) => Promise<{ shown: boolean; named: boolean; cost: number } | null>;
+  } = {},
+): Promise<KeywordRead> {
   // 14 Nov 2026: the daily tracking reads to TRACKING_SERP_DEPTH (100); the scan's readKeywordRank stays at SERP_DEPTH.
   // 15 Nov 2026 (Volunteero, #2 in the UK, read absent on four days of seven): Google serves DataForSEO varying pages
   // for the same search at the same moment. A read that does not find the site, or that is no reading (a foreign,
   // thin or wrapped page), is read once more as another desktop; the second counts when it is a reading and the first
   // found nothing. A page that is no reading never becomes "not in the top 100" (rankOfRead, decide.ts keywordOutcome).
+  // 27 Nov 2026 (Danny): the read is for the place a keyword names (ctx.location), and its second opinion asks DataForSEO to
+  // resolve poisoned listings, as the hub's re-checks do. The AI Overview is NOT asked for on this request: load_async_ai_overview on a
+  // city-level read answered 40101 every time (tested 27 Nov, York, 9 of 9), so it is read apart, best-effort, by ctx.aioOf.
+  const location = ctx.location ?? MARKETS[market].location_code;
+  const names = ctx.names ?? (() => false);
   const once = async (os?: "windows" | "macos") => {
-    const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os);
+    const { path, body, timeoutMs } = keywordRankRequest(keyword, market, TRACKING_SERP_DEPTH, os, { location, poison: os !== undefined });
     const task = firstTask(await post(path, body, budgetFor(timeoutMs, budgetMs)));
-    const organic = parseOrganic(task.result?.[0]);
-    const rank = rankOfRead(organic, domain, task.partial === true, market);
-    return { organic, rank, cost: taskCost(task), fault: serpFault(organic, market) };
+    const a = analyseKeywordResult(task.result?.[0], { domain, market, partial: task.partial === true, names });
+    return { ...a, cost: taskCost(task) };
   };
   const first = await once();
   let pick = first;
@@ -274,12 +300,26 @@ export async function readKeywordPosition(
       if (typeof second.rank === "number" || (first.rank === undefined && second.rank === null)) pick = second;
     }
   }
-  const url = typeof pick.rank === "number" ? (pick.organic.find((o) => o.rank === pick.rank)?.url ?? null) : null;
-  // MS-1 (12 Oct 2026): the page of results this read already paid for - rank, domain and
-  // URL of each organic result to SERP_DEPTH - so who else ranks for the cluster keyword is
-  // kept day by day rather than thrown away. No new request and no new cost.
-  const top = pick.organic.filter((o) => o.rank <= SERP_DEPTH).map((o) => ({ rank: o.rank, domain: o.domain, url: o.url }));
-  return { rank: pick.rank, url, cost, top, fault: pick.fault };
+  const own = domain.toLowerCase().replace(/^www\./, "");
+  const isOwn = (d: string) => d === own || d.endsWith(`.${own}`);
+  // Never a guessed address: a wrapped result is resolved through its one redirect (goto.ts), else it is unknown.
+  const pageOf = async (d: { url: string | null; goto: string | null }) => d.url ?? (d.goto && ctx.resolve ? await ctx.resolve(d.goto) : null);
+  const hit = typeof pick.rank === "number" ? pick.detail.find((d) => d.rank === pick.rank && isOwn(d.domain)) : undefined;
+  const url = hit ? await pageOf(hit) : null;
+  // MS-1 (12 Oct 2026): the page of results this read already paid for - rank, domain and URL of each organic result to
+  // SERP_DEPTH - so who else ranks for the cluster keyword is kept day by day rather than thrown away. A wrapped result's url
+  // is null unless it was resolved, where it used to be a guess built from the breadcrumb.
+  const top = pick.detail.filter((d) => d.rank <= SERP_DEPTH).map((d) => ({ rank: d.rank, domain: d.domain, url: d.url }));
+  const listed: Listed[] = [];
+  for (const c of pick.candidates.slice(0, 3)) listed.push({ rank: c.rank, domain: c.domain, url: await pageOf(c), title: c.title });
+  // The AI Overview, only for a read that can be stood behind (a page that is no reading says nothing about the client).
+  // `named` is null until the Overview itself has been read: unknown is not "no".
+  let aio: KeywordRead["aio"] = { shown: pick.aio.shown, named: null };
+  if (ctx.aioOf && pick.fault === null) {
+    const a = await ctx.aioOf(keyword).catch(() => null);
+    if (a) { cost += a.cost; aio = { shown: a.shown, named: a.named }; }
+  }
+  return { rank: pick.rank, url, cost, top, fault: pick.fault, location, aio, listed };
 }
 
 /**

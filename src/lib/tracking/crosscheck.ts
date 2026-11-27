@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { HUB_SUGGEST } from "@/lib/dash/suggest";
 
+import { MARKETS, type Market } from "@/lib/scan/domain";
 import { missingColumn } from "./decide.ts";
 import { ahrefsRank, decideCheck, needsCheck } from "./crosscheck-decide.ts";
 
@@ -70,7 +71,12 @@ export async function crossCheckRun(db: SupabaseClient, runId: string): Promise<
     const previous = new Map<string, number | null>();
     for (const b of before ?? []) if (!previous.has(b.keyword_id as string)) previous.set(b.keyword_id as string, b.position as number | null);
 
-    const due = fresh.filter((r) => needsCheck(r.position, previous.get(r.keyword_id))).slice(0, AHREFS_MAX);
+    // 27 Nov 2026: a keyword read for a place (York) is not comparable with Ahrefs' country-wide position, so it is never second-read
+    // and its place-specific reading is never replaced by one. A database without tracking_serp.location_code reads none as local.
+    const { data: placed, error: pErr } = await db.from("tracking_serp").select("keyword_id, location_code").eq("run_id", runId).not("location_code", "is", null);
+    if (pErr && !missingColumn(pErr, "location_code")) return `could not read the places: ${pErr.message}`;
+    const local = new Set((placed ?? []).filter((p) => p.location_code !== MARKETS[client.market as Market].location_code).map((p) => p.keyword_id as string));
+    const due = fresh.filter((r) => !local.has(r.keyword_id) && needsCheck(r.position, previous.get(r.keyword_id))).slice(0, AHREFS_MAX);
     if (!due.length) return "no keyword needs a second reading";
     const { data: ks, error: kErr } = await db.from("tracked_keywords").select("id, keyword").eq("client_domain_id", run.client_domain_id).in("id", due.map((r) => r.keyword_id));
     if (kErr) return `could not read the keywords: ${kErr.message}`;

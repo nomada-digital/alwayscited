@@ -24,11 +24,13 @@ test("a SERP with no AI Overview is a silence: answered=false, no throw, and a r
   assert.equal(runOutcome(21, 0), "complete", "silences are not failures, so no partial");
 });
 
-test("retry: 429, 5xx and DataForSEO 5xxxx retry twice with backoff; bad requests, auth and timeouts do not", () => {
+test("retry: 429, 5xx and DataForSEO 5xxxx retry four times with backoff; bad requests, auth and timeouts do not", () => {
   const plenty = 200_000;
   assert.equal(readRetryDelay({ status: 429 }, 0, plenty), 1_000);
   assert.equal(readRetryDelay({ status: 429 }, 1, plenty), 3_000);
-  assert.equal(readRetryDelay({ status: 429 }, 2, plenty), null, "two retries, then stop");
+  assert.equal(readRetryDelay({ status: 429 }, 2, plenty), 8_000);
+  assert.equal(readRetryDelay({ status: 429 }, 3, plenty), 15_000);
+  assert.equal(readRetryDelay({ status: 429 }, 4, plenty), null, "four retries (27 Nov 2026), then stop");
   assert.equal(readRetryDelay({ status: 503 }, 0, plenty), 1_000);
   assert.equal(readRetryDelay({ taskStatus: 50000 }, 0, plenty), 1_000);
   assert.equal(readRetryDelay({ taskStatus: 40501 }, 0, plenty), null, "a bad parameter is not retried");
@@ -37,7 +39,7 @@ test("retry: 429, 5xx and DataForSEO 5xxxx retry twice with backoff; bad request
   assert.equal(readRetryDelay({ status: 429 }, 0, 9_000), null, "no retry that would not fit inside the run");
 });
 
-test("R137: 40101 (the search engine's own server error) retries twice on the same delays", () => {
+test("R137: 40101 (the search engine's own server error) retries four times on the same delays", () => {
   const plenty = 200_000;
   let thrown: unknown;
   try {
@@ -48,7 +50,9 @@ test("R137: 40101 (the search engine's own server error) retries twice on the sa
   assert.equal((thrown as { taskStatus?: number }).taskStatus, 40101);
   assert.equal(readRetryDelay(thrown, 0, plenty), 1_000);
   assert.equal(readRetryDelay(thrown, 1, plenty), 3_000);
-  assert.equal(readRetryDelay(thrown, 2, plenty), null, "two retries, then stop");
+  assert.equal(readRetryDelay(thrown, 2, plenty), 8_000);
+  assert.equal(readRetryDelay(thrown, 3, plenty), 15_000);
+  assert.equal(readRetryDelay(thrown, 4, plenty), null, "four retries, then stop");
   assert.equal(readRetryDelay(thrown, 0, 9_000), null, "not past the run's budget");
   assert.equal(readRetryDelay({ taskStatus: 40102 }, 0, plenty), null, "no results is not a server error");
 });
@@ -159,11 +163,13 @@ test("14 Nov 2026: the daily tracking reads each keyword to the top 100 in the c
   assert.equal(SERP_DEPTH, 20);
   assert.equal(((keywordRankRequest("x", "UK").body as Record<string, unknown>[])[0]!).depth, 20, "the scan's read is unchanged");
   const dfs = readFileSync(new URL("../scan/dataforseo.ts", import.meta.url), "utf8");
-  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH, os\)/, "readKeywordPosition, the tracking read, asks for the top 100");
+  assert.match(dfs, /keywordRankRequest\(keyword, market, TRACKING_SERP_DEPTH, os, \{ location, poison: os !== undefined \}\)/, "readKeywordPosition, the tracking read, asks for the top 100, for the keyword's place (27 Nov 2026)");
+  assert.equal(((keywordRankRequest("x", "UK", TRACKING_SERP_DEPTH).body as Record<string, unknown>[])[0]!).location_code, 2826, "with no place given, the market's country");
+  assert.equal(((keywordRankRequest("x", "UK", TRACKING_SERP_DEPTH, undefined, { location: 1007266 }).body as Record<string, unknown>[])[0]!).location_code, 1007266, "a place-named keyword is read for York");
   assert.deepEqual([uk.se_domain, us.se_domain], [SE_DOMAIN.UK, SE_DOMAIN.US], "15 Nov 2026: each market on its own Google");
   assert.ok(SE_DOMAIN.UK.endsWith(["", "co", "uk"].join(".")));
   assert.equal(uk.device, "desktop");
-  assert.match(dfs, /const top = pick\.organic\.filter\(\(o\) => o\.rank <= SERP_DEPTH\)/, "only the top 20 is kept as the day's results");
+  assert.match(dfs, /const top = pick\.detail\.filter\(\(d\) => d\.rank <= SERP_DEPTH\)/, "only the top 20 is kept as the day's results (27 Nov 2026: from the detailed organic items, with no url invented for a redirect link)");
 });
 
 /** Where runner.ts marks a read failed, and whether it still collapses an empty SERP to null. */

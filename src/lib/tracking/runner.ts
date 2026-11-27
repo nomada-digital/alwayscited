@@ -6,6 +6,9 @@ import { extractBrands } from "@/lib/scan/anthropic";
 import { brandKey, namesExactly, namesSubject, subjectKeys } from "@/lib/scan/brand-name";
 import { runLocalGrids } from "@/lib/local/run";
 import { readEngine, readKeywordPosition } from "@/lib/scan/dataforseo";
+import { limitedResolver } from "@/lib/scan/goto";
+import { placeFrom, whereFor } from "@/lib/scan/locations";
+import { MARKETS } from "@/lib/scan/domain";
 import { type Market } from "@/lib/scan/domain";
 import { type Citation, type Engine, knownEngines } from "@/lib/scan/engines";
 import { recordModelCallDebit } from "@/lib/scan/spend";
@@ -79,9 +82,17 @@ import { readTrackable, recordSkips } from "./run-health.ts";
 
 /** The scan pipeline's pool size, for the same reason: the tail sets the finish, not the burst. */
 const CONCURRENCY = 28;
+/** Keyword reads are the heavy ones (a top-100 SERP with the AI Overview): DataForSEO answers 40101 "Internal SE Server Error" to a burst, so they go a few at a time (27 Nov 2026; 11 of 70 reads failed on 27 Nov with 28 at once). */
+const KEYWORD_CONCURRENCY = 5;
 
 /** Against the 300s function ceiling, as the scan budgets itself. */
 const RUN_BUDGET_MS = 270_000;
+/** Failed keyword reads are tried again after the rest (27 Nov 2026): this many extra passes, if this much of the run is left, after this pause. */
+const SECOND_PASSES = 2;
+const SECOND_PASS_MIN_MS = 45_000;
+const SECOND_PASS_PAUSE_MS = 8_000;
+/** Redirect links resolved to their page in one run: the client's own result and the pages that list it. */
+const GOTO_LOOKUPS_PER_RUN = 60;
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
@@ -314,6 +325,11 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       .eq("id", run.client_domain_id)
       .single();
     if (clErr) throw new Error(`could not read the client: ${clErr.message}`);
+    // 27 Nov 2026 (Danny): where this client's searches are read from, if it is local to one place. Columns of
+    // 20261127040000; a database without them reads every keyword as before (country, or the place the keyword names).
+    const { data: locRow, error: locErr } = await db.from("client_domains").select("search_location_code, search_location_name").eq("id", client.id).maybeSingle();
+    if (locErr && !missingColumn(locErr, "search_location_code")) throw new Error(`could not read the client's location: ${locErr.message}`);
+    const clientPlace = placeFrom({ code: locRow?.search_location_code, name: locRow?.search_location_name });
     const domain = client.domain as string;
     domainForDebit = domain;
     const brand = (client.brand_name as string | null) ?? domain;
@@ -323,12 +339,16 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
 
     const [{ data: qs, error: qErr }, { data: ks, error: kErr }] = await Promise.all([
       db.from("tracked_questions").select("id, text, added_on, stopped_on").eq("client_domain_id", client.id),
-      db.from("tracked_keywords").select("id, keyword, added_on, stopped_on").eq("client_domain_id", client.id),
+      db.from("tracked_keywords").select("id, keyword, added_on, stopped_on, location_code, location_name").eq("client_domain_id", client.id),
     ]);
     if (qErr) throw new Error(`could not read the questions: ${qErr.message}`);
-    if (kErr) throw new Error(`could not read the keywords: ${kErr.message}`);
+    type KwRow = { id: string; keyword: string; added_on: string; stopped_on: string | null; location_code?: number | null; location_name?: string | null };
+    let ksRows = ks as KwRow[] | null;
+    if (kErr && missingColumn(kErr, "location_code")) {
+      ({ data: ksRows } = await db.from("tracked_keywords").select("id, keyword, added_on, stopped_on").eq("client_domain_id", client.id).returns<KwRow[]>());
+    } else if (kErr) throw new Error(`could not read the keywords: ${kErr.message}`);
     const questions = (qs ?? []).filter((q) => liveOn(q as { added_on: string; stopped_on: string | null }, day));
-    const keywords = (ks ?? []).filter((k) => liveOn(k as { added_on: string; stopped_on: string | null }, day));
+    const keywords = (ksRows ?? []).filter((k) => liveOn(k as { added_on: string; stopped_on: string | null }, day));
 
     const engines = knownEngines(run.engines as string[] | null);
     // 29 Oct 2026: a brand that is also an ordinary word ("COMMON") counts only as written (brand-name.ts namesExactly).
@@ -400,13 +420,30 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
 
     // A keyword read: null is "not in the top 100" (TRACKING_SERP_DEPTH), a finding; an empty SERP or
     // an error is a failed read with its reason, never a silent null.
-    const serp = await mapWithConcurrency(keywordJobs, CONCURRENCY, async (k) => {
+    // 27 Nov 2026 (Danny, Common): each keyword is read for the place it names (york, leeds ...) or its own override or the
+    // client's place, else the country (scan/locations.ts); a redirect link is resolved to its page, never guessed; and a read that
+    // failed is tried again in the same run, once more after the others, before it is given up.
+    const resolve = limitedResolver(GOTO_LOOKUPS_PER_RUN);
+    // The AI Overview for a keyword, as the prompts read it (country level, best-effort: a failure leaves it unread, never "not named").
+    const aioOf = async (kw: string) => {
+      if (remainingMs() < 20_000) return null;
+      const r = await readEngine("google_aio", kw, market, remainingMs());
+      const claimed = !r.answered && !!(r.raw as { claimed_but_absent?: boolean } | null)?.claimed_but_absent;
+      const own = domain.toLowerCase().replace(/^www\./, "");
+      const cites = r.citations.some((c) => { const d = c.source_domain.toLowerCase().replace(/^www\./, ""); return d === own || d.endsWith(`.${own}`); });
+      return { shown: r.answered || claimed, named: r.answered && (names(r.prose) || cites), cost: r.cost };
+    };
+    const readOne = async (k: (typeof keywordJobs)[number]) => {
+      const where = whereFor({
+        keyword: k.keyword as string, market, countryCode: MARKETS[market].location_code,
+        override: placeFrom({ code: (k as { location_code?: unknown }).location_code, name: (k as { location_name?: unknown }).location_name }), clientDefault: clientPlace,
+      });
       let cost = 0;
       let reason = "out of time before the read";
       for (let attempt = 0; ; attempt++) {
         if (remainingMs() < 5000) break;
         try {
-          const read = await readKeywordPosition(k.keyword as string, domain, market, remainingMs());
+          const read = await readKeywordPosition(k.keyword as string, domain, market, remainingMs(), { location: where.code, names, resolve, aioOf });
           spend.dfs += read.cost;
           cost += read.cost;
           const out = keywordOutcome(read.rank, read.fault);
@@ -414,7 +451,7 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
             reason = out.reason;
             break;
           }
-          return { k, failed: false as const, rank: out.rank, url: read.url, cost, top: read.top };
+          return { k, failed: false as const, rank: out.rank, url: read.url, cost, top: read.top, where, aio: read.aio, listed: read.listed };
         } catch (err) {
           const billed = billedCost(err);
           spend.dfs += billed;
@@ -429,8 +466,20 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
           break;
         }
       }
-      return { k, failed: true as const, rank: null, url: null, cost, reason };
-    });
+      return { k, failed: true as const, rank: null, url: null, cost, reason, where };
+    };
+    let serp = await mapWithConcurrency(keywordJobs, KEYWORD_CONCURRENCY, readOne);
+    // The second pass: whatever still failed, once more after the rest have been read (DataForSEO's search-engine errors
+    // and odd pages come and go within minutes), while the run has the time. A keyword read here counts like any other.
+    for (let pass = 0; pass < SECOND_PASSES; pass++) {
+      const failed = serp.filter((s) => s.failed);
+      if (!failed.length || remainingMs() < SECOND_PASS_MIN_MS) break;
+      console.log(`[track] ${runId} reading ${failed.length} failed keyword${failed.length === 1 ? "" : "s"} again (pass ${pass + 2})`);
+      await sleep(SECOND_PASS_PAUSE_MS);
+      const again = await mapWithConcurrency(failed.map((s) => s.k), KEYWORD_CONCURRENCY, readOne);
+      const byId = new Map(again.map((a) => [a.k.id as string, a]));
+      serp = serp.map((s) => (s.failed ? byId.get(s.k.id as string) ?? s : s));
+    }
 
     // Who else is named: one extraction per engine over that engine's answers,
     // as the scan does it, then attributed back to each answer with the same
@@ -544,14 +593,24 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
         url: s.url,
         cost: Number(s.cost.toFixed(4)),
       }));
+    // 27 Nov 2026: where the page was read for, and what it says about the client beyond its own position (20261127040000).
+    const withVisibility = (rows: typeof serpRows) => rows.map((r, i) => ({
+      ...r, top: serpRead[i]!.top, location_code: serpRead[i]!.where.code, location_name: serpRead[i]!.where.name,
+      aio_shown: serpRead[i]!.aio.shown, aio_named: serpRead[i]!.aio.named, listed: serpRead[i]!.listed,
+    }));
     if (serpRows.length) {
       // MS-1 (12 Oct 2026): each keyword's organic top 20 rides in `top`, 20261012000000's
       // column. A deploy landing before that migration stores the positions without it rather
       // than losing them, as the brands_ok write does.
       const withTop = serpRows.map((r, i) => ({ ...r, top: serpRead[i]!.top }));
-      for (const rows of [withTop, serpRows]) {
+      const withAll = withVisibility(serpRows);
+      for (const rows of [withAll, withTop, serpRows]) {
         const { error } = await db.from("tracking_serp").upsert(rows, { onConflict: "run_id,keyword_id" });
         if (!error) break;
+        if (rows === withAll && (missingColumn(error, "location_code") || missingColumn(error, "aio_named") || missingColumn(error, "listed"))) {
+          console.warn(`[track] ${runId} tracking_serp has no location or visibility columns yet; positions stored without them`);
+          continue;
+        }
         if (rows === withTop && missingColumn(error, "top")) {
           console.warn(`[track] ${runId} tracking_serp has no top yet; positions stored without it`);
           continue;
