@@ -207,6 +207,9 @@ const RECORDED: Record<string, string> = {
     "the daily cron's lifecycle sweep and Stripe's trial_will_end read a client's account to skip agency mode and mail its live owners; the cron answers with sent and unsent labels of email name and client id, the webhook with a status only.",
   // 1 Oct 2026, R159 part 5: first_reading finds the client's account mode and owners.
   // 18 Oct 2026: the 90-day retention purge (retention-purge.ts), run from the signed 03:30 cron.
+  // 27 Nov 2026: Your tasks (tasks/notify.ts), run from the 05:00 cron.
+  "src/lib/tasks/notify.ts :: id, slug, domain, account_id, status, archived_at, task_email_mode, account_lead":
+    "the daily tasks pass, to find a client's owners and editors for the batched tasks email; started only by the cron behind CRON_SECRET, it returns counts, never an id.",
   "src/lib/tracking/retention-purge.ts :: id, slug, domain, account_id, status, ended_at":
     "the retention purge, to delete an ended client and, with its last client, its account; started only by the cron behind CRON_SECRET, it returns slugs and dates, never the id.",
   "src/lib/tracking/runner.ts :: account_id, tier":
@@ -267,6 +270,8 @@ const MENTIONED: Record<string, string> = {
     "paid checkout from a scan becomes a client. Writes, behind the Stripe signature; " +
     "the webhook answers with no row. Also reads it back when a subscription ends, to mail " +
     "plan_ended (R159, 1 Oct 2026; widened 8 Oct 2026 - its RECORDED entry above).",
+  "src/lib/tasks/notify.ts":
+    "27 Nov 2026: the daily tasks pass reads account_id to find a client's owners and editors (weekRecipientsNamed) for the batched tasks email. Started only by the cron behind CRON_SECRET; it answers with counts.",
   "src/lib/tracking/retention-purge.ts":
     "18 Oct 2026: the 90-day retention purge filters on account_id to count, and then delete, an ended client's account " +
     "and its members' sign-ins. Started only by the 03:30 cron behind CRON_SECRET; its report carries slugs, domains and dates, never the id.",

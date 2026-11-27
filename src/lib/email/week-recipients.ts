@@ -21,3 +21,12 @@ export async function weekRecipients(db: SupabaseClient, accountId: string, clie
   const scopes = await readScopes(db, members.map((m) => String(m.id)));
   return members.filter((m) => sees(scopes.of.get(String(m.id)), clientId)).map((m) => String(m.email));
 }
+
+/** The same people with their first names (27 Nov 2026, Your tasks: the greeting on the batched tasks email). Same scope rule. */
+export async function weekRecipientsNamed(db: SupabaseClient, accountId: string, clientId: string): Promise<{ email: string; firstName: string | null }[]> {
+  const { data: members, error } = await db.from("dashboard_members").select("id, email, role, first_name").eq("account_id", accountId).in("role", ["owner", "editor"]).is("removed_at", null);
+  if (error) throw new Error(`could not read the members: ${error.message}`);
+  if (!members?.length) return [];
+  const scopes = await readScopes(db, members.map((m) => String(m.id)));
+  return members.filter((m) => sees(scopes.of.get(String(m.id)), clientId)).map((m) => ({ email: String(m.email), firstName: (m.first_name as string | null) ?? null }));
+}

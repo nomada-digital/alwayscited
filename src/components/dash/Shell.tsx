@@ -18,7 +18,7 @@ import ViewAsSuggest from "./ViewAsSuggest";
  * the sections, and the plan's allowances, always in view, so a full one is
  * seen before an add is refused.
  */
-export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, prompts = 0, logo = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; prompts?: number; logo?: string | null; children: React.ReactNode }) {
+export default function Shell({ ws, others, base, demo = false, viewAs = null, banner = null, waiting = null, prompts = 0, tasks = { total: 0, open: 0 }, logo = null, children }: { ws: Workspace; others: { slug: string; domain: string }[]; base: string; demo?: boolean; viewAs?: { by: string; expiresAt: string } | null; banner?: PlanBanner | null; waiting?: string | null; prompts?: number; tasks?: { total: number; open: number }; logo?: string | null; children: React.ReactNode }) {
   const root = `${base}/${ws.client.slug}`;
   const a = ws.allowances;
   const items = [
@@ -38,6 +38,8 @@ export default function Shell({ ws, others, base, demo = false, viewAs = null, b
     { href: `${root}/opportunities`, label: "Opportunities", icon: "opportunities", n: ws.opportunities.length || null },
     { href: `${root}/integrations`, label: "Integrations", icon: "integrations" },
     { href: `${root}/schema`, label: "Schema", icon: "edit" },
+    // 27 Nov 2026: Your tasks, with a badge of what still needs the customer; the link shows once there is a task.
+    ...(tasks.total ? [{ href: `${root}/tasks`, label: "Your tasks", icon: "plan", n: tasks.open || null }] : []),
     // 26 Nov 2026: ready-to-paste prompts Nomada has published for this customer; the link shows once there is one.
     ...(prompts ? [{ href: `${root}/prompts`, label: "Prompts for your site", icon: "edit", n: prompts }] : []),
     { href: `${root}/plan`, label: "Plan", icon: "plan" },

@@ -3,6 +3,7 @@ import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setPromptTier, setPromptType, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { linksRead, markLive } from "@/lib/agency/mark-live";
 import { promptsPublish, promptsRead, promptsUnpublish } from "@/lib/agency/prompts";
+import { taskEmailMark, tasksAdd, tasksRead, tasksSettings, tasksUpdate } from "@/lib/agency/tasks";
 import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
@@ -32,7 +33,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish", "links_read", "mark_live"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish", "links_read", "mark_live", "tasks_read", "tasks_add", "tasks_update", "tasks_settings", "task_email_mark"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -106,6 +107,20 @@ export async function POST(req: Request) {
         return promptsPublish(db, client, by, { id: str("id"), title: str("title"), intro: str("intro"), prompts: b.prompts });
       case "prompts_unpublish":
         return promptsUnpublish(db, client, by, str("id"));
+      // Your tasks (27 Nov 2026, lib/agency/tasks.ts): actions for the customer, on their dashboard at /<slug>/tasks.
+      case "tasks_read":
+        return tasksRead(db, client);
+      case "tasks_add": {
+        const params: Record<string, string> = {};
+        if (b.params && typeof b.params === "object") for (const [k, v] of Object.entries(b.params as Record<string, unknown>)) if (typeof v === "string" && /^[a-z_]{1,20}$/.test(k)) params[k] = v.slice(0, 2000);
+        return tasksAdd(db, client, by, { template: str("template"), params, custom: b.custom && typeof b.custom === "object" ? (b.custom as Record<string, unknown>) : null });
+      }
+      case "tasks_update":
+        return tasksUpdate(db, client, by, { id: id("id"), status: str("status"), archive: b.archive === true });
+      case "tasks_settings":
+        return tasksSettings(db, client, by, { mode: str("mode"), lead: str("lead") });
+      case "task_email_mark":
+        return taskEmailMark(db, client, by, { id: id("id"), hubDraftId: str("hub_draft_id"), dismiss: b.dismiss === true });
       case "budget_read":
         return budgetRead(db, client);
       case "budget_cap":

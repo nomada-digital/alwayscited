@@ -107,7 +107,7 @@ const files = sourceFiles(SRC).map((f) => ({
 const SENDERS: Record<
   string,
   {
-    reach: "anonymous" | "behind the ceilings" | "open, limited per caller" | "signed by Stripe" | "signed-in member, limited per member" | "signed-in owner, limited per owner" | "signed-in owner or editor, once a client" | "the tracking runner, once a client a Sunday" | "the tracking runner or the daily cron, once a day";
+    reach: "anonymous" | "behind the ceilings" | "open, limited per caller" | "signed by Stripe" | "signed-in member, limited per member" | "signed-in owner, limited per owner" | "signed-in owner or editor, once a client" | "the tracking runner, once a client a Sunday" | "the tracking runner or the daily cron, once a day" | "the daily cron, once a client a day";
     bound: string;
     evidence: RegExp;
     where: string;
@@ -322,6 +322,20 @@ const SENDERS: Record<
       "Its callers are a claimed tracking run and the cron behind CRON_SECRET; the health JSON does not send.",
     evidence: /if \(!claimAbandoned\(prior\.props, p\.now\)\) return "taken";[\s\S]*?\.eq\("props->>sent", "false"\)[\s\S]*?\.insert\(\{[^}]*event: RUN_HEALTH_EVENT[\s\S]*?await io\.send\(/,
     where: "src/lib/tracking/run-health.ts",
+  },
+  /**
+   * 27 Nov 2026, Your tasks (Danny): the batched "We've added N tasks to your dashboard" email. Reached only by the daily cron
+   * (the 05:00 track route, behind CRON_SECRET) - no route, action or page calls it. Default is a draft for the owner to approve
+   * in the hub; a send happens only for a client staff switched to "Send automatically".
+   */
+  "src/lib/tasks/notify.ts": {
+    reach: "the daily cron, once a client a day",
+    bound:
+      "Mails only the account's stored owners and editors (dashboard_members), never a caller-supplied address. At most one email " +
+      "per client in 20 hours (client_task_emails created_at), and each task is announced once (notified_at). Sends only when the " +
+      "client's task_email_mode is auto; the default is draft, which stores the email for the hub's Ready to send and mails nobody.",
+    evidence: /const auto = c\.task_email_mode === "auto";[\s\S]*?if \(auto\) \{[\s\S]*?\.emails\.send\(/,
+    where: "src/lib/tasks/notify.ts",
   },
   /**
    * 2 Oct 2026, R166 step 4 (Danny, danny.md line 175): setup confirmed, to

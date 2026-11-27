@@ -270,6 +270,11 @@ const SENDERS: { file: string; sends: number; why: string }[] = [
     why: "the daily run-health summary, 9 Oct 2026 (audit reliability-6, spec OP-1) - to us at the contact destination, from a closing tracking run or the daily cron, once a tracking day when a client's run is not complete",
   },
   {
+    file: "src/lib/tasks/notify.ts",
+    sends: 1,
+    why: "the batched 'We've added N tasks to your dashboard' email, 27 Nov 2026 (Danny) - to the account's stored owners and editors, at most one a day per client, and only for a client staff set to 'Send automatically': the default is a draft left for the owner to approve in the hub, so nothing is sent unless staff chose it for that client",
+  },
+  {
     file: "src/lib/email/lifecycle-mail.ts",
     sends: 1,
     // "only from the signed Stripe webhook" until 8 Oct 2026 (review of 7e133a7): the runner,
@@ -302,7 +307,7 @@ test("every send takes its From from the one reader", () => {
   // emails (R159 part 3), flag-gated. 11 since 2 Oct 2026: setup confirmed
   // (R166 step 4). 12 since 9 Oct 2026: the run-health summary (audit
   // reliability-6, OP-1).
-  assert.equal(all.length, 12, `expected 12 sends, the walk found ${all.length}`);
+  assert.equal(all.length, 13, `expected 13 sends, the walk found ${all.length}`);
 
   for (const s of all) {
     assert.equal(s.from, "mailFrom()", `${s.file} sets its own From: ${s.from}`);
@@ -342,6 +347,10 @@ test("every send takes its From from the one reader", () => {
  */
 const RECIPIENTS: { to: string; why: string }[] = [
   {
+    to: "owners",
+    why: "the account's stored dashboard owners and editors (27 Nov 2026, Your tasks), read in that module from dashboard_members for the client whose tasks staff added - never a value a caller supplies; sent only for a client set to 'Send automatically', otherwise it is a draft",
+  },
+  {
     to: "process.env.CONTACT_EMAIL_DESTINATION ?? CONTACT_EMAIL",
     // 9 Oct 2026: the run-health summary (health-mail.ts) is addressed the same way, as the
     // order email, the link alert and setup confirmed already were.
@@ -379,7 +388,7 @@ test("every send is addressed to somebody we are allowed to write to", () => {
   // 10 since 1 Oct 2026: the lifecycle emails (R159 part 3), to a stored owner.
   // 11 since 2 Oct 2026: setup confirmed (R166 step 4), to the contact destination.
   // 12 since 9 Oct 2026: the run-health summary (audit reliability-6, OP-1), to the contact destination.
-  assert.equal(all.length, 12, `expected 12 sends, the walk found ${all.length}`);
+  assert.equal(all.length, 13, `expected 13 sends, the walk found ${all.length}`);
 
   const allowed = new Map(RECIPIENTS.map((r) => [r.to, r.why]));
   for (const s of all) {

@@ -10,6 +10,7 @@ import { runHealthAfterDispatch } from "@/lib/tracking/health-io";
 import { dispatchTrackingRuns } from "@/lib/tracking/runner";
 import { backfillDifficulty } from "@/lib/dash/research";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { taskDailyPassSafely } from "@/lib/tasks/notify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,9 +83,11 @@ export async function GET(req: Request) {
   const mail = await sweepLifecycleMailSafely();
   // 2 Nov 2026 (sg-37): the daily pull for every connected Search Console, GA4 and Bing property (lib/dash/connect-io.ts).
   const connections = await pullConnectionsSafely();
+  // 27 Nov 2026: Your tasks - settle the auto-checks (after the connections above), then the batched "we've added tasks" email.
+  const tasksPass = await taskDailyPassSafely(supabaseAdmin());
   // 15 Nov 2026: Search Console and GA4 connected direct, through the hub's google-data (lib/dash/google-io.ts).
   const google = await pullGoogleSafely();
   // 14 Nov 2026: keyword difficulty for any tracked keyword still without it, so no customer ever needs a lookup button.
   const difficulty = await backfillDifficulty(supabaseAdmin(), trackingDay()).catch((e: unknown) => { console.warn(`[track] difficulty backfill failed: ${e instanceof Error ? e.message : String(e)}`); return null; });
-  return NextResponse.json({ ...answer.body, swaps, health, mail, connections, google, difficulty }, { status: answer.status });
+  return NextResponse.json({ ...answer.body, swaps, health, mail, connections, tasks: tasksPass, google, difficulty }, { status: answer.status });
 }
