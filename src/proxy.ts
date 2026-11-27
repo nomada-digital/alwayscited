@@ -6,7 +6,7 @@ import { appHost, appOrigin, internalPath, isAppHost, passesThrough, stripPrefix
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
-import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashOrigin, dashPathForApp, dashStrip, demoPath, demoSlug, isDashHost, viewPath } from "@/lib/dash/host";
+import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashOrigin, dashPathForApp, dashStrip, demoPath, demoSlug, isDashHost, isPreviewDeploy, viewPath } from "@/lib/dash/host";
 
 /**
  * HTTP Basic auth over /admin. The operations page exposes cost, lead counts
@@ -165,6 +165,11 @@ export function proxy(request: NextRequest) {
   // the move is permanent, and every /app page it pointed at is gone (/app/auth links still sign in: same token table).
   const appBare = onApp ? (passesThrough(pathname) ? null : (stripPrefix(pathname) ?? pathname)) : stripPrefix(pathname);
   if (appBare !== null && pathname !== "/robots.txt") {
+    // A preview stays on its own address, where the tree is at /dashboards (27 Nov 2026); never a 301, so nothing caches it.
+    if (isPreviewDeploy()) {
+      const to = dashPathForApp(appBare);
+      return NextResponse.redirect(new URL(`/dashboards${to === "/" ? "" : to}${search}`, request.url), 307);
+    }
     return NextResponse.redirect(new URL(`${dashPathForApp(appBare)}${search}`, dashOrigin()), 301);
   }
 

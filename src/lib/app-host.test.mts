@@ -104,7 +104,8 @@ test("the header is handed its Log in link by the server, never decides it in th
   const layout = readFileSync(join(process.cwd(), "src", "app", "layout.tsx"), "utf8");
   // 18 Oct 2026 (brief 2d): /app retired, every address 308s to the dashboards host, so the layout hands the
   // dashboards host's own /login (dash/host.ts dashOrigin) rather than appHref("/login"), which would only 308 there.
-  assert.match(layout, /<Header loginHref=\{`\$\{dashOrigin\(\)\}\/login`\} \/>/, "the root layout passes the dashboards host's /login");
+  // 27 Nov 2026: through loginHref(), which is the dashboards host's /login everywhere except a Vercel preview, where it is relative.
+  assert.match(layout, /<Header loginHref=\{loginHref\(\)\} \/>/, "the root layout passes the dashboards host's /login");
   const header = readFileSync(join(process.cwd(), "src", "components", "Header.tsx"), "utf8");
   // The header is a client component: APP_HOST is empty there, so any helper
   // that reads it would give the server's render one href and hydration another.
@@ -325,4 +326,14 @@ test("every dashboard link to the marketing site goes through siteHref", () => {
   assert.deepEqual(offenders, [], `a marketing link that 404s on the dashboards host - prefix it with SITE_ORIGIN or wrap it in siteHref() from src/lib/app-host.ts:\n${offenders.join("\n")}`);
   assert.ok(sources >= 4, `only ${sources} marketing hrefs found in the dashboard; 4 is the recorded floor`);
   assert.ok(wrapped >= 6, `only ${wrapped} SITE_ORIGIN or siteHref() sites in the dashboard; 6 is the recorded floor`);
+});
+
+test("the Log in link is the dashboards host's /login, and relative on a preview so it stays on its own deployment", async () => {
+  const { loginHref, isPreviewDeploy } = await import("./dash/host.ts");
+  assert.equal(loginHref({ VERCEL_ENV: "production" }), "https://dashboards.alwayscited.com/login");
+  assert.equal(loginHref({}), "https://dashboards.alwayscited.com/login");
+  assert.equal(loginHref({ VERCEL_ENV: "preview", DASH_HOST: "dashboards.alwayscited.com" }), "/dashboards/login");
+  assert.equal(isPreviewDeploy({ VERCEL_ENV: "production" }), false);
+  assert.equal(isPreviewDeploy({ VERCEL_ENV: "development" }), false);
+  assert.equal(isPreviewDeploy({}), false);
 });

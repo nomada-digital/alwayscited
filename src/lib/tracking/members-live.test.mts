@@ -238,6 +238,12 @@ const NO_SCOPE: Record<string, { reads: number; why: string }> = {
   },
   // 18 Oct 2026: the retention purge reads who belongs to an account it is deleting, to clear their sign-ins - and
   // which of them also belong elsewhere, to keep those. Nothing it reads decides who sees a client.
+  // 27 Nov 2026: the preview-only staff QA sign-in checks that a @nomadadigital.co.uk address is an active member before
+  // starting an eight-hour session on a Vercel preview (404 elsewhere, /admin Basic auth required); it shows nothing itself.
+  "src/app/admin/qa-login/route.ts": {
+    reads: 1,
+    why: "the preview-only staff QA sign-in checks that the staff address is an active member, behind /admin's Basic auth and VERCEL_ENV=preview; the session it starts is read through the usual scope.",
+  },
   "src/lib/tracking/retention-purge.ts": {
     reads: 2,
     why: "the 90-day retention purge clears the sign-ins of an account it deletes, keeping anyone who is a member of another account; it shows nothing to anybody.",
