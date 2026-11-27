@@ -53,7 +53,7 @@ test("goto links resolve through one redirect and never fetch the target", async
   assert.equal(await resolveGoto(wrap(2), toGoogle), null);
   const ok200 = (async () => new Response("x", { status: 200 })) as unknown as typeof fetch;
   assert.equal(await resolveGoto(wrap(3), ok200), null);
-  const lim = limitedResolver(1, ok);
+  const lim = limitedResolver(1, ok, 0);
   assert.equal(await lim(wrap(1)), "https://craftcms.com/partners/common");
   assert.equal(await lim(wrap(1)), "https://craftcms.com/partners/common", "asked once, remembered");
   assert.equal(await lim(wrap(9)), null, "past the ceiling it stays unknown");
@@ -67,4 +67,12 @@ test("a UK page of Swiss and Australian sites is the wrong page, never 'not in t
   assert.equal(serpFault(york, "UK"), "foreign");
   const fine = [hit(1, "craftcms.com"), hit(2, "clutch.co"), hit(3, "firmbase.co"), hit(4, "thedigitalembassy.com.au"), ...Array.from({ length: 8 }, (_, i) => hit(5 + i, `s${i}.co.uk`))];
   assert.equal(serpFault(fine, "UK"), null, "one .com.au among UK results is an ordinary SERP");
+});
+
+test("the resolver stops asking after two answers that were not a redirect (a throttle is respected, not worked around)", async () => {
+  let calls = 0;
+  const throttled = (async () => { calls += 1; return new Response("checking", { status: 200 }); }) as unknown as typeof fetch;
+  const r = limitedResolver(10, throttled, 0);
+  for (const n of [1, 2, 3, 4]) assert.equal(await r(`https://google.com/goto?url=CAES${n}`), null);
+  assert.equal(calls, 2);
 });

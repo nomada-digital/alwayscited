@@ -60,14 +60,24 @@ export async function answerWords(clientId: string, promptId: string, day: Day, 
   return (data ?? []) as AnswerWords[];
 }
 
-export type SerpDay = { run_date: Day; position: number | null; url: string | null; top: { url: string; rank: number; domain: string }[] | null };
+export type SerpDay = {
+  run_date: Day; position: number | null; url: string | null; top: { url: string | null; rank: number; domain: string }[] | null;
+  /** Where the read was made, whether Google showed an AI Overview and named the client, and pages that list the client (27 Nov 2026 onward; null before). */
+  location_code?: number | null; location_name?: string | null; aio_shown?: boolean | null; aio_named?: boolean | null; listed?: { domain: string; url: string | null; rank: number | null }[] | null;
+};
 
 /** Every Google reading of one tracked keyword, oldest first, with the top 20 where it was stored (from 13 Oct 2026). */
 export async function keywordReadings(clientId: string, keywordId: string, db: SupabaseClient | null = null): Promise<SerpDay[]> {
   if (isSampleClient(clientId)) return sampleRaw(trackingDay()).serp.filter((s) => s.keyword_id === keywordId).map((s) => ({ ...s, top: null }));
   if (dashFixturePath()) return fixtureRaw().serp.filter((s) => s.keyword_id === keywordId).map((s) => ({ ...s, top: (s as { top?: SerpDay["top"] }).top ?? null }));
   const d = db ?? supabaseAdmin();
-  return paged<SerpDay>(() => d.from("tracking_serp").select("run_date, position, url, top").eq("client_domain_id", clientId).eq("keyword_id", keywordId).order("run_date"), "the keyword's positions");
+  // The columns added on 27 Nov 2026 may not be there yet on an older database: read without them rather than fail.
+  try {
+    return paged<SerpDay>(() => d.from("tracking_serp").select("run_date, position, url, top, location_code, location_name, aio_shown, aio_named, listed").eq("client_domain_id", clientId).eq("keyword_id", keywordId).order("run_date"), "the keyword's positions");
+  } catch (e) {
+    if (!/location_code|location_name|aio_shown|aio_named|listed/.test(e instanceof Error ? e.message : "")) throw e;
+    return paged<SerpDay>(() => d.from("tracking_serp").select("run_date, position, url, top").eq("client_domain_id", clientId).eq("keyword_id", keywordId).order("run_date"), "the keyword's positions");
+  }
 }
 
 export type CitingAnswer = { run_date: Day; question_id: string; engine: Engine; named: boolean; citations: Citation[] | null };

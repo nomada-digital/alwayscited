@@ -425,3 +425,8 @@ test("model: a keyword whose read failed on the latest run says so, and carries 
   const old = kw(raw());
   assert.deepEqual([old.place, old.aio, old.listed, old.stale], [null, null, [], false]);
 });
+
+test("a client-facing Overview never prints the Google account that connected Search Console", () => {
+  const src = readFileSync(join(process.cwd(), "src", "components", "dash", "GoogleTraffic.tsx"), "utf8");
+  assert.ok(!/google_email|connected as/.test(src));
+});

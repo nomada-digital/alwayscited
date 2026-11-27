@@ -8,6 +8,7 @@ import { PageHead } from "@/components/dash/Shell";
 import { keywordReadings } from "@/lib/dash/history";
 import { pageChangeOf, pathKey, pathOf } from "@/lib/dash/model";
 import { pageData } from "@/lib/dash/page-data";
+import { placeLabel } from "@/lib/scan/locations";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Keyword", robots: { index: false, follow: false } };
@@ -33,6 +34,7 @@ export default async function KeywordDetail({ params, searchParams }: { params: 
   const vs = typeof sp.vs === "string" && DAY.test(sp.vs) && dates.includes(sp.vs) && sp.vs !== date ? sp.vs : null;
   const at = days.find((d) => d.run_date === date) ?? null;
   const before = vs ? (days.find((d) => d.run_date === vs) ?? null) : null;
+  const located = at?.location_code != null;
   const own = raw.client.domain.replace(/^www\./, "").toLowerCase();
   const isOwn = (domain: string) => domain.replace(/^www\./, "").toLowerCase() === own || domain.toLowerCase().endsWith(`.${own}`);
   const cluster = raw.clusters.find((c) => c.id === kw.cluster_id);
@@ -48,7 +50,7 @@ export default async function KeywordDetail({ params, searchParams }: { params: 
   swaps.reverse();
   const recent = pageChangeOf(days.map((d) => [d.run_date, d.position, d.url]));
   // Matched on host and path, so "www." or a trailing slash is not read as a different result.
-  const rankOf = (top: { domain: string; url: string; rank: number }[] | null, url: string) => top?.find((t) => pathKey(t.url) === pathKey(url))?.rank ?? null;
+  const rankOf = (top: { domain: string; url: string | null; rank: number }[] | null, t: { domain: string; url: string | null }) => top?.find((x) => (x.url && t.url ? pathKey(x.url) === pathKey(t.url) : x.domain === t.domain))?.rank ?? null;
   const ranked = days.map((d) => d.position).filter((p): p is number => p !== null);
   const worst = ranked.length ? Math.max(...ranked) : null;
   return (
@@ -56,7 +58,7 @@ export default async function KeywordDetail({ params, searchParams }: { params: 
       <PageHead
         micro={<><Link href={`${base}/${slug}/google`}>Search positions</Link><span>/</span><span>Keyword</span></>}
         title={kw.keyword}
-        intro={<>{kw.search_volume ? `${kw.search_volume.toLocaleString("en-GB")} searches a month. ` : ""}Tracked on Google ({raw.client.market}) since {fullDay(kw.added_on)}{cluster ? <>, in <Link href={`${base}/${slug}/clusters/${cluster.id}`} style={{ color: "var(--accent)" }}>{cluster.name}</Link></> : null}.{best !== null ? ` Best position: ${best}.` : ""}</>}
+        intro={<>{kw.search_volume ? `${kw.search_volume.toLocaleString("en-GB")} searches a month. ` : ""}Tracked on Google ({at?.location_code != null ? `read for ${placeLabel(at.location_name ?? null) ?? "the whole UK"}` : raw.client.market}) since {fullDay(kw.added_on)}{cluster ? <>, in <Link href={`${base}/${slug}/clusters/${cluster.id}`} style={{ color: "var(--accent)" }}>{cluster.name}</Link></> : null}.{best !== null ? ` Best position: ${best}.` : ""}</>}
       />
       {!days.length ? (
         <div className="dash-card empty"><b>No reading yet</b>It is checked on Google at the next morning&rsquo;s check.</div>
@@ -86,17 +88,19 @@ export default async function KeywordDetail({ params, searchParams }: { params: 
                 <p className="intro">You: <Pos pos={at?.position ?? null} />{before ? <> · {fullDay(before.run_date)}: <Pos pos={before.position} /> <Change n={before.position !== null && at?.position != null ? before.position - at.position : null} /></> : null}{at?.url ? <> · ranking page {pathOf(at.url)}</> : null}</p>
               </div>
             </div>
+            {/* Pages are shown only for readings that resolved each link to its real address (27 Nov 2026 onward). Earlier ones carried paths built from Google's breadcrumb titles, which are not URLs, so they show the site only. */}
+            {at?.location_code != null ? <p className="faint" style={{ fontSize: 12, margin: "0 0 8px" }}>Read for {placeLabel(at.location_name ?? null) ?? "the whole UK"}. Where a link could not be resolved to its page, the site is shown without a path.{at.aio_shown ? (at.aio_named ? " Named in the AI Overview." : " An AI Overview showed and did not name you.") : ""}{at.listed?.length ? ` Listed via ${at.listed.map((l) => l.domain).join(", ")}.` : ""}</p> : null}
             {at?.top?.length ? (
               <div className="tbl-wrap">
                 <table className="tbl">
                   <thead><tr><th className="r">#</th><th>Result</th>{before ? <th className="r">{fullDay(before.run_date)}</th> : null}</tr></thead>
                   <tbody>
                     {at.top.slice(0, 20).map((t) => {
-                      const was = before ? rankOf(before.top, t.url) : null;
+                      const was = before ? rankOf(before.top, t) : null;
                       return (
                         <tr key={`${t.rank}-${t.url}`} className={isOwn(t.domain) ? "you" : ""}>
                           <td className="r num">{t.rank}</td>
-                          <td style={{ maxWidth: 520 }}><a href={t.url} target="_blank" rel="noopener noreferrer nofollow">{t.domain}</a><div className="sub" style={{ overflowWrap: "anywhere" }}>{pathOf(t.url)}</div></td>
+                          <td style={{ maxWidth: 520 }}>{t.url && located ? <><a href={t.url} target="_blank" rel="noopener noreferrer nofollow">{t.domain}</a><div className="sub" style={{ overflowWrap: "anywhere" }}>{pathOf(t.url)}</div></> : <span>{t.domain}</span>}</td>
                           {before ? <td className="r num">{was === null ? <span className="pill">new</span> : <>{was} <Change n={was - t.rank} /></>}</td> : null}
                         </tr>
                       );

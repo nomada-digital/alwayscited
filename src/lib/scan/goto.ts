@@ -44,17 +44,26 @@ export async function resolveGoto(url: string, fetchImpl: typeof fetch = fetch, 
   }
 }
 
-/** A resolver with a ceiling on the lookups a run makes, and a memory so one link is asked once. */
-export function limitedResolver(max: number, fetchImpl: typeof fetch = fetch): (url: string) => Promise<string | null> {
+/**
+ * A resolver with a ceiling on the lookups a run makes, and a memory so one link is asked once.
+ *
+ * Google answers a quick run of these with a "checking" page instead of the redirect (seen 27 Nov 2026 after four or five in a burst),
+ * so lookups are spaced `paceMs` apart, and after two answers in a row that were not a redirect the run stops asking: a throttle is
+ * respected, never worked around. What was not resolved stays unknown (null), and the page shows the site without a path.
+ */
+export function limitedResolver(max: number, fetchImpl: typeof fetch = fetch, paceMs = 1_500): (url: string) => Promise<string | null> {
   let used = 0;
+  let misses = 0;
   const seen = new Map<string, string | null>();
   return async (url) => {
     if (seen.has(url)) return seen.get(url)!;
     const plain = isGoto(url) ? plainTarget(url) : url;
     if (plain) return plain;
-    if (used >= max) return null;
+    if (used >= max || misses >= 2) return null;
+    if (used > 0 && paceMs > 0) await new Promise((r) => setTimeout(r, paceMs));
     used += 1;
     const t = await resolveGoto(url, fetchImpl);
+    misses = t ? 0 : misses + 1;
     seen.set(url, t);
     return t;
   };
