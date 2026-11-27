@@ -376,48 +376,6 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
     // Every attempt's billed cost is kept, failed or not. A SERP with no AI
     // Overview does not throw: it is answered=false with its cost, a silence.
     // Google claiming an Overview that did not arrive gets the scan's one retry.
-    const answers = await mapWithConcurrency(jobs, CONCURRENCY, async ({ q, engine }): Promise<AnswerRow> => {
-      const base = { question_id: q.id as string, engine, citations: [] as Citation[] };
-      let cost = 0;
-      let reason = "out of time before the read";
-      let claimRetried = false;
-      for (let attempt = 0; ; attempt++) {
-        if (remainingMs() < 5000) break;
-        try {
-          const read = await readEngine(engine, q.text as string, market, remainingMs());
-          spend.dfs += read.cost;
-          cost += read.cost;
-          const claimedButAbsent = !read.answered && (read.raw as { claimed_but_absent?: boolean } | null)?.claimed_but_absent;
-          if (claimedButAbsent && !claimRetried && remainingMs() >= 15_000) {
-            claimRetried = true;
-            continue;
-          }
-          return {
-            ...base,
-            answered: read.answered,
-            named: read.answered && names(read.prose),
-            response_text: read.prose || null,
-            citations: read.citations,
-            cost,
-            failed: false,
-          };
-        } catch (err) {
-          const billed = billedCost(err);
-          spend.dfs += billed;
-          cost += billed;
-          reason = readFailureReason(err);
-          const wait = readRetryDelay(err, attempt, remainingMs());
-          if (wait !== null) {
-            await sleep(wait);
-            continue;
-          }
-          console.warn(`[track] ${runId} ${engine} read failed: ${message(err)}`);
-          break;
-        }
-      }
-      return { ...base, answered: false, named: false, response_text: null, cost, failed: true, reason };
-    });
-
     // A keyword read: null is "not in the top 100" (TRACKING_SERP_DEPTH), a finding; an empty SERP or
     // an error is a failed read with its reason, never a silent null.
     // 27 Nov 2026 (Danny, Common): each keyword is read for the place it names (york, leeds ...) or its own override or the
@@ -468,18 +426,67 @@ export async function runTrackingDay(runId: string): Promise<{ status: string; s
       }
       return { k, failed: true as const, rank: null, url: null, cost, reason, where };
     };
-    let serp = await mapWithConcurrency(keywordJobs, KEYWORD_CONCURRENCY, readOne);
-    // The second pass: whatever still failed, once more after the rest have been read (DataForSEO's search-engine errors
-    // and odd pages come and go within minutes), while the run has the time. A keyword read here counts like any other.
-    for (let pass = 0; pass < SECOND_PASSES; pass++) {
-      const failed = serp.filter((s) => s.failed);
-      if (!failed.length || remainingMs() < SECOND_PASS_MIN_MS) break;
-      console.log(`[track] ${runId} reading ${failed.length} failed keyword${failed.length === 1 ? "" : "s"} again (pass ${pass + 2})`);
-      await sleep(SECOND_PASS_PAUSE_MS);
-      const again = await mapWithConcurrency(failed.map((s) => s.k), KEYWORD_CONCURRENCY, readOne);
-      const byId = new Map(again.map((a) => [a.k.id as string, a]));
-      serp = serp.map((s) => (s.failed ? byId.get(s.k.id as string) ?? s : s));
-    }
+    // Started before the answers are read, so the keywords have the run's whole budget instead of what the answers leave (27 Nov 2026:
+    // four of ten keywords were out of time with the second pass never reached).
+    const serpRead_ = (async () => {
+      let serp = await mapWithConcurrency(keywordJobs, KEYWORD_CONCURRENCY, readOne);
+      // The second pass: whatever still failed, once more after the rest have been read (DataForSEO's search-engine errors
+      // and odd pages come and go within minutes), while the run has the time. A keyword read here counts like any other.
+      for (let pass = 0; pass < SECOND_PASSES; pass++) {
+        const failed = serp.filter((s) => s.failed);
+        if (!failed.length || remainingMs() < SECOND_PASS_MIN_MS) break;
+        console.log(`[track] ${runId} reading ${failed.length} failed keyword${failed.length === 1 ? "" : "s"} again (pass ${pass + 2})`);
+        await sleep(SECOND_PASS_PAUSE_MS);
+        const again = await mapWithConcurrency(failed.map((s) => s.k), KEYWORD_CONCURRENCY, readOne);
+        const byId = new Map(again.map((a) => [a.k.id as string, a]));
+        serp = serp.map((s) => (s.failed ? byId.get(s.k.id as string) ?? s : s));
+      }
+    return serp;
+    })();
+
+    const answers = await mapWithConcurrency(jobs, CONCURRENCY, async ({ q, engine }): Promise<AnswerRow> => {
+      const base = { question_id: q.id as string, engine, citations: [] as Citation[] };
+      let cost = 0;
+      let reason = "out of time before the read";
+      let claimRetried = false;
+      for (let attempt = 0; ; attempt++) {
+        if (remainingMs() < 5000) break;
+        try {
+          const read = await readEngine(engine, q.text as string, market, remainingMs());
+          spend.dfs += read.cost;
+          cost += read.cost;
+          const claimedButAbsent = !read.answered && (read.raw as { claimed_but_absent?: boolean } | null)?.claimed_but_absent;
+          if (claimedButAbsent && !claimRetried && remainingMs() >= 15_000) {
+            claimRetried = true;
+            continue;
+          }
+          return {
+            ...base,
+            answered: read.answered,
+            named: read.answered && names(read.prose),
+            response_text: read.prose || null,
+            citations: read.citations,
+            cost,
+            failed: false,
+          };
+        } catch (err) {
+          const billed = billedCost(err);
+          spend.dfs += billed;
+          cost += billed;
+          reason = readFailureReason(err);
+          const wait = readRetryDelay(err, attempt, remainingMs());
+          if (wait !== null) {
+            await sleep(wait);
+            continue;
+          }
+          console.warn(`[track] ${runId} ${engine} read failed: ${message(err)}`);
+          break;
+        }
+      }
+      return { ...base, answered: false, named: false, response_text: null, cost, failed: true, reason };
+    });
+
+    const serp = await serpRead_;
 
     // Who else is named: one extraction per engine over that engine's answers,
     // as the scan does it, then attributed back to each answer with the same

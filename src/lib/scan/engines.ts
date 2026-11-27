@@ -335,7 +335,9 @@ function wrappedLink(url: string | null): boolean {
  * on. A .com is anyone's and never counts.
  */
 export const FOREIGN_MAX = 3;
-const COUNTRY_TLDS = ["uk", "us", "ca", "au", "ie", "nz", "in", "za", "sg", "ph", "my", "de", "fr", "es", "it", "nl"];
+// 27 Nov 2026: Common's "craft cms agency york" came back as sidora.ch, klarplan.ch and an .com.au agency, and was stored as "not in the top 100".
+// Switzerland and the rest of the usual country codes now count too. Never .co (Colombia's code is used as a plain domain: clutch.co, firmbase.co).
+const COUNTRY_TLDS = ["uk", "us", "ca", "au", "ie", "nz", "in", "za", "sg", "ph", "my", "de", "fr", "es", "it", "nl", "ch", "at", "be", "se", "no", "dk", "pl", "pt", "br", "mx", "ae", "hk", "jp", "kr", "cn", "ru", "tr", "gr", "cz", "ro", "hu", "fi", "ng", "ke", "pk", "lk", "id", "th", "vn", "tw"];
 const OWN_TLDS: Record<string, readonly string[]> = { UK: ["uk"], US: ["us"], JM: ["jm"] };
 export function foreignCount(organic: readonly OrganicHit[], market: string): number {
   const own = OWN_TLDS[market] ?? [];

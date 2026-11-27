@@ -58,3 +58,13 @@ test("goto links resolve through one redirect and never fetch the target", async
   assert.equal(await lim(wrap(1)), "https://craftcms.com/partners/common", "asked once, remembered");
   assert.equal(await lim(wrap(9)), null, "past the ceiling it stays unknown");
 });
+
+import { foreignCount, serpFault } from "./engines.ts";
+test("a UK page of Swiss and Australian sites is the wrong page, never 'not in the top 100' (Common, 27 Nov 2026)", () => {
+  const hit = (rank: number, domain: string) => ({ rank, domain, url: null as string | null });
+  const york = [hit(1, "sidora.ch"), hit(2, "klarplan.ch"), hit(3, "sortlist.co.uk"), hit(4, "preview.coysh.digital"), hit(5, "fraserclark.com"), hit(6, "medium.com"), hit(7, "thedigitalembassy.com.au"), hit(8, "firmbase.co"), hit(9, "agencies.co"), hit(10, "a.example.com"), hit(11, "b.example.com")];
+  assert.equal(foreignCount(york, "UK"), 3, ".ch, .ch and .au count; .co does not");
+  assert.equal(serpFault(york, "UK"), "foreign");
+  const fine = [hit(1, "craftcms.com"), hit(2, "clutch.co"), hit(3, "firmbase.co"), hit(4, "thedigitalembassy.com.au"), ...Array.from({ length: 8 }, (_, i) => hit(5 + i, `s${i}.co.uk`))];
+  assert.equal(serpFault(fine, "UK"), null, "one .com.au among UK results is an ordinary SERP");
+});
