@@ -7,6 +7,7 @@ import { PageHead } from "@/components/dash/Shell";
 import { dashFixturePath } from "@/lib/dash/fixture";
 import { pageData } from "@/lib/dash/page-data";
 import { showsInsertions, showsPlacements } from "@/lib/links/gate";
+import { stageOf } from "@/lib/links/stage";
 import { type LinkRow, readLinks } from "@/lib/links/sheet-store";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import type { RawInProgress } from "@/lib/dash/types";
@@ -98,16 +99,7 @@ function liveCount(rows: LinkRow[]): string {
   return `${live} live${going ? ` · ${going} in progress` : ""}`;
 }
 
-/** The sheet's own status, in three plain stages (17 Nov 2026, Danny: in-progress statuses must be clear): live, not
- *  live (lost, removed, declined, cancelled) or in progress (anything else the tracker writes: pending, writing,
- *  outreach, submitted, approved...). The pill names the stage; the sheet's wording sits under it when it says more. */
-type Stage = "live" | "progress" | "off";
-function stageOf(status: string | null): Stage {
-  const s = (status ?? "").trim();
-  if (/^(live|published|indexed|done|complete[d]?)\b/i.test(s)) return "live";
-  if (/\b(lost|removed|deleted|declined|rejected|cancel(l)?ed|dropped|dead|not live)\b/i.test(s)) return "off";
-  return "progress";
-}
+/* The sheet's own status in three plain stages (live, in progress, not live): stageOf, lib/links/stage.ts, 25 Nov 2026 so a manual override reads the same way. */
 function StatusPill({ status }: { status: string | null }) {
   if (!status) return null;
   const st = stageOf(status);

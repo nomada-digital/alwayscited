@@ -369,6 +369,9 @@ const SENDERS: Record<
 const ACTIONS: Record<string, string[]> = {
   "src/app/contact/actions.ts": ["submitContactForm"],
   "src/app/actions/waitlist.ts": ["requestScan"],
+  // 25 Nov 2026, /admin/links: one action for the page's forms. Sends no mail; checks the admin's Basic auth itself
+  // (refuseUnlessAdmin) and a Nomada address as the actor before it reads or writes.
+  "src/app/admin/links/actions.ts": ["linkForm"],
   // 29 Sep 2026, T2 /admin/tracking. Sends no mail. Each checks the admin's
   // Basic auth itself (refuseUnlessAdmin) before anything, because an action
   // id is answered on any path and the /admin proxy covers only /admin.

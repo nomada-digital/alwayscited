@@ -48,6 +48,7 @@ const NEEDS_BUILD = "no build to read - run `npm run build` then `npm run captur
 const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/admin/scans": "the ops page; 401s to everyone and has no public reader at all",
   "/admin/funnel": "funnel counts by day and market (R152, 1 Oct 2026); behind the same /admin Basic auth, no public reader",
+  "/admin/links": "mark placements and link insertions live, change their stage, correct their address (25 Nov 2026); behind the same /admin Basic auth, no public reader",
   "/admin/emails": "lifecycle email previews on fixture data for Danny to approve (R159, 1 Oct 2026); behind the same /admin Basic auth, no public reader",
   "/admin/tracking": "tracked-client operations (T2, 29 Sep 2026); behind the same /admin Basic auth, no public reader",
   // 30 Sep 2026, R96 part 3 (BRIEF-2 T12).

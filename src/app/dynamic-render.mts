@@ -241,6 +241,11 @@ export const STATES: Record<string, State> = {
     urls: [],
     blocked: "behind auth - answers 401 with 24 bytes and no HTML at all, and a credential is not ours to hold",
   },
+  // 25 Nov 2026: manual overrides on placements and link insertions, same /admin Basic auth.
+  "/admin/links": {
+    urls: [],
+    blocked: "behind auth - answers 401 with 24 bytes and no HTML at all, and a credential is not ours to hold",
+  },
   // 1 Oct 2026, R159 part 2: the lifecycle email previews, same /admin Basic auth.
   "/admin/emails": {
     urls: [],

@@ -183,6 +183,8 @@ test("the routes that cannot be rendered here are exactly the seven known ones",
   assert.deepEqual(blocked, [
     "/admin/emails",
     "/admin/funnel",
+    // 25 Nov 2026: manual overrides on placements and link insertions, same /admin Basic auth.
+    "/admin/links",
     "/admin/scans",
     "/admin/tracking",
     "/admin/tracking/[client]/placements",

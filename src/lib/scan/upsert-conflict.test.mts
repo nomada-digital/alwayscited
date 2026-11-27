@@ -331,6 +331,9 @@ test("the upsert sites are the ones we think they are", () => {
       "keyword_footprints:client_domain_id,pulled_on",
       // 17 Oct 2026: keyword research's shared 30-day cache (lib/dash/research.ts), one row per market, kind, seed and day.
       "keyword_research:kind,market,read_on,seed",
+      // 25 Nov 2026: one manual override per item on link_overrides' unique (client_domain_id, source, item_key) in
+      // 20261125010000_link_overrides.sql (lib/links/override.ts setOverride): marking an item live twice is one row, the latest.
+      "link_overrides:client_domain_id,item_key,source",
       // 22 Oct 2026: a map pack grid's weekly read, one row per grid, day and point on local_grid_points'
       // unique (grid_id, run_date, row_idx, col_idx) in 20261022010000_local_grids.sql (lib/local/run.ts).
       "local_grid_points:col_idx,grid_id,row_idx,run_date",

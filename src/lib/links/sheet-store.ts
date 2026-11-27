@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { clearAgreed, readOverrides, withOverrides } from "./override";
 import { type LinkKind, type SheetLink, parseLinkSheet } from "./sheet-parse";
 
 /**
@@ -54,6 +55,9 @@ export async function storeSheet(
     const { error: gErr } = gone.length ? await db.from("sheet_links").update({ on_sheet: false }).in("id", gone) : { error: null };
     if (gErr) console.error(`[sheets] ${gone.length} rows off the sheet not hidden for ${client.slug} ${kind}: ${gErr.message}`);
   }
+  // 25 Nov 2026: a manual override whose item the sheet now reads the same way has done its job; clear it.
+  const cleared = await clearAgreed(db, client.id, kind, rows);
+  if (cleared) console.log(`[sheets] ${client.slug} ${kind}: ${cleared} manual override${cleared === 1 ? "" : "s"} cleared, the sheet agrees`);
   const skipped = parsed.skipped.other_client + parsed.skipped.no_url + parsed.skipped.repeats;
   await status({ synced_at: now, error: null, source: incoming.source, read_on: incoming.readOn, rows_kept: rows.length, rows_skipped: skipped, columns: parsed.columns });
   return { ok: true, message: `${rows.length} ${kind === "insertion" ? "insertion" : "placement"} row${rows.length === 1 ? "" : "s"} synced${skipped ? `, ${skipped} skipped (other clients, repeats or no URL)` : ""}.` };
@@ -76,5 +80,11 @@ export async function readLinks(db: SupabaseClient, clientId: string): Promise<{
   if (error) throw new Error(`could not read the links: ${error.message}`);
   if (sErr) console.warn(`[dash] link sync dates not read: ${sErr.message}`);
   const at = (k: LinkKind) => ((syncs ?? []).find((s) => s.kind === k)?.synced_at as string | null | undefined) ?? null;
-  return { rows: (data ?? []) as LinkRow[], syncedAt: { insertion: at("insertion"), placement: at("placement") } };
+  // 25 Nov 2026: the team's manual overrides sit over the sheet's rows (override.ts), so a slow sheet does not hold back what is live.
+  // Never fatal: a failed read shows the sheet as it is.
+  const overrides = await readOverrides(db, clientId, { source: "sheet_link", activeOnly: true }).catch((e: unknown) => {
+    console.warn(`[dash] link overrides not read: ${e instanceof Error ? e.message : String(e)}`);
+    return [];
+  });
+  return { rows: withOverrides((data ?? []) as LinkRow[], overrides), syncedAt: { insertion: at("insertion"), placement: at("placement") } };
 }

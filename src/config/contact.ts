@@ -118,6 +118,14 @@ export const WAITLIST_LIMITS = { domain: 253, topic: 200, email: 254, website: 2
 export const APP_LIMITS = { search: 120, note: 200, email: 254, task: 200, website: 200 };
 
 /**
+ * Manual overrides on placements and link insertions (25 Nov 2026; 20261125010000_link_overrides.sql), read by
+ * lib/links/override.ts and the /admin/links action, and carried as the form's maxLength. `url` and `anchor` are
+ * link_overrides.live_url and anchor_text's own checks, `note` its note's; `day` a yyyy-mm-dd; `slug` and `by` the
+ * customer's dashboard address and the staff address the trail records.
+ */
+export const LINK_LIMITS = { url: 500, anchor: 200, note: 1000, day: 10, slug: 80, by: 254 };
+
+/**
  * Connect your data (2 Nov 2026, sg-37): `gaProperty` is the GA4 property ID a customer pastes, digits only,
  * read by lib/dash/connect.ts gaPropertyId (6 to 12 digits, with "properties/" allowed in front).
  */

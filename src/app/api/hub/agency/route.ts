@@ -5,6 +5,7 @@ import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-del
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
 import { teamChange, teamRead } from "@/lib/agency/team";
+import { LINK_ACTIONS, isLinkAction, linkAction } from "@/lib/links/agency";
 import { storeSheet } from "@/lib/links/sheet-store";
 import { budgetCap, budgetRead, budgetWeight, contextRead, contextSave, overrideClear, overrideSet, shortlistDecide, shortlistRead, shortlistRun, spendRecord } from "@/lib/csm/agency";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -30,7 +31,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", ...LINK_ACTIONS]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -56,6 +57,8 @@ export async function POST(req: Request) {
   const id = (k: string) => (/^[0-9a-f-]{36}$/.test(str(k)) ? str(k) : "");
 
   const done = await (async () => {
+    // Manual overrides on placements and link insertions (25 Nov 2026, lib/links/agency.ts): mark live, stage, address, anchor.
+    if (isLinkAction(action)) return linkAction(db, client, by, action, b);
     switch (action) {
       case "read":
         return readAgency(db, client);

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { type Client, type Done, audit } from "@/lib/agency/edit";
 import { chosenTargetRow } from "@/lib/dash/target";
+import { readOverrides } from "@/lib/links/override";
 import { urlKey } from "@/lib/tracking/placements";
 
 /**
@@ -59,14 +60,33 @@ export function readProgress(raw: unknown): ProgressItem[] {
 const tableMissing = (e: { code?: string; message?: string } | null) => !!e && (e.code === "PGRST205" || e.code === "42P01" || /placements_in_progress/.test(e.message ?? "") && /schema cache|does not exist/.test(e.message ?? ""));
 
 /** Written into placements_in_progress, live ones marked live, those gone from the sheet dropped. Words, never thrown. */
-async function syncProgress(db: SupabaseClient, client: Client, clusterFor: (k: string | null) => { id: string }, progress: ProgressItem[], live: string[]): Promise<string> {
+async function syncProgress(db: SupabaseClient, client: Client, clusterFor: (k: string | null) => { id: string }, progress: ProgressItem[], liveIn: string[]): Promise<string> {
+  let live = liveIn;
   const { data: rows, error } = await db.from("placements_in_progress").select("placement_ref, stage").eq("client_domain_id", client.id);
   if (tableMissing(error)) return progress.length ? `${progress.length} in progress not shown yet: 20261114000000_placements_in_progress.sql is not applied.` : "";
   if (error) return `In progress not read: ${error.message}`;
   const now = new Date().toISOString();
-  if (progress.length) {
+  // 25 Nov 2026: an item the team has overridden is not touched by the sheet until the sheet agrees with it: not
+  // rewritten, not marked live or dropped from here. When the sheet reads it the same way, the override is cleared.
+  const held = new Map((await readOverrides(db, client.id, { source: "progress", activeOnly: true }).catch(() => [])).map((o) => [o.item_key, o]));
+  const agreed: string[] = [];
+  for (const [ref, o] of held) {
+    const sent = progress.find((p) => p.pid === ref);
+    const sheetStage = live.includes(ref) ? "live" : sent?.stage ?? null;
+    const want = o.status === "Live" || o.status === "Published" ? "live" : o.status === "Content written" ? "written" : o.status === "Awaiting publication" ? "awaiting" : "dropped";
+    if (sheetStage === want) agreed.push(ref);
+  }
+  if (agreed.length) {
+    const { error: cErr } = await db.from("link_overrides").update({ active: false, cleared_at: now, cleared_reason: "WLDM sheet caught up", updated_at: now }).eq("client_domain_id", client.id).eq("source", "progress").in("item_key", agreed);
+    if (cErr) console.error(`[links] overrides not cleared for ${client.slug}: ${cErr.message}`);
+    else for (const ref of agreed) await audit(db, client.id, "hub sheet sync", "link_override_cleared", `progress:placement:${ref}`, { status: held.get(ref)?.status }, { reason: "WLDM sheet caught up" });
+    for (const ref of agreed) held.delete(ref);
+  }
+  const progressFree = progress.filter((p) => !held.has(p.pid));
+  live = live.filter((ref) => !held.has(ref));
+  if (progressFree.length) {
     const { error: e } = await db.from("placements_in_progress").upsert(
-      progress.map((p) => ({ client_domain_id: client.id, cluster_id: clusterFor(p.keyword).id, placement_ref: p.pid, title: p.title, title_source: p.title_source, keyword: p.keyword, expected_month: p.expected_month, stage: p.stage, booked: p.booked, site: p.site, updated_at: now })),
+      progressFree.map((p) => ({ client_domain_id: client.id, cluster_id: clusterFor(p.keyword).id, placement_ref: p.pid, title: p.title, title_source: p.title_source, keyword: p.keyword, expected_month: p.expected_month, stage: p.stage, booked: p.booked, site: p.site, updated_at: now })),
       { onConflict: "client_domain_id,placement_ref" },
     );
     if (e) return `In progress not written: ${e.message}`;
@@ -74,7 +94,7 @@ async function syncProgress(db: SupabaseClient, client: Client, clusterFor: (k: 
   const sent = new Set(progress.map((p) => p.pid));
   const open = (rows ?? []).filter((r) => r.stage === "written" || r.stage === "awaiting").map((r) => r.placement_ref as string);
   const nowLive = open.filter((ref) => live.includes(ref));
-  const gone = open.filter((ref) => !sent.has(ref) && !live.includes(ref));
+  const gone = open.filter((ref) => !sent.has(ref) && !live.includes(ref) && !held.has(ref));
   const flip = async (refs: string[], stage: "live" | "dropped") => {
     if (!refs.length) return "";
     const { error: e } = await db.from("placements_in_progress").update({ stage, updated_at: now }).eq("client_domain_id", client.id).in("placement_ref", refs);
