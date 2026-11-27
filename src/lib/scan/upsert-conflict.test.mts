@@ -268,6 +268,9 @@ test("the upsert sites are the ones we think they are", () => {
       // 30 Sep 2026, BRIEF-3 C4: the second of each is the Stripe webhook's
       // signup (checkout/signup.ts), the client and its owner on T2's keys.
       // 5 Nov 2026, CSM batch A: one commercial-context note per client (lib/csm/agency.ts contextSave).
+      // 27 Nov 2026: the direct access a customer says they gave (tasks/store.ts customerAccess) and staff confirm (agency/tasks.ts accessSet).
+      "client_access:client_domain_id,kind",
+      "client_access:client_domain_id,kind",
       "client_commercial_context:client_domain_id",
       "client_domains:account_id,domain,market,topic",
       "client_domains:account_id,domain,market,topic",

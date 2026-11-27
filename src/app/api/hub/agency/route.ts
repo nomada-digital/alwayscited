@@ -3,7 +3,7 @@ import { hubAuthorised } from "@/lib/agency/hub-auth";
 import { addPrompt, archive, setBrand, changeKeyword, draftPrompts, editPrompt, readAgency, readClient, removePrompt, replacePrompts, restore, runChecksNow, setClusterLimit, setPromptTier, setPromptType, setSheets, setStatus, setTier } from "@/lib/agency/edit";
 import { linksRead, markLive } from "@/lib/agency/mark-live";
 import { promptsPublish, promptsRead, promptsUnpublish } from "@/lib/agency/prompts";
-import { taskEmailMark, tasksAdd, tasksRead, tasksSettings, tasksUpdate } from "@/lib/agency/tasks";
+import { accessSet, taskEmailMark, tasksAdd, tasksRead, tasksSettings, tasksUpdate } from "@/lib/agency/tasks";
 import { schemaDeliveredRead, schemaDeliveredSet } from "@/lib/agency/schema-delivered";
 import { placementsSync, readItems, readProgress } from "@/lib/agency/sheet-placements";
 import { targetRead, targetSet } from "@/lib/agency/targets";
@@ -33,7 +33,7 @@ export const maxDuration = 240;
  *
  * POST {action, slug, by, ...} -> {ok, message, data?}
  */
-const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish", "links_read", "mark_live", "tasks_read", "tasks_add", "tasks_update", "tasks_settings", "task_email_mark"]);
+const ACTIONS = new Set(["shortlist_read", "shortlist_run", "shortlist_decide", "spend_record", "context_read", "context_save", "override_set", "override_clear", "budget_weight", "budget_cap", "read", "set_brand", "set_sheets", "set_tier", "set_cluster_limit", "set_status", "archive", "restore", "add_prompt", "edit_prompt", "remove_prompt", "set_prompt_tier", "set_prompt_type", "draft_prompts", "replace_prompts", "change_keyword", "run_checks", "crosscheck", "sheet_cells", "budget_read", "placements_sync", "schema_delivered_read", "schema_delivered_set", "target_read", "target_set", "team_read", "team_invite", "team_role", "team_remove", "prompts_read", "prompts_publish", "prompts_unpublish", "links_read", "mark_live", "tasks_read", "tasks_add", "tasks_update", "tasks_settings", "task_email_mark", "access_set"]);
 
 export async function POST(req: Request) {
   if (!(await hubAuthorised(req))) return Response.json({ error: "forbidden" }, { status: 403 });
@@ -119,6 +119,8 @@ export async function POST(req: Request) {
         return tasksUpdate(db, client, by, { id: id("id"), status: str("status"), archive: b.archive === true });
       case "tasks_settings":
         return tasksSettings(db, client, by, { mode: str("mode"), lead: str("lead") });
+      case "access_set":
+        return accessSet(db, client, by, { kind: str("kind"), status: str("status"), platform: str("platform"), note: str("note") });
       case "task_email_mark":
         return taskEmailMark(db, client, by, { id: id("id"), hubDraftId: str("hub_draft_id"), dismiss: b.dismiss === true });
       case "budget_read":

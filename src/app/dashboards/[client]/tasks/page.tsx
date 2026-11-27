@@ -4,7 +4,7 @@ import TaskList from "@/components/dash/TaskList";
 import { PageHead } from "@/components/dash/Shell";
 import { pageData } from "@/lib/dash/page-data";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { readTasks, syncTasks } from "@/lib/tasks/store";
+import { detectSitePlatform, readAccess, readTasks, syncTasks } from "@/lib/tasks/store";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -22,10 +22,13 @@ export default async function Tasks({ params }: { params: Promise<{ client: stri
   const db = supabaseAdmin();
   let rows = await readTasks(db, raw.client.id);
   if (!demo) rows = await syncTasks(db, { id: raw.client.id, domain: raw.client.domain }, rows);
+  const access = await readAccess(db, raw.client.id);
+  // The platform is guessed once from the live homepage; the customer can correct it. A demo or view-as never writes it.
+  const platform = access.platform ?? (demo || !rows.some((t) => t.onsite || t.kind === "access") ? null : await detectSitePlatform(db, { id: raw.client.id, domain: raw.client.domain }));
   return (
     <>
       <PageHead micro="Your tasks" title="Your tasks" intro="Things that will help your results, with plain steps for each. Tick one when you have done it. Where we can, we check it for you." />
-      <TaskList slug={slug} initial={rows} canWrite={ws.canWrite && !demo} />
+      <TaskList slug={slug} domain={raw.client.domain} initial={rows} canWrite={ws.canWrite && !demo} platform={platform} siteAccess={access.site} />
     </>
   );
 }

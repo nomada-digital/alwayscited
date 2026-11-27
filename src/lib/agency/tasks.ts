@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { ACCESS_EMAIL } from "@/lib/dash/connect";
 import { type Client, type Done, audit } from "@/lib/agency/edit";
+import { isPlatform } from "@/lib/tasks/platform";
 import { TEMPLATES, buildCustom, buildFromTemplate } from "@/lib/tasks/templates";
 
 /**
@@ -17,20 +18,25 @@ const UUID = /^[0-9a-f-]{36}$/;
 const dashboard = (slug: string) => `https://dashboards.alwayscited.com/${slug}`;
 
 export async function tasksRead(db: SupabaseClient, client: Client): Promise<Done> {
-  const [{ data: tData, error: tErr }, { data: eData, error: eErr }, { data: sData, error: sErr }] = await Promise.all([
-    db.from("client_tasks").select("id, template, kind, title, why, steps, check_spec, status, done_at, done_by, checked_at, check_note, last_check_at, created_by, created_at, notified_at").eq("client_domain_id", client.id).is("archived_at", null).order("sort").order("created_at"),
+  const [{ data: tData, error: tErr }, { data: eData, error: eErr }, { data: sData, error: sErr }, { data: aData, error: aErr }, { data: cData, error: cErr }] = await Promise.all([
+    db.from("client_tasks").select("id, template, kind, title, why, steps, check_spec, onsite, status, done_at, done_by, checked_at, check_note, last_check_at, created_by, created_at, notified_at").eq("client_domain_id", client.id).is("archived_at", null).order("sort").order("created_at"),
     db.from("client_task_emails").select("id, status, subject, html, body_text, to_emails, from_name, task_ids, hub_draft_id, created_at, sent_at, error").eq("client_domain_id", client.id).order("created_at", { ascending: false }).limit(10),
-    db.from("client_domains").select("task_email_mode, account_lead").eq("id", client.id).maybeSingle(),
+    db.from("client_domains").select("task_email_mode, account_lead, site_platform").eq("id", client.id).maybeSingle(),
+    db.from("client_access").select("kind, platform, status, note, requested_at, granted_at, recorded_by").eq("client_domain_id", client.id),
+    db.from("integration_connections").select("provider, status, last_synced_at").eq("client_domain_id", client.id),
   ]);
   if (missing(tErr)) return { ok: true, message: WAITING, data: { ready: false, rows: [], emails: [], templates: [] } };
   if (tErr) return { ok: false, message: `Could not read the tasks: ${tErr.message}` };
   if (eErr && !missing(eErr)) return { ok: false, message: `Could not read the task emails: ${eErr.message}` };
   if (sErr) return { ok: false, message: `Could not read the email settings: ${sErr.message}` };
+  if (aErr && !missing(aErr)) return { ok: false, message: `Could not read the access: ${aErr.message}` };
+  if (cErr) return { ok: false, message: `Could not read the connections: ${cErr.message}` };
   return {
     ok: true, message: `${(tData ?? []).length} task${(tData ?? []).length === 1 ? "" : "s"}.`,
     data: {
       ready: true, rows: tData ?? [], emails: eData ?? [], dashboard: `${dashboard(client.slug)}/tasks`,
       mode: (sData?.task_email_mode as string | undefined) === "auto" ? "auto" : "draft", lead: (sData?.account_lead as string | null | undefined) ?? "",
+      platform: (sData?.site_platform as string | null | undefined) ?? null, access: aData ?? [], connections: cData ?? [],
       templates: TEMPLATES.map((x) => ({ id: x.id, label: x.label, fields: x.fields })),
     },
   };
@@ -88,4 +94,19 @@ export async function taskEmailMark(db: SupabaseClient, client: Client, by: stri
   if (!data) return { ok: false, message: "That email is not this customer's." };
   await audit(db, client.id, by, "task_email_mark", p.id, null, patch);
   return { ok: true, message: p.dismiss ? "Dismissed." : "Recorded." };
+}
+
+/** Staff confirm (or revoke) the access a customer says they have given, and may correct the platform. Granted flips the customer's on-site tasks to "We'll handle this". */
+export async function accessSet(db: SupabaseClient, client: Client, by: string, p: { kind: string; status: string; platform: string; note: string }): Promise<Done> {
+  if (!["site", "gsc", "ga4", "bing"].includes(p.kind)) return { ok: false, message: "Which access?" };
+  if (!["requested", "granted", "revoked"].includes(p.status)) return { ok: false, message: "Choose requested, granted or revoked." };
+  if (p.platform && !isPlatform(p.platform)) return { ok: false, message: "That is not a platform we know." };
+  const now = new Date().toISOString();
+  const row = { client_domain_id: client.id, kind: p.kind, platform: p.platform || null, status: p.status, note: p.note.trim().slice(0, 500) || null, recorded_by: by, ...(p.status === "granted" ? { granted_at: now } : {}) };
+  const { error } = await db.from("client_access").upsert(row, { onConflict: "client_domain_id,kind" });
+  if (missing(error)) return { ok: false, message: WAITING };
+  if (error) return { ok: false, message: `Not saved: ${error.message}` };
+  if (p.platform && p.kind === "site") await db.from("client_domains").update({ site_platform: p.platform, site_platform_at: now }).eq("id", client.id);
+  await audit(db, client.id, by, "access_set", p.kind, null, { status: p.status, platform: p.platform || null });
+  return { ok: true, message: p.status === "granted" ? "Recorded as granted. The customer's on-site tasks now say we'll handle them; link the site in the hub's CMS connections to make the changes through Noma." : p.status === "revoked" ? "Recorded as revoked." : "Recorded as requested." };
 }

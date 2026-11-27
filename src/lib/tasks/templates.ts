@@ -7,9 +7,10 @@
  * Pure module: no imports of server code, so node --test loads it.
  */
 export type Step = { text: string; href?: string; img?: string };
-export type TaskKind = "manual" | "connect_gsc" | "connect_ga4" | "connect_bing" | "page_check";
+export type TaskKind = "manual" | "connect_gsc" | "connect_ga4" | "connect_bing" | "page_check" | "access";
 export type PageCheck = { url: string; target: "h1" | "title"; before: string; after: string };
-export type TaskDraft = { template: string | null; kind: TaskKind; title: string; why: string; steps: Step[]; check: PageCheck | null };
+/** onsite: a change on their own site, which we do ourselves once they have given us access. aiPrompt: what to paste into their AI, only where an LLM can realistically do it. */
+export type TaskDraft = { template: string | null; kind: TaskKind; title: string; why: string; steps: Step[]; check: PageCheck | null; onsite: boolean; aiPrompt: string | null };
 /** accessEmail is the address customers add in Google (connect.ts ACCESS_EMAIL), passed in so this module stays dependency-free. */
 export type Ctx = { slug: string; domain: string; dashboard: string; accessEmail: string };
 export type Field = { key: string; label: string; placeholder?: string; long?: boolean; options?: string[] };
@@ -31,17 +32,34 @@ export function ownPageUrl(raw: string, domain: string): string | null {
 
 const pathOf = (url: string) => { try { const p = new URL(url).pathname; return p === "/" ? "your homepage" : p.replace(/\/$/, ""); } catch { return url; } };
 
+const NO: Pick<TaskDraft, "onsite" | "aiPrompt" | "check"> = { onsite: false, aiPrompt: null, check: null };
+
 export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p: Record<string, string>, ctx: Ctx) => TaskDraft | string }[] = [
+  {
+    id: "direct_access",
+    label: "Let us do it for you: give us access",
+    fields: [],
+    build: (_p, ctx) => ({
+      template: "direct_access", kind: "access", ...NO,
+      title: "Let us do it for you: give us access",
+      why: "The simplest option: give us access to your site and we make the changes for you, with nothing for you to do each time and your approval before anything goes live.",
+      steps: [
+        { text: `Pick your platform below. We've guessed it from ${ctx.domain}, and you can change it.` },
+        { text: "Send the invitation from your own account. You never share a password." },
+        { text: "Press I've given you access. We confirm it and take it from there." },
+      ],
+    }),
+  },
   {
     id: "connect_gsc",
     label: "Connect Search Console",
     fields: [],
     build: (_p, ctx) => ({
-      template: "connect_gsc", kind: "connect_gsc", check: null,
+      template: "connect_gsc", kind: "connect_gsc", ...NO,
       title: "Connect Search Console",
       why: "It shows which page Google puts in front of people for each search, so we can see what is working.",
       steps: [
-        { text: "Open Integrations in your dashboard.", href: `${ctx.dashboard}/integrations` },
+        { text: "Open Integrations in your dashboard.", href: `${ctx.dashboard}/integrations#connect-gsc` },
         { text: "On the Google Search Console card, press Continue with Google and sign in with the Google account that owns your Search Console property." },
         { text: "Allow read-only access when Google asks. We can't change anything." },
         { text: `Pick the property for ${ctx.domain} and press Use this property.` },
@@ -54,7 +72,9 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
     label: "Set up and connect Google Analytics 4",
     fields: [],
     build: (_p, ctx) => ({
-      template: "connect_ga4", kind: "connect_ga4", check: null,
+      template: "connect_ga4", kind: "connect_ga4", check: null, onsite: false,
+      aiPrompt:
+        "Add Google Analytics 4 to my website. My Measurement ID is G-XXXXXXXXXX (I will replace this with mine).\n\nRules:\n- Add the standard Google tag (gtag.js) once, in the head of every page, using the site's own analytics or tracking setting where there is one.\n- Do not add it twice if it is already there.\n- Change nothing else on the site.\n\nWhen you are done, tell me exactly where you added it and how to publish.",
       title: "Set up and connect Google Analytics 4",
       why: "It shows the visits that follow a citation or a placement, so we can show you what the work is worth.",
       steps: [
@@ -64,7 +84,7 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
         { text: "In Google Analytics open Admin, then Property access management." },
         { text: `Press the plus, choose Add users, enter ${ctx.accessEmail} and give it the Viewer role.` },
         { text: "Still in Admin, open Property details and copy the property ID (numbers only)." },
-        { text: "Open Integrations in your dashboard, paste the ID on the Google Analytics 4 card and press Check connection.", href: `${ctx.dashboard}/integrations` },
+        { text: "Open Integrations in your dashboard, paste the ID on the Google Analytics 4 card and press Check connection.", href: `${ctx.dashboard}/integrations#connect-ga4` },
       ],
     }),
   },
@@ -73,14 +93,14 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
     label: "Connect Bing Webmaster Tools",
     fields: [],
     build: (_p, ctx) => ({
-      template: "connect_bing", kind: "connect_bing", check: null,
+      template: "connect_bing", kind: "connect_bing", ...NO,
       title: "Connect Bing Webmaster Tools",
       why: "Bing is where Microsoft Copilot looks, so its numbers show how you appear there.",
       steps: [
         { text: `Open Bing Webmaster Tools and sign in. If ${ctx.domain} is not listed yet, choose Import and pick Google Search Console: sign in with Google and select ${ctx.domain}.`, href: "https://www.bing.com/webmasters" },
         { text: "Open your site, then go to Settings, then User management." },
         { text: `Press Add user, enter ${ctx.accessEmail} and choose Read only.` },
-        { text: "Open Integrations in your dashboard and press Check connection on the Bing Webmaster Tools card.", href: `${ctx.dashboard}/integrations` },
+        { text: "Open Integrations in your dashboard and press Check connection on the Bing Webmaster Tools card.", href: `${ctx.dashboard}/integrations#connect-bing` },
       ],
     }),
   },
@@ -91,7 +111,7 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
     build: (p, ctx) => {
       const name = clean(p.business, 120) || ctx.domain;
       return {
-        template: "chatgpt_listing", kind: "manual", check: null,
+        template: "chatgpt_listing", kind: "manual", ...NO,
         title: "Claim your ChatGPT business listing",
         why: "An unclaimed listing can be claimed by someone else. Claimed, you can see how often ChatGPT mentions you and how many clicks come to your site.",
         steps: [
@@ -121,7 +141,11 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
       if (before === after) return "The before and after text are the same.";
       const what = target === "title" ? "page title" : "main heading (H1)";
       return {
-        template: "page_heading", kind: "page_check", check: { url, target, before, after },
+        template: "page_heading", kind: "page_check", check: { url, target, before, after }, onsite: true,
+        aiPrompt:
+          `You are editing my website. Make one small change and leave everything else exactly as it is.\n\nPage: ${url}\n\nChange the ${what} from:\n"${before}"\n\nto exactly:\n"${after}"\n\nRules:\n- Change only that text. Do not touch other headings, copy, links, styling or layout.\n` +
+          (target === "h1" ? "- The page must still have exactly one H1.\n" : "- This is the page's title tag (the SEO title), not a heading on the page.\n") +
+          "\nWhen you are done, show me the exact change you made and tell me how to publish it.",
         title: `Change the ${what} on ${pathOf(url)}`,
         why: target === "title" ? "The title is what Google and AI read first, so it should say exactly what the page is about." : "The main heading tells Google and AI what the page is about, so it should say exactly that.",
         steps: [
@@ -140,7 +164,9 @@ export const TEMPLATES: { id: string; label: string; fields: Field[]; build: (p:
     build: (p, ctx) => {
       const note = clean(p.note, 300);
       return {
-        template: "internal_links", kind: "manual", check: null,
+        template: "internal_links", kind: "manual", check: null, onsite: true,
+        aiPrompt:
+          `You are editing my website (${ctx.domain}). Add internal links, and change nothing else.\n\n${note ? `What to link: ${note}\n\n` : "Link from the pages where it reads naturally to the page that matters most for my main service.\n\n"}Rules:\n- Add links only inside existing body copy, using natural anchor text that describes the page being linked to.\n- At most 3 links on any one page, and none where it would read awkwardly.\n- Do not change any other wording, headings, styling or layout.\n- Do not add site-wide boxes, footers or menus.\n\nWhen you are done, list every page you changed, the sentence and the link you added, and tell me how to publish.\n\n(Our prompts for your site are at ${ctx.dashboard}/prompts if you want the full list.)`,
         title: "Add internal links",
         why: "Links between your own pages tell Google which page matters most for each search.",
         steps: [
@@ -176,7 +202,7 @@ export function buildCustom(p: { title?: unknown; why?: unknown; steps?: unknown
     }
     steps.push(s);
   }
-  return { template: null, kind: "manual", title, why, steps, check: null };
+  return { template: null, kind: "manual", title, why, steps, check: null, onsite: false, aiPrompt: null };
 }
 
 export function buildFromTemplate(id: string, params: Record<string, string>, ctx: Ctx): TaskDraft | string {
