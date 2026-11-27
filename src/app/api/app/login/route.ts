@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { signInUrl } from "@/lib/tracking/app-redirect";
 import { sendLoginLink } from "@/lib/tracking/login-mail";
 import { LOGIN_SENT, LOGIN_TTL_MS, LOGIN_PER_EMAIL_PER_HOUR, hashToken, mayRecordStranger, mayRequestLink, newToken } from "@/lib/tracking/session";
-import { dashLinkOrigin, dashNext } from "@/lib/dash/host";
+import { dashHere, dashLinkOrigin, dashNext, previewOrigin } from "@/lib/dash/host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -112,7 +112,8 @@ export async function POST(req: Request) {
     // Cut-over (22 Oct 2026): every sign-in link opens the dashboards host, where its session cookie lives,
     // wherever it was asked from; an old /app next is mapped to its dashboards page (dashNext).
     const next = dashNext(body.next);
-    const link = `${dashLinkOrigin(req.headers.get("host"))}/auth?token=${token}` + (next ? `&next=${encodeURIComponent(next)}` : "");
+    // A preview's link opens that preview (27 Nov 2026), where the tree is at /dashboards, so QA can sign in there.
+    const link = `${previewOrigin() ?? dashLinkOrigin(req.headers.get("host"))}${dashHere("/auth")}?token=${token}` + (next ? `&next=${encodeURIComponent(next)}` : "");
     await sendLoginLink({ memberEmail: member[0]!.email as string, link });
   }
   return answer({ ok: true, message: LOGIN_SENT });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { dashNext } from "@/lib/dash/host";
+import { dashHere, dashNext } from "@/lib/dash/host";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { SESSION_TTL_MS, hashToken, isTokenShape, newToken, sessionCookie } from "@/lib/tracking/session";
 
@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   const form = await req.formData().catch(() => null);
   const token = form?.get("token");
-  const back = (path: string) => NextResponse.redirect(new URL(path, req.url), 303);
+  const back = (path: string) => NextResponse.redirect(new URL(dashHere(path), req.url), 303);
   if (!isTokenShape(token)) return back("/login?link=expired");
   // where the link was asked from (an old /app link's next too), checked again here (dashNext)
   const next = dashNext(form?.get("next"));

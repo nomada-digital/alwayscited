@@ -337,3 +337,15 @@ test("the Log in link is the dashboards host's /login, and relative on a preview
   assert.equal(isPreviewDeploy({ VERCEL_ENV: "development" }), false);
   assert.equal(isPreviewDeploy({}), false);
 });
+
+test("on a preview the sign-in link opens that preview; nowhere else does", async () => {
+  const { previewOrigin, dashHere } = await import("./dash/host.ts");
+  const prev = { VERCEL_ENV: "preview", VERCEL_BRANCH_URL: "alwayscited-git-x-dannys-projects-b8faad48.vercel.app", VERCEL_URL: "alwayscited-abc123-dannys-projects-b8faad48.vercel.app" };
+  assert.equal(previewOrigin(prev), "https://alwayscited-git-x-dannys-projects-b8faad48.vercel.app");
+  assert.equal(previewOrigin({ ...prev, VERCEL_BRANCH_URL: "" }), "https://alwayscited-abc123-dannys-projects-b8faad48.vercel.app");
+  assert.equal(previewOrigin({ ...prev, VERCEL_ENV: "production" }), null, "production mail never carries a preview origin");
+  assert.equal(previewOrigin({ VERCEL_ENV: "preview", VERCEL_BRANCH_URL: "evil.example.com" }), null, "only a vercel.app host");
+  assert.equal(dashHere("/auth", { VERCEL_ENV: "preview" }), "/dashboards/auth");
+  assert.equal(dashHere("/", { VERCEL_ENV: "preview" }), "/dashboards");
+  assert.equal(dashHere("/auth", { VERCEL_ENV: "production" }), "/auth");
+});
