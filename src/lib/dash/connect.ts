@@ -19,7 +19,7 @@
 export type ConnectProvider = "gsc" | "ga4" | "bing";
 
 /** The address the customer adds, the same for all three (team@, Danny's instruction of 2 Nov 2026). */
-export const ACCESS_EMAIL = "team@nomadadigital.co.uk";
+export const ACCESS_EMAIL = "data@nomadadigital.co.uk";
 
 /** Windsor's connector for each provider. */
 export const CONNECTOR: Record<ConnectProvider, string> = { gsc: "searchconsole", ga4: "googleanalytics4", bing: "bing_webmaster" };

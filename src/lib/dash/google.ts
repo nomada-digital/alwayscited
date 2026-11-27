@@ -23,6 +23,14 @@ export function gscUsersLink(property: string | null): string {
 }
 
 /** Search Console permission levels as sites.list names them, in plain words. */
+/** What a customer is told about the access that is connected: never the account that connected it. */
+export const CLIENT_ACCESS: Record<string, string> = {
+  siteOwner: "Full access",
+  siteFullUser: "Full access",
+  siteRestrictedUser: "Restricted access",
+  siteUnverifiedUser: "Not verified",
+};
+
 export const PERMISSION: Record<string, string> = {
   siteOwner: "Owner",
   siteFullUser: "Full",
