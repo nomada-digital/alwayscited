@@ -12,14 +12,15 @@ import { headerSafe } from "@/lib/email-header";
  * Returns false rather than throwing; the login page says the same sentence
  * either way, so a failed send is logged, not shown.
  */
-export async function sendLoginLink(input: { memberEmail: string; link: string }): Promise<boolean> {
+export async function sendLoginLink(input: { memberEmail: string; link: string; product?: string }): Promise<boolean> {
+  const product = input.product ?? "alwayscited";
   const key = process.env.RESEND_API_KEY;
   if (!key) {
     console.error("[app] RESEND_API_KEY is not set, login link not sent");
     return false;
   }
   const text = [
-    "Here is your link to the alwaystracked dashboard. It works once, for 15 minutes.",
+    `Here is your link to the ${product} dashboard. It works once, for 15 minutes.`,
     "",
     input.link,
     "",
@@ -29,7 +30,7 @@ export async function sendLoginLink(input: { memberEmail: string; link: string }
     const { error } = await new Resend(key).emails.send({
       from: mailFrom(),
       to: input.memberEmail,
-      subject: headerSafe("Your alwaystracked login link"),
+      subject: headerSafe(`Your ${product} login link`),
       text,
     });
     if (error) {

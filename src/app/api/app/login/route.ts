@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { APP_LIMITS, SCAN_LIMITS } from "@/config/contact";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { clientIp, hashIp } from "@/lib/scan/ip";
+import { clientsFor } from "@/lib/tracking/member";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { signInUrl } from "@/lib/tracking/app-redirect";
 import { sendLoginLink } from "@/lib/tracking/login-mail";
@@ -114,7 +115,11 @@ export async function POST(req: Request) {
     const next = dashNext(body.next);
     // A preview's link opens that preview (27 Nov 2026), where the tree is at /dashboards, so QA can sign in there.
     const link = `${previewOrigin() ?? dashLinkOrigin(req.headers.get("host"))}${dashHere("/auth")}?token=${token}` + (next ? `&next=${encodeURIComponent(next)}` : "");
-    await sendLoginLink({ memberEmail: member[0]!.email as string, link });
+    // Named for the member's plan, not always "alwaystracked" (27 Nov 2026): one plan across their clients names it, a mix says alwayscited.
+    const tiers = new Set((await clientsFor(email).catch(() => [])).map((c) => c.tier));
+    const only = tiers.size === 1 ? [...tiers][0] : null;
+    const product = only && ["tracked", "mentioned", "cited", "everywhere"].includes(only) ? `always${only}` : "alwayscited";
+    await sendLoginLink({ memberEmail: member[0]!.email as string, link, product });
   }
   return answer({ ok: true, message: LOGIN_SENT });
 }

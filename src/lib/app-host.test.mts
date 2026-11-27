@@ -349,3 +349,15 @@ test("on a preview the sign-in link opens that preview; nowhere else does", asyn
   assert.equal(dashHere("/", { VERCEL_ENV: "preview" }), "/dashboards");
   assert.equal(dashHere("/auth", { VERCEL_ENV: "production" }), "/auth");
 });
+
+test("the preview session cookie is host-only, and the post-sign-in redirect is a bare path that cannot leave the host", async () => {
+  const { sessionCookie, SESSION_COOKIE } = await import("./tracking/session.ts");
+  const c = sessionCookie("x".repeat(64)) as Record<string, unknown>;
+  assert.equal(SESSION_COOKIE.startsWith("__Host-"), true);
+  assert.equal("domain" in c, false, "no Domain attribute: host-only, as __Host- requires");
+  assert.equal(c.secure, true);
+  assert.equal(c.path, "/");
+  assert.equal(c.sameSite, "lax");
+  const route = readFileSync(join(process.cwd(), "src", "app", "api", "dash", "auth", "route.ts"), "utf8");
+  assert.match(route, /isPreviewDeploy\(\) \? new NextResponse\(null, \{ status: 303, headers: \{ location: dashHere\(path\) \} \}\)/);
+});
