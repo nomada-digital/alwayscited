@@ -7,7 +7,7 @@ import { checkCeilings } from "@/lib/scan/ceilings";
 import { type ReadFailure, readSite, UnreachableDomain } from "@/lib/scan/crawl";
 import type { ThinReason } from "@/lib/scan/page-read";
 import { headlineFromSiteText } from "@/lib/scan/page-read";
-import { isPlausibleDomain, isScanMarket, normalizeDomain } from "@/lib/scan/domain";
+import { enteredUrl, isPlausibleDomain, isScanMarket, normalizeDomain } from "@/lib/scan/domain";
 import { readRankingFootprint } from "@/lib/scan/dataforseo";
 import { keywordForm } from "@/lib/scan/dataforseo-request";
 import { estimateScanCost } from "@/lib/scan/engine-costs";
@@ -40,7 +40,7 @@ function fail(status: number, code: string, message: string) {
  */
 const SITE_READ_FAILURE: Record<
   ReadFailure,
-  (domain: string, status?: number, detail?: ThinReason) => { http: number; code: string; message: string }
+  (domain: string, status?: number, detail?: ThinReason, challenge?: boolean) => { http: number; code: string; message: string }
 > = {
   dns: (d) => ({
     http: 422,
@@ -52,15 +52,18 @@ const SITE_READ_FAILURE: Record<
     code: "not_a_page",
     message: `${d} answered, but did not return a web page. Check the address and try again.`,
   }),
-  blocked: (d, status) => ({
+  blocked: (d, status, _detail, challenge) => ({
     http: 502,
     code: "site_blocked",
     // The status is in the sentence on purpose. This is the one failure a
     // visitor can act on without us - a 403 to a named crawler is an allowlist
     // entry on their side - and it is the one they would otherwise have to ask
     // us to look up.
-    message:
-      `${d} is up, but it would not serve the page to our reader` +
+    message: challenge
+      ? // Cloudflare's challenge (26 Nov 2026): said as what it is, never as "took too long".
+        `${d} blocks automated checks (its bot protection asked our reader to prove it is human), so we can't read it. ` +
+        `If you can, allow "alwayscited-scan" in your firewall or bot settings and try again.`
+      : `${d} is up, but it would not serve the page to our reader` +
       `${status ? ` (HTTP ${status})` : ""}. ` +
       `That is usually a bot filter or a firewall rather than anything wrong with your address.`,
   }),
@@ -299,7 +302,7 @@ export async function POST(req: Request) {
   let read;
   let headline = { title: "", h1: "", description: "" };
   try {
-    const siteText = await readSite(domain);
+    const siteText = await readSite(domain, enteredUrl(body.domain ?? "", domain));
     headline = headlineFromSiteText(siteText);
     read = await readBrand(siteText, billed);
     // 3 Nov 2026: our own brand came back as two words - a name the domain runs together keeps the site's own spelling.
@@ -312,9 +315,9 @@ export async function POST(req: Request) {
       // was indistinguishable in the log from people mistyping a domain.
       console.warn(
         `[scan] site read failed for ${domain}: ${err.reason}${err.status ? ` ${err.status}` : ""}` +
-          `${err.detail ? ` (${err.detail})` : ""}${err.url ? ` url=${err.url}` : ""}`,
+          `${err.detail ? ` (${err.detail})` : ""}${err.challenge ? " challenge" : ""}${err.url ? ` url=${err.url}` : ""}`,
       );
-      const told = SITE_READ_FAILURE[err.reason](domain, err.status, err.detail);
+      const told = SITE_READ_FAILURE[err.reason](domain, err.status, err.detail, err.challenge);
       return fail(told.http, told.code, told.message);
     }
     // Logged rather than swallowed. These two failures look identical to a

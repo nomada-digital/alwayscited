@@ -250,6 +250,13 @@ const NO_CALLER: { route: string; method: string; why: string; earns: () => bool
     earns: () => /hubAuthorised\(req\)/.test(readFileSync(join(ROOT, "src/app/api/hub/agency/route.ts"), "utf8")) && /HUB_OFFER_SECRET/.test(readFileSync(join(ROOT, "src/lib/agency/hub-auth.ts"), "utf8")),
   },
   {
+    route: "/api/dash/handoff",
+    method: "GET",
+    // 26 Nov 2026: the hub opens a customer's dashboard in the agency view, signed with HMAC (lib/dash/handoff.ts).
+    why: "Opened by the agency hub's browser redirect, never by this app; it answers only to a signature under HUB_HANDOFF_SECRET (handoff.ts) and 503s without it.",
+    earns: () => /verifyHandoff\(process\.env\.HUB_HANDOFF_SECRET/.test(readFileSync(join(ROOT, "src/app/api/dash/handoff/route.ts"), "utf8")) && /timingSafeEqual/.test(readFileSync(join(ROOT, "src/lib/dash/handoff.ts"), "utf8")),
+  },
+  {
     route: "/api/cron/purge-responses",
     method: "GET",
     why: "Vercel Cron calls it on a schedule; nothing in the app does.",

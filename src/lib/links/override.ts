@@ -7,7 +7,8 @@ import { audit } from "@/lib/agency/edit";
 import { urlKey as placementKey } from "@/lib/tracking/placements";
 
 import { type LinkCheck, checkLink } from "./check";
-import { type Override, OVERRIDE_STATUSES, applyOverride, isOverrideStatus, sheetAgrees, stageOf } from "./stage";
+import { type Override, OVERRIDE_STATUSES, applyOverride, isOverrideStatus, sheetAgrees, stageOfOverride } from "./override-rules";
+import { stageOfStatus } from "./stage";
 
 /**
  * Manual overrides on placements and link insertions (25 Nov 2026; 20261125010000_link_overrides.sql). WLDM's sheet is
@@ -72,7 +73,7 @@ export async function setOverride(db: SupabaseClient, client: Client, by: string
   if (!source || !kind || !key) return no("Say which item this is.");
   if (!isOverrideStatus(i.status)) return no(`The stage is one of: ${OVERRIDE_STATUSES.join(", ")}.`);
   const status = i.status;
-  const stage = stageOf(status);
+  const stage = stageOfOverride(status);
   const url = i.live_url === undefined || i.live_url === null || i.live_url === "" ? null : httpUrl(i.live_url);
   if (i.live_url && !url) return no("The live URL must be a full http or https address.");
   const anchor = typeof i.anchor_text === "string" && i.anchor_text.trim() ? i.anchor_text.replace(/\s+/g, " ").trim().slice(0, LINK_LIMITS.anchor) : null;
@@ -208,8 +209,8 @@ export async function listInternal(db: SupabaseClient, client: Client): Promise<
     for (const r of (links ?? []) as { kind: "insertion" | "placement"; url_key: string; live_url: string; anchor_text: string | null; target_keyword: string | null; status: string | null; live_on: string | null }[]) {
       const o = ov("sheet_link", r.url_key);
       const active = o?.active ? o : null;
-      if (stageOf(r.status) !== "progress" && !active) continue;
-      items.push({ source: "sheet_link", kind: r.kind, key: r.url_key, title: r.live_url, live_url: active?.live_url ?? r.live_url, anchor_text: active?.anchor_text ?? r.anchor_text, target_keyword: r.target_keyword, sheet_status: r.status, stage: stageOf(active?.status ?? r.status), override: o, differs: !!active && !sheetAgrees(r, active), live_on: active?.live_on ?? r.live_on });
+      if (stageOfStatus(r.status) !== "progress" && !active) continue;
+      items.push({ source: "sheet_link", kind: r.kind, key: r.url_key, title: r.live_url, live_url: active?.live_url ?? r.live_url, anchor_text: active?.anchor_text ?? r.anchor_text, target_keyword: r.target_keyword, sheet_status: r.status, stage: stageOfStatus(active?.status ?? r.status), override: o, differs: !!active && !sheetAgrees(r, active), live_on: active?.live_on ?? r.live_on });
     }
     for (const p of (prog ?? []) as { placement_ref: string; title: string; keyword: string | null; stage: string }[]) {
       const o = ov("progress", p.placement_ref);

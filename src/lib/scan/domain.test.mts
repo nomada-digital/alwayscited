@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isPlausibleDomain, normalizeDomain } from "./domain.ts";
+import { enteredUrl, homepageCandidates, isPlausibleDomain, normalizeDomain } from "./domain.ts";
 
 /**
  * The first real check in this repo, and it is here rather than anywhere else
@@ -122,4 +122,24 @@ test("isPlausibleDomain refuses what is not a hostname", () => {
   assert.equal(isPlausibleDomain("-bad.example.com"), false);
   assert.equal(isPlausibleDomain("bad-.example.com"), false);
   assert.equal(isPlausibleDomain("例え.com"), false);
+});
+
+test("the first fetch goes where the visitor pointed, www included (26 Nov 2026)", () => {
+  assert.equal(enteredUrl("https://www.sandburnhall.co.uk/", "sandburnhall.co.uk"), "https://www.sandburnhall.co.uk/");
+  assert.equal(enteredUrl("WWW.Sandburnhall.co.uk", "sandburnhall.co.uk"), "https://www.sandburnhall.co.uk/");
+  assert.equal(enteredUrl("sandburnhall.co.uk", "sandburnhall.co.uk"), "https://sandburnhall.co.uk/");
+  assert.equal(enteredUrl("http://example.com/en/?utm=1#x", "example.com"), "http://example.com/en/");
+  // Credentials and ports are dropped; a different host, and the "\\@" trick, are not accepted.
+  assert.equal(enteredUrl("https://user:pw@example.com:8443/", "example.com"), "https://example.com/");
+  assert.equal(enteredUrl("https://example.com\\@evil.com", "example.com"), "https://example.com/");
+  assert.equal(enteredUrl("https://evil.com/", "example.com"), null);
+  assert.equal(enteredUrl("ftp://example.com", "example.com"), null);
+  assert.equal(enteredUrl("", "example.com"), null);
+});
+
+test("the homepage is tried as entered, then on the www counterpart, then the other scheme (26 Nov 2026)", () => {
+  assert.deepEqual(homepageCandidates("sandburnhall.co.uk", "https://www.sandburnhall.co.uk/"), ["https://www.sandburnhall.co.uk/", "https://sandburnhall.co.uk/", "http://www.sandburnhall.co.uk/", "http://sandburnhall.co.uk/"]);
+  assert.deepEqual(homepageCandidates("sandburnhall.co.uk", "https://sandburnhall.co.uk/"), ["https://sandburnhall.co.uk/", "https://www.sandburnhall.co.uk/", "http://sandburnhall.co.uk/", "http://www.sandburnhall.co.uk/"]);
+  assert.deepEqual(homepageCandidates("example.com", "http://example.com/en/"), ["http://example.com/en/", "http://www.example.com/en/", "https://example.com/", "https://www.example.com/"]);
+  assert.deepEqual(homepageCandidates("example.com"), ["https://example.com/", "https://www.example.com/", "http://example.com/", "http://www.example.com/"]);
 });

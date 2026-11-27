@@ -4,7 +4,7 @@ import { LINK_LIMITS } from "@/config/contact";
 import { T } from "@/config/tokens";
 import { TEAM } from "@/config/team";
 import { type InternalItem, listInternal } from "@/lib/links/override";
-import { OVERRIDE_STATUSES } from "@/lib/links/stage";
+import { OVERRIDE_STATUSES } from "@/lib/links/override-rules";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 import { ActingProvider, LinkForm } from "./Forms";

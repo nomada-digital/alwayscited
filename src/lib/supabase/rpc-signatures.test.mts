@@ -303,5 +303,8 @@ test("the six call sites are the ones we think they are", () => {
     // 18 Nov 2026, prompt positions: each live prompt's type, position and verdict figures, read-only, for the agency
     // view (lib/tracking/prompt-type.ts readPositions).
     prompt_positions: 1,
+    // 26 Nov 2026, the hub's signed handoff: mints the read-only view-as token the way the hub's own "What the customer
+    // sees" does (app/api/dash/handoff/route.ts), after the HMAC checks out.
+    hub_view_as: 1,
   });
 });

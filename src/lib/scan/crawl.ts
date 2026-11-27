@@ -3,6 +3,7 @@ import "server-only";
 import { outboundLinks } from "../coverage/draft";
 
 import { checkHost } from "./address";
+import { homepageCandidates } from "./domain";
 import { readRenderedPage } from "./dataforseo";
 import { bodyText, headlineLines, pageHeadline, type ReadStop, readPage, type ThinReason, thinReason, whyThin } from "./page-read";
 import { decodeEntities, toProse } from "./prose";
@@ -40,6 +41,10 @@ const THIN_HOMEPAGE = 1_500;
 const ABOUT_GUESSES = ["/about", "/about-us"];
 
 const TOTAL_BUDGET_MS = 8_000;
+
+/** Each homepage attempt's own clock (26 Nov 2026), and what a failover adds to the whole read's budget. */
+const ATTEMPT_MS = 4_000;
+const FAILOVER_EXTRA_MS = 4_000;
 const MAX_EXTRA_PAGES = 6;
 
 /**
@@ -131,14 +136,17 @@ export class UnreachableDomain extends Error {
   readonly detail?: ThinReason;
   /** The address that answered, where one did. Logged beside the reason. */
   readonly url?: string;
+  /** For a blocked: the refusal was a bot-filter challenge (Cloudflare), not an ordinary 403. */
+  readonly challenge?: boolean;
 
-  constructor(domain: string, reason: ReadFailure, status?: number, more?: { detail?: ThinReason; url?: string }) {
+  constructor(domain: string, reason: ReadFailure, status?: number, more?: { detail?: ThinReason; url?: string; challenge?: boolean }) {
     super(`could not read ${domain}: ${reason}${more?.detail ? ` (${more.detail})` : ""}`);
     this.name = "UnreachableDomain";
     this.reason = reason;
     this.status = status;
     this.detail = more?.detail;
     this.url = more?.url;
+    this.challenge = more?.challenge;
   }
 }
 
@@ -167,7 +175,7 @@ type Fetched =
    * produced and nothing carries the correction forward.
    */
   | { ok: true; html: string; url: string; stop: ReadStop; scripts: number }
-  | { ok: false; why: "status"; status: number }
+  | { ok: false; why: "status"; status: number; challenge?: boolean }
   | { ok: false; why: "not_html" }
   | { ok: false; why: "private" }
   | { ok: false; why: "network" };
@@ -251,6 +259,16 @@ function decodeBody(bytes: Uint8Array, contentType: string): string {
 }
 
 /**
+ * A bot filter's challenge rather than a missing page (26 Nov 2026): Cloudflare marks the response it will not serve
+ * with `cf-mitigated: challenge`, and a 403 or 503 from its edge with no other marker is the same wall. The visitor
+ * is told their site blocks automated checks, which is the thing they can fix, rather than that it was slow.
+ */
+function isChallenge(res: Response): boolean {
+  if ((res.headers.get("cf-mitigated") ?? "").toLowerCase() === "challenge") return true;
+  return (res.status === 403 || res.status === 503) && /cloudflare/i.test(res.headers.get("server") ?? "");
+}
+
+/**
  * Fetch one page, following redirects by hand so that every hop is checked.
  *
  * redirect: follow handed the whole chain to fetch, which left only the first
@@ -308,7 +326,7 @@ async function getText(url: string, signal: AbortSignal, trusted: string): Promi
     // left for the collector at whatever size it arrived.
     if (!res.ok) {
       await res.body?.cancel().catch(() => {});
-      return { ok: false, why: "status", status: res.status };
+      return { ok: false, why: "status", status: res.status, challenge: isChallenge(res) };
     }
     const type = res.headers.get("content-type") ?? "";
     if (!type.includes("html")) {
@@ -431,10 +449,12 @@ function failureFor(
   domain: string,
   signal: AbortSignal,
   first: Exclude<Fetched, { ok: true }> | null,
+  hung = false,
 ): UnreachableDomain {
-  if (signal.aborted) return new UnreachableDomain(domain, "timeout");
+  // A host that answered and refused is never reported as slow, whatever else hung (26 Nov 2026).
+  if (first?.why === "status") return new UnreachableDomain(domain, "blocked", first.status, { challenge: first.challenge });
+  if (signal.aborted || (hung && first?.why === "network")) return new UnreachableDomain(domain, "timeout");
   if (first?.why === "private") return new UnreachableDomain(domain, "private");
-  if (first?.why === "status") return new UnreachableDomain(domain, "blocked", first.status);
   if (first?.why === "not_html") return new UnreachableDomain(domain, "not_html");
   return new UnreachableDomain(domain, "dns");
 }
@@ -478,9 +498,9 @@ export async function readPieces(urls: string[]): Promise<PieceRead[]> {
  * yields nothing usable, carrying the reason so the caller can say which of the
  * five things went wrong rather than blaming the address for all of them.
  */
-export async function readSite(domain: string): Promise<string> {
+export async function readSite(domain: string, entered?: string | null): Promise<string> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TOTAL_BUDGET_MS);
+  const timer = setTimeout(() => controller.abort(), TOTAL_BUDGET_MS + FAILOVER_EXTRA_MS);
 
   try {
     // Where the address points is settled before a single byte is fetched.
@@ -488,7 +508,8 @@ export async function readSite(domain: string): Promise<string> {
     // rather than one per attempt.
     const where = await checkHost(domain, controller.signal);
     if (where === "private") throw new UnreachableDomain(domain, "private");
-    if (where === "unresolved") throw failureFor(domain, controller.signal, null);
+    // An apex that does not resolve is no longer the end of it (26 Nov 2026): a site served on www alone has no apex
+    // record. Every candidate below is checked as it is fetched (getText checks any host but `domain`).
 
     let html: string | null = null;
     // How the homepage read stopped, for the reason a too_thin is logged with.
@@ -496,9 +517,15 @@ export async function readSite(domain: string): Promise<string> {
     let base = `https://${domain}/`;
     let firstFailure: Exclude<Fetched, { ok: true }> | null = null;
 
-    for (const scheme of ["https", "http"] as const) {
-      const url = `${scheme}://${domain}/`;
-      const got = await getText(url, controller.signal, domain);
+    // Where the homepage is tried, in order (26 Nov 2026): the address exactly as entered, then the same page on the
+    // www / non-www counterpart, then the other scheme on each. Each attempt has its own clock, so one host that hangs
+    // cannot spend the budget the counterpart needed (sandburnhall.co.uk: the bare apex hangs, www works).
+    const candidates = homepageCandidates(domain, entered);
+    let hung = false;
+    for (const url of candidates) {
+      if (controller.signal.aborted) break;
+      const attempt = AbortSignal.any([controller.signal, AbortSignal.timeout(ATTEMPT_MS)]);
+      const got = await getText(url, attempt, domain);
       if (got.ok) {
         html = got.html;
         homeRead = { stop: got.stop, scripts: got.scripts };
@@ -506,10 +533,10 @@ export async function readSite(domain: string): Promise<string> {
         base = got.url;
         break;
       }
-      // The https attempt is the one worth reporting: it is what a visitor
-      // means by their address, and an http retry against a host that just
-      // refused us only repeats the refusal.
-      firstFailure ??= got;
+      if (attempt.aborted) hung = true;
+      // The failure worth reporting is the most telling one: a host that answered and refused (a block says more than
+      // anything), then a private address, then not-a-page; a plain network failure only when nothing else happened.
+      if (!firstFailure || (got.why !== "network" && (firstFailure.why === "network" || (got.why === "status" && firstFailure.why !== "status")))) firstFailure = got;
     }
 
     // `html === null` rather than `!html`, because "" is a page that answered.
@@ -521,7 +548,7 @@ export async function readSite(domain: string): Promise<string> {
     if (html === null) {
       // Judged before the render: the 8 second controller fires while it runs,
       // and failureFor would then call a refused site slow.
-      const failure = failureFor(domain, controller.signal, firstFailure);
+      const failure = failureFor(domain, controller.signal, firstFailure, hung);
       // Refused by a bot filter: the same homepage through a real browser
       // before telling the visitor we could not read it. Homepage only; the
       // extra pages are not worth a second render each.

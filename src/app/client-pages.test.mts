@@ -79,6 +79,8 @@ const KEYS: Record<string, Record<string, string>> = {
   "/listings": {},
   // 14 Nov 2026: Schema for your site; reads no query (Check again re-renders the page).
   "/schema": {},
+  // 26 Nov 2026: Prompts for your site, published by staff; reads no query.
+  "/prompts": {},
   // 29 Oct 2026: placements and link insertions from the link team's sheets. No query keys.
   "/links": {},
   // 22 Oct 2026: the map pack grids. No query keys.

@@ -86,6 +86,9 @@ export const NOT_REQUIRED: Record<string, string> = {
   // 22 Oct 2026: the agency hub's subscription offer (api/hub/offer). Unset, that one server-to-server door answers 503
   // and the hub says it is not connected; nothing a visitor or customer uses depends on it.
   HUB_OFFER_SECRET: "only the agency hub's offer door reads it, and answers 503 without it",
+  // 26 Nov 2026: the hub's signed handoff into the agency view (api/dash/handoff). Unset, that door answers 503 and the
+  // hub falls back to its own "What the customer sees"; nothing a visitor or customer uses depends on it.
+  HUB_HANDOFF_SECRET: "only the agency hub's signed handoff door reads it, and answers 503 without it",
   // 2 Nov 2026, sg-37: the dashboards' Connect your data (lib/dash/connect-io.ts). Unset, Check connection answers
   // "not visible yet", the daily pull skips, and a customer still waiting a day is in the run-health mail.
   WINDSOR_API_KEY: "only Check connection and the data connections' daily pull read it, and both degrade to not connected without it",

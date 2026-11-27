@@ -71,6 +71,7 @@ const CLOSED_ON_PURPOSE: Record<string, string> = {
   "/dashboards/[client]/clusters/[cluster]": "one cluster's keyword groups, keywords and prompts; private, same membership 404",
   "/dashboards/[client]/google": "one client's Google positions; private, same membership 404",
   "/dashboards/[client]/integrations": "one client's connections; private, same membership 404",
+  "/dashboards/[client]/prompts": "one client's published prompts for their own site (26 Nov 2026); private, same membership 404",
   "/dashboards/[client]/schema": "one client's schema for their own site (14 Nov 2026); private, same membership 404",
   "/dashboards/[client]/listings": "one client's local listings checklist (17 Nov 2026); private, same membership 404",
   "/dashboards/[client]/links": "one client's placements and link insertions (paid plans, 29 Oct 2026); private, same membership 404",

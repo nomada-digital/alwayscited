@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { SCAN_LIMITS } from "@/config/contact";
 import { isPlausibleEmail, normalizeEmail } from "@/lib/email-address";
 import { clientIp, hashIp } from "@/lib/scan/ip";
+import { botCheck, HONEYPOT_FIELD } from "@/lib/scan/walkthrough-guard";
 import { markClaimed } from "@/lib/scan/unlock";
 import { readWalkthroughCategory, readWalkthroughMarket, readWalkthroughName } from "@/lib/scan/walkthrough-fields";
 import { sendWalkthroughAlert } from "@/lib/scan/walkthrough-mail";
@@ -38,7 +39,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   // R151 (3 Oct 2026): the form posts here without script too, and is answered
   // with a 303 back to its page carrying only the outcome, never the address.
   const isForm = !(req.headers.get("content-type") ?? "").includes("application/json");
-  let body: { email?: string; kind?: string; back?: unknown; name?: unknown; category?: unknown; market?: unknown };
+  let body: { email?: string; kind?: string; back?: unknown; name?: unknown; category?: unknown; market?: unknown; t?: unknown; [HONEYPOT_FIELD]?: unknown };
   if (isForm) {
     const form = await req.formData().catch(() => null);
     if (!form) return Response.json({ error: "bad_request" }, { status: 400 });
@@ -49,6 +50,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
       name: String(form.get("name") ?? ""),
       category: String(form.get("category") ?? ""),
       market: String(form.get("market") ?? ""),
+      [HONEYPOT_FIELD]: String(form.get(HONEYPOT_FIELD) ?? ""),
     };
   } else {
     try {
@@ -65,6 +67,14 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
   const kind = body.kind === "demo" ? "demo" : body.kind === "video" ? "video" : null;
   if (!kind) return answer({ error: "bad_kind", message: "Pick a video or a demo." }, 400);
+
+  // The invisible bot check (26 Nov 2026, walkthrough-guard.ts): a caught post is answered as a real one and kept nowhere.
+  const verdict = botCheck({ honeypot: body[HONEYPOT_FIELD], t: body.t }, { json: !isForm });
+  if (verdict === "reload") return answer({ error: "reload", message: "Please reload the page and try again." }, 400);
+  if (verdict === "bot") {
+    console.warn("[walkthrough] dropped a post that failed the bot check");
+    return answer({ ok: true, message: kind === "video" ? "Thanks. Luke will send your Loom." : "Thanks. Danny will be in touch." });
+  }
 
   const name = readWalkthroughName(body.name);
   if (!name.ok) return answer({ error: name.error, message: name.message }, 400);

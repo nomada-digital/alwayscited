@@ -4,7 +4,8 @@ import path from "node:path";
 import { test } from "node:test";
 
 import { blockedHost, checkLink, findLink } from "./check.ts";
-import { OVERRIDE_STATUSES, applyOverride, isOverrideStatus, sheetAgrees, stageOf, type Override } from "./stage.ts";
+import { stageOfStatus } from "./stage.ts";
+import { OVERRIDE_STATUSES, applyOverride, isOverrideStatus, sheetAgrees, stageOfOverride as stageOf, stateOfOverride, type Override } from "./override-rules.ts";
 
 /**
  * Manual overrides on placements and link insertions (25 Nov 2026): the stage rules, how an override sits over the
@@ -14,7 +15,7 @@ import { OVERRIDE_STATUSES, applyOverride, isOverrideStatus, sheetAgrees, stageO
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const SQL = readFileSync(path.join(ROOT, "supabase/migrations/20261125010000_link_overrides.sql"), "utf8").replace(/--[^\n]*/g, "");
 
-const row = { kind: "placement", url_key: "agilityportal.io/blog/best-cms-for-intranet", live_url: "https://agilityportal.io/blog/best-cms-for-intranet", anchor_text: null as string | null, status: "In progress" as string | null, live_on: null as string | null };
+const row: { kind: string; url_key: string; live_url: string; anchor_text: string | null; status: string | null; live_on: string | null; state?: string | null } = { kind: "placement", url_key: "agilityportal.io/blog/best-cms-for-intranet", live_url: "https://agilityportal.io/blog/best-cms-for-intranet", anchor_text: null as string | null, status: "In progress" as string | null, live_on: null as string | null };
 const live: Override = { source: "sheet_link", kind: "placement", item_key: row.url_key, status: "Live", live_url: "https://agilityportal.io/blog/best-cms-for-intranet", anchor_text: "craft cms agency", live_on: "2026-11-20", active: true };
 
 test("stages: the same three the customer's pill reads, and every override status reads as intended", () => {
@@ -25,7 +26,7 @@ test("stages: the same three the customer's pill reads, and every override statu
   assert.equal(stageOf("Awaiting publication"), "progress");
   assert.equal(stageOf("Lost - removed"), "off");
   assert.equal(stageOf("Not live"), "off");
-  assert.equal(stageOf(null), "progress");
+  assert.equal(stageOfStatus(null), "progress");
   assert.deepEqual(OVERRIDE_STATUSES.map(stageOf), ["progress", "progress", "live", "live", "off"]);
   assert.equal(isOverrideStatus("Live"), true);
   assert.equal(isOverrideStatus("live"), false);
@@ -37,6 +38,9 @@ test("an override wins over the sheet's row, and only its own row", () => {
   assert.equal(merged.status, "Live");
   assert.equal(merged.live_on, "2026-11-20");
   assert.equal(merged.anchor_text, "craft cms agency");
+  assert.equal(merged.state, "live", "state is set too, so one the audit wrote cannot outrank the override");
+  assert.equal(applyOverride({ ...row, state: "in_review" }, live).state, "live");
+  assert.deepEqual(OVERRIDE_STATUSES.map(stateOfOverride), ["in_progress", "in_progress", "live", "live", "removed"]);
   assert.equal(merged.url_key, row.url_key, "the key stays the sheet's, so the next sync still matches it");
   assert.equal(row.status, "In progress", "the sheet's row is not mutated");
   const partial = applyOverride({ ...row, anchor_text: "from the sheet", live_on: "2026-11-01" }, { ...live, anchor_text: null, live_on: null, live_url: null });
