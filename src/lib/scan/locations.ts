@@ -20,9 +20,9 @@ const sc = (code: number, name: string): Place => ({ code, name: `${name},Scotla
 
 /** Place words a UK keyword may name, longest first so "north yorkshire" is read before "york". Yorkshire is read from York. */
 export const UK_PLACES: Record<string, Place> = {
-  "york": gb(1007266, "York"),
-  "yorkshire": gb(1007266, "York"),
-  "north yorkshire": gb(1007266, "York"),
+  "york": gb(1007266, "York,York"),
+  "yorkshire": gb(1007266, "York,York"),
+  "north yorkshire": gb(1007266, "York,York"),
   "west yorkshire": gb(1006864, "Leeds,West Yorkshire"),
   "south yorkshire": gb(1007064, "Sheffield,South Yorkshire"),
   "leeds": gb(1006864, "Leeds,West Yorkshire"),
