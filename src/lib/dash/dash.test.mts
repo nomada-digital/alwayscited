@@ -226,7 +226,7 @@ test("model: sample console figures only when asked, never beside real rows, and
   assert.deepEqual(sampleConsole("widgets", 100, 8, "gsc"), sampleConsole("widgets", 100, 8, "gsc"));
   const real = raw({ consoleRows: [{ provider: "gsc", query: "widgets", clicks: 3, impressions: 40, ctr: 0.075, position: 7.5, period_end: "2026-10-15" }] });
   const ws = buildWorkspace(real, { plan: PLAN, sample: true });
-  assert.deepEqual(ws.clusters[0]!.own.keywords[0]!.console.gsc, { clicks: 3, impr: 40, ctr: 0.075, pos: 7.5 });
+  assert.deepEqual(ws.clusters[0]!.own.keywords[0]!.console.gsc, { clicks: 3, impr: 40, ctr: 0.075, pos: 7.5, from: "2026-09-18", to: "2026-10-15" }, "the figure says which 28 days it averages (27 Nov 2026)");
   assert.equal(ws.consoleLive.gsc, true);
 });
 
@@ -406,4 +406,22 @@ test("every old /app address has a home on the dashboards host (brief 2d)", asyn
     ["/acme-com/whatever/else", "/acme-com"], ["/<script>", "/"],
   ];
   for (const [from, to] of cases) assert.equal(dashPathForApp(from), to, from);
+});
+
+test("model: a keyword whose read failed on the latest run says so, and carries the place, the AI Overview and the pages that list the client (27 Nov 2026)", () => {
+  const kw = (r: Raw) => buildWorkspace(r, { plan: PLAN }).clusters[0]!.own.keywords[0]!;
+  // read on the 10th, no row on the latest run day (the 17th): stale, with the day it was last read
+  const stale = kw(raw({ serp: [{ run_date: "2026-10-10", keyword_id: "w1", position: 12, url: null }, { run_date: "2026-10-17", keyword_id: "other", position: 3, url: null }] }));
+  assert.equal(stale.stale, true);
+  assert.equal(stale.readOn, "2026-10-10");
+  // read on the latest run: not stale, and what the reading carried
+  const fresh = kw(raw({ serp: [{ run_date: "2026-10-17", keyword_id: "w1", position: null, url: null, location_name: "York,England,United Kingdom", aio_shown: true, aio_named: true, listed: [{ rank: 1, domain: "craftcms.com", url: "https://craftcms.com/partners/common", title: "COMMON" }] }] }));
+  assert.equal(fresh.stale, false);
+  assert.equal(fresh.pos, null, "a listing is never the client's own position");
+  assert.equal(fresh.place, "York");
+  assert.deepEqual(fresh.aio, { shown: true, named: true });
+  assert.equal(fresh.listed?.[0]?.domain, "craftcms.com");
+  // before the columns existed: no place, no AI Overview reading, nothing listed
+  const old = kw(raw());
+  assert.deepEqual([old.place, old.aio, old.listed, old.stale], [null, null, [], false]);
 });

@@ -12,7 +12,7 @@ import type { ResearchedKeyword } from "@/lib/scan/dataforseo-request";
 import type { Audience } from "@/config/keyword-audience";
 
 import { Menu } from "./ClusterEditor";
-import { Change, ConsolePos, Pos, Spark, VariesNote, consoleFallback, longDay } from "./Figures";
+import { Change, PositionCell, Spark, longDay } from "./Figures";
 import Icon from "./Icon";
 import PackButton from "./PackButton";
 import { Toasts, tempId, useOps } from "./useOps";
@@ -99,7 +99,7 @@ export default function KeywordManager({ slug, base, initial, plan, demo, metric
                       })()}</td>
                       <td className="r num">{(k.volume ?? m?.volume)?.toLocaleString("en-GB") ?? "-"}</td>
                       <td><Kd kd={m?.kd} /></td>
-                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : consoleFallback({ pos: k.pos, read: k.read, varies: k.varies, gsc: k.console.gsc }) !== null ? <ConsolePos pos={consoleFallback({ pos: k.pos, read: k.read, varies: k.varies, gsc: k.console.gsc })!} /> : k.pos !== null ? <><Pos pos={k.pos} />{k.varies ? <VariesNote /> : null}</> : k.hist.length ? <span className="muted" style={{ fontSize: 12.5 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span> : <span className="faint" style={{ fontSize: 12.5 }}>Not read yet</span>}</td>
+                      <td className="r">{k.addedOn && k.addedOn > ws.today ? <span className="pill accent">Tomorrow</span> : <PositionCell pos={k.pos} read={!!k.read} varies={k.varies} stale={k.stale} readOn={k.readOn} place={k.place} gsc={k.console.gsc} aio={k.aio} listed={k.listed} />}</td>
                       <td className="r"><Change n={k.change} /></td>
                       <td><Spark values={k.hist.map(([, p]) => p)} invert width={80} height={22} /></td>
                       <td className="muted" style={{ fontSize: 12.5, maxWidth: 240, overflowWrap: "anywhere" }}>{pathOf(k.url) ?? "-"}{k.pageChange ? <div className="sub"><span className="pill warn">Page changed {longDay(k.pageChange.on)}</span></div> : null}</td>
