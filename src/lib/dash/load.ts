@@ -120,7 +120,12 @@ export async function loadRaw(client: ClientRow, role: string, today: Day, db: S
   if (progErr && !absent(progErr)) console.warn(`[dash] placements in progress read failed: ${progErr.message}`);
 
   // Started together, awaited one by one: paged() throws on any page's error, so nothing here is held unchecked.
-  const serpRead = paged<RawSerp>(() => db.from("tracking_serp").select("run_date, keyword_id, position, url").eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
+  // 27 Nov 2026: the place read, the AI Overview and the pages that list the client ride beside the position (20261127040000);
+  // a database before that migration reads the positions alone.
+  const serpQuery = (cols: string) => paged<RawSerp>(() => db.from("tracking_serp").select(cols).eq("client_domain_id", cid).gte("run_date", addDays(today, -SERP_DAYS)).order("run_date").order("id"), "positions");
+  const serpRead = serpQuery("run_date, keyword_id, position, url, location_name, aio_shown, aio_named, listed").catch((e: unknown) =>
+    /location_name|aio_shown|aio_named|listed/.test(e instanceof Error ? e.message : String(e)) ? serpQuery("run_date, keyword_id, position, url") : Promise.reject(e),
+  );
   const verdictRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named, list_pos, list_of, verdict, verdict_rival").eq("client_domain_id", cid).gte("run_date", since).lt("run_date", sourcesSince).order("run_date").order("id"), "answers");
   const citeRead = paged<RawAnswer>(() => db.from("tracking_answers").select("run_date, question_id, engine, answered, named, brands, citations, list_pos, list_of, verdict, verdict_rival").eq("client_domain_id", cid).gte("run_date", sourcesSince).order("run_date").order("id"), "recent answers");
   // A later read failing while an earlier one is awaited is still thrown below, not reported unhandled.

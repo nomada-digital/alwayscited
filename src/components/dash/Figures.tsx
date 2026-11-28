@@ -4,6 +4,7 @@ import EngineLogo from "@/components/EngineLogo";
 import { ENGINE_SPECS, type Engine } from "@/lib/scan/engines";
 import { fullness } from "@/lib/dash/allowance";
 import { targetLabel } from "@/lib/dash/target";
+import { consoleFallback } from "@/lib/dash/console-fallback";
 
 /**
  * The dashboards host's small figures. No hooks, so both server pages and the
@@ -29,29 +30,70 @@ export function VariesNote() {
   return <div className="faint" style={{ fontSize: 11.5 }} title="Our two ranking sources read this search differently. This is the position the evidence supports best.">{VARIES_NOTE}</div>;
 }
 
-/**
- * Search Console as the rankings fallback (Danny, 16 Nov 2026: DataForSEO reads are unreliable). When the live read
- * failed, found nothing or disagreed with the cross-check, and Search Console has an average position for the search
- * and page, that is shown instead, labelled. Null when the live read stands.
- */
-export function consoleFallback(p: { pos: number | null; read?: boolean; varies?: boolean; gsc?: { pos: number | null; impr: number } | null }): number | null {
-  const doubtful = p.read === false || p.pos === null || !!p.varies;
-  return doubtful && p.gsc && p.gsc.pos != null && p.gsc.impr > 0 ? Math.round(p.gsc.pos) : null;
+/** The days a Search Console figure averages, "30 Oct to 26 Nov", or null when the figure carries none. */
+export function consoleRange(g: { from?: string; to?: string } | null | undefined): string | null {
+  return g?.from && g?.to ? `${longDay(g.from)} to ${longDay(g.to)}` : null;
 }
 
-export function ConsolePos({ pos }: { pos: number }) {
+/** Search Console's average position, labelled as such with the days it covers (27 Nov 2026, Danny: keep the label, add the date range). */
+export function ConsolePos({ pos, range }: { pos: number; range?: string | null }) {
   return (
     <>
       <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>
-      <div className="faint" style={{ fontSize: 11.5 }} title="Google's average position for this search and page over the last 28 days, from your Search Console. Shown because today's live reading failed or disagreed.">Search Console</div>
+      <div className="faint" style={{ fontSize: 11.5 }} title={`Google's average position for this search and page${range ? `, ${range}` : " over the last 28 days"}, from your Search Console. Shown because today's live reading failed or disagreed.`}>Search Console average{range ? `, ${range}` : ""}</div>
+    </>
+  );
+}
+
+/**
+ * What a keyword's latest reading says about the client beyond its own site's position (27 Nov 2026, Danny): named in the AI Overview,
+ * or listed on a third-party page in the top 10 (the craftcms.com partner page for COMMON). Kept apart from the position, which is
+ * only ever the client's own domain, so the numbers stay honest and the visibility is still visible.
+ */
+export function Visibility({ aio, listed }: { aio?: { shown: boolean; named: boolean } | null; listed?: { rank: number; domain: string; url: string | null }[] }) {
+  const l = listed?.[0];
+  if (!aio?.named && !l) return null;
+  return (
+    <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 4 }}>
+      {aio?.named ? <span className="pill good" style={{ fontSize: 11 }} title="Google's AI Overview for this search names you or cites your site. This is not a position.">Named in AI Overview</span> : null}
+      {l ? <span className="pill accent" style={{ fontSize: 11 }} title={`A page on ${l.domain} that names you is #${l.rank} in Google for this search. It is not your own site's position.${l.url ? ` ${l.url}` : ""}`}>Listed via {l.domain} (#{l.rank})</span> : null}
+    </div>
+  );
+}
+
+/**
+ * A tracked keyword's Google figure. A read that failed today says so ("Couldn't read today", with the last reading beneath) rather
+ * than showing yesterday's position or "Not in top 100"; "Not in top 100" is only ever a read that worked and did not find the site.
+ */
+export function PositionCell(p: { pos: number | null; read: boolean; varies?: boolean; stale?: boolean; readOn?: string | null; place?: string | null; gsc?: { pos: number | null; impr: number; from?: string; to?: string } | null; aio?: { shown: boolean; named: boolean } | null; listed?: { rank: number; domain: string; url: string | null }[] }) {
+  const fb = consoleFallback({ pos: p.pos, read: p.read, varies: p.varies || p.stale, gsc: p.gsc });
+  const range = consoleRange(p.gsc);
+  let main: React.ReactNode;
+  if (p.stale) {
+    main = (
+      <>
+        <span className="muted" style={{ fontSize: 12.5 }} title="Google could not be read for this search on the latest check, so no position is shown for today.">Couldn&apos;t read today</span>
+        {p.readOn ? <div className="faint" style={{ fontSize: 11.5 }}>Last read {longDay(p.readOn)}: {p.pos === null ? "not in top 100" : `#${p.pos}`}</div> : null}
+        {fb !== null ? <div style={{ marginTop: 4 }}><ConsolePos pos={fb} range={range} /></div> : null}
+      </>
+    );
+  } else if (fb !== null) main = <ConsolePos pos={fb} range={range} />;
+  else if (p.pos !== null) main = <><Pos pos={p.pos} />{p.varies ? <VariesNote /> : null}</>;
+  else if (p.read) main = <span className="muted" style={{ fontSize: 12.5 }} title="Google was read and your site is not in its top 100 for this search">Not in top 100</span>;
+  else main = <span className="faint" style={{ fontSize: 12.5 }}>Not read yet</span>;
+  return (
+    <>
+      {main}
+      {p.place && p.read ? <div className="faint" style={{ fontSize: 11.5 }} title={`Read as a searcher in ${p.place}, because the search names it.`}>Read for {p.place}</div> : null}
+      <Visibility aio={p.aio} listed={p.listed} />
     </>
   );
 }
 
 /** A tracked keyword's Google slot: its position (with the note when the sources disagreed), else what is known. */
-export function GooglePos({ pos, read, varies, gsc }: { pos: number | null; read: boolean; varies?: boolean; gsc?: { pos: number | null; impr: number } | null }) {
+export function GooglePos({ pos, read, varies, gsc }: { pos: number | null; read: boolean; varies?: boolean; gsc?: { pos: number | null; impr: number; from?: string; to?: string } | null }) {
   const fb = consoleFallback({ pos, read, varies, gsc });
-  if (fb !== null) return <ConsolePos pos={fb} />;
+  if (fb !== null) return <ConsolePos pos={fb} range={consoleRange(gsc)} />;
   if (pos !== null) return <><Pos pos={pos} />{varies ? <VariesNote /> : null}</>;
   if (read) return <Pos pos={null} />;
   return <span className="faint" style={{ fontSize: 12 }}>Not read yet</span>;

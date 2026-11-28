@@ -38,6 +38,7 @@ import type {
   RawConsoleRow,
   RawKeyword,
   RawPrompt,
+  RawSerp,
   Workspace,
 } from "./types.ts";
 
@@ -143,7 +144,8 @@ function figOf(rs: readonly RawConsoleRow[]): ConsoleFig {
   const impr = rs.reduce((n, r) => n + r.impressions, 0);
   const pi = rs.reduce((n, r) => n + (r.position == null ? 0 : r.impressions), 0);
   const pw = rs.reduce((n, r) => n + (r.position == null ? 0 : Number(r.position) * r.impressions), 0);
-  return { clicks, impr, ctr: impr ? clicks / impr : 0, pos: pi ? Math.round((pw / pi) * 10) / 10 : (rs.find((r) => r.position != null)?.position ?? null) };
+  const to = rs.reduce<Day | null>((m, r) => (m === null || r.period_end > m ? r.period_end : m), null);
+  return { clicks, impr, ctr: impr ? clicks / impr : 0, pos: pi ? Math.round((pw / pi) * 10) / 10 : (rs.find((r) => r.position != null)?.position ?? null), ...(to ? { to, from: addDaysIso(to, -27) } : {}) };
 }
 
 /** The same page, give or take scheme, www and a trailing slash. */
@@ -201,7 +203,12 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
   // Keywords: daily positions.
   const serpBy = new Map<string, [Day, number | null, string | null][]>();
   const variesOn = new Set<string>();
+  // 27 Nov 2026: the client's latest run day, so a keyword last read before it is one whose read failed today; and what each
+  // reading says beyond the position (the place it was read for, the AI Overview, pages that list the client).
+  const latestRun = raw.serp.reduce<Day | null>((m, s) => (m === null || s.run_date > m ? s.run_date : m), null);
+  const seenOn = new Map<string, RawSerp>();
   for (const s of [...raw.serp].sort((a, b) => a.run_date.localeCompare(b.run_date))) {
+    seenOn.set(`${s.run_date}|${s.keyword_id}`, s);
     if (s.varies) variesOn.add(`${s.run_date}|${s.keyword_id}`);
     const l = serpBy.get(s.keyword_id) ?? [];
     l.push([s.run_date, s.position, s.url]);
@@ -251,6 +258,11 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       pos: curPos,
       read: !!cur,
       varies: !!cur && variesOn.has(`${cur[0]}|${k.id}`),
+      stale: !!cur && latestRun !== null && cur[0] < latestRun,
+      readOn: cur?.[0] ?? null,
+      place: (cur ? seenOn.get(`${cur[0]}|${k.id}`)?.location_name : null)?.split(",")[0]?.trim() || null,
+      aio: (() => { const r = cur ? seenOn.get(`${cur[0]}|${k.id}`) : undefined; return r && r.aio_shown != null ? { shown: !!r.aio_shown, named: !!r.aio_named } : null; })(),
+      listed: (cur ? seenOn.get(`${cur[0]}|${k.id}`)?.listed : null) ?? [],
       change,
       url: cur?.[2] ?? null,
       hist: hist.slice(-30).map(([d, p]) => [d, p]),
@@ -349,6 +361,8 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       headVolume: head?.search_volume ?? null,
       headPos: headView?.pos ?? null,
       headRead: headView?.read ?? false,
+      headStale: headView?.stale ?? false,
+      headReadOn: headView?.readOn ?? null,
       headVaries: headView?.varies ?? false,
       headGsc: headView?.console.gsc ?? null,
       headChange: headView?.change ?? null,
