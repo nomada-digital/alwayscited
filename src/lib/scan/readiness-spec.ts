@@ -94,6 +94,8 @@ export const NOT_REQUIRED: Record<string, string> = {
   WINDSOR_API_KEY: "only Check connection and the data connections' daily pull read it, and both degrade to not connected without it",
   VERCEL_ENV: "set by the platform",
   VERCEL_REGION: "set by the platform",
+  VERCEL_BRANCH_URL: "set by the platform; read only on a preview, to point its sign-in email at itself (lib/dash/host.ts previewOrigin)",
+  VERCEL_URL: "set by the platform; the same, when a preview has no branch address",
   VERCEL_GIT_COMMIT_SHA: "set by the platform",
   VERCEL_GIT_COMMIT_REF: "set by the platform",
   NEXT_PUBLIC_SITE_URL: "falls back to the canonical origin in config/schema.ts, which is the real value",

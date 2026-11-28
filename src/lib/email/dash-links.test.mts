@@ -66,14 +66,18 @@ test("no email sender builds a dashboard link with appUrl or /app", () => {
     assert.ok(!/["'`]\/app\/(auth|login)/.test(src), `${f} spells no /app sign-in path`);
   }
   const login = fs.readFileSync(path.join(ROOT, "src/app/api/app/login/route.ts"), "utf8");
-  assert.match(login, /const link = `\$\{dashLinkOrigin\(req\.headers\.get\("host"\)\)\}\/auth\?token=\$\{token\}`/, "every sign-in link opens the dashboards host's /auth");
+  // 27 Nov 2026: on a Vercel preview only, previewOrigin() is the preview's own address and dashHere puts /dashboards in front;
+  // everywhere else previewOrigin() is null and dashHere is the identity, so this is the dashboards host's /auth as before.
+  assert.match(login, /const link = `\$\{previewOrigin\(\) \?\? dashLinkOrigin\(req\.headers\.get\("host"\)\)\}\$\{dashHere\("\/auth"\)\}\?token=\$\{token\}`/, "every sign-in link opens the dashboards host's /auth");
   const signup = fs.readFileSync(path.join(ROOT, "src/lib/checkout/signup.ts"), "utf8");
   assert.match(signup, /const link = `\$\{dashOrigin\(\)\}\/auth\?token=\$\{token\}`/, "the signup sign-in link opens the dashboards host's /auth");
 });
 
 test("the header's Log in and the help page's sign-in go to the dashboards host", () => {
   const layout = fs.readFileSync(path.join(ROOT, "src/app/layout.tsx"), "utf8");
-  assert.match(layout, /loginHref=\{`\$\{dashOrigin\(\)\}\/login`\}/);
+  // 27 Nov 2026: loginHref() is dashOrigin()/login, relative only on a preview (app-host.test.mts holds both).
+  assert.match(layout, /loginHref=\{loginHref\(\)\}/);
+  assert.match(fs.readFileSync(path.join(ROOT, "src/lib/dash/host.ts"), "utf8"), /`\$\{dashOrigin\(env\)\}\/login`/);
   assert.match(fs.readFileSync(path.join(ROOT, "src/config/help.ts"), "utf8"), /const SIGN_IN = dashLink\("\/login"\);/);
 });
 

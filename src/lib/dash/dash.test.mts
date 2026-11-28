@@ -407,3 +407,8 @@ test("every old /app address has a home on the dashboards host (brief 2d)", asyn
   ];
   for (const [from, to] of cases) assert.equal(dashPathForApp(from), to, from);
 });
+
+test("a client-facing Overview never prints the Google account that connected Search Console", () => {
+  const src = readFileSync(join(process.cwd(), "src", "components", "dash", "GoogleTraffic.tsx"), "utf8");
+  assert.ok(!/google_email|connected as/.test(src));
+});

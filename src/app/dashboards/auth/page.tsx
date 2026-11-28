@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import BrandMark from "@/components/BrandMark";
 import TierName from "@/components/TierName";
-import { DASH_NEXT_MAX, dashNext } from "@/lib/dash/host";
+import { DASH_NEXT_MAX, dashHere, dashNext } from "@/lib/dash/host";
 import { TOKEN_CHARS, isTokenShape } from "@/lib/tracking/session";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,7 @@ export default async function DashAuth({ searchParams }: { searchParams: Promise
             <>
               <h1 style={{ margin: "0 0 6px", fontSize: 22 }}>That link does not work</h1>
               <p className="muted">Ask for a new one.</p>
-              <a className="btn primary" href="/login">Back to sign in</a>
+              <a className="btn primary" href={dashHere("/login")}>Back to sign in</a>
             </>
           )}
         </div>

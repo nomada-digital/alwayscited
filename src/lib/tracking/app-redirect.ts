@@ -1,5 +1,5 @@
 import { appHost, appOrigin, appPath } from "../app-host.ts";
-import { dashLinkOrigin } from "../dash/host.ts";
+import { dashLinkOrigin, isPreviewDeploy } from "../dash/host.ts";
 
 /**
  * Where a dashboard route handler sends somebody (M1, 5 Oct 2026).
@@ -36,5 +36,7 @@ export function dashUrl(req: Request, path: string, env?: { APP_HOST?: string })
  * one (dashLinkOrigin), never the Host header as sent. `query` is the fixed codes the page reads.
  */
 export function signInUrl(req: Request, query: URLSearchParams): URL {
+  // A preview signs in on its own address (27 Nov 2026), where the page is /dashboards/login.
+  if (isPreviewDeploy()) return new URL(`/dashboards/login?${query}`, req.url);
   return new URL(`/login?${query}`, dashLinkOrigin(req.headers.get("host")));
 }

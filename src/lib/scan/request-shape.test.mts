@@ -348,7 +348,8 @@ test("the keyword volume and keyword rank reads are each sent from one door, cal
     // 29 Oct 2026: agency/edit.ts measures the one keyword staff change a cluster to, once per change, in the agency view.
     // 3 Nov 2026: the questions route's cluster keyword check moved to cluster-keyword.ts (chooseClusterKeyword), which
     // /admin/scans' Add keyword calls too; a thin market (JM) reads up to two more markets' volume there.
-    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/lib/agency/edit.ts", "src/lib/scan/cluster-keyword.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
+    // 27 Nov 2026: placeholder-io.ts checks the example search a cheap model proposes for Find keywords' box against DataForSEO volume, once per client and toggle state.
+    readKeywordVolumes: ["src/app/api/dash/[client]/setup/keyword/route.ts", "src/lib/agency/edit.ts", "src/lib/dash/placeholder-io.ts", "src/lib/scan/cluster-keyword.ts", "src/lib/scan/pipeline.ts", "src/lib/tracking/check-keyword.ts", "src/lib/tracking/starter.ts"],
     // 3 Nov 2026: cluster-rank.ts holds the scan's cluster keyword read (the pipeline calls it once a scan) and its
     // daily retry for positions that could not be checked, RETRIES_PER_PASS a pass, from cron/reap-stalled-scans.
     readKeywordRank: ["src/lib/scan/cluster-rank.ts", "src/lib/scan/pipeline.ts"],

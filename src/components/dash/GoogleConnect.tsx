@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import GoogleButton from "@/components/dash/GoogleButton";
 import { CONTACT_EMAIL } from "@/config/contact";
-import { PERMISSION, READ_ONLY_NOTE } from "@/lib/dash/google";
+import { CLIENT_ACCESS, PERMISSION, READ_ONLY_NOTE } from "@/lib/dash/google";
 import type { RawConnection } from "@/lib/dash/types";
 
 type Listed = { id: string; name: string; permission: string | null };
@@ -112,8 +112,9 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
 
       {state === "connected" && shown ? (
         <div style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.5 }}>
-          <div>Connected as <b>{shown.email ?? "your Google account"}</b></div>
-          <div style={{ wordBreak: "break-all" }}>{shown.property}{shown.permission ? <span className="faint"> · {PERMISSION[shown.permission] ?? shown.permission}</span> : null}</div>
+          {/* 27 Nov 2026 (Danny): a customer sees "Connected · Full access", never the Google account that connected it (often ours). The address is staff-only. */}
+          <div><b>Connected</b>{shown.permission ? <> · {CLIENT_ACCESS[shown.permission] ?? "Access confirmed"}</> : null}{staff && shown.email ? <span className="faint"> · as {shown.email}</span> : null}</div>
+          <div style={{ wordBreak: "break-all" }}>{shown.property}</div>
           <div className="muted" style={{ fontSize: 12.5 }}>{synced ? `Last sync ${synced}` : "First sync on its way"}</div>
           {may ? <button className="btn ghost sm" onClick={disconnect} disabled={busy} style={{ marginTop: 8, paddingLeft: 0 }}>{busy ? "Disconnecting..." : "Disconnect"}</button> : null}
         </div>
