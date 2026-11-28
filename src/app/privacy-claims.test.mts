@@ -435,7 +435,10 @@ test("only the consent module touches document.cookie", () => {
 // auth, read by that page and by /scan/[token] to skip the report gate. Never set for a visitor; /legal names it.
 // 16 Nov 2026: connecting Google Search Console - api/google/connect sets a 15-minute nonce cookie (path /api/google)
 // and api/google/callback reads it to tie Google's reply to the browser that asked, then deletes it. /legal names it.
-const COOKIE_JAR_READERS = ["src/app/admin/scans/actions.ts", "src/app/admin/scans/page.tsx", "src/app/api/google/callback/route.ts", "src/app/scan/[token]/page.tsx", "src/lib/tracking/member.ts"];
+// 28 Nov 2026: the dashboards beta switch (lib/dash/beta.ts, beta-flag.ts) - a reviewer cookie, set only by opening a dashboards page with
+// the code in the address (src/proxy.ts), never offered to a visitor, and read only to decide whether a staff session, demo link or
+// view-as link sees merged-but-not-yet-live changes. A customer who has it sees nothing different. Like the team cookie, it is not a visitor cookie.
+const COOKIE_JAR_READERS = ["src/app/admin/scans/actions.ts", "src/app/admin/scans/page.tsx", "src/app/api/google/callback/route.ts", "src/app/scan/[token]/page.tsx", "src/lib/dash/beta.ts", "src/lib/tracking/member.ts"];
 
 test("only the dashboard session reads the request cookie jar, and /legal says so", () => {
   const hits = FILES.filter(({ source }) =>

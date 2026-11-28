@@ -3,7 +3,8 @@ import { clientsFor } from "@/lib/tracking/member";
 import { refuseRole } from "@/lib/tracking/stop";
 import { dashEmail } from "@/lib/dash/access";
 import { CONNECT_LIMITS } from "@/config/contact";
-import { ACCESS_EMAIL, gaPropertyId } from "@/lib/dash/connect";
+import { betaOn } from "@/lib/dash/beta";
+import { accessEmail, gaPropertyId } from "@/lib/dash/connect";
 import { findProperty, pullConnection } from "@/lib/dash/connect-io";
 import { dashFixturePath, fixtureClient } from "@/lib/dash/fixture";
 
@@ -13,11 +14,12 @@ export const maxDuration = 60;
 
 const PROVIDERS = ["ga4", "gsc", "bing"] as const;
 
-const HINT = {
+// The access address is data@ with the dashboards beta on, team@ without it (dash/beta-flag.ts, 28 Nov 2026).
+const hintFor = (ACCESS_EMAIL: string) => ({
   gsc: `Check that ${ACCESS_EMAIL} is on your site's Users and permissions list with Restricted access, on the property for your domain.`,
   ga4: `Check that ${ACCESS_EMAIL} has the Viewer role under Property access management, and that the property ID you pasted is the number in Admin, Property details.`,
   bing: `Check that ${ACCESS_EMAIL} is under Settings, User management for your site, spelled exactly like that.`,
-} as const;
+}) as const;
 
 /**
  * Check connection (2 Nov 2026, sg-37; in place of the 17 Oct request button).
@@ -30,6 +32,8 @@ const HINT = {
  */
 export async function POST(req: Request, { params }: { params: Promise<{ client: string }> }) {
   const { client: slug } = await params;
+  const ACCESS_EMAIL = accessEmail(await betaOn());
+  const HINT = hintFor(ACCESS_EMAIL);
   const email = await dashEmail();
   if (!email) return Response.json({ ok: false, message: "Your session has ended. Sign in again." }, { status: 401 });
   const body = (await req.json().catch(() => null)) as { provider?: unknown; property?: unknown } | null;

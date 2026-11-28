@@ -37,10 +37,19 @@ export function consoleRange(g: { from?: string; to?: string } | null | undefine
 
 /** Search Console's average position, labelled as such with the days it covers (27 Nov 2026, Danny: keep the label, add the date range). */
 export function ConsolePos({ pos, range }: { pos: number; range?: string | null }) {
+  // No dates (the dashboards beta is off, or the figure carries none): the label as it has always read.
+  if (!range) {
+    return (
+      <>
+        <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>
+        <div className="faint" style={{ fontSize: 11.5 }} title="Google's average position for this search and page over the last 28 days, from your Search Console. Shown because today's live reading failed or disagreed.">Search Console</div>
+      </>
+    );
+  }
   return (
     <>
       <span className={`pos ${pos <= 3 ? "top3" : pos <= 10 ? "top10" : ""}`}>{pos}</span>
-      <div className="faint" style={{ fontSize: 11.5 }} title={`Google's average position for this search and page${range ? `, ${range}` : " over the last 28 days"}, from your Search Console. Shown because today's live reading failed or disagreed.`}>Search Console average{range ? `, ${range}` : ""}</div>
+      <div className="faint" style={{ fontSize: 11.5 }} title={`Google's average position for this search and page, ${range}, from your Search Console. Shown because today's live reading failed or disagreed.`}>Search Console average, {range}</div>
     </>
   );
 }

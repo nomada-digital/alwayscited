@@ -35,9 +35,9 @@ function Kd({ kd }: { kd: number | null | undefined }) {
  * one click to track any of them into a chosen cluster and group. Research
  * goes through /api/dash/[client]/keywords, capped per client per day.
  */
-export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known, audience: startAudience = "all", placeholders }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics; audience?: Audience; placeholders?: Placeholders }) {
+export default function KeywordManager({ slug, base, initial, plan, demo, metrics: known, audience: startAudience = "all", placeholders, beta = false }: { slug: string; base: string; initial: Raw; plan: PlanShape; demo: boolean; metrics: Metrics; audience?: Audience; placeholders?: Placeholders; beta?: boolean }) {
   const { shown, run, toasts, dismiss, undo } = useOps(slug, initial, plan, demo);
-  const ws = useMemo(() => buildWorkspace(shown, { plan }), [shown, plan]);
+  const ws = useMemo(() => buildWorkspace(shown, { plan, beta }), [shown, plan, beta]);
   const [metrics, setMetrics] = useState<Metrics>(known);
   // By position, each plural or singular straight after its keyword (brief 2c: side by side, never averaged).
   const allTracked = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c }))).filter((k) => k.src === "tracked");

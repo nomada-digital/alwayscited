@@ -6,6 +6,7 @@ import { appHost, appOrigin, internalPath, isAppHost, passesThrough, stripPrefix
 import { constantTimeEqual, decodeBasicAuth } from "@/lib/constant-time";
 import { isPrefetch } from "@/lib/prefetch";
 import { previewPath } from "@/lib/hub-preview";
+import { BETA_CODE, BETA_COOKIE, BETA_MAX_AGE_S, BETA_PARAM, betaAsk } from "@/lib/dash/beta-flag";
 import { DEMO_HEADER, VIEW_HEADER, dashInternal, dashOrigin, dashPathForApp, dashStrip, demoPath, demoSlug, isDashHost, isPreviewDeploy, viewPath } from "@/lib/dash/host";
 
 /**
@@ -100,6 +101,18 @@ export function proxy(request: NextRequest) {
   if (skip(pathname)) return NextResponse.next();
 
   const host = request.headers.get("host");
+
+  // The dashboards beta switch (28 Nov 2026, dash/beta-flag.ts): `?beta=ac28` sets the reviewer's cookie, `?beta=off` clears it, and
+  // either way the parameter is dropped from the address. Only where the dashboards are served (their host, or a preview).
+  const ask = betaAsk(request.nextUrl.searchParams.get(BETA_PARAM));
+  if (ask && (isDashHost(host) || isPreviewDeploy())) {
+    const to = request.nextUrl.clone();
+    to.searchParams.delete(BETA_PARAM);
+    const res = NextResponse.redirect(to, 307);
+    res.cookies.set({ name: BETA_COOKIE, value: ask === "on" ? BETA_CODE : "", httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: ask === "on" ? BETA_MAX_AGE_S : 0 });
+    res.headers.set("cache-control", "no-store");
+    return res;
+  }
 
   /**
    * dashboards.alwayscited.com (17 Oct 2026, src/lib/dash/host.ts): the new

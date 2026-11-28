@@ -3,17 +3,17 @@
 import { useState } from "react";
 
 import { CONNECT_LIMITS } from "@/config/contact";
-import { ACCESS_EMAIL, STALE_MS } from "@/lib/dash/connect";
+import { STALE_MS, accessEmail } from "@/lib/dash/connect";
 import type { Provider, RawConnection } from "@/lib/dash/types";
 
-const INFO: Record<Provider, { name: string; what: string; steps: (d: string) => string[] }> = {
+const INFO: Record<Provider, { name: string; what: string; steps: (d: string, email: string, beta: boolean) => string[] }> = {
   gsc: {
     name: "Google Search Console",
     what: "Clicks, impressions and average position for every search you appear in, straight from Google.",
-    steps: (d) => [
+    steps: (d, email, beta) => [
       `Open Search Console and pick the property for ${d}.`,
       "Go to Settings, then Users and permissions.",
-      `Press Add user and enter ${ACCESS_EMAIL}.`,
+      `Press Add user and enter ${email}.`,
       "Set the permission to Restricted and press Add.",
       "Come back here and press Check connection.",
     ],
@@ -21,10 +21,10 @@ const INFO: Record<Provider, { name: string; what: string; steps: (d: string) =>
   ga4: {
     name: "Google Analytics 4",
     what: "Visits that arrive from AI assistants and from the pages your placements are on.",
-    steps: (d) => [
+    steps: (d, email, beta) => [
       `Open Google Analytics and pick the property for ${d}.`,
       "Go to Admin (the cog at the bottom left), then Property access management.",
-      `Press the plus, choose Add users and enter ${ACCESS_EMAIL}.`,
+      `Press the plus, choose Add users and enter ${email}.`,
       "Choose the Viewer role and press Add.",
       "Still in Admin, open Property details and copy the property ID (numbers only).",
       "Paste it below and press Check connection.",
@@ -33,12 +33,17 @@ const INFO: Record<Provider, { name: string; what: string; steps: (d: string) =>
   bing: {
     name: "Bing Webmaster Tools",
     what: "Clicks and impressions on Bing, straight from Bing.",
-    steps: (d) => [
+    steps: (d, email, beta) => beta ? [
       `Fastest if Search Console already has ${d}: open Bing Webmaster Tools, sign in, choose Import and pick Google Search Console. Sign in with Google and select ${d}, and Bing adds it already verified, in one go.`,
       `Or add it by hand: open Bing Webmaster Tools and add ${d}.`,
       `Open ${d}, then go to Settings, then User management.`,
-      `Press Add user, enter ${ACCESS_EMAIL} and choose Read only. Then press Add.`,
+      `Press Add user, enter ${email} and choose Read only. Then press Add.`,
       "Come back here and press Check connection.",
+    ] : [
+      `Open Bing Webmaster Tools and pick ${d}.`,
+      "Go to Settings, then User management.",
+      `Press Add user, enter ${email} and choose Read only.`,
+      "Press Add, then come back here and press Check connection.",
     ],
   },
 };
@@ -51,7 +56,8 @@ const INFO: Record<Provider, { name: string; what: string; steps: (d: string) =>
  * customer still waiting a day after their first check is flagged to us
  * (the run-health mail), and the card says so rather than asking them to chase.
  */
-export default function IntegrationCard({ slug, domain, provider, conn, canWrite, demo = false }: { slug: string; domain: string; provider: Provider; conn: RawConnection | null; canWrite: boolean; demo?: boolean }) {
+export default function IntegrationCard({ slug, domain, provider, conn, canWrite, demo = false, beta = false }: { slug: string; domain: string; provider: Provider; conn: RawConnection | null; canWrite: boolean; demo?: boolean; beta?: boolean }) {
+  const email = accessEmail(beta);
   const [state, setState] = useState<string | null>(conn?.status ?? null);
   const [prop, setProp] = useState<string | null>(conn?.property ?? null);
   const [gaId, setGaId] = useState<string>(provider === "ga4" && conn?.status !== "connected" ? (conn?.property ?? "") : "");
@@ -66,7 +72,7 @@ export default function IntegrationCard({ slug, domain, provider, conn, canWrite
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(ACCESS_EMAIL);
+      await navigator.clipboard.writeText(email);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -118,16 +124,16 @@ export default function IntegrationCard({ slug, domain, provider, conn, canWrite
         <div style={{ marginTop: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 12px", borderRadius: 12, background: "var(--wash)" }}>
             <span style={{ fontSize: 12.5, color: "var(--soft)", flexBasis: "100%" }}>Our access address</span>
-            <b style={{ fontSize: 14, wordBreak: "break-all", flex: "1 1 auto" }}>{ACCESS_EMAIL}</b>
+            <b style={{ fontSize: 14, wordBreak: "break-all", flex: "1 1 auto" }}>{email}</b>
             <button className="btn sm" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
           </div>
           <button className="btn ghost" onClick={() => setOpen(!open)} aria-expanded={open} style={{ marginTop: 8, paddingLeft: 0 }}>
-            {open ? "Hide the steps" : `How to add it, ${i.steps(domain).length} steps`}
+            {open ? "Hide the steps" : `How to add it, ${i.steps(domain, email, beta).length} steps`}
           </button>
           {open ? (
             <>
               <ol style={{ margin: "6px 0 0", paddingLeft: 20, listStyle: "decimal", display: "flex", flexDirection: "column", gap: 6, fontSize: 13.5, lineHeight: 1.45 }}>
-                {i.steps(domain).map((s) => <li key={s}>{s}</li>)}
+                {i.steps(domain, email, beta).map((s) => <li key={s}>{s}</li>)}
               </ol>
             </>
           ) : null}

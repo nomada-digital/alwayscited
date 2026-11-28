@@ -225,8 +225,9 @@ test("model: sample console figures only when asked, never beside real rows, and
   assert.ok(s && s.impr > 0);
   assert.deepEqual(sampleConsole("widgets", 100, 8, "gsc"), sampleConsole("widgets", 100, 8, "gsc"));
   const real = raw({ consoleRows: [{ provider: "gsc", query: "widgets", clicks: 3, impressions: 40, ctr: 0.075, position: 7.5, period_end: "2026-10-15" }] });
-  const ws = buildWorkspace(real, { plan: PLAN, sample: true });
-  assert.deepEqual(ws.clusters[0]!.own.keywords[0]!.console.gsc, { clicks: 3, impr: 40, ctr: 0.075, pos: 7.5, from: "2026-09-18", to: "2026-10-15" }, "the figure says which 28 days it averages (27 Nov 2026)");
+  const ws = buildWorkspace(real, { plan: PLAN, sample: true, beta: true });
+  assert.deepEqual(ws.clusters[0]!.own.keywords[0]!.console.gsc, { clicks: 3, impr: 40, ctr: 0.075, pos: 7.5, from: "2026-09-18", to: "2026-10-15" }, "with the beta on, the figure says which 28 days it averages (27 Nov 2026)");
+  assert.deepEqual(buildWorkspace(real, { plan: PLAN, sample: true }).clusters[0]!.own.keywords[0]!.console.gsc, { clicks: 3, impr: 40, ctr: 0.075, pos: 7.5 }, "with it off, the figure is what production carried");
   assert.equal(ws.consoleLive.gsc, true);
 });
 
@@ -408,13 +409,14 @@ test("every old /app address has a home on the dashboards host (brief 2d)", asyn
   for (const [from, to] of cases) assert.equal(dashPathForApp(from), to, from);
 });
 
-test("a client-facing Overview never prints the Google account that connected Search Console", () => {
+test("the Overview drops the Google account that connected Search Console once the beta is on", () => {
   const src = readFileSync(join(process.cwd(), "src", "components", "dash", "GoogleTraffic.tsx"), "utf8");
-  assert.ok(!/google_email|connected as/.test(src));
+  // Behind the dashboards beta (28 Nov 2026): the address prints only while the beta is off, where this is what production served.
+  assert.match(src, /beta \? "" : gsc\?\.google_email/);
 });
 
 test("model: a keyword whose read failed on the latest run says so, and carries the place, the AI Overview and the pages that list the client (27 Nov 2026)", () => {
-  const kw = (r: Raw) => buildWorkspace(r, { plan: PLAN }).clusters[0]!.own.keywords[0]!;
+  const kw = (r: Raw) => buildWorkspace(r, { plan: PLAN, beta: true }).clusters[0]!.own.keywords[0]!;
   // read on the 10th, no row on the latest run day (the 17th): stale, with the day it was last read
   const stale = kw(raw({ serp: [{ run_date: "2026-10-10", keyword_id: "w1", position: 12, url: null }, { run_date: "2026-10-17", keyword_id: "other", position: 3, url: null }] }));
   assert.equal(stale.stale, true);

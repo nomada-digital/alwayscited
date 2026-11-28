@@ -384,10 +384,10 @@ button.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .dash-client-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .dash-client-id > div { min-width: 0; }
 
-/* Integrations: three cards in one grid, top-aligned, one height (27 Nov 2026). The old ".dash-card + .dash-card" margin pushed the second and third card down
+/* Behind the dashboards beta (.beta-ac28, 28 Nov 2026). Integrations: three cards in one grid, top-aligned, one height (27 Nov 2026). The old ".dash-card + .dash-card" margin pushed the second and third card down
    inside the grid; inside a grid the gap is the spacing. */
-.dash-grid > .dash-card, .dash-grid > .dash-card + .dash-card { margin-top: 0; }
-.dash-grid { align-items: stretch; }
-.dash-grid.k3 > .connect-wrap, .dash-grid.k2 > .connect-wrap { display: flex; flex-direction: column; margin: 0; }
-.connect-wrap > .dash-card { flex: 1; margin: 0; }
-@media (max-width: 900px) { .dash-grid.k3 { grid-template-columns: minmax(0, 1fr); } }
+.dash-grid.beta-ac28 > .dash-card, .dash-grid.beta-ac28 > .dash-card + .dash-card { margin-top: 0; }
+.dash-grid.beta-ac28 { align-items: stretch; }
+.dash-grid.beta-ac28 > .connect-wrap { display: flex; flex-direction: column; margin: 0; }
+.dash-grid.beta-ac28 .connect-wrap > .dash-card { flex: 1; margin: 0; }
+@media (max-width: 900px) { .dash-grid.beta-ac28.k3 { grid-template-columns: minmax(0, 1fr); } }

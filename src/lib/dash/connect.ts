@@ -20,6 +20,10 @@ export type ConnectProvider = "gsc" | "ga4" | "bing";
 
 /** The address the customer adds, the same for all three (team@, Danny's instruction of 2 Nov 2026). */
 export const ACCESS_EMAIL = "data@nomadadigital.co.uk";
+/** The address customers were told to add before 27 Nov 2026; still what the live pages say while the dashboards beta is off. */
+export const LEGACY_ACCESS_EMAIL = "team@nomadadigital.co.uk";
+/** The access address a page tells customers to add: data@ with the beta on, team@ without it. */
+export const accessEmail = (beta: boolean): string => (beta ? ACCESS_EMAIL : LEGACY_ACCESS_EMAIL);
 
 /** Windsor's connector for each provider. */
 export const CONNECTOR: Record<ConnectProvider, string> = { gsc: "searchconsole", ga4: "googleanalytics4", bing: "bing_webmaster" };

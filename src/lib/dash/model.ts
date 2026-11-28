@@ -122,7 +122,8 @@ function rateOf(rows: readonly RawAnswer[]): number | null {
   return answered.length ? answered.filter((a) => a.named).length / answered.length : null;
 }
 
-export type BuildOpts = { plan: PlanShape; sample?: boolean };
+/** `beta`: the dashboards beta switch (28 Nov 2026, dash/beta-flag.ts). Off, the workspace carries none of the failed-read, place, AI Overview, listing or date-range fields. */
+export type BuildOpts = { plan: PlanShape; sample?: boolean; beta?: boolean };
 
 /**
  * Each plural or singular straight after the keyword it pairs with (18 Oct 2026 brief 2c): the two forms are
@@ -139,13 +140,13 @@ export function pairsBeside<T extends { id: string | null; pairOf?: string | nul
 }
 
 /** Clicks and impressions summed, position impression-weighted, across a query's rows. */
-function figOf(rs: readonly RawConsoleRow[]): ConsoleFig {
+function figOf(rs: readonly RawConsoleRow[], range = false): ConsoleFig {
   const clicks = rs.reduce((n, r) => n + r.clicks, 0);
   const impr = rs.reduce((n, r) => n + r.impressions, 0);
   const pi = rs.reduce((n, r) => n + (r.position == null ? 0 : r.impressions), 0);
   const pw = rs.reduce((n, r) => n + (r.position == null ? 0 : Number(r.position) * r.impressions), 0);
   const to = rs.reduce<Day | null>((m, r) => (m === null || r.period_end > m ? r.period_end : m), null);
-  return { clicks, impr, ctr: impr ? clicks / impr : 0, pos: pi ? Math.round((pw / pi) * 10) / 10 : (rs.find((r) => r.position != null)?.position ?? null), ...(to ? { to, from: addDaysIso(to, -27) } : {}) };
+  return { clicks, impr, ctr: impr ? clicks / impr : 0, pos: pi ? Math.round((pw / pi) * 10) / 10 : (rs.find((r) => r.position != null)?.position ?? null), ...(range && to ? { to, from: addDaysIso(to, -27) } : {}) };
 }
 
 /** The same page, give or take scheme, www and a trailing slash. */
@@ -230,7 +231,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       consolePages[prov].set(k, [...(consolePages[prov].get(k) ?? []), r]);
       consoleRows[prov].push(r);
     }
-    for (const [k, rs] of consolePages[prov]) consoleBy[prov].set(k, figOf(rs));
+    for (const [k, rs] of consolePages[prov]) consoleBy[prov].set(k, figOf(rs, !!opts.beta));
   }
   const consoleLive = { gsc: consoleBy.gsc.size > 0, bing: consoleBy.bing.size > 0 };
   const sample = !!opts.sample && !consoleLive.gsc && !consoleLive.bing;
@@ -239,7 +240,7 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
     const onPage = (prov: "gsc" | "bing") => {
       const rs = consolePages[prov].get(lc(k)) ?? [];
       const mine = url ? rs.filter((r) => samePage(r.page ?? "", url)) : [];
-      return mine.length ? figOf(mine) : (consoleBy[prov].get(lc(k)) ?? null);
+      return mine.length ? figOf(mine, !!opts.beta) : (consoleBy[prov].get(lc(k)) ?? null);
     };
     return { gsc: onPage("gsc"), bing: onPage("bing") };
   };
@@ -258,11 +259,11 @@ export function buildWorkspace(raw: Raw, opts: BuildOpts): Workspace {
       pos: curPos,
       read: !!cur,
       varies: !!cur && variesOn.has(`${cur[0]}|${k.id}`),
-      stale: !!cur && latestRun !== null && cur[0] < latestRun,
-      readOn: cur?.[0] ?? null,
-      place: (cur ? seenOn.get(`${cur[0]}|${k.id}`)?.location_name : null)?.split(",")[0]?.trim() || null,
-      aio: (() => { const r = cur ? seenOn.get(`${cur[0]}|${k.id}`) : undefined; return r && r.aio_shown != null ? { shown: !!r.aio_shown, named: !!r.aio_named } : null; })(),
-      listed: (cur ? seenOn.get(`${cur[0]}|${k.id}`)?.listed : null) ?? [],
+      stale: !!opts.beta && !!cur && latestRun !== null && cur[0] < latestRun,
+      readOn: opts.beta ? (cur?.[0] ?? null) : null,
+      place: !opts.beta ? null : (cur ? seenOn.get(`${cur[0]}|${k.id}`)?.location_name : null)?.split(",")[0]?.trim() || null,
+      aio: !opts.beta ? null : (() => { const r = cur ? seenOn.get(`${cur[0]}|${k.id}`) : undefined; return r && r.aio_shown != null ? { shown: !!r.aio_shown, named: !!r.aio_named } : null; })(),
+      listed: !opts.beta ? [] : ((cur ? seenOn.get(`${cur[0]}|${k.id}`)?.listed : null) ?? []),
       change,
       url: cur?.[2] ?? null,
       hist: hist.slice(-30).map(([d, p]) => [d, p]),

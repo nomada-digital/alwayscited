@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 
 import { DEMO_HEADER, VIEW_HEADER, dashBase, demoLink, demoSlug } from "./host";
+import { betaOn } from "./beta";
 import { demoAs } from "./demo-state";
 
 import { dashClients, dashEmail, dashRaw, demoRaw, viewAs } from "./access";
@@ -39,6 +40,7 @@ export type PageData = {
 const daysSince = (day: string | null, today: string) => (day ? Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86_400_000) : null);
 
 export async function pageData(slug: string, opts: { sample?: boolean } = {}): Promise<PageData> {
+  const beta = await betaOn();
   // A demo link: the proxy verified the token and set the header; it is checked again here against the slug it opens.
   const token = await demoToken();
   if (token) {
@@ -47,7 +49,7 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
     if (!found) notFound();
     // A per-plan demo link shows the client as that plan, with sample delivery rows labelled as such (demo-state.ts).
     const raw = demoAs(found, demoLink(token)?.state ?? null);
-    return { email: "demo", raw, demo: true, viewAs: null, base: `/demo/${token}`, banner: null, others: [], nudge: { markets: 1, daysOnPlan: daysSince(raw.client.started_on, raw.today) }, ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }) };
+    return { email: "demo", raw, demo: true, viewAs: null, base: `/demo/${token}`, banner: null, others: [], nudge: { markets: 1, daysOnPlan: daysSince(raw.client.started_on, raw.today) }, ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample, beta }) };
   }
   // The hub's view-as link: the owner's own dashboard, exactly as they see it, with every write path off (demo: true)
   // and a banner on every page. The token is checked against the database on every request (access.ts viewAs).
@@ -70,7 +72,7 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
       demo: true,
       viewAs: { by: v.by, expiresAt: v.expiresAt },
       raw,
-      ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }),
+      ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample, beta }),
       // One client per token: the site switcher would lead to pages this token does not open.
       others: [],
     };
@@ -102,7 +104,7 @@ export async function pageData(slug: string, opts: { sample?: boolean } = {}): P
     demo: false,
     viewAs: null,
     raw,
-    ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample }),
+    ws: buildWorkspace(raw, { plan: planShape(), sample: opts.sample, beta }),
     others: clients.filter((c) => c.slug !== slug).map((c) => ({ slug: c.slug, domain: c.domain })),
   };
 }

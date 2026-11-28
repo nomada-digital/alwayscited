@@ -16,6 +16,7 @@ import { defaultAudience } from "@/lib/dash/audience";
 import { knownMetrics } from "@/lib/dash/research";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { clusterKeywords, trimRaw } from "@/lib/dash/model";
+import { betaOn } from "@/lib/dash/beta";
 import { pageData } from "@/lib/dash/page-data";
 import { placeholdersFor } from "@/lib/dash/placeholder-io";
 import type { Placeholders } from "@/lib/dash/placeholder";
@@ -30,9 +31,11 @@ export default async function Google({ params }: { params: Promise<{ client: str
   const { raw, ws, base, demo, nudge } = await pageData(slug);
   // What the shared research cache already knows about the tracked keywords: free, no paid read on page view.
   const tracked = raw.keywords.filter((k) => k.stopped_on === null);
-  const metrics = Object.fromEntries([...(await knownMetricsSafe(raw.client.market, [...new Set([...tracked.map((k) => k.keyword), ...raw.clusters.map((c) => c.name)])], raw.today))]);
+  // Behind the dashboards beta switch (28 Nov 2026, dash/beta-flag.ts): off, the metrics lookup, the toggle's starting side and the example text are what production had.
+  const beta = await betaOn();
+  const metrics = Object.fromEntries([...(await knownMetricsSafe(raw.client.market, beta ? [...new Set([...tracked.map((k) => k.keyword), ...raw.clusters.map((c) => c.name)])] : tracked.map((k) => k.keyword), raw.today))]);
   // 27 Nov 2026 (Danny): Find keywords' example comes from this client's own keywords and follows the toggle; it opens on the client's own side.
-  const { audience, placeholders } = await findKeywordsSetup(raw.client, tracked, ws.clusters.map((c) => c.name), metrics);
+  const { audience, placeholders } = beta ? await findKeywordsSetup(raw.client, tracked, ws.clusters.map((c) => c.name), metrics) : { audience: defaultAudience(await orderSector(raw.client.id)) as Audience, placeholders: undefined };
   const rows = ws.clusters.flatMap((c) => clusterKeywords(c).map((k) => ({ ...k, cluster: c })));
   const situations = [...new Set(rows.filter((r) => r.src === "tracked").map((k) => keywordSituation(k)))];
   const rolling = updateRolling(raw.today);
@@ -42,7 +45,7 @@ export default async function Google({ params }: { params: Promise<{ client: str
       <PageHead micro={<>Search positions · Google, {ws.client.market}</>} title="Where you rank" intro="Tracked keywords are checked on Google every morning. The rest come from your monthly ranking snapshot, sorted into your keyword groups." />
       <Nudges ws={ws} base={base} ctx={nudge} only={["to-cited"]} />
       {rolling ? <p className="muted" style={{ fontSize: 13, margin: "0 0 12px" }}><span className="pill warn">{longDay(rolling.from)} to {longDay(rolling.to)}</span> {rolling.note}.</p> : null}
-      <KeywordManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} metrics={metrics} audience={audience} placeholders={placeholders} />
+      <KeywordManager slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} metrics={metrics} audience={audience} placeholders={placeholders} beta={beta} />
       <SerpChances slug={slug} base={base} initial={trimRaw(raw)} plan={planShape()} demo={demo} />
       {situations.length ? (
         <div className="dash-card">

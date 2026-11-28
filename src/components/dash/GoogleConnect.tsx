@@ -25,7 +25,7 @@ const BACK: Record<string, { text: string; bad?: boolean }> = {
  * it last read, with Disconnect. On a view-as link, Nomada staff connect it on the client's behalf - signing in with
  * a Google account that can see the client's property - and get URL Inspection for key pages (staff only at first).
  */
-export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staff, keyPages = [], inspections = [] }: {
+export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staff, keyPages = [], inspections = [], beta = false }: {
   slug: string;
   domain: string;
   conn: RawConnection | null;
@@ -34,6 +34,8 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
   staff: boolean;
   keyPages?: string[];
   inspections?: Inspection[];
+  /** The dashboards beta (28 Nov 2026): a customer sees "Connected · Full access" and not the connecting account. Off, the card reads as before. */
+  beta?: boolean;
 }) {
   const oauth = conn?.via === "google" && conn.auth === "oauth";
   const [state, setState] = useState<"none" | "pick" | "connected">(oauth && conn?.status === "connected" && conn.property ? "connected" : oauth && conn?.status === "pending" ? "pick" : "none");
@@ -113,8 +115,17 @@ export default function GoogleConnect({ slug, domain, conn, canWrite, demo, staf
       {state === "connected" && shown ? (
         <div style={{ marginTop: 12, fontSize: 13.5, lineHeight: 1.5 }}>
           {/* 27 Nov 2026 (Danny): a customer sees "Connected · Full access", never the Google account that connected it (often ours). The address is staff-only. */}
-          <div><b>Connected</b>{shown.permission ? <> · {CLIENT_ACCESS[shown.permission] ?? "Access confirmed"}</> : null}{staff && shown.email ? <span className="faint"> · as {shown.email}</span> : null}</div>
-          <div style={{ wordBreak: "break-all" }}>{shown.property}</div>
+          {beta ? (
+            <>
+              <div><b>Connected</b>{shown.permission ? <> · {CLIENT_ACCESS[shown.permission] ?? "Access confirmed"}</> : null}{staff && shown.email ? <span className="faint"> · as {shown.email}</span> : null}</div>
+              <div style={{ wordBreak: "break-all" }}>{shown.property}</div>
+            </>
+          ) : (
+            <>
+              <div>Connected as <b>{shown.email ?? "your Google account"}</b></div>
+              <div style={{ wordBreak: "break-all" }}>{shown.property}{shown.permission ? <span className="faint"> · {PERMISSION[shown.permission] ?? shown.permission}</span> : null}</div>
+            </>
+          )}
           <div className="muted" style={{ fontSize: 12.5 }}>{synced ? `Last sync ${synced}` : "First sync on its way"}</div>
           {may ? <button className="btn ghost sm" onClick={disconnect} disabled={busy} style={{ marginTop: 8, paddingLeft: 0 }}>{busy ? "Disconnecting..." : "Disconnect"}</button> : null}
         </div>

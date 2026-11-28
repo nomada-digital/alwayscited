@@ -16,7 +16,7 @@ function change(cur: number, prev: number) {
  * 28 before, with the source named - the traffic figure Danny wants in place of the DataForSEO estimates. Not
  * connected, a short prompt to connect it instead.
  */
-export default function GoogleTraffic({ s, gsc, href, canConnect }: { s: GoogleSummary; gsc: RawConnection | null; href: string; canConnect: boolean }) {
+export default function GoogleTraffic({ s, gsc, href, canConnect, beta = false }: { s: GoogleSummary; gsc: RawConnection | null; href: string; canConnect: boolean; beta?: boolean }) {
   const connected = gsc?.via === "google" && gsc.status === "connected";
   if (!connected) {
     if (!canConnect) return null;
@@ -52,7 +52,7 @@ export default function GoogleTraffic({ s, gsc, href, canConnect }: { s: GoogleS
           ) : <div />}
         </div>
       ) : <p className="muted" style={{ fontSize: 13 }}>Connected. Your first numbers are on their way.</p>}
-      <p className="faint" style={{ fontSize: 12, margin: "10px 0 0" }}>Source: Google Search Console{gsc?.last_synced_at ? `, last sync ${gsc.last_synced_at.slice(0, 10)}` : ""}.</p>
+      <p className="faint" style={{ fontSize: 12, margin: "10px 0 0" }}>Source: Google Search Console{beta ? "" : gsc?.google_email ? `, connected as ${gsc.google_email}` : ""}{gsc?.last_synced_at ? `, last sync ${gsc.last_synced_at.slice(0, 10)}` : ""}.</p>
     </div>
   );
 }

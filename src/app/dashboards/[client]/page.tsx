@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { Change, EngineHeads, Kpi, PositionCell, LimitsLine, Rate, Spark, longDay, pct } from "@/components/dash/Figures";
+import { betaOn } from "@/lib/dash/beta";
 import GoogleTraffic from "@/components/dash/GoogleTraffic";
 import Nudges from "@/components/dash/Nudges";
 import PlanCard from "@/components/dash/PlanCard";
@@ -69,7 +70,7 @@ export default async function Overview({ params }: { params: Promise<{ client: s
         <Kpi href={`${base}/${slug}/clusters`} label="Clusters" value={ws.allowances.clusters.used} unit={`of ${ws.allowances.clusters.limit}`} sub={`${ws.allowances.prompts.used} of ${ws.allowances.prompts.limit} prompts · ${ws.clusters.reduce((n, c) => n + c.groups.length, 0)} keyword groups`} />
         <Kpi href={`${base}/${slug}/sources`} label="AI cites your site" value={cites ? cites.answers : 0} unit="answers" sub="Last 7 readings, any engine" />
       </div>
-      {google ? <GoogleTraffic s={google} gsc={ws.connections.gsc ?? null} href={`${base}/${slug}/integrations`} canConnect={ws.canWrite || !!viewAs} /> : null}
+      {google ? <GoogleTraffic s={google} gsc={ws.connections.gsc ?? null} href={`${base}/${slug}/integrations`} canConnect={ws.canWrite || !!viewAs} beta={await betaOn()} /> : null}
       <div className="dash-grid side" style={{ marginTop: 16 }}>
         <div className="dash-card">
           <div className="dash-card-head">
